@@ -11,6 +11,7 @@ import {
   HeartCheckIcon,
   LogoutSquare01Icon,
   UserIcon,
+  Globe02Icon,
 } from '@hugeicons/core-free-icons'
 import {
   Sidebar,
@@ -46,6 +47,11 @@ const mainNavItems: NavItem[] = [
     icon: MusicNote01Icon,
   },
   {
+    title: 'Search',
+    url: '/search',
+    icon: Search01Icon,
+  },
+  {
     title: 'Wanted',
     url: '/wanted',
     icon: HeartCheckIcon,
@@ -79,7 +85,7 @@ const settingsNavItems: NavItem[] = [
   {
     title: 'Indexers',
     url: '/settings/indexers',
-    icon: Search01Icon,
+    icon: Globe02Icon,
   },
   {
     title: 'Download Clients',

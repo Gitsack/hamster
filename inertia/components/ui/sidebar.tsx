@@ -1,6 +1,6 @@
 "use client"
 
-import * as React from "react"
+import React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "@/lib/slot"
 import { PanelLeftIcon } from "lucide-react"

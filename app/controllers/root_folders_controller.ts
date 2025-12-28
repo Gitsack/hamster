@@ -8,6 +8,7 @@ const rootFolderValidator = vine.compile(
     path: vine.string().minLength(1),
     name: vine.string().minLength(1).maxLength(255).optional(),
     mediaType: vine.enum(['music', 'movies', 'tv']).optional(),
+    createIfMissing: vine.boolean().optional(),
   })
 )
 
@@ -53,7 +54,19 @@ export default class RootFoldersController {
         return response.badRequest({ error: 'Path is not a directory' })
       }
     } catch {
-      return response.badRequest({ error: 'Path does not exist or is not accessible' })
+      // Path doesn't exist - create it if requested
+      if (data.createIfMissing) {
+        try {
+          await fs.mkdir(data.path, { recursive: true })
+        } catch (mkdirError) {
+          return response.badRequest({
+            error: 'Failed to create directory',
+            details: mkdirError instanceof Error ? mkdirError.message : 'Unknown error',
+          })
+        }
+      } else {
+        return response.badRequest({ error: 'Path does not exist or is not accessible' })
+      }
     }
 
     // Check if path is already added

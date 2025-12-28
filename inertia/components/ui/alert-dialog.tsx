@@ -97,10 +97,10 @@ function AlertDialogContent({ className, children, ...props }: React.HTMLAttribu
   if (!mounted || !open) return null
 
   return createPortal(
-    <>
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop - no click to close for alert dialogs */}
       <div
-        className="fixed inset-0 z-50 bg-black/50"
+        className="absolute inset-0 bg-black/50"
         aria-hidden="true"
       />
       {/* Content */}
@@ -109,14 +109,14 @@ function AlertDialogContent({ className, children, ...props }: React.HTMLAttribu
         aria-modal="true"
         data-slot="alert-dialog-content"
         className={cn(
-          "bg-background fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border p-6 shadow-lg outline-none max-h-[85vh] overflow-y-auto",
+          "bg-background relative z-10 grid w-full max-w-lg gap-4 rounded-lg border p-6 shadow-lg outline-none max-h-[85vh] overflow-y-auto mx-4",
           className
         )}
         {...props}
       >
         {children}
       </div>
-    </>,
+    </div>,
     document.body
   )
 }

@@ -36,6 +36,7 @@ import {
   Download01Icon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
+import { FolderBrowser } from '@/components/folder-browser'
 
 type MediaType = 'music' | 'movies' | 'tv'
 
@@ -83,9 +84,12 @@ export default function MediaManagement() {
   const [editingMediaType, setEditingMediaType] = useState<MediaType>('music')
   const [newPath, setNewPath] = useState('')
   const [newName, setNewName] = useState('')
+  const [createIfMissing, setCreateIfMissing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [downloadFolderInput, setDownloadFolderInput] = useState('')
+  const [downloadFolderCreateIfMissing, setDownloadFolderCreateIfMissing] = useState(false)
   const [savingDownloadFolder, setSavingDownloadFolder] = useState(false)
+  const [downloadFolderDialogOpen, setDownloadFolderDialogOpen] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -125,12 +129,16 @@ export default function MediaManagement() {
       const response = await fetch('/api/v1/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ downloadFolder: downloadFolderInput }),
+        body: JSON.stringify({
+          downloadFolder: downloadFolderInput,
+          createDownloadFolder: downloadFolderCreateIfMissing,
+        }),
       })
 
       if (response.ok) {
         const data = await response.json()
         setSettings(data)
+        setDownloadFolderDialogOpen(false)
         toast.success('Download folder saved')
       } else {
         const error = await response.json()
@@ -141,6 +149,12 @@ export default function MediaManagement() {
     } finally {
       setSavingDownloadFolder(false)
     }
+  }
+
+  const openDownloadFolderDialog = () => {
+    setDownloadFolderInput(settings.downloadFolder || '')
+    setDownloadFolderCreateIfMissing(false)
+    setDownloadFolderDialogOpen(true)
   }
 
   const handleToggleMediaType = async (mediaType: MediaType, enabled: boolean) => {
@@ -167,6 +181,7 @@ export default function MediaManagement() {
     setEditingMediaType(mediaType)
     setNewPath('')
     setNewName('')
+    setCreateIfMissing(false)
     setDialogOpen(true)
   }
 
@@ -185,6 +200,7 @@ export default function MediaManagement() {
           path: newPath,
           name: newName || undefined,
           mediaType: editingMediaType,
+          createIfMissing,
         }),
       })
 
@@ -237,30 +253,26 @@ export default function MediaManagement() {
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                 <HugeiconsIcon icon={Download01Icon} className="size-5 text-primary" />
               </div>
-              <div>
+              <div className="flex-1">
                 <CardTitle>Download Folder</CardTitle>
                 <CardDescription>
                   Where downloaded files are placed before being imported
                 </CardDescription>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-3">
-              <Input
-                placeholder="/path/to/downloads"
-                value={downloadFolderInput}
-                onChange={(e) => setDownloadFolderInput(e.target.value)}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleSaveDownloadFolder}
-                disabled={savingDownloadFolder || downloadFolderInput === settings.downloadFolder}
-              >
-                {savingDownloadFolder ? 'Saving...' : 'Save'}
+              <Button onClick={openDownloadFolderDialog}>
+                <HugeiconsIcon icon={Folder01Icon} className="mr-2 size-4" />
+                {settings.downloadFolder ? 'Change' : 'Set Folder'}
               </Button>
             </div>
-          </CardContent>
+          </CardHeader>
+          {settings.downloadFolder && (
+            <CardContent>
+              <div className="flex items-center gap-2 text-sm">
+                <HugeiconsIcon icon={Folder01Icon} className="size-4 text-muted-foreground" />
+                <code className="font-mono text-muted-foreground">{settings.downloadFolder}</code>
+              </div>
+            </CardContent>
+          )}
         </Card>
 
         {/* Media Types */}
@@ -438,24 +450,21 @@ export default function MediaManagement() {
 
       {/* Add Folder Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add {mediaTypeInfo[editingMediaType].label} Folder</DialogTitle>
             <DialogDescription>
-              Add a folder where your {mediaTypeInfo[editingMediaType].label.toLowerCase()} files
+              Browse and select a folder where your {mediaTypeInfo[editingMediaType].label.toLowerCase()} files
               are stored.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="path">Path</Label>
-              <Input
-                id="path"
-                placeholder={`/path/to/${editingMediaType}`}
-                value={newPath}
-                onChange={(e) => setNewPath(e.target.value)}
-              />
-            </div>
+            <FolderBrowser
+              value={newPath}
+              onChange={setNewPath}
+              createIfMissing={createIfMissing}
+              onCreateIfMissingChange={setCreateIfMissing}
+            />
             <div className="space-y-2">
               <Label htmlFor="name">Name (optional)</Label>
               <Input
@@ -470,8 +479,36 @@ export default function MediaManagement() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddFolder} disabled={saving}>
+            <Button onClick={handleAddFolder} disabled={saving || !newPath}>
               {saving ? 'Adding...' : 'Add Folder'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Download Folder Dialog */}
+      <Dialog open={downloadFolderDialogOpen} onOpenChange={setDownloadFolderDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Set Download Folder</DialogTitle>
+            <DialogDescription>
+              Select the folder where downloaded files will be placed before being imported into your library.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <FolderBrowser
+              value={downloadFolderInput}
+              onChange={setDownloadFolderInput}
+              createIfMissing={downloadFolderCreateIfMissing}
+              onCreateIfMissingChange={setDownloadFolderCreateIfMissing}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDownloadFolderDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveDownloadFolder} disabled={savingDownloadFolder || !downloadFolderInput}>
+              {savingDownloadFolder ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>

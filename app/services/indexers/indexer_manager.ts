@@ -32,6 +32,10 @@ export interface SearchOptions {
   indexerIds?: number[]
   useProwlarr?: boolean
   limit?: number
+  // If true, use general search without music-specific filters
+  generalSearch?: boolean
+  // If true, skip deduplication
+  skipDedup?: boolean
 }
 
 export class IndexerManager {
@@ -85,26 +89,33 @@ export class IndexerManager {
           enabled: indexer.enabled,
         }
 
-        // Try music search first, fallback to general search
         let searchResults: NewznabSearchResult[]
+        const query = [options.artist, options.album, options.query]
+          .filter(Boolean)
+          .join(' ')
 
-        try {
-          searchResults = await newznabService.searchMusic(config, {
-            query: options.query,
-            artist: options.artist,
-            album: options.album,
-            year: options.year,
-            limit: options.limit,
-          })
-        } catch {
-          // Fallback to general search if music search fails
-          const query = [options.artist, options.album, options.query]
-            .filter(Boolean)
-            .join(' ')
-
+        if (options.generalSearch) {
+          // General search without music-specific filters (like Prowlarr)
           searchResults = await newznabService.search(config, query, {
             limit: options.limit,
+            categories: [], // No category filter
           })
+        } else {
+          // Try music search first, fallback to general search
+          try {
+            searchResults = await newznabService.searchMusic(config, {
+              query: options.query,
+              artist: options.artist,
+              album: options.album,
+              year: options.year,
+              limit: options.limit,
+            })
+          } catch {
+            // Fallback to general search if music search fails
+            searchResults = await newznabService.search(config, query, {
+              limit: options.limit,
+            })
+          }
         }
 
         return this.mapNewznabResults(searchResults)
@@ -124,7 +135,11 @@ export class IndexerManager {
       return dateB - dateA
     })
 
-    // Deduplicate by title (prefer larger files)
+    // Deduplicate by title (prefer larger files) - skip if requested
+    if (options.skipDedup) {
+      return results
+    }
+
     const seen = new Map<string, UnifiedSearchResult>()
     for (const result of results) {
       const key = result.title.toLowerCase()

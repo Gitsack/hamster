@@ -9,8 +9,8 @@ export default function Home() {
 
       <div className="pt-4 h-full flex flex-col">
         {/* Header */}
-        <div className="grow pb-4 bg-gradient-to-b from-sand-1 to-sand-2 flex justify-center items-center">
-          <a href="https://adonisjs.com" target="_blank" className="isolate">
+        <div className="grow pb-4 bg-linear-to-b from-sand-1 to-sand-2 flex justify-center items-center">
+          <a href="https://adonisjs.com" target="_blank" rel="noopener" className="isolate">
             <svg className="w-16 h-16 fill-primary" viewBox="0 0 33 33">
               <path
                 fillRule="evenodd"
@@ -61,7 +61,7 @@ export default function Home() {
                 </defs>
               </svg>
 
-              <div className="absolute left-0 right-0 bottom-0 h-16 bg-gradient-to-b from-white/0 to-white"></div>
+              <div className="absolute left-0 right-0 bottom-0 h-16 bg-linear-to-b from-white/0 to-white"></div>
             </div>
 
             <div className="flex flex-row gap-4">
@@ -76,7 +76,7 @@ export default function Home() {
 
               <div className="space-y-1">
                 <h2 className="text-lg font-semibold">
-                  <a href="https://docs.adonisjs.com" target="_blank">
+                  <a href="https://docs.adonisjs.com" target="_blank" rel="noopener">
                     <span>Documentation</span>
                     <span className="absolute inset-0"></span>
                   </a>

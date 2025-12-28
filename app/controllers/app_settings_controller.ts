@@ -1,5 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import AppSetting, { type MediaType } from '#models/app_setting'
+import fs from 'node:fs/promises'
 
 function ensureArray<T>(value: T[] | string | undefined, defaultValue: T[]): T[] {
   if (Array.isArray(value)) {
@@ -29,9 +30,35 @@ export default class AppSettingsController {
   }
 
   async update({ request, response }: HttpContext) {
-    const { downloadFolder, enabledMediaTypes } = request.only(['downloadFolder', 'enabledMediaTypes'])
+    const { downloadFolder, enabledMediaTypes, createDownloadFolder } = request.only([
+      'downloadFolder',
+      'enabledMediaTypes',
+      'createDownloadFolder',
+    ])
 
     if (downloadFolder !== undefined) {
+      // Check if path exists
+      try {
+        const stats = await fs.stat(downloadFolder)
+        if (!stats.isDirectory()) {
+          return response.badRequest({ error: 'Path is not a directory' })
+        }
+      } catch {
+        // Path doesn't exist - create it if requested
+        if (createDownloadFolder) {
+          try {
+            await fs.mkdir(downloadFolder, { recursive: true })
+          } catch (mkdirError) {
+            return response.badRequest({
+              error: 'Failed to create directory',
+              details: mkdirError instanceof Error ? mkdirError.message : 'Unknown error',
+            })
+          }
+        } else {
+          return response.badRequest({ error: 'Path does not exist or is not accessible' })
+        }
+      }
+
       await AppSetting.set('downloadFolder', downloadFolder)
     }
 

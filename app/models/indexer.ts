@@ -25,7 +25,19 @@ export default class Indexer extends BaseModel {
   @column()
   declare priority: number
 
-  @column()
+  @column({
+    prepare: (value: any) => JSON.stringify(value),
+    consume: (value: any) => {
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value)
+        } catch {
+          return value
+        }
+      }
+      return value
+    },
+  })
   declare settings: IndexerSettings
 
   @column()

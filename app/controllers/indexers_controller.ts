@@ -44,8 +44,8 @@ export default class IndexersController {
       supportsRss: true,
       prowlarrIndexerId: null,
       settings: {
-        baseUrl: data.url,
-        apiKey: data.apiKey,
+        baseUrl: data.url.trim(),
+        apiKey: data.apiKey.trim(),
         categories: data.categories || [],
       },
     })
@@ -91,8 +91,8 @@ export default class IndexersController {
       enabled: data.enabled ?? indexer.enabled,
       priority: data.priority ?? indexer.priority,
       settings: {
-        baseUrl: data.url,
-        apiKey: data.apiKey,
+        baseUrl: data.url.trim(),
+        apiKey: data.apiKey.trim(),
         categories: data.categories ?? indexer.settings.categories ?? [],
       },
     })
@@ -142,17 +142,27 @@ export default class IndexersController {
   }
 
   async search({ request, response }: HttpContext) {
-    const { query, artist, album, year, indexerIds, limit } = request.qs()
+    const { query, artist, album, year, indexerIds, limit, type } = request.qs()
 
-    const results = await indexerManager.search({
-      query,
-      artist,
-      album,
-      year: year ? parseInt(year, 10) : undefined,
-      indexerIds: indexerIds ? indexerIds.split(',').map(Number) : undefined,
-      limit: limit ? parseInt(limit, 10) : 100,
-    })
+    try {
+      // type=general for Prowlarr-like search without music filters
+      const isGeneralSearch = type === 'general'
 
-    return response.json(results)
+      const results = await indexerManager.search({
+        query,
+        artist,
+        album,
+        year: year ? parseInt(year, 10) : undefined,
+        indexerIds: indexerIds ? indexerIds.split(',').map(Number) : undefined,
+        limit: limit ? parseInt(limit, 10) : 100,
+        generalSearch: isGeneralSearch,
+        skipDedup: isGeneralSearch, // Also skip dedup for general search
+      })
+
+      return response.json(results)
+    } catch (error) {
+      console.error('Search error:', error)
+      return response.internalServerError({ error: 'Search failed', details: String(error) })
+    }
   }
 }

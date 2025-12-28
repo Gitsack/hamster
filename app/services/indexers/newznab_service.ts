@@ -157,6 +157,7 @@ export class NewznabService {
       apikey: config.apiKey,
       limit: String(options.limit || 100),
       offset: String(options.offset || 0),
+      extended: '1', // Request extended attributes (grabs, etc.)
     })
 
     if (options.query) params.set('q', options.query)
@@ -199,6 +200,7 @@ export class NewznabService {
       q: query,
       limit: String(options.limit || 100),
       offset: String(options.offset || 0),
+      extended: '1', // Request extended attributes (grabs, etc.)
     })
 
     const categories = options.categories || config.categories || MUSIC_CATEGORIES

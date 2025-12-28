@@ -22,6 +22,7 @@ const DownloadClientsController = () => import('#controllers/download_clients_co
 const QueueController = () => import('#controllers/queue_controller')
 const PlaybackController = () => import('#controllers/playback_controller')
 const AppSettingsController = () => import('#controllers/app_settings_controller')
+const FilesystemController = () => import('#controllers/filesystem_controller')
 
 // Public routes
 router.on('/').renderInertia('home')
@@ -51,6 +52,9 @@ router
     router.on('/library/add').renderInertia('library/add').as('library.add')
     router.on('/artist/:id').renderInertia('library/artist/[id]').as('artist')
     router.on('/album/:id').renderInertia('library/album/[id]').as('album')
+
+    // Search
+    router.on('/search').renderInertia('search/index').as('search')
 
     // Wanted
     router.on('/wanted').renderInertia('wanted/index').as('wanted')
@@ -100,11 +104,11 @@ router
     // Indexers
     router.get('/indexers', [IndexersController, 'index'])
     router.post('/indexers', [IndexersController, 'store'])
+    router.post('/indexers/test', [IndexersController, 'test'])
+    router.get('/indexers/search', [IndexersController, 'search'])
     router.get('/indexers/:id', [IndexersController, 'show'])
     router.put('/indexers/:id', [IndexersController, 'update'])
     router.delete('/indexers/:id', [IndexersController, 'destroy'])
-    router.post('/indexers/test', [IndexersController, 'test'])
-    router.get('/indexers/search', [IndexersController, 'search'])
 
     // Prowlarr
     router.get('/prowlarr', [ProwlarrController, 'show'])
@@ -155,6 +159,11 @@ router
     router.get('/settings', [AppSettingsController, 'index'])
     router.put('/settings', [AppSettingsController, 'update'])
     router.post('/settings/media-type', [AppSettingsController, 'toggleMediaType'])
+
+    // Filesystem browser
+    router.get('/filesystem/browse', [FilesystemController, 'browse'])
+    router.get('/filesystem/quick-paths', [FilesystemController, 'quickPaths'])
+    router.get('/filesystem/check', [FilesystemController, 'checkPath'])
   })
   .prefix('/api/v1')
   .use(middleware.auth())
