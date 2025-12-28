@@ -8,5 +8,154 @@
 */
 
 import router from '@adonisjs/core/services/router'
+import { middleware } from './kernel.js'
+
+const AuthController = () => import('#controllers/auth_controller')
+const RootFoldersController = () => import('#controllers/root_folders_controller')
+const QualityProfilesController = () => import('#controllers/quality_profiles_controller')
+const MetadataProfilesController = () => import('#controllers/metadata_profiles_controller')
+const IndexersController = () => import('#controllers/indexers_controller')
+const ProwlarrController = () => import('#controllers/prowlarr_controller')
+const ArtistsController = () => import('#controllers/artists_controller')
+const AlbumsController = () => import('#controllers/albums_controller')
+const DownloadClientsController = () => import('#controllers/download_clients_controller')
+const QueueController = () => import('#controllers/queue_controller')
+const PlaybackController = () => import('#controllers/playback_controller')
+const AppSettingsController = () => import('#controllers/app_settings_controller')
+
+// Public routes
 router.on('/').renderInertia('home')
+
+// Guest routes (only accessible when not logged in)
+router
+  .group(() => {
+    router.get('/login', [AuthController, 'showLogin']).as('login')
+    router.post('/login', [AuthController, 'login'])
+    router.get('/register', [AuthController, 'showRegister']).as('register')
+    router.post('/register', [AuthController, 'register'])
+  })
+  .use(middleware.guest())
+
+// Auth routes (only accessible when logged in)
+router
+  .group(() => {
+    router.post('/logout', [AuthController, 'logout']).as('logout')
+  })
+  .use(middleware.auth())
+
+// Protected app routes
+router
+  .group(() => {
+    // Library
+    router.on('/library').renderInertia('library/index').as('library')
+    router.on('/library/add').renderInertia('library/add').as('library.add')
+    router.on('/artist/:id').renderInertia('library/artist/[id]').as('artist')
+    router.on('/album/:id').renderInertia('library/album/[id]').as('album')
+
+    // Wanted
+    router.on('/wanted').renderInertia('wanted/index').as('wanted')
+    router.on('/wanted/search/:id').renderInertia('wanted/search/[id]').as('wanted.search')
+
+    // Calendar
+    router.on('/calendar').renderInertia('calendar/index').as('calendar')
+
+    // Activity
+    router.on('/activity/queue').renderInertia('activity/queue').as('activity.queue')
+    router.on('/activity/history').renderInertia('activity/history').as('activity.history')
+
+    // Settings
+    router.get('/settings', async ({ response }) => response.redirect('/settings/media-management'))
+    router.on('/settings/media-management').renderInertia('settings/media-management').as('settings.media-management')
+    router.on('/settings/indexers').renderInertia('settings/indexers').as('settings.indexers')
+    router.on('/settings/download-clients').renderInertia('settings/download-clients').as('settings.download-clients')
+    router.on('/settings/general').renderInertia('settings/general').as('settings.general')
+    router.on('/settings/ui').renderInertia('settings/ui').as('settings.ui')
+  })
+  .use(middleware.auth())
+
+// API routes
+router
+  .group(() => {
+    // Root folders
+    router.get('/rootfolders', [RootFoldersController, 'index'])
+    router.post('/rootfolders', [RootFoldersController, 'store'])
+    router.get('/rootfolders/:id', [RootFoldersController, 'show'])
+    router.put('/rootfolders/:id', [RootFoldersController, 'update'])
+    router.delete('/rootfolders/:id', [RootFoldersController, 'destroy'])
+
+    // Quality profiles
+    router.get('/qualityprofiles', [QualityProfilesController, 'index'])
+    router.post('/qualityprofiles', [QualityProfilesController, 'store'])
+    router.get('/qualityprofiles/:id', [QualityProfilesController, 'show'])
+    router.put('/qualityprofiles/:id', [QualityProfilesController, 'update'])
+    router.delete('/qualityprofiles/:id', [QualityProfilesController, 'destroy'])
+
+    // Metadata profiles
+    router.get('/metadataprofiles', [MetadataProfilesController, 'index'])
+    router.post('/metadataprofiles', [MetadataProfilesController, 'store'])
+    router.get('/metadataprofiles/:id', [MetadataProfilesController, 'show'])
+    router.put('/metadataprofiles/:id', [MetadataProfilesController, 'update'])
+    router.delete('/metadataprofiles/:id', [MetadataProfilesController, 'destroy'])
+
+    // Indexers
+    router.get('/indexers', [IndexersController, 'index'])
+    router.post('/indexers', [IndexersController, 'store'])
+    router.get('/indexers/:id', [IndexersController, 'show'])
+    router.put('/indexers/:id', [IndexersController, 'update'])
+    router.delete('/indexers/:id', [IndexersController, 'destroy'])
+    router.post('/indexers/test', [IndexersController, 'test'])
+    router.get('/indexers/search', [IndexersController, 'search'])
+
+    // Prowlarr
+    router.get('/prowlarr', [ProwlarrController, 'show'])
+    router.put('/prowlarr', [ProwlarrController, 'update'])
+    router.post('/prowlarr/test', [ProwlarrController, 'test'])
+    router.post('/prowlarr/sync', [ProwlarrController, 'sync'])
+    router.get('/prowlarr/indexers', [ProwlarrController, 'indexers'])
+
+    // Artists
+    router.get('/artists', [ArtistsController, 'index'])
+    router.post('/artists', [ArtistsController, 'store'])
+    router.get('/artists/search', [ArtistsController, 'search'])
+    router.get('/artists/:id', [ArtistsController, 'show'])
+    router.put('/artists/:id', [ArtistsController, 'update'])
+    router.delete('/artists/:id', [ArtistsController, 'destroy'])
+    router.post('/artists/:id/refresh', [ArtistsController, 'refresh'])
+
+    // Albums
+    router.get('/albums', [AlbumsController, 'index'])
+    router.get('/albums/wanted', [AlbumsController, 'wanted'])
+    router.get('/albums/:id', [AlbumsController, 'show'])
+    router.put('/albums/:id', [AlbumsController, 'update'])
+    router.get('/albums/:id/releases', [AlbumsController, 'searchReleases'])
+    router.get('/albums/:id/files', [AlbumsController, 'files'])
+
+    // Download clients
+    router.get('/downloadclients', [DownloadClientsController, 'index'])
+    router.post('/downloadclients', [DownloadClientsController, 'store'])
+    router.get('/downloadclients/:id', [DownloadClientsController, 'show'])
+    router.put('/downloadclients/:id', [DownloadClientsController, 'update'])
+    router.delete('/downloadclients/:id', [DownloadClientsController, 'destroy'])
+    router.post('/downloadclients/test', [DownloadClientsController, 'test'])
+
+    // Queue
+    router.get('/queue', [QueueController, 'index'])
+    router.post('/queue/refresh', [QueueController, 'refresh'])
+    router.delete('/queue/:id', [QueueController, 'destroy'])
+    router.get('/queue/history', [QueueController, 'history'])
+    router.post('/queue/grab', [QueueController, 'grab'])
+
+    // Playback
+    router.get('/playback/stream/:id', [PlaybackController, 'stream'])
+    router.get('/playback/info/:id', [PlaybackController, 'info'])
+    router.get('/playback/artwork/:id', [PlaybackController, 'artwork'])
+    router.get('/playback/album/:id/playlist', [PlaybackController, 'albumPlaylist'])
+
+    // App Settings
+    router.get('/settings', [AppSettingsController, 'index'])
+    router.put('/settings', [AppSettingsController, 'update'])
+    router.post('/settings/media-type', [AppSettingsController, 'toggleMediaType'])
+  })
+  .prefix('/api/v1')
+  .use(middleware.auth())
 

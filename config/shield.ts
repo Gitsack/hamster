@@ -1,4 +1,5 @@
 import { defineConfig } from '@adonisjs/shield'
+import type { HttpContext } from '@adonisjs/core/http'
 
 const shieldConfig = defineConfig({
   /**
@@ -17,7 +18,7 @@ const shieldConfig = defineConfig({
    */
   csrf: {
     enabled: true,
-    exceptRoutes: [],
+    exceptRoutes: (ctx: HttpContext) => ctx.request.url().startsWith('/api/'),
     enableXsrfCookie: true,
     methods: ['POST', 'PUT', 'PATCH', 'DELETE'],
   },
