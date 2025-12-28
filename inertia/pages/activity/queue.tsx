@@ -31,6 +31,7 @@ import {
   Loading01Icon,
   ArrowDown01Icon,
   PauseIcon,
+  FolderSearchIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
@@ -53,19 +54,25 @@ export default function Queue() {
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [scanning, setScanning] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchQueue = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
+    setError(null)
     try {
       const response = await fetch('/api/v1/queue')
       if (response.ok) {
         const data = await response.json()
         setQueue(data)
+      } else {
+        setError('Failed to fetch queue')
       }
-    } catch (error) {
-      console.error('Failed to fetch queue:', error)
+    } catch (err) {
+      console.error('Failed to fetch queue:', err)
+      setError('Failed to connect to server')
     } finally {
       setLoading(false)
     }
@@ -88,11 +95,31 @@ export default function Queue() {
         setQueue(data)
         toast.success('Queue refreshed')
       }
-    } catch (error) {
-      console.error('Failed to refresh queue:', error)
+    } catch (err) {
+      console.error('Failed to refresh queue:', err)
       toast.error('Failed to refresh queue')
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  const scanCompleted = async () => {
+    setScanning(true)
+    try {
+      const response = await fetch('/api/v1/queue/scan-completed', { method: 'POST' })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(data.message || 'Scan completed')
+        // Refresh queue after scan
+        fetchQueue(false)
+      } else {
+        toast.error(data.error || 'Scan failed')
+      }
+    } catch (err) {
+      console.error('Failed to scan completed downloads:', err)
+      toast.error('Failed to scan completed downloads')
+    } finally {
+      setScanning(false)
     }
   }
 
@@ -146,6 +173,10 @@ export default function Queue() {
         return <Badge variant="outline">Queued</Badge>
       case 'importing':
         return <Badge className="bg-purple-500">Importing</Badge>
+      case 'completed':
+        return <Badge className="bg-green-500">Completed</Badge>
+      case 'failed':
+        return <Badge className="bg-red-500">Failed</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -166,13 +197,22 @@ export default function Queue() {
     <AppLayout
       title="Queue"
       actions={
-        <Button onClick={refreshQueue} disabled={refreshing}>
-          <HugeiconsIcon
-            icon={RefreshIcon}
-            className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
-          />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={scanCompleted} disabled={scanning} variant="outline">
+            <HugeiconsIcon
+              icon={FolderSearchIcon}
+              className={`h-4 w-4 mr-2 ${scanning ? 'animate-pulse' : ''}`}
+            />
+            {scanning ? 'Scanning...' : 'Import Completed'}
+          </Button>
+          <Button onClick={refreshQueue} disabled={refreshing}>
+            <HugeiconsIcon
+              icon={RefreshIcon}
+              className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
+            />
+            Refresh
+          </Button>
+        </div>
       }
     >
       <Head title="Queue" />
@@ -183,7 +223,14 @@ export default function Queue() {
             <CardTitle>Active Downloads</CardTitle>
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {error ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <p className="text-destructive mb-4">{error}</p>
+                <Button onClick={() => fetchQueue()} variant="outline">
+                  Try Again
+                </Button>
+              </div>
+            ) : loading ? (
               <div className="space-y-4">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-4">
@@ -234,9 +281,9 @@ export default function Queue() {
                       <TableCell>{getStatusBadge(item.status)}</TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          <Progress value={item.progress} className="h-2" />
+                          <Progress value={Number(item.progress) || 0} className="h-2" />
                           <div className="text-xs text-muted-foreground">
-                            {item.progress.toFixed(1)}%
+                            {(Number(item.progress) || 0).toFixed(1)}%
                           </div>
                         </div>
                       </TableCell>

@@ -363,7 +363,9 @@ export default function AddArtist() {
                   onValueChange={setSelectedRootFolder}
                 >
                   <SelectTrigger id="rootFolder">
-                    <SelectValue placeholder="Select root folder" />
+                    {selectedRootFolder
+                      ? rootFolders.find((f) => String(f.id) === selectedRootFolder)?.path
+                      : <span className="text-muted-foreground">Select root folder</span>}
                   </SelectTrigger>
                   <SelectPopup>
                     {rootFolders.map((folder) => (
@@ -382,7 +384,9 @@ export default function AddArtist() {
                   onValueChange={setSelectedQualityProfile}
                 >
                   <SelectTrigger id="qualityProfile">
-                    <SelectValue placeholder="Select quality profile" />
+                    {selectedQualityProfile
+                      ? qualityProfiles.find((p) => String(p.id) === selectedQualityProfile)?.name
+                      : <span className="text-muted-foreground">Select quality profile</span>}
                   </SelectTrigger>
                   <SelectPopup>
                     {qualityProfiles.map((profile) => (
@@ -401,7 +405,9 @@ export default function AddArtist() {
                   onValueChange={setSelectedMetadataProfile}
                 >
                   <SelectTrigger id="metadataProfile">
-                    <SelectValue placeholder="Select metadata profile" />
+                    {selectedMetadataProfile
+                      ? metadataProfiles.find((p) => String(p.id) === selectedMetadataProfile)?.name
+                      : <span className="text-muted-foreground">Select metadata profile</span>}
                   </SelectTrigger>
                   <SelectPopup>
                     {metadataProfiles.map((profile) => (

@@ -8,8 +8,16 @@ import { resolvePageComponent } from '@adonisjs/inertia/helpers'
 import { AudioPlayerProvider } from '@/contexts/audio_player_context'
 import { AudioPlayer } from '@/components/player/audio_player'
 import { Toaster } from 'sonner'
+import { useState, useEffect } from 'react'
 
-const appName = import.meta.env.VITE_APP_NAME || 'AdonisJS'
+const appName = import.meta.env.VITE_APP_NAME || 'MediaBox'
+
+function ClientOnlyToaster() {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  if (!mounted) return null
+  return <Toaster position="bottom-right" />
+}
 
 createInertiaApp({
   progress: { color: '#5468FF' },
@@ -29,7 +37,7 @@ createInertiaApp({
       <AudioPlayerProvider>
         <App {...props} />
         <AudioPlayer />
-        <Toaster position="top-right" />
+        <ClientOnlyToaster />
       </AudioPlayerProvider>
     )
   },

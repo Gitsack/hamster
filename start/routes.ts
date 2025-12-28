@@ -18,6 +18,7 @@ const IndexersController = () => import('#controllers/indexers_controller')
 const ProwlarrController = () => import('#controllers/prowlarr_controller')
 const ArtistsController = () => import('#controllers/artists_controller')
 const AlbumsController = () => import('#controllers/albums_controller')
+const TracksController = () => import('#controllers/tracks_controller')
 const DownloadClientsController = () => import('#controllers/download_clients_controller')
 const QueueController = () => import('#controllers/queue_controller')
 const PlaybackController = () => import('#controllers/playback_controller')
@@ -128,11 +129,16 @@ router
 
     // Albums
     router.get('/albums', [AlbumsController, 'index'])
+    router.post('/albums', [AlbumsController, 'store'])
+    router.get('/albums/search', [AlbumsController, 'search'])
     router.get('/albums/wanted', [AlbumsController, 'wanted'])
     router.get('/albums/:id', [AlbumsController, 'show'])
     router.put('/albums/:id', [AlbumsController, 'update'])
     router.get('/albums/:id/releases', [AlbumsController, 'searchReleases'])
     router.get('/albums/:id/files', [AlbumsController, 'files'])
+
+    // Tracks
+    router.get('/tracks/search', [TracksController, 'search'])
 
     // Download clients
     router.get('/downloadclients', [DownloadClientsController, 'index'])
@@ -144,7 +150,10 @@ router
 
     // Queue
     router.get('/queue', [QueueController, 'index'])
+    router.get('/queue/debug', [QueueController, 'debug'])
     router.post('/queue/refresh', [QueueController, 'refresh'])
+    router.post('/queue/scan-completed', [QueueController, 'scanCompleted'])
+    router.post('/queue/:id/import', [QueueController, 'import'])
     router.delete('/queue/:id', [QueueController, 'destroy'])
     router.get('/queue/history', [QueueController, 'history'])
     router.post('/queue/grab', [QueueController, 'grab'])

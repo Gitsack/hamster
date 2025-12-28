@@ -322,7 +322,7 @@ export default class ArtistsController {
         secondaryTypes: mbAlbum.secondaryTypes || [],
         releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
         imageUrl: coverUrl,
-        monitored: artist.monitored,
+        monitored: false, // Albums are not monitored by default - user must explicitly select them
         anyReleaseOk: true,
       })
     }

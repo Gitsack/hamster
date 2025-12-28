@@ -1,8 +1,24 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Album from '#models/album'
+import Artist from '#models/artist'
 import Track from '#models/track'
 import TrackFile from '#models/track_file'
 import vine from '@vinejs/vine'
+import { musicBrainzService } from '#services/metadata/musicbrainz_service'
+import { coverArtService } from '#services/metadata/cover_art_service'
+import { DateTime } from 'luxon'
+
+const addAlbumValidator = vine.compile(
+  vine.object({
+    musicbrainzId: vine.string(), // Release group ID
+    artistMusicbrainzId: vine.string(),
+    rootFolderId: vine.number(),
+    qualityProfileId: vine.number(),
+    metadataProfileId: vine.number(),
+    monitored: vine.boolean().optional(),
+    searchForAlbum: vine.boolean().optional(),
+  })
+)
 
 const updateAlbumValidator = vine.compile(
   vine.object({
@@ -52,6 +68,153 @@ export default class AlbumsController {
     )
 
     return response.json(albumsWithCounts)
+  }
+
+  /**
+   * Add a specific album to the library
+   * Creates the artist if not exists, then adds only the selected album
+   */
+  async store({ request, response }: HttpContext) {
+    const data = await request.validateUsing(addAlbumValidator)
+
+    // Check if album already exists
+    const existingAlbum = await Album.findBy('musicbrainzReleaseGroupId', data.musicbrainzId)
+    if (existingAlbum) {
+      return response.conflict({ error: 'Album already exists in library' })
+    }
+
+    // Find or create the artist
+    let artist = await Artist.findBy('musicbrainzId', data.artistMusicbrainzId)
+
+    if (!artist) {
+      // Fetch artist metadata from MusicBrainz
+      const mbArtist = await musicBrainzService.getArtist(data.artistMusicbrainzId)
+      if (!mbArtist) {
+        return response.notFound({ error: 'Artist not found on MusicBrainz' })
+      }
+
+      // Create artist with monitored=false so we don't auto-fetch all albums
+      artist = await Artist.create({
+        musicbrainzId: data.artistMusicbrainzId,
+        name: mbArtist.name,
+        sortName: mbArtist.sortName,
+        disambiguation: mbArtist.disambiguation || null,
+        status: mbArtist.endDate ? 'ended' : 'continuing',
+        artistType: mbArtist.type || null,
+        country: mbArtist.country || null,
+        formedAt: mbArtist.beginDate ? DateTime.fromISO(mbArtist.beginDate) : null,
+        endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
+        monitored: false, // Artist not monitored - only specific albums
+        qualityProfileId: data.qualityProfileId,
+        metadataProfileId: data.metadataProfileId,
+        rootFolderId: data.rootFolderId,
+        addedAt: DateTime.now(),
+      })
+    }
+
+    // Fetch album metadata from MusicBrainz
+    const mbAlbums = await musicBrainzService.getArtistAlbums(data.artistMusicbrainzId)
+    const mbAlbum = mbAlbums.find((a) => a.id === data.musicbrainzId)
+
+    if (!mbAlbum) {
+      return response.notFound({ error: 'Album not found on MusicBrainz' })
+    }
+
+    // Map primary type to our album type
+    const albumType = this.mapAlbumType(mbAlbum.primaryType)
+
+    // Get cover art URL
+    const coverUrl = coverArtService.getFrontCoverUrl(mbAlbum.id, '500')
+
+    // Create the album
+    const album = await Album.create({
+      artistId: artist.id,
+      musicbrainzReleaseGroupId: mbAlbum.id,
+      title: mbAlbum.title,
+      albumType,
+      secondaryTypes: mbAlbum.secondaryTypes || [],
+      releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
+      imageUrl: coverUrl,
+      monitored: data.monitored ?? true,
+      anyReleaseOk: true,
+    })
+
+    // Optionally search for the album and trigger download
+    if (data.searchForAlbum) {
+      this.searchAndGrabAlbum(album).catch((error) => {
+        console.error(`Failed to search for album ${album.id}:`, error)
+      })
+    }
+
+    return response.created({
+      id: album.id,
+      title: album.title,
+      artistId: artist.id,
+      artistName: artist.name,
+      monitored: album.monitored,
+    })
+  }
+
+  /**
+   * Search indexers for an album and grab the best result
+   */
+  private async searchAndGrabAlbum(album: Album): Promise<void> {
+    await album.load('artist')
+
+    const { indexerManager } = await import('#services/indexers/indexer_manager')
+    const { downloadManager } = await import('#services/download_clients/download_manager')
+
+    const results = await indexerManager.search({
+      artist: album.artist?.name,
+      album: album.title,
+      year: album.releaseDate?.year,
+      limit: 25,
+    })
+
+    if (results.length === 0) {
+      console.log(`No releases found for album: ${album.title}`)
+      return
+    }
+
+    // Sort by size (prefer larger files, usually better quality) and grab the first
+    const sorted = results.sort((a, b) => b.size - a.size)
+    const bestResult = sorted[0]
+
+    try {
+      await downloadManager.grab({
+        title: bestResult.title,
+        downloadUrl: bestResult.downloadUrl,
+        size: bestResult.size,
+        albumId: album.id,
+        indexerId: bestResult.indexerId,
+        indexerName: bestResult.indexer,
+        guid: bestResult.id,
+      })
+      console.log(`Grabbed release for album ${album.title}: ${bestResult.title}`)
+    } catch (error) {
+      console.error(`Failed to grab release for album ${album.title}:`, error)
+    }
+  }
+
+  private mapAlbumType(
+    primaryType?: string
+  ): 'album' | 'ep' | 'single' | 'compilation' | 'live' | 'remix' | 'other' {
+    switch (primaryType?.toLowerCase()) {
+      case 'album':
+        return 'album'
+      case 'ep':
+        return 'ep'
+      case 'single':
+        return 'single'
+      case 'compilation':
+        return 'compilation'
+      case 'live':
+        return 'live'
+      case 'remix':
+        return 'remix'
+      default:
+        return 'other'
+    }
   }
 
   /**
@@ -230,6 +393,42 @@ export default class AlbumsController {
               trackNumber: file.track.trackNumber,
             }
           : null,
+      }))
+    )
+  }
+
+  /**
+   * Search MusicBrainz for albums (for adding new albums)
+   */
+  async search({ request, response }: HttpContext) {
+    const query = request.input('q', '')
+    const artistName = request.input('artist', '')
+
+    if (!query || query.length < 2) {
+      return response.json([])
+    }
+
+    const results = await musicBrainzService.searchAlbums(query, artistName || undefined, 25)
+
+    // Check which albums are already in the library
+    const existingMbIds = await Album.query()
+      .whereIn(
+        'musicbrainzReleaseGroupId',
+        results.map((r) => r.id)
+      )
+      .select('musicbrainzReleaseGroupId')
+
+    const existingSet = new Set(existingMbIds.map((a) => a.musicbrainzReleaseGroupId))
+
+    return response.json(
+      results.map((album) => ({
+        musicbrainzId: album.id,
+        title: album.title,
+        artistName: album.artistName,
+        artistMusicbrainzId: album.artistId,
+        releaseDate: album.releaseDate,
+        type: album.primaryType,
+        inLibrary: existingSet.has(album.id),
       }))
     )
   }

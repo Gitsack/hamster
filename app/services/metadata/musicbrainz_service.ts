@@ -212,6 +212,44 @@ export class MusicBrainzService {
       secondaryTypes: rg['secondary-types'] || [],
     }))
   }
+
+  /**
+   * Search for tracks (recordings) by name
+   */
+  async searchTracks(
+    query: string,
+    artistName?: string,
+    limit = 25
+  ): Promise<
+    Array<{
+      id: string
+      title: string
+      artistId: string
+      artistName: string
+      albumTitle?: string
+      albumId?: string
+      duration?: number
+    }>
+  > {
+    let searchQuery = query
+    if (artistName) {
+      searchQuery = `${query} AND artist:${artistName}`
+    }
+
+    const url = `${MUSICBRAINZ_API}/recording/?query=${encodeURIComponent(searchQuery)}&limit=${limit}&fmt=json`
+    const response = await fetchWithRateLimit(url)
+    const data = (await response.json()) as { recordings?: any[] }
+
+    return (data.recordings || []).map((recording: any) => ({
+      id: recording.id,
+      title: recording.title,
+      artistId: recording['artist-credit']?.[0]?.artist?.id || '',
+      artistName: recording['artist-credit']?.[0]?.name || '',
+      albumTitle: recording.releases?.[0]?.title,
+      albumId: recording.releases?.[0]?.['release-group']?.id,
+      duration: recording.length,
+    }))
+  }
 }
 
 export const musicBrainzService = new MusicBrainzService()

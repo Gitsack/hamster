@@ -332,11 +332,68 @@ export default function ArtistDetail() {
         </div>
 
         {/* Albums */}
-        <Tabs defaultValue="all" className="space-y-4">
+        <Tabs defaultValue="monitored" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="all">All Albums</TabsTrigger>
-            <TabsTrigger value="missing">Missing</TabsTrigger>
+            <TabsTrigger value="monitored">
+              Monitored ({artist.albums.filter((a) => a.monitored).length})
+            </TabsTrigger>
+            <TabsTrigger value="wanted">
+              Wanted ({artist.albums.filter((a) => a.monitored && a.fileCount < a.trackCount).length})
+            </TabsTrigger>
+            <TabsTrigger value="all">
+              All ({artist.albums.length})
+            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="monitored" className="space-y-4">
+            {artist.albums.filter((a) => a.monitored).length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="rounded-full bg-muted p-6 mb-4">
+                    <HugeiconsIcon
+                      icon={CdIcon}
+                      className="h-12 w-12 text-muted-foreground"
+                    />
+                  </div>
+                  <h3 className="text-lg font-medium mb-2">No monitored albums</h3>
+                  <p className="text-muted-foreground">
+                    Monitor albums to track them and search for releases.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {artist.albums
+                  .filter((a) => a.monitored)
+                  .map((album) => (
+                    <AlbumCard key={album.id} album={album} />
+                  ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="wanted" className="space-y-4">
+            {artist.albums.filter((a) => a.monitored && a.fileCount < a.trackCount).length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <h3 className="text-lg font-medium mb-2">
+                    All monitored albums complete!
+                  </h3>
+                  <p className="text-muted-foreground">
+                    You have all tracks for monitored albums.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {artist.albums
+                  .filter((a) => a.monitored && a.fileCount < a.trackCount)
+                  .map((album) => (
+                    <AlbumCard key={album.id} album={album} />
+                  ))}
+              </div>
+            )}
+          </TabsContent>
 
           <TabsContent value="all" className="space-y-4">
             {artist.albums.length === 0 ? (
@@ -359,30 +416,6 @@ export default function ArtistDetail() {
                 {artist.albums.map((album) => (
                   <AlbumCard key={album.id} album={album} />
                 ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="missing" className="space-y-4">
-            {artist.albums.filter((a) => a.fileCount < a.trackCount).length ===
-            0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <h3 className="text-lg font-medium mb-2">
-                    All albums complete!
-                  </h3>
-                  <p className="text-muted-foreground">
-                    You have all tracks for this artist.
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {artist.albums
-                  .filter((a) => a.fileCount < a.trackCount)
-                  .map((album) => (
-                    <AlbumCard key={album.id} album={album} />
-                  ))}
               </div>
             )}
           </TabsContent>
@@ -433,39 +466,63 @@ function AlbumCard({ album }: { album: Album }) {
       ? Math.round((album.fileCount / album.trackCount) * 100)
       : 0
 
+  const isComplete = percentComplete === 100
+  const isWanted = album.monitored && percentComplete < 100
+
   return (
     <Link href={`/album/${album.id}`}>
-      <Card className="overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group">
+      <Card
+        className={`overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group ${
+          album.monitored && isComplete ? 'ring-1 ring-green-500/50' : ''
+        }`}
+      >
         <div className="aspect-square bg-muted relative">
           {album.imageUrl ? (
             <img
               src={album.imageUrl}
               alt={album.title}
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover ${
+                !album.monitored ? 'grayscale opacity-50' : ''
+              }`}
               loading="lazy"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
+            <div className={`w-full h-full flex items-center justify-center ${
+              !album.monitored ? 'opacity-50' : ''
+            }`}>
               <HugeiconsIcon
                 icon={CdIcon}
                 className="h-16 w-16 text-muted-foreground/50"
               />
             </div>
           )}
-          {!album.monitored && (
+          {/* Status badge - only show for monitored albums */}
+          {album.monitored && (
             <div className="absolute top-2 right-2">
-              <Badge variant="secondary">Unmonitored</Badge>
+              {isWanted ? (
+                <Badge variant="default" className="bg-orange-500/90">
+                  Wanted
+                </Badge>
+              ) : isComplete ? (
+                <Badge variant="default" className="bg-green-500/90">
+                  Complete
+                </Badge>
+              ) : null}
             </div>
           )}
-          {/* Progress bar at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted-foreground/20">
-            <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${percentComplete}%` }}
-            />
-          </div>
+          {/* Progress bar at bottom - only for monitored albums */}
+          {album.monitored && (
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted-foreground/20">
+              <div
+                className={`h-full transition-all ${
+                  isComplete ? 'bg-green-500' : 'bg-primary'
+                }`}
+                style={{ width: `${percentComplete}%` }}
+              />
+            </div>
+          )}
         </div>
-        <CardContent className="p-3">
+        <CardContent className={`p-3 ${!album.monitored ? 'opacity-50' : ''}`}>
           <h3 className="font-medium truncate group-hover:text-primary transition-colors">
             {album.title}
           </h3>

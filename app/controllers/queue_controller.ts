@@ -1,6 +1,9 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Download from '#models/download'
+import DownloadClient from '#models/download_client'
 import { downloadManager } from '#services/download_clients/download_manager'
+import { downloadImportService } from '#services/media/download_import_service'
+import { sabnzbdService, type SabnzbdConfig } from '#services/download_clients/sabnzbd_service'
 
 export default class QueueController {
   /**
@@ -111,6 +114,181 @@ export default class QueueController {
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to grab release',
+      })
+    }
+  }
+
+  /**
+   * Scan and import completed downloads
+   */
+  async scanCompleted({ response }: HttpContext) {
+    try {
+      const results = {
+        scanned: 0,
+        updated: 0,
+        imported: 0,
+        failed: 0,
+        errors: [] as string[],
+      }
+
+      // First, check SABnzbd history to update any stuck downloads
+      const clients = await DownloadClient.query().where('enabled', true)
+
+      for (const client of clients) {
+        if (client.type === 'sabnzbd') {
+          const config: SabnzbdConfig = {
+            host: client.settings.host || 'localhost',
+            port: client.settings.port || 8080,
+            apiKey: client.settings.apiKey || '',
+            useSsl: client.settings.useSsl || false,
+          }
+
+          try {
+            const history = await sabnzbdService.getHistory(config, 50)
+
+            for (const slot of history.slots) {
+              // Find download by externalId
+              const download = await Download.query()
+                .where('downloadClientId', client.id)
+                .where('externalId', slot.nzo_id)
+                .whereIn('status', ['queued', 'downloading', 'paused'])
+                .first()
+
+              if (download && slot.status === 'Completed') {
+                download.status = 'importing'
+                download.progress = 100
+                download.outputPath = slot.storage
+                await download.save()
+                results.updated++
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to check SABnzbd history for ${client.name}:`, error)
+          }
+        }
+      }
+
+      // Now find all downloads that can be imported
+      const completedDownloads = await Download.query()
+        .whereNotNull('outputPath')
+        .whereIn('status', ['completed', 'importing'])
+        .whereNotNull('albumId')
+        .preload('album')
+
+      for (const download of completedDownloads) {
+        results.scanned++
+
+        try {
+          const importResult = await downloadImportService.importDownload(download)
+
+          if (importResult.success && importResult.filesImported > 0) {
+            results.imported++
+            download.status = 'completed'
+            await download.save()
+          } else if (importResult.errors.length > 0) {
+            results.failed++
+            results.errors.push(`${download.title}: ${importResult.errors.join(', ')}`)
+          }
+        } catch (error) {
+          results.failed++
+          results.errors.push(
+            `${download.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          )
+        }
+      }
+
+      return response.json({
+        message: `Updated ${results.updated}, scanned ${results.scanned} downloads, imported ${results.imported}, failed ${results.failed}`,
+        ...results,
+      })
+    } catch (error) {
+      return response.badRequest({
+        error: error instanceof Error ? error.message : 'Failed to scan completed downloads',
+      })
+    }
+  }
+
+  /**
+   * Debug endpoint to see raw data
+   */
+  async debug({ response }: HttpContext) {
+    const downloads = await Download.query()
+      .preload('downloadClient')
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+
+    const clients = await DownloadClient.query().where('enabled', true)
+    const historyData: Record<string, unknown[]> = {}
+
+    for (const client of clients) {
+      if (client.type === 'sabnzbd') {
+        const config: SabnzbdConfig = {
+          host: client.settings.host || 'localhost',
+          port: client.settings.port || 8080,
+          apiKey: client.settings.apiKey || '',
+          useSsl: client.settings.useSsl || false,
+        }
+
+        try {
+          const history = await sabnzbdService.getHistory(config, 20)
+          historyData[client.name] = history.slots.map((s) => ({
+            nzo_id: s.nzo_id,
+            name: s.name,
+            status: s.status,
+            storage: s.storage,
+          }))
+        } catch (error) {
+          historyData[client.name] = [{ error: String(error) }]
+        }
+      }
+    }
+
+    return response.json({
+      downloads: downloads.map((d) => ({
+        id: d.id,
+        title: d.title,
+        status: d.status,
+        externalId: d.externalId,
+        outputPath: d.outputPath,
+        albumId: d.albumId,
+        clientName: d.downloadClient?.name,
+      })),
+      sabnzbdHistory: historyData,
+    })
+  }
+
+  /**
+   * Manually import a specific download
+   */
+  async import({ params, response }: HttpContext) {
+    try {
+      const download = await Download.query()
+        .where('id', params.id)
+        .whereNotNull('outputPath')
+        .first()
+
+      if (!download) {
+        return response.notFound({ error: 'Download not found or has no output path' })
+      }
+
+      const result = await downloadImportService.importDownload(download)
+
+      if (result.success) {
+        download.status = 'completed'
+        await download.save()
+        return response.json({
+          message: `Imported ${result.filesImported} files`,
+          ...result,
+        })
+      } else {
+        return response.badRequest({
+          error: result.errors.join('; ') || 'Import failed',
+          ...result,
+        })
+      }
+    } catch (error) {
+      return response.badRequest({
+        error: error instanceof Error ? error.message : 'Failed to import download',
       })
     }
   }

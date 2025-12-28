@@ -1,6 +1,7 @@
 import DownloadClient from '#models/download_client'
 import Download from '#models/download'
 import { sabnzbdService, type SabnzbdConfig } from './sabnzbd_service.js'
+import { downloadImportService } from '#services/media/download_import_service'
 import { DateTime } from 'luxon'
 
 export interface DownloadRequest {
@@ -108,7 +109,7 @@ export class DownloadManager {
    */
   async getQueue(): Promise<QueueItem[]> {
     const downloads = await Download.query()
-      .whereIn('status', ['queued', 'downloading', 'paused'])
+      .whereIn('status', ['queued', 'downloading', 'paused', 'importing'])
       .preload('downloadClient')
       .orderBy('createdAt', 'asc')
 
@@ -182,22 +183,58 @@ export class DownloadManager {
             .where('externalId', slot.nzo_id)
             .first()
 
-          if (download && download.status !== 'completed' && download.status !== 'failed') {
+          if (download && download.status !== 'completed' && download.status !== 'failed' && download.status !== 'importing') {
             if (slot.status === 'Completed') {
-              download.status = 'completed'
+              // Mark as importing and save the output path
+              download.status = 'importing'
               download.progress = 100
               download.completedAt = DateTime.now()
               download.outputPath = slot.storage
+              await download.save()
+
+              // Trigger import in background
+              this.triggerImport(download).catch((error) => {
+                console.error(`Failed to import download ${download.id}:`, error)
+              })
             } else if (slot.status === 'Failed') {
               download.status = 'failed'
               download.errorMessage = slot.fail_message || 'Download failed'
+              await download.save()
             }
-            await download.save()
           }
         }
 
         break
       }
+    }
+  }
+
+  /**
+   * Trigger import for a completed download
+   */
+  private async triggerImport(download: Download): Promise<void> {
+    console.log(`Starting import for download: ${download.title}`)
+
+    try {
+      const result = await downloadImportService.importDownload(download, (progress) => {
+        console.log(`Import progress: ${progress.phase} - ${progress.current}/${progress.total}`)
+      })
+
+      if (result.success) {
+        console.log(`Import completed: ${result.filesImported} files imported for ${download.title}`)
+        download.status = 'completed'
+      } else {
+        console.error(`Import failed for ${download.title}:`, result.errors)
+        download.status = 'failed'
+        download.errorMessage = result.errors.join('; ') || 'Import failed'
+      }
+
+      await download.save()
+    } catch (error) {
+      console.error(`Import error for ${download.title}:`, error)
+      download.status = 'failed'
+      download.errorMessage = error instanceof Error ? error.message : 'Import failed'
+      await download.save()
     }
   }
 
