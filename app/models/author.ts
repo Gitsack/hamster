@@ -2,19 +2,21 @@ import { DateTime } from 'luxon'
 import { BaseModel, belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import QualityProfile from './quality_profile.js'
-import MetadataProfile from './metadata_profile.js'
 import RootFolder from './root_folder.js'
-import Album from './album.js'
+import Book from './book.js'
 
-export type ArtistStatus = 'continuing' | 'ended' | 'unknown'
-
-export default class Artist extends BaseModel {
+export default class Author extends BaseModel {
   @column({ isPrimary: true })
   declare id: number
 
+  // External IDs
   @column()
-  declare musicbrainzId: string | null
+  declare goodreadsId: string | null
 
+  @column()
+  declare openlibraryId: string | null
+
+  // Basic info
   @column()
   declare name: string
 
@@ -22,40 +24,19 @@ export default class Artist extends BaseModel {
   declare sortName: string | null
 
   @column()
-  declare disambiguation: string | null
-
-  @column()
   declare overview: string | null
 
-  @column()
-  declare status: ArtistStatus
-
-  @column()
-  declare artistType: string | null
-
-  @column()
-  declare country: string | null
-
-  @column.date()
-  declare formedAt: DateTime | null
-
-  @column.date()
-  declare endedAt: DateTime | null
-
+  // Media
   @column()
   declare imageUrl: string | null
 
-  @column()
-  declare monitored: boolean
-
+  // Library status
   @column()
   declare wanted: boolean
 
+  // Configuration
   @column()
   declare qualityProfileId: number | null
-
-  @column()
-  declare metadataProfileId: number | null
 
   @column()
   declare rootFolderId: number | null
@@ -72,12 +53,9 @@ export default class Artist extends BaseModel {
   @belongsTo(() => QualityProfile)
   declare qualityProfile: BelongsTo<typeof QualityProfile>
 
-  @belongsTo(() => MetadataProfile)
-  declare metadataProfile: BelongsTo<typeof MetadataProfile>
-
   @belongsTo(() => RootFolder)
   declare rootFolder: BelongsTo<typeof RootFolder>
 
-  @hasMany(() => Album)
-  declare albums: HasMany<typeof Album>
+  @hasMany(() => Book)
+  declare books: HasMany<typeof Book>
 }

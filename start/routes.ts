@@ -19,6 +19,10 @@ const ProwlarrController = () => import('#controllers/prowlarr_controller')
 const ArtistsController = () => import('#controllers/artists_controller')
 const AlbumsController = () => import('#controllers/albums_controller')
 const TracksController = () => import('#controllers/tracks_controller')
+const MoviesController = () => import('#controllers/movies_controller')
+const TvShowsController = () => import('#controllers/tv_shows_controller')
+const AuthorsController = () => import('#controllers/authors_controller')
+const BooksController = () => import('#controllers/books_controller')
 const DownloadClientsController = () => import('#controllers/download_clients_controller')
 const QueueController = () => import('#controllers/queue_controller')
 const PlaybackController = () => import('#controllers/playback_controller')
@@ -51,18 +55,23 @@ router
     // Library
     router.on('/library').renderInertia('library/index').as('library')
     router.on('/library/add').renderInertia('library/add').as('library.add')
+    // Music
     router.on('/artist/:id').renderInertia('library/artist/[id]').as('artist')
     router.on('/album/:id').renderInertia('library/album/[id]').as('album')
+    // Movies
+    router.on('/movie/:id').renderInertia('library/movie/[id]').as('movie')
+    // TV
+    router.on('/tvshow/:id').renderInertia('library/tvshow/[id]').as('tvshow')
+    // Books
+    router.on('/author/:id').renderInertia('library/author/[id]').as('author')
+    router.on('/book/:id').renderInertia('library/book/[id]').as('book')
 
     // Search
     router.on('/search').renderInertia('search/index').as('search')
 
-    // Wanted
-    router.on('/wanted').renderInertia('wanted/index').as('wanted')
-    router.on('/wanted/search/:id').renderInertia('wanted/search/[id]').as('wanted.search')
-
-    // Calendar
-    router.on('/calendar').renderInertia('calendar/index').as('calendar')
+    // Requests
+    router.on('/requests').renderInertia('requests/index').as('requests')
+    router.on('/requests/search/:id').renderInertia('requests/search/[id]').as('requests.search')
 
     // Activity
     router.on('/activity/queue').renderInertia('activity/queue').as('activity.queue')
@@ -141,6 +150,44 @@ router
     // Tracks
     router.get('/tracks/search', [TracksController, 'search'])
 
+    // Movies
+    router.get('/movies', [MoviesController, 'index'])
+    router.post('/movies', [MoviesController, 'store'])
+    router.get('/movies/search', [MoviesController, 'search'])
+    router.get('/movies/:id', [MoviesController, 'show'])
+    router.put('/movies/:id', [MoviesController, 'update'])
+    router.delete('/movies/:id', [MoviesController, 'destroy'])
+    router.post('/movies/:id/wanted', [MoviesController, 'setWanted'])
+    router.post('/movies/:id/download', [MoviesController, 'download'])
+
+    // TV Shows
+    router.get('/tvshows', [TvShowsController, 'index'])
+    router.post('/tvshows', [TvShowsController, 'store'])
+    router.get('/tvshows/search', [TvShowsController, 'search'])
+    router.get('/tvshows/:id', [TvShowsController, 'show'])
+    router.put('/tvshows/:id', [TvShowsController, 'update'])
+    router.delete('/tvshows/:id', [TvShowsController, 'destroy'])
+    router.get('/tvshows/:id/season/:seasonNumber', [TvShowsController, 'showSeason'])
+    router.post('/tvshows/:id/episodes/:episodeId/wanted', [TvShowsController, 'setEpisodeWanted'])
+
+    // Authors
+    router.get('/authors', [AuthorsController, 'index'])
+    router.post('/authors', [AuthorsController, 'store'])
+    router.get('/authors/search', [AuthorsController, 'search'])
+    router.get('/authors/:id', [AuthorsController, 'show'])
+    router.put('/authors/:id', [AuthorsController, 'update'])
+    router.delete('/authors/:id', [AuthorsController, 'destroy'])
+
+    // Books
+    router.get('/books', [BooksController, 'index'])
+    router.post('/books', [BooksController, 'store'])
+    router.get('/books/search', [BooksController, 'search'])
+    router.get('/books/:id', [BooksController, 'show'])
+    router.put('/books/:id', [BooksController, 'update'])
+    router.delete('/books/:id', [BooksController, 'destroy'])
+    router.post('/books/:id/wanted', [BooksController, 'setWanted'])
+    router.post('/books/:id/download', [BooksController, 'download'])
+
     // Download clients
     router.get('/downloadclients', [DownloadClientsController, 'index'])
     router.post('/downloadclients', [DownloadClientsController, 'store'])
@@ -150,6 +197,7 @@ router
     router.post('/downloadclients/test', [DownloadClientsController, 'test'])
     router.get('/downloadclients/:id/browse', [DownloadClientsController, 'browseDownloads'])
     router.post('/downloadclients/:id/import', [DownloadClientsController, 'importFromPath'])
+    router.get('/downloadclients/:id/download', [DownloadClientsController, 'downloadFile'])
 
     // Queue
     router.get('/queue', [QueueController, 'index'])

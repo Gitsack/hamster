@@ -2,7 +2,6 @@ import { PropsWithChildren, ReactNode } from 'react'
 import { AppSidebar } from './app-sidebar'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { Separator } from '@/components/ui/separator'
-import { Toaster } from '@/components/ui/sonner'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 
 interface AppLayoutProps extends PropsWithChildren {
@@ -28,7 +27,6 @@ export function AppLayout({ children, title, actions }: AppLayoutProps) {
           {children}
         </main>
       </SidebarInset>
-      <Toaster position="top-right" />
     </SidebarProvider>
   )
 }

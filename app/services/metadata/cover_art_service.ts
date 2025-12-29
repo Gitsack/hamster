@@ -102,6 +102,26 @@ export class CoverArtService {
   }
 
   /**
+   * Check if cover art exists for a release group and return URL if it does
+   */
+  async getVerifiedCoverUrl(
+    releaseGroupMbid: string,
+    size: '250' | '500' | '1200' = '500'
+  ): Promise<string | null> {
+    try {
+      const url = this.getFrontCoverUrl(releaseGroupMbid, size)
+      const response = await fetch(url, { method: 'HEAD' })
+      if (response.ok || response.status === 307) {
+        // 307 is a redirect to the actual image, which means it exists
+        return url
+      }
+      return null
+    } catch (error) {
+      return null
+    }
+  }
+
+  /**
    * Get the front cover URL for a release
    */
   getReleaseFrontCoverUrl(releaseMbid: string, size: '250' | '500' | '1200' = '500'): string {

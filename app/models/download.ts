@@ -5,6 +5,11 @@ import DownloadClient from './download_client.js'
 import Album from './album.js'
 import Release from './release.js'
 import Indexer from './indexer.js'
+import Movie from './movie.js'
+import TvShow from './tv_show.js'
+import Episode from './episode.js'
+import Book from './book.js'
+import type { MediaType } from './app_setting.js'
 
 export type DownloadStatus = 'queued' | 'downloading' | 'paused' | 'completed' | 'failed' | 'importing'
 
@@ -45,10 +50,25 @@ export default class Download extends BaseModel {
   declare etaSeconds: number | null
 
   @column()
+  declare mediaType: MediaType | null
+
+  @column()
   declare albumId: number | null
 
   @column()
   declare releaseId: number | null
+
+  @column()
+  declare movieId: number | null
+
+  @column()
+  declare tvShowId: number | null
+
+  @column()
+  declare episodeId: number | null
+
+  @column()
+  declare bookId: number | null
 
   @column()
   declare indexerId: number | null
@@ -85,4 +105,16 @@ export default class Download extends BaseModel {
 
   @belongsTo(() => Indexer)
   declare indexer: BelongsTo<typeof Indexer>
+
+  @belongsTo(() => Movie)
+  declare movie: BelongsTo<typeof Movie>
+
+  @belongsTo(() => TvShow)
+  declare tvShow: BelongsTo<typeof TvShow>
+
+  @belongsTo(() => Episode)
+  declare episode: BelongsTo<typeof Episode>
+
+  @belongsTo(() => Book)
+  declare book: BelongsTo<typeof Book>
 }

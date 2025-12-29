@@ -43,6 +43,9 @@ export default class Album extends BaseModel {
   declare monitored: boolean
 
   @column()
+  declare wanted: boolean
+
+  @column()
   declare anyReleaseOk: boolean
 
   @column.dateTime({ autoCreate: true })

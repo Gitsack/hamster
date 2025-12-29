@@ -291,6 +291,111 @@ export default class DownloadClientsController {
     }
   }
 
+  /**
+   * Download a file or folder (as zip) to the user's browser
+   */
+  async downloadFile({ params, request, response }: HttpContext) {
+    const nodePath = await import('node:path')
+    const fs = await import('node:fs')
+    const fsPromises = await import('node:fs/promises')
+
+    const client = await DownloadClient.find(params.id)
+
+    if (!client) {
+      return response.notFound({ error: 'Download client not found' })
+    }
+
+    const basePath = client.settings.localPath
+    if (!basePath) {
+      return response.badRequest({ error: 'No local path configured for this download client' })
+    }
+
+    const downloadPath = request.qs().path
+    if (!downloadPath) {
+      return response.badRequest({ error: 'Path is required' })
+    }
+
+    // Security: ensure the path is within the base path
+    const normalizedBase = nodePath.resolve(basePath)
+    const normalizedDownload = nodePath.resolve(downloadPath)
+    if (!normalizedDownload.startsWith(normalizedBase)) {
+      return response.badRequest({ error: 'Access denied: path outside of downloads folder' })
+    }
+
+    try {
+      const stat = await fsPromises.stat(normalizedDownload)
+
+      if (stat.isDirectory()) {
+        // For directories, create a zip file on the fly
+        const archiver = await import('archiver')
+        const fileName = nodePath.basename(normalizedDownload) + '.zip'
+
+        response.header('Content-Type', 'application/zip')
+        response.header('Content-Disposition', `attachment; filename="${fileName}"`)
+
+        const archive = archiver.default('zip', { zlib: { level: 5 } })
+
+        archive.on('error', (err) => {
+          console.error('Archive error:', err)
+          response.status(500).send('Failed to create archive')
+        })
+
+        archive.pipe(response.response)
+        archive.directory(normalizedDownload, nodePath.basename(normalizedDownload))
+        await archive.finalize()
+      } else {
+        // For single files, stream directly
+        const fileName = nodePath.basename(normalizedDownload)
+        const mimeType = this.getMimeType(fileName)
+
+        response.header('Content-Type', mimeType)
+        response.header('Content-Disposition', `attachment; filename="${fileName}"`)
+        response.header('Content-Length', stat.size.toString())
+
+        const readStream = fs.createReadStream(normalizedDownload)
+        readStream.pipe(response.response)
+      }
+    } catch (error) {
+      return response.badRequest({
+        error: error instanceof Error ? error.message : 'Failed to download file',
+      })
+    }
+  }
+
+  private getMimeType(filename: string): string {
+    const ext = filename.toLowerCase().split('.').pop()
+    const mimeTypes: Record<string, string> = {
+      mp3: 'audio/mpeg',
+      flac: 'audio/flac',
+      wav: 'audio/wav',
+      ogg: 'audio/ogg',
+      m4a: 'audio/mp4',
+      aac: 'audio/aac',
+      mp4: 'video/mp4',
+      mkv: 'video/x-matroska',
+      avi: 'video/x-msvideo',
+      mov: 'video/quicktime',
+      wmv: 'video/x-ms-wmv',
+      webm: 'video/webm',
+      pdf: 'application/pdf',
+      epub: 'application/epub+zip',
+      mobi: 'application/x-mobipocket-ebook',
+      zip: 'application/zip',
+      rar: 'application/x-rar-compressed',
+      '7z': 'application/x-7z-compressed',
+      nzb: 'application/x-nzb',
+      txt: 'text/plain',
+      srt: 'text/plain',
+      sub: 'text/plain',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+    }
+    return mimeTypes[ext || ''] || 'application/octet-stream'
+  }
+
   private async getDirSize(dirPath: string): Promise<number> {
     const fs = await import('node:fs/promises')
     const path = await import('node:path')

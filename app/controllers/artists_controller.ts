@@ -13,13 +13,13 @@ const addArtistValidator = vine.compile(
     rootFolderId: vine.number(),
     qualityProfileId: vine.number(),
     metadataProfileId: vine.number(),
-    monitored: vine.boolean().optional(),
+    wanted: vine.boolean().optional(),
   })
 )
 
 const updateArtistValidator = vine.compile(
   vine.object({
-    monitored: vine.boolean().optional(),
+    wanted: vine.boolean().optional(),
     qualityProfileId: vine.number().optional(),
     metadataProfileId: vine.number().optional(),
     rootFolderId: vine.number().optional(),
@@ -35,6 +35,9 @@ export default class ArtistsController {
       .preload('qualityProfile')
       .preload('metadataProfile')
       .preload('rootFolder')
+      .preload('albums', (query) => {
+        query.whereNotNull('imageUrl').orderBy('releaseDate', 'desc').limit(1)
+      })
       .withCount('albums')
       .orderBy('sortName', 'asc')
 
@@ -47,8 +50,9 @@ export default class ArtistsController {
         status: artist.status,
         artistType: artist.artistType,
         country: artist.country,
-        imageUrl: artist.imageUrl,
-        monitored: artist.monitored,
+        // Use artist image if available, otherwise use first album cover
+        imageUrl: artist.imageUrl || artist.albums[0]?.imageUrl || null,
+        wanted: artist.wanted,
         albumCount: (artist.$extras as { albums_count?: string }).albums_count || 0,
         qualityProfile: artist.qualityProfile
           ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
@@ -94,7 +98,7 @@ export default class ArtistsController {
           releaseDate: album.releaseDate?.toISODate(),
           albumType: album.albumType,
           imageUrl: album.imageUrl,
-          monitored: album.monitored,
+          wanted: album.wanted,
           trackCount: Number((trackCount[0].$extras as { total: string }).total) || 0,
           fileCount: Number((fileCount[0].$extras as { total: string }).total) || 0,
         }
@@ -114,7 +118,7 @@ export default class ArtistsController {
       formedAt: artist.formedAt?.toISODate(),
       endedAt: artist.endedAt?.toISODate(),
       imageUrl: artist.imageUrl,
-      monitored: artist.monitored,
+      wanted: artist.wanted,
       qualityProfile: artist.qualityProfile
         ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
         : null,
@@ -157,7 +161,7 @@ export default class ArtistsController {
       country: mbArtist.country || null,
       formedAt: mbArtist.beginDate ? DateTime.fromISO(mbArtist.beginDate) : null,
       endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
-      monitored: data.monitored ?? true,
+      wanted: data.wanted ?? true,
       qualityProfileId: data.qualityProfileId,
       metadataProfileId: data.metadataProfileId,
       rootFolderId: data.rootFolderId,
@@ -188,7 +192,7 @@ export default class ArtistsController {
     const data = await request.validateUsing(updateArtistValidator)
 
     artist.merge({
-      monitored: data.monitored ?? artist.monitored,
+      wanted: data.wanted ?? artist.wanted,
       qualityProfileId: data.qualityProfileId ?? artist.qualityProfileId,
       metadataProfileId: data.metadataProfileId ?? artist.metadataProfileId,
       rootFolderId: data.rootFolderId ?? artist.rootFolderId,
@@ -198,7 +202,7 @@ export default class ArtistsController {
     return response.json({
       id: artist.id,
       name: artist.name,
-      monitored: artist.monitored,
+      wanted: artist.wanted,
     })
   }
 
@@ -249,8 +253,31 @@ export default class ArtistsController {
     })
     await artist.save()
 
-    // Refresh albums
+    // Refresh albums and update artist image if needed
     await this.fetchArtistAlbums(artist)
+
+    // If artist still has no image or current image is broken, try to find one
+    if (!artist.imageUrl) {
+      const albums = await Album.query()
+        .where('artistId', artist.id)
+        .where('albumType', 'album')
+        .whereNotNull('musicbrainzReleaseGroupId')
+        .orderBy('releaseDate', 'desc')
+
+      for (const album of albums) {
+        if (album.musicbrainzReleaseGroupId) {
+          const verified = await coverArtService.getVerifiedCoverUrl(
+            album.musicbrainzReleaseGroupId,
+            '500'
+          )
+          if (verified) {
+            artist.imageUrl = verified
+            await artist.save()
+            break
+          }
+        }
+      }
+    }
 
     return response.json({
       id: artist.id,
@@ -302,17 +329,42 @@ export default class ArtistsController {
     if (!artist.musicbrainzId) return
 
     const mbAlbums = await musicBrainzService.getArtistAlbums(artist.musicbrainzId)
+    let verifiedArtistCoverUrl: string | null = null
 
-    for (const mbAlbum of mbAlbums) {
+    // Sort albums by release date (newest first) to get the most recent album cover
+    const sortedAlbums = [...mbAlbums].sort((a, b) => {
+      if (!a.releaseDate) return 1
+      if (!b.releaseDate) return -1
+      return b.releaseDate.localeCompare(a.releaseDate)
+    })
+
+    for (const mbAlbum of sortedAlbums) {
       // Skip if album already exists
       const existing = await Album.findBy('musicbrainzReleaseGroupId', mbAlbum.id)
-      if (existing) continue
+      if (existing) {
+        // If we don't have an artist image yet, check if this existing album has one
+        if (!verifiedArtistCoverUrl && existing.imageUrl) {
+          const verified = await coverArtService.getVerifiedCoverUrl(mbAlbum.id, '500')
+          if (verified) {
+            verifiedArtistCoverUrl = verified
+          }
+        }
+        continue
+      }
 
       // Map primary type to our album type
       const albumType = this.mapAlbumType(mbAlbum.primaryType)
 
-      // Try to get cover art
+      // Try to get cover art URL (optimistic - may not exist)
       const coverUrl = coverArtService.getFrontCoverUrl(mbAlbum.id, '500')
+
+      // For the artist image, verify the cover actually exists (check first few studio albums)
+      if (!verifiedArtistCoverUrl && albumType === 'album') {
+        const verified = await coverArtService.getVerifiedCoverUrl(mbAlbum.id, '500')
+        if (verified) {
+          verifiedArtistCoverUrl = verified
+        }
+      }
 
       await Album.create({
         artistId: artist.id,
@@ -322,9 +374,15 @@ export default class ArtistsController {
         secondaryTypes: mbAlbum.secondaryTypes || [],
         releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
         imageUrl: coverUrl,
-        monitored: false, // Albums are not monitored by default - user must explicitly select them
+        wanted: false, // Albums are not wanted by default - user must explicitly select them
         anyReleaseOk: true,
       })
+    }
+
+    // Update artist image with a verified album cover if not already set
+    if (verifiedArtistCoverUrl && !artist.imageUrl) {
+      artist.imageUrl = verifiedArtistCoverUrl
+      await artist.save()
     }
   }
 

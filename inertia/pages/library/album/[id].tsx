@@ -138,7 +138,7 @@ export default function AlbumDetail() {
       })
       if (response.ok) {
         setAlbum({ ...album, monitored: !album.monitored })
-        toast.success(album.monitored ? 'Album unmonitored' : 'Album monitored')
+        toast.success(album.monitored ? 'Album unrequested' : 'Album requested')
       }
     } catch (error) {
       console.error('Failed to update album:', error)
@@ -315,7 +315,7 @@ export default function AlbumDetail() {
                   icon={album.monitored ? ViewOffIcon : ViewIcon}
                   className="h-4 w-4 mr-2"
                 />
-                {album.monitored ? 'Unmonitor' : 'Monitor'}
+                {album.monitored ? 'Unrequest' : 'Request'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={searchReleases} disabled={searching}>
@@ -355,9 +355,6 @@ export default function AlbumDetail() {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <h1 className="text-2xl font-bold">{album.title}</h1>
-                {!album.monitored && (
-                  <Badge variant="secondary">Unmonitored</Badge>
-                )}
               </div>
               <Link
                 href={`/artist/${album.artistId}`}

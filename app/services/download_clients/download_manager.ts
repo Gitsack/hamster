@@ -9,6 +9,10 @@ export interface DownloadRequest {
   downloadUrl: string
   size?: number
   albumId?: number
+  movieId?: number
+  tvShowId?: number
+  episodeId?: number
+  bookId?: number
   releaseId?: number
   indexerId?: number
   indexerName?: string
@@ -49,6 +53,10 @@ export class DownloadManager {
       progress: 0,
       sizeBytes: request.size || null,
       albumId: request.albumId || null,
+      movieId: request.movieId || null,
+      tvShowId: request.tvShowId || null,
+      episodeId: request.episodeId || null,
+      bookId: request.bookId || null,
       releaseId: request.releaseId || null,
       indexerId: request.indexerId || null,
       nzbInfo: {

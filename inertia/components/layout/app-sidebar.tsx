@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import { HugeiconsIcon, IconSvgElement } from '@hugeicons/react'
 import {
   MusicNote01Icon,
-  Calendar03Icon,
   Download04Icon,
   Clock01Icon,
   Settings02Icon,
@@ -53,14 +52,9 @@ const mainNavItems: NavItem[] = [
     icon: Search01Icon,
   },
   {
-    title: 'Wanted',
-    url: '/wanted',
+    title: 'Requests',
+    url: '/requests',
     icon: HeartCheckIcon,
-  },
-  {
-    title: 'Calendar',
-    url: '/calendar',
-    icon: Calendar03Icon,
   },
 ]
 

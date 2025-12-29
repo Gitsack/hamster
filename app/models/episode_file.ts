@@ -1,0 +1,47 @@
+import { DateTime } from 'luxon'
+import { BaseModel, belongsTo, column } from '@adonisjs/lucid/orm'
+import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import Episode from './episode.js'
+import TvShow from './tv_show.js'
+import type { VideoMediaInfo } from './movie_file.js'
+
+export default class EpisodeFile extends BaseModel {
+  @column({ isPrimary: true })
+  declare id: number
+
+  @column()
+  declare episodeId: number
+
+  @column()
+  declare tvShowId: number
+
+  @column()
+  declare relativePath: string
+
+  @column()
+  declare sizeBytes: number
+
+  @column()
+  declare quality: string | null
+
+  @column({
+    prepare: (value: VideoMediaInfo) => JSON.stringify(value),
+    consume: (value: string) => (value ? JSON.parse(value) : null),
+  })
+  declare mediaInfo: VideoMediaInfo | null
+
+  @column.dateTime()
+  declare dateAdded: DateTime | null
+
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+
+  @belongsTo(() => Episode)
+  declare episode: BelongsTo<typeof Episode>
+
+  @belongsTo(() => TvShow)
+  declare tvShow: BelongsTo<typeof TvShow>
+}

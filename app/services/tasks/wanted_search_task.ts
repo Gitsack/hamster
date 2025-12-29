@@ -1,4 +1,5 @@
 import Album from '#models/album'
+import Download from '#models/download'
 import { indexerManager } from '#services/indexers/indexer_manager'
 import { downloadManager } from '#services/download_clients/download_manager'
 
@@ -81,7 +82,20 @@ class WantedSearchTask {
 
       console.log(`[WantedSearch] Found ${albumsToSearch.length} wanted albums`)
 
+      // Get albums that already have active downloads (queued, downloading, paused, or importing)
+      const activeDownloads = await Download.query()
+        .whereNotNull('albumId')
+        .whereIn('status', ['queued', 'downloading', 'paused', 'importing'])
+
+      const albumsWithActiveDownloads = new Set(activeDownloads.map((d) => d.albumId))
+
       for (const album of albumsToSearch) {
+        // Skip if album already has an active download
+        if (albumsWithActiveDownloads.has(album.id)) {
+          console.log(`[WantedSearch] Skipping ${album.title} - already has active download`)
+          continue
+        }
+
         result.searched++
 
         try {

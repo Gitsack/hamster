@@ -14,30 +14,25 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Folder01Icon,
-  Delete02Icon,
   Add01Icon,
   Alert02Icon,
   CheckmarkCircle02Icon,
   MusicNote01Icon,
   Video01Icon,
   Tv01Icon,
+  Book01Icon,
+  Edit01Icon,
+  Key01Icon,
+  EyeIcon,
+  ViewOffIcon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 import { FolderBrowser } from '@/components/folder-browser'
 
-type MediaType = 'music' | 'movies' | 'tv'
+type MediaType = 'music' | 'movies' | 'tv' | 'books'
 
 interface RootFolder {
   id: number
@@ -51,38 +46,56 @@ interface RootFolder {
 
 interface AppSettings {
   enabledMediaTypes: MediaType[]
+  hasTmdbApiKey: boolean
 }
 
-const mediaTypeInfo: Record<MediaType, { label: string; icon: any; description: string }> = {
+const mediaTypeInfo: Record<MediaType, { label: string; icon: any; description: string; needsApiKey?: boolean }> = {
   music: {
     label: 'Music',
     icon: MusicNote01Icon,
-    description: 'Manage your music library with artist and album organization',
+    description: 'Artist and album organization with MusicBrainz metadata',
   },
   movies: {
     label: 'Movies',
     icon: Video01Icon,
-    description: 'Organize your movie collection (coming soon)',
+    description: 'Movie collection with TMDB metadata',
+    needsApiKey: true,
   },
   tv: {
     label: 'TV Shows',
     icon: Tv01Icon,
-    description: 'Track and organize TV series (coming soon)',
+    description: 'Series with seasons and episodes from TMDB',
+    needsApiKey: true,
+  },
+  books: {
+    label: 'Books',
+    icon: Book01Icon,
+    description: 'Ebook library with OpenLibrary metadata',
   },
 }
 
 export default function MediaManagement() {
   const [settings, setSettings] = useState<AppSettings>({
     enabledMediaTypes: ['music'],
+    hasTmdbApiKey: false,
   })
   const [rootFolders, setRootFolders] = useState<RootFolder[]>([])
   const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
+
+  // Folder dialog state
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false)
   const [editingMediaType, setEditingMediaType] = useState<MediaType>('music')
+  const [editingFolderId, setEditingFolderId] = useState<number | null>(null)
   const [newPath, setNewPath] = useState('')
   const [newName, setNewName] = useState('')
   const [createIfMissing, setCreateIfMissing] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // API Key dialog state
+  const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false)
+  const [tmdbApiKey, setTmdbApiKey] = useState('')
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [savingApiKey, setSavingApiKey] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -111,6 +124,13 @@ export default function MediaManagement() {
   }, [])
 
   const handleToggleMediaType = async (mediaType: MediaType, enabled: boolean) => {
+    // Check if TMDB API key is needed
+    if (enabled && mediaTypeInfo[mediaType].needsApiKey && !settings.hasTmdbApiKey) {
+      toast.error(`Please configure your TMDB API key first to enable ${mediaTypeInfo[mediaType].label}`)
+      setApiKeyDialogOpen(true)
+      return
+    }
+
     try {
       const response = await fetch('/api/v1/settings/media-type', {
         method: 'POST',
@@ -130,15 +150,21 @@ export default function MediaManagement() {
     }
   }
 
-  const openAddFolderDialog = (mediaType: MediaType) => {
-    setEditingMediaType(mediaType)
-    setNewPath('')
-    setNewName('')
-    setCreateIfMissing(false)
-    setDialogOpen(true)
+  const getFolderForMediaType = (mediaType: MediaType) => {
+    return rootFolders.find((folder) => folder.mediaType === mediaType)
   }
 
-  const handleAddFolder = async () => {
+  const openFolderDialog = (mediaType: MediaType) => {
+    const existingFolder = getFolderForMediaType(mediaType)
+    setEditingMediaType(mediaType)
+    setEditingFolderId(existingFolder?.id || null)
+    setNewPath(existingFolder?.path || '')
+    setNewName(existingFolder?.name || '')
+    setCreateIfMissing(false)
+    setFolderDialogOpen(true)
+  }
+
+  const handleSaveFolder = async () => {
     if (!newPath.trim()) {
       toast.error('Path is required')
       return
@@ -146,52 +172,83 @@ export default function MediaManagement() {
 
     setSaving(true)
     try {
-      const response = await fetch('/api/v1/rootfolders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: newPath,
-          name: newName || undefined,
-          mediaType: editingMediaType,
-          createIfMissing,
-        }),
-      })
+      if (editingFolderId) {
+        // Update existing folder
+        const response = await fetch(`/api/v1/rootfolders/${editingFolderId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: newPath,
+            name: newName || undefined,
+            mediaType: editingMediaType,
+          }),
+        })
 
-      if (response.ok) {
-        toast.success('Folder added')
-        setDialogOpen(false)
-        fetchData()
+        if (response.ok) {
+          toast.success('Folder updated')
+          setFolderDialogOpen(false)
+          fetchData()
+        } else {
+          const error = await response.json()
+          toast.error(error.error || 'Failed to update folder')
+        }
       } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to add folder')
+        // Create new folder
+        const response = await fetch('/api/v1/rootfolders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: newPath,
+            name: newName || undefined,
+            mediaType: editingMediaType,
+            createIfMissing,
+          }),
+        })
+
+        if (response.ok) {
+          toast.success('Folder added')
+          setFolderDialogOpen(false)
+          fetchData()
+        } else {
+          const error = await response.json()
+          toast.error(error.error || 'Failed to add folder')
+        }
       }
     } catch (error) {
-      toast.error('Failed to add folder')
+      toast.error('Failed to save folder')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleDeleteFolder = async (id: number) => {
+  const handleSaveApiKey = async () => {
+    if (!tmdbApiKey.trim()) {
+      toast.error('API key is required')
+      return
+    }
+
+    setSavingApiKey(true)
     try {
-      const response = await fetch(`/api/v1/rootfolders/${id}`, {
-        method: 'DELETE',
+      const response = await fetch('/api/v1/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tmdbApiKey }),
       })
 
       if (response.ok) {
-        toast.success('Folder removed')
-        fetchData()
+        const data = await response.json()
+        setSettings((prev) => ({ ...prev, hasTmdbApiKey: data.hasTmdbApiKey }))
+        toast.success('TMDB API key saved')
+        setApiKeyDialogOpen(false)
+        setTmdbApiKey('')
       } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to remove folder')
+        toast.error('Failed to save API key')
       }
     } catch (error) {
-      toast.error('Failed to remove folder')
+      toast.error('Failed to save API key')
+    } finally {
+      setSavingApiKey(false)
     }
-  }
-
-  const getFoldersForMediaType = (mediaType: MediaType) => {
-    return rootFolders.filter((folder) => folder.mediaType === mediaType)
   }
 
   return (
@@ -199,150 +256,133 @@ export default function MediaManagement() {
       <Head title="Media Management" />
 
       <div className="space-y-6">
+        {/* API Keys */}
+        <Card>
+          <CardHeader>
+            <CardTitle>API Keys</CardTitle>
+            <CardDescription>
+              Configure API keys for metadata providers
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                  <HugeiconsIcon icon={Key01Icon} className="size-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <span className="font-medium">TMDB API Key</span>
+                  <p className="text-sm text-muted-foreground">
+                    Required for Movies and TV Shows metadata.{' '}
+                    <a
+                      href="https://www.themoviedb.org/settings/api"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Get one free
+                    </a>
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {settings.hasTmdbApiKey ? (
+                  <span className="text-sm text-green-600 flex items-center gap-1">
+                    <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-4" />
+                    Configured
+                  </span>
+                ) : (
+                  <span className="text-sm text-orange-500 flex items-center gap-1">
+                    <HugeiconsIcon icon={Alert02Icon} className="size-4" />
+                    Not configured
+                  </span>
+                )}
+                <Button variant="outline" size="sm" onClick={() => setApiKeyDialogOpen(true)}>
+                  {settings.hasTmdbApiKey ? 'Change' : 'Add'}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Media Types */}
         <Card>
           <CardHeader>
             <CardTitle>Media Types</CardTitle>
             <CardDescription>
-              Enable media types to manage. Each type has its own library and folder settings.
+              Enable media types and configure their library folders
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {(Object.keys(mediaTypeInfo) as MediaType[]).map((mediaType) => {
               const info = mediaTypeInfo[mediaType]
               const isEnabled = settings.enabledMediaTypes.includes(mediaType)
-              const isDisabled = mediaType !== 'music' // Only music is available for now
+              const folder = getFolderForMediaType(mediaType)
 
               return (
                 <div
                   key={mediaType}
-                  className={`flex items-center justify-between rounded-lg border p-4 ${
-                    isEnabled ? 'border-primary/50 bg-primary/5' : ''
-                  } ${isDisabled ? 'opacity-50' : ''}`}
+                  className={`rounded-lg border ${isEnabled ? 'border-primary/50' : ''}`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                        isEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      <HugeiconsIcon icon={info.icon} className="size-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
+                  {/* Media type header */}
+                  <div
+                    className={`flex items-center justify-between p-4 ${
+                      isEnabled ? 'bg-primary/5' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                          isEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        <HugeiconsIcon icon={info.icon} className="size-5" />
+                      </div>
+                      <div>
                         <span className="font-medium">{info.label}</span>
-                        {isDisabled && (
-                          <Badge variant="secondary" className="text-xs">
-                            Coming Soon
-                          </Badge>
+                        <p className="text-sm text-muted-foreground">{info.description}</p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={isEnabled}
+                      onCheckedChange={(checked) => handleToggleMediaType(mediaType, checked)}
+                    />
+                  </div>
+
+                  {/* Folder configuration (shown when enabled) */}
+                  {isEnabled && (
+                    <div className="border-t p-4 bg-muted/30">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <HugeiconsIcon icon={Folder01Icon} className="size-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">Library Folder</span>
+                        </div>
+                        {folder ? (
+                          <div className="flex items-center gap-2">
+                            <code className="text-sm bg-muted px-2 py-1 rounded">{folder.path}</code>
+                            {folder.accessible ? (
+                              <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-4 text-green-600" />
+                            ) : (
+                              <HugeiconsIcon icon={Alert02Icon} className="size-4 text-destructive" />
+                            )}
+                            <Button variant="ghost" size="sm" onClick={() => openFolderDialog(mediaType)}>
+                              <HugeiconsIcon icon={Edit01Icon} className="size-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={() => openFolderDialog(mediaType)}>
+                            <HugeiconsIcon icon={Add01Icon} className="size-4 mr-1" />
+                            Set Folder
+                          </Button>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">{info.description}</p>
                     </div>
-                  </div>
-                  <Switch
-                    checked={isEnabled}
-                    onCheckedChange={(checked) => handleToggleMediaType(mediaType, checked)}
-                    disabled={isDisabled}
-                  />
+                  )}
                 </div>
               )
             })}
           </CardContent>
         </Card>
-
-        {/* Media Library Folders - one section per enabled media type */}
-        {settings.enabledMediaTypes.map((mediaType) => {
-          const info = mediaTypeInfo[mediaType]
-          const folders = getFoldersForMediaType(mediaType)
-
-          return (
-            <Card key={mediaType}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <HugeiconsIcon icon={info.icon} className="size-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle>{info.label} Library</CardTitle>
-                      <CardDescription>
-                        Folder where your {info.label.toLowerCase()} files are stored
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <Button onClick={() => openAddFolderDialog(mediaType)}>
-                    <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
-                    Add Folder
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8 text-muted-foreground">Loading...</div>
-                ) : folders.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No folders configured for {info.label.toLowerCase()}.
-                    <br />
-                    Add a folder to start organizing your library.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Path</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="w-[100px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {folders.map((folder) => (
-                        <TableRow key={folder.id}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              <HugeiconsIcon
-                                icon={Folder01Icon}
-                                className="size-4 text-muted-foreground"
-                              />
-                              {folder.name}
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">{folder.path}</TableCell>
-                          <TableCell>
-                            {folder.accessible ? (
-                              <div className="flex items-center gap-1 text-green-600">
-                                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-4" />
-                                <span>Accessible</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 text-destructive">
-                                <HugeiconsIcon icon={Alert02Icon} className="size-4" />
-                                <span>Not accessible</span>
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteFolder(folder.id)}
-                            >
-                              <HugeiconsIcon
-                                icon={Delete02Icon}
-                                className="size-4 text-destructive"
-                              />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })}
 
         {/* File Naming */}
         <Card>
@@ -372,14 +412,15 @@ export default function MediaManagement() {
         </Card>
       </div>
 
-      {/* Add Folder Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Folder Dialog */}
+      <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add {mediaTypeInfo[editingMediaType].label} Folder</DialogTitle>
+            <DialogTitle>
+              {editingFolderId ? 'Edit' : 'Set'} {mediaTypeInfo[editingMediaType].label} Folder
+            </DialogTitle>
             <DialogDescription>
-              Browse and select a folder where your {mediaTypeInfo[editingMediaType].label.toLowerCase()} files
-              are stored.
+              Select a folder where your {mediaTypeInfo[editingMediaType].label.toLowerCase()} files are stored.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -400,16 +441,68 @@ export default function MediaManagement() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setFolderDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAddFolder} disabled={saving || !newPath}>
-              {saving ? 'Adding...' : 'Add Folder'}
+            <Button onClick={handleSaveFolder} disabled={saving || !newPath}>
+              {saving ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* API Key Dialog */}
+      <Dialog open={apiKeyDialogOpen} onOpenChange={setApiKeyDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>TMDB API Key</DialogTitle>
+            <DialogDescription>
+              Enter your TMDB API key to enable Movies and TV Shows metadata.
+              You can get a free API key at{' '}
+              <a
+                href="https://www.themoviedb.org/settings/api"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                themoviedb.org
+              </a>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="apiKey">API Key (v3 auth)</Label>
+              <div className="relative">
+                <Input
+                  id="apiKey"
+                  type={showApiKey ? 'text' : 'password'}
+                  placeholder="Enter your TMDB API key"
+                  value={tmdbApiKey}
+                  onChange={(e) => setTmdbApiKey(e.target.value)}
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                >
+                  <HugeiconsIcon icon={showApiKey ? ViewOffIcon : EyeIcon} className="size-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApiKeyDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveApiKey} disabled={savingApiKey || !tmdbApiKey.trim()}>
+              {savingApiKey ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   )
 }

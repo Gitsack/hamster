@@ -15,14 +15,14 @@ const addAlbumValidator = vine.compile(
     rootFolderId: vine.number(),
     qualityProfileId: vine.number(),
     metadataProfileId: vine.number(),
-    monitored: vine.boolean().optional(),
+    wanted: vine.boolean().optional(),
     searchForAlbum: vine.boolean().optional(),
   })
 )
 
 const updateAlbumValidator = vine.compile(
   vine.object({
-    monitored: vine.boolean().optional(),
+    wanted: vine.boolean().optional(),
     anyReleaseOk: vine.boolean().optional(),
   })
 )
@@ -60,7 +60,7 @@ export default class AlbumsController {
           albumType: album.albumType,
           secondaryTypes: album.secondaryTypes,
           imageUrl: album.imageUrl,
-          monitored: album.monitored,
+          wanted: album.wanted,
           trackCount: Number((trackCount[0].$extras as { total: string }).total) || 0,
           fileCount: Number((fileCount[0].$extras as { total: string }).total) || 0,
         }
@@ -93,7 +93,7 @@ export default class AlbumsController {
         return response.notFound({ error: 'Artist not found on MusicBrainz' })
       }
 
-      // Create artist with monitored=false so we don't auto-fetch all albums
+      // Create artist with wanted=false so we don't auto-fetch all albums
       artist = await Artist.create({
         musicbrainzId: data.artistMusicbrainzId,
         name: mbArtist.name,
@@ -104,7 +104,7 @@ export default class AlbumsController {
         country: mbArtist.country || null,
         formedAt: mbArtist.beginDate ? DateTime.fromISO(mbArtist.beginDate) : null,
         endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
-        monitored: false, // Artist not monitored - only specific albums
+        wanted: false, // Artist not wanted - only specific albums
         qualityProfileId: data.qualityProfileId,
         metadataProfileId: data.metadataProfileId,
         rootFolderId: data.rootFolderId,
@@ -135,7 +135,7 @@ export default class AlbumsController {
       secondaryTypes: mbAlbum.secondaryTypes || [],
       releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
       imageUrl: coverUrl,
-      monitored: data.monitored ?? true,
+      wanted: data.wanted ?? true,
       anyReleaseOk: true,
     })
 
@@ -151,7 +151,7 @@ export default class AlbumsController {
       title: album.title,
       artistId: artist.id,
       artistName: artist.name,
-      monitored: album.monitored,
+      wanted: album.wanted,
     })
   }
 
@@ -246,7 +246,7 @@ export default class AlbumsController {
       albumType: album.albumType,
       secondaryTypes: album.secondaryTypes,
       imageUrl: album.imageUrl,
-      monitored: album.monitored,
+      wanted: album.wanted,
       anyReleaseOk: album.anyReleaseOk,
       tracks: album.tracks.map((track) => ({
         id: track.id,
@@ -280,7 +280,7 @@ export default class AlbumsController {
     const data = await request.validateUsing(updateAlbumValidator)
 
     album.merge({
-      monitored: data.monitored ?? album.monitored,
+      wanted: data.wanted ?? album.wanted,
       anyReleaseOk: data.anyReleaseOk ?? album.anyReleaseOk,
     })
     await album.save()
@@ -288,7 +288,7 @@ export default class AlbumsController {
     return response.json({
       id: album.id,
       title: album.title,
-      monitored: album.monitored,
+      wanted: album.wanted,
       anyReleaseOk: album.anyReleaseOk,
     })
   }
@@ -300,9 +300,9 @@ export default class AlbumsController {
     const page = request.input('page', 1)
     const limit = request.input('limit', 50)
 
-    // Get albums that are monitored but have no track files
+    // Get albums that are wanted but have no track files
     const albums = await Album.query()
-      .where('monitored', true)
+      .where('wanted', true)
       .whereDoesntHave('trackFiles', () => {})
       .preload('artist')
       .orderBy('releaseDate', 'desc')
@@ -405,6 +405,21 @@ export default class AlbumsController {
 
     if (!album) {
       return response.notFound({ error: 'Album not found' })
+    }
+
+    // Check if there's already an active download for this album
+    const { default: Download } = await import('#models/download')
+    const existingDownload = await Download.query()
+      .where('albumId', album.id)
+      .whereIn('status', ['queued', 'downloading', 'paused', 'importing'])
+      .first()
+
+    if (existingDownload) {
+      return response.conflict({
+        error: 'Album already has an active download',
+        downloadId: existingDownload.id,
+        status: existingDownload.status,
+      })
     }
 
     // Check if searching for a specific track

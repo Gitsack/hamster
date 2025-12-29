@@ -3,7 +3,7 @@ import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -56,9 +56,11 @@ import {
   Globe02Icon,
   Add01Icon,
   MoreVerticalIcon,
-  Delete02Icon,
+  Film01Icon,
+  Tv01Icon,
+  Book01Icon,
 } from '@hugeicons/core-free-icons'
-import { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from 'react'
+import { useState, useEffect, useMemo, useCallback, Component, ErrorInfo, ReactNode } from 'react'
 import { toast } from 'sonner'
 
 // Error boundary to catch rendering errors
@@ -96,7 +98,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 // Types
-type SearchMode = 'music' | 'direct'
+type MediaType = 'music' | 'movies' | 'tv' | 'books'
 type MusicSearchType = 'artist' | 'album' | 'track'
 
 interface IndexerSearchResult {
@@ -149,6 +151,48 @@ interface TrackSearchResult {
   inLibrary: boolean
 }
 
+interface MovieSearchResult {
+  tmdbId: string
+  title: string
+  year?: number
+  overview?: string
+  posterUrl?: string
+  releaseDate?: string
+  rating?: number
+  inLibrary: boolean
+}
+
+interface TvShowSearchResult {
+  tmdbId: string
+  title: string
+  year?: number
+  overview?: string
+  posterUrl?: string
+  firstAirDate?: string
+  status?: string
+  rating?: number
+  seasonCount?: number
+  episodeCount?: number
+  inLibrary: boolean
+}
+
+interface AuthorSearchResult {
+  openlibraryId: string
+  name: string
+  birthDate?: string
+  inLibrary: boolean
+}
+
+interface BookSearchResult {
+  openlibraryId: string
+  title: string
+  authorName: string
+  authorKey?: string
+  year?: number
+  coverUrl?: string
+  inLibrary: boolean
+}
+
 interface Indexer {
   id: number
   name: string
@@ -165,6 +209,7 @@ interface DownloadClient {
 interface RootFolder {
   id: number
   path: string
+  mediaType?: string
 }
 
 interface QualityProfile {
@@ -198,15 +243,12 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'actions', label: 'Actions', visible: true },
 ]
 
-const categoryOptions = [
-  { value: '3000', label: 'Audio' },
-  { value: '3010', label: 'Audio/MP3' },
-  { value: '3020', label: 'Audio/Video' },
-  { value: '3030', label: 'Audio/Audiobook' },
-  { value: '3040', label: 'Audio/Lossless' },
-  { value: '3050', label: 'Audio/Other' },
-  { value: '3060', label: 'Audio/Foreign' },
-]
+const MEDIA_TYPE_CONFIG: Record<MediaType, { label: string; icon: typeof MusicNote01Icon }> = {
+  music: { label: 'Music', icon: MusicNote01Icon },
+  movies: { label: 'Movies', icon: Film01Icon },
+  tv: { label: 'TV Shows', icon: Tv01Icon },
+  books: { label: 'Books', icon: Book01Icon },
+}
 
 // Utility functions
 function formatBytes(bytes: number): string {
@@ -245,11 +287,14 @@ function formatAge(dateString: string): string {
 export default function SearchPage() {
   // Get initial mode from URL params
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
-  const initialMode = (urlParams?.get('mode') as SearchMode) || 'music'
+  const initialMode = (urlParams?.get('mode') as MediaType | 'direct') || 'music'
   const initialType = (urlParams?.get('type') as MusicSearchType) || 'artist'
 
+  // Enabled media types from settings
+  const [enabledMediaTypes, setEnabledMediaTypes] = useState<MediaType[]>(['music'])
+
   // Main state
-  const [searchMode, setSearchMode] = useState<SearchMode>(initialMode)
+  const [searchMode, setSearchMode] = useState<MediaType | 'direct'>(initialMode)
   const [musicSearchType, setMusicSearchType] = useState<MusicSearchType>(initialType)
   const [searchQuery, setSearchQuery] = useState('')
   const [searching, setSearching] = useState(false)
@@ -259,6 +304,17 @@ export default function SearchPage() {
   const [artistResults, setArtistResults] = useState<ArtistSearchResult[]>([])
   const [albumResults, setAlbumResults] = useState<AlbumSearchResult[]>([])
   const [trackResults, setTrackResults] = useState<TrackSearchResult[]>([])
+
+  // Movies search results
+  const [movieResults, setMovieResults] = useState<MovieSearchResult[]>([])
+
+  // TV search results
+  const [tvShowResults, setTvShowResults] = useState<TvShowSearchResult[]>([])
+
+  // Books search results
+  const [authorResults, setAuthorResults] = useState<AuthorSearchResult[]>([])
+  const [bookResults, setBookResults] = useState<BookSearchResult[]>([])
+  const [booksSearchType, setBooksSearchType] = useState<'author' | 'book'>('author')
 
   // Direct search results
   const [indexerResults, setIndexerResults] = useState<IndexerSearchResult[]>([])
@@ -281,22 +337,61 @@ export default function SearchPage() {
   const [downloading, setDownloading] = useState(false)
   const [bulkDownloading, setBulkDownloading] = useState(false)
 
-  // Add artist/album dialog state
+  // Add dialogs state
   const [rootFolders, setRootFolders] = useState<RootFolder[]>([])
   const [qualityProfiles, setQualityProfiles] = useState<QualityProfile[]>([])
   const [metadataProfiles, setMetadataProfiles] = useState<MetadataProfile[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
+
+  // Music add state
   const [selectedArtist, setSelectedArtist] = useState<ArtistSearchResult | null>(null)
   const [selectedAlbum, setSelectedAlbum] = useState<AlbumSearchResult | null>(null)
   const [addArtistDialogOpen, setAddArtistDialogOpen] = useState(false)
   const [addAlbumDialogOpen, setAddAlbumDialogOpen] = useState(false)
+
+  // Movie add state
+  const [selectedMovie, setSelectedMovie] = useState<MovieSearchResult | null>(null)
+  const [addMovieDialogOpen, setAddMovieDialogOpen] = useState(false)
+  const [addingMovie, setAddingMovie] = useState(false)
+
+  // TV add state
+  const [selectedTvShow, setSelectedTvShow] = useState<TvShowSearchResult | null>(null)
+  const [addTvShowDialogOpen, setAddTvShowDialogOpen] = useState(false)
+  const [addingTvShow, setAddingTvShow] = useState(false)
+
+  // Books add state
+  const [selectedAuthor, setSelectedAuthor] = useState<AuthorSearchResult | null>(null)
+  const [selectedBook, setSelectedBook] = useState<BookSearchResult | null>(null)
+  const [addAuthorDialogOpen, setAddAuthorDialogOpen] = useState(false)
+  const [addBookDialogOpen, setAddBookDialogOpen] = useState(false)
+  const [addingAuthor, setAddingAuthor] = useState(false)
+  const [addingBook, setAddingBook] = useState(false)
+  const [addBooks, setAddBooks] = useState(true)
+
+  // Common add state
   const [selectedRootFolder, setSelectedRootFolder] = useState<string>('')
   const [selectedQualityProfile, setSelectedQualityProfile] = useState<string>('')
   const [selectedMetadataProfile, setSelectedMetadataProfile] = useState<string>('')
-  const [monitored, setMonitored] = useState(true)
-  const [searchForAlbum, setSearchForAlbum] = useState(true)
+  const [wanted, setWanted] = useState(true)
+  const [searchOnAdd, setSearchOnAdd] = useState(true)
   const [addingArtist, setAddingArtist] = useState(false)
   const [addingAlbum, setAddingAlbum] = useState(false)
+
+  // Load enabled media types
+  useEffect(() => {
+    fetch('/api/v1/settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.enabledMediaTypes?.length > 0) {
+          setEnabledMediaTypes(data.enabledMediaTypes)
+          // If current mode isn't enabled, switch to first enabled
+          if (!data.enabledMediaTypes.includes(searchMode) && searchMode !== 'direct') {
+            setSearchMode(data.enabledMediaTypes[0])
+          }
+        }
+      })
+      .catch(console.error)
+  }, [])
 
   // Load initial data
   useEffect(() => {
@@ -312,7 +407,7 @@ export default function SearchPage() {
       .then((data) => setDownloadClients(data.filter((c: DownloadClient) => c.enabled)))
       .catch(console.error)
 
-    // Load add artist options
+    // Load add options
     Promise.all([
       fetch('/api/v1/rootfolders').then((r) => r.json()),
       fetch('/api/v1/qualityprofiles').then((r) => r.json()),
@@ -329,6 +424,12 @@ export default function SearchPage() {
       .catch(console.error)
       .finally(() => setLoadingOptions(false))
   }, [])
+
+  // Get filtered root folders for current media type
+  const filteredRootFolders = useMemo(() => {
+    if (searchMode === 'direct') return rootFolders
+    return rootFolders.filter((rf) => !rf.mediaType || rf.mediaType === searchMode)
+  }, [rootFolders, searchMode])
 
   // Filtered and sorted results for direct search
   const filteredIndexerResults = useMemo(() => {
@@ -379,7 +480,6 @@ export default function SearchPage() {
 
     try {
       if (searchMode === 'direct') {
-        // Direct indexer search
         const params = new URLSearchParams({
           query: searchQuery,
           limit: '100',
@@ -391,46 +491,41 @@ export default function SearchPage() {
 
         const response = await fetch(`/api/v1/indexers/search?${params}`)
         if (response.ok) {
-          const data = await response.json()
-          setIndexerResults(data)
+          setIndexerResults(await response.json())
         } else {
           toast.error('Search failed')
         }
-      } else {
-        // Music metadata search
+      } else if (searchMode === 'music') {
         switch (musicSearchType) {
           case 'artist': {
             const response = await fetch(`/api/v1/artists/search?q=${encodeURIComponent(searchQuery)}`)
-            if (response.ok) {
-              const data = await response.json()
-              setArtistResults(data)
-            }
+            if (response.ok) setArtistResults(await response.json())
             break
           }
           case 'album': {
             const response = await fetch(`/api/v1/albums/search?q=${encodeURIComponent(searchQuery)}`)
-            if (response.ok) {
-              const data = await response.json()
-              setAlbumResults(data)
-            } else {
-              // Fallback if endpoint doesn't exist yet
-              setAlbumResults([])
-              toast.error('Album search coming soon')
-            }
+            if (response.ok) setAlbumResults(await response.json())
             break
           }
           case 'track': {
             const response = await fetch(`/api/v1/tracks/search?q=${encodeURIComponent(searchQuery)}`)
-            if (response.ok) {
-              const data = await response.json()
-              setTrackResults(data)
-            } else {
-              // Fallback if endpoint doesn't exist yet
-              setTrackResults([])
-              toast.error('Track search coming soon')
-            }
+            if (response.ok) setTrackResults(await response.json())
             break
           }
+        }
+      } else if (searchMode === 'movies') {
+        const response = await fetch(`/api/v1/movies/search?q=${encodeURIComponent(searchQuery)}`)
+        if (response.ok) setMovieResults(await response.json())
+      } else if (searchMode === 'tv') {
+        const response = await fetch(`/api/v1/tvshows/search?q=${encodeURIComponent(searchQuery)}`)
+        if (response.ok) setTvShowResults(await response.json())
+      } else if (searchMode === 'books') {
+        if (booksSearchType === 'author') {
+          const response = await fetch(`/api/v1/authors/search?q=${encodeURIComponent(searchQuery)}`)
+          if (response.ok) setAuthorResults(await response.json())
+        } else {
+          const response = await fetch(`/api/v1/books/search?q=${encodeURIComponent(searchQuery)}`)
+          if (response.ok) setBookResults(await response.json())
         }
       }
     } catch (error) {
@@ -555,11 +650,8 @@ export default function SearchPage() {
             }),
           })
 
-          if (response.ok) {
-            successCount++
-          } else {
-            failCount++
-          }
+          if (response.ok) successCount++
+          else failCount++
         } catch {
           failCount++
         }
@@ -578,27 +670,11 @@ export default function SearchPage() {
     setSelectedResults(new Set())
   }
 
-  // Add artist functions
-  const openAddArtistDialog = (artist: ArtistSearchResult) => {
-    setSelectedArtist(artist)
-    setAddArtistDialogOpen(true)
-  }
-
-  // Add album functions
-  const openAddAlbumDialog = (album: AlbumSearchResult) => {
-    setSelectedAlbum(album)
-    setAddAlbumDialogOpen(true)
-  }
-
+  // Add functions
   const addArtist = async () => {
-    if (!selectedArtist) return
-    if (!selectedRootFolder || !selectedQualityProfile || !selectedMetadataProfile) {
-      toast.error('Please select all required options')
-      return
-    }
+    if (!selectedArtist || !selectedRootFolder || !selectedQualityProfile || !selectedMetadataProfile) return
 
     setAddingArtist(true)
-
     try {
       const response = await fetch('/api/v1/artists', {
         method: 'POST',
@@ -608,7 +684,7 @@ export default function SearchPage() {
           rootFolderId: parseInt(selectedRootFolder),
           qualityProfileId: parseInt(selectedQualityProfile),
           metadataProfileId: parseInt(selectedMetadataProfile),
-          monitored,
+          wanted,
         }),
       })
 
@@ -616,16 +692,9 @@ export default function SearchPage() {
         const data = await response.json()
         toast.success(`${selectedArtist.name} added to library`)
         setAddArtistDialogOpen(false)
-
-        // Update search results
         setArtistResults((prev) =>
-          prev.map((r) =>
-            r.musicbrainzId === selectedArtist.musicbrainzId
-              ? { ...r, inLibrary: true }
-              : r
-          )
+          prev.map((r) => r.musicbrainzId === selectedArtist.musicbrainzId ? { ...r, inLibrary: true } : r)
         )
-
         router.visit(`/artist/${data.id}`)
       } else {
         const error = await response.json()
@@ -640,14 +709,9 @@ export default function SearchPage() {
   }
 
   const addAlbum = async () => {
-    if (!selectedAlbum) return
-    if (!selectedRootFolder || !selectedQualityProfile || !selectedMetadataProfile) {
-      toast.error('Please select all required options')
-      return
-    }
+    if (!selectedAlbum || !selectedRootFolder || !selectedQualityProfile || !selectedMetadataProfile) return
 
     setAddingAlbum(true)
-
     try {
       const response = await fetch('/api/v1/albums', {
         method: 'POST',
@@ -658,28 +722,18 @@ export default function SearchPage() {
           rootFolderId: parseInt(selectedRootFolder),
           qualityProfileId: parseInt(selectedQualityProfile),
           metadataProfileId: parseInt(selectedMetadataProfile),
-          monitored,
-          searchForAlbum,
+          wanted,
+          searchOnAdd,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        const message = searchForAlbum
-          ? `${selectedAlbum.title} added to library and searching for releases...`
-          : `${selectedAlbum.title} added to library`
-        toast.success(message)
+        toast.success(`${selectedAlbum.title} added to library`)
         setAddAlbumDialogOpen(false)
-
-        // Update search results
         setAlbumResults((prev) =>
-          prev.map((r) =>
-            r.musicbrainzId === selectedAlbum.musicbrainzId
-              ? { ...r, inLibrary: true }
-              : r
-          )
+          prev.map((r) => r.musicbrainzId === selectedAlbum.musicbrainzId ? { ...r, inLibrary: true } : r)
         )
-
         router.visit(`/album/${data.id}`)
       } else {
         const error = await response.json()
@@ -692,6 +746,168 @@ export default function SearchPage() {
       setAddingAlbum(false)
     }
   }
+
+  const addMovie = async () => {
+    if (!selectedMovie || !selectedRootFolder || !selectedQualityProfile) return
+
+    setAddingMovie(true)
+    try {
+      const response = await fetch('/api/v1/movies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tmdbId: selectedMovie.tmdbId,
+          title: selectedMovie.title,
+          year: selectedMovie.year,
+          rootFolderId: parseInt(selectedRootFolder),
+          qualityProfileId: parseInt(selectedQualityProfile),
+          wanted,
+          searchOnAdd,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        toast.success(`${selectedMovie.title} added to library`)
+        setAddMovieDialogOpen(false)
+        setMovieResults((prev) =>
+          prev.map((r) => r.tmdbId === selectedMovie.tmdbId ? { ...r, inLibrary: true } : r)
+        )
+        router.visit(`/movie/${data.id}`)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to add movie')
+      }
+    } catch (error) {
+      console.error('Failed to add movie:', error)
+      toast.error('Failed to add movie')
+    } finally {
+      setAddingMovie(false)
+    }
+  }
+
+  const addTvShow = async () => {
+    if (!selectedTvShow || !selectedRootFolder || !selectedQualityProfile) return
+
+    setAddingTvShow(true)
+    try {
+      const response = await fetch('/api/v1/tvshows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tmdbId: selectedTvShow.tmdbId,
+          title: selectedTvShow.title,
+          year: selectedTvShow.year,
+          rootFolderId: parseInt(selectedRootFolder),
+          qualityProfileId: parseInt(selectedQualityProfile),
+          wanted,
+          searchOnAdd,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        toast.success(`${selectedTvShow.title} added to library`)
+        setAddTvShowDialogOpen(false)
+        setTvShowResults((prev) =>
+          prev.map((r) => r.tmdbId === selectedTvShow.tmdbId ? { ...r, inLibrary: true } : r)
+        )
+        router.visit(`/tvshow/${data.id}`)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to add TV show')
+      }
+    } catch (error) {
+      console.error('Failed to add TV show:', error)
+      toast.error('Failed to add TV show')
+    } finally {
+      setAddingTvShow(false)
+    }
+  }
+
+  const addAuthor = async () => {
+    if (!selectedAuthor || !selectedRootFolder || !selectedQualityProfile) return
+
+    setAddingAuthor(true)
+    try {
+      const response = await fetch('/api/v1/authors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          openlibraryId: selectedAuthor.openlibraryId,
+          name: selectedAuthor.name,
+          rootFolderId: parseInt(selectedRootFolder),
+          qualityProfileId: parseInt(selectedQualityProfile),
+          wanted,
+          addBooks,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        toast.success(`${selectedAuthor.name} added to library`)
+        setAddAuthorDialogOpen(false)
+        setAuthorResults((prev) =>
+          prev.map((r) => r.openlibraryId === selectedAuthor.openlibraryId ? { ...r, inLibrary: true } : r)
+        )
+        router.visit(`/author/${data.id}`)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to add author')
+      }
+    } catch (error) {
+      console.error('Failed to add author:', error)
+      toast.error('Failed to add author')
+    } finally {
+      setAddingAuthor(false)
+    }
+  }
+
+  const addBook = async () => {
+    if (!selectedBook || !selectedRootFolder || !selectedQualityProfile) return
+
+    setAddingBook(true)
+    try {
+      const response = await fetch('/api/v1/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          openlibraryId: selectedBook.openlibraryId,
+          title: selectedBook.title,
+          authorKey: selectedBook.authorKey,
+          authorName: selectedBook.authorName,
+          rootFolderId: parseInt(selectedRootFolder),
+          qualityProfileId: parseInt(selectedQualityProfile),
+          wanted,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        toast.success(`${selectedBook.title} added to library`)
+        setAddBookDialogOpen(false)
+        setBookResults((prev) =>
+          prev.map((r) => r.openlibraryId === selectedBook.openlibraryId ? { ...r, inLibrary: true } : r)
+        )
+        router.visit(`/book/${data.id}`)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to add book')
+      }
+    } catch (error) {
+      console.error('Failed to add book:', error)
+      toast.error('Failed to add book')
+    } finally {
+      setAddingBook(false)
+    }
+  }
+
+  // Track failed images
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
+
+  const handleImageError = useCallback((key: string) => {
+    setFailedImages(prev => new Set(prev).add(key))
+  }, [])
 
   // Sortable header component
   const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
@@ -711,7 +927,63 @@ export default function SearchPage() {
     </TableHead>
   )
 
-  // Render music search results
+  // Render search result card
+  const renderResultCard = (
+    item: { id: string; name: string; subtitle?: string; extra?: string; imageUrl?: string; inLibrary: boolean },
+    icon: typeof MusicNote01Icon,
+    onAdd: () => void
+  ) => {
+    const imageKey = `search-${item.id}`
+    const showImage = item.imageUrl && !failedImages.has(imageKey)
+
+    return (
+      <Card key={item.id} className={item.inLibrary ? 'opacity-60' : ''}>
+        <CardContent className="flex items-center gap-4 p-4">
+          <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden">
+            {showImage ? (
+              <img
+                src={item.imageUrl!}
+                alt={item.name}
+                className="w-full h-full object-cover"
+                onError={() => handleImageError(imageKey)}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <HugeiconsIcon icon={icon} className="h-8 w-8 text-muted-foreground/50" />
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-medium">{item.name}</h3>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+              {item.subtitle && <span>{item.subtitle}</span>}
+              {item.extra && (
+                <>
+                  <span>•</span>
+                  <span>{item.extra}</span>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {item.inLibrary ? (
+              <Badge variant="outline" className="gap-1">
+                <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                In Library
+              </Badge>
+            ) : (
+              <Button size="sm" onClick={onAdd}>
+                <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
+                Add
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Render music results
   const renderMusicResults = () => {
     if (searching) {
       return (
@@ -735,82 +1007,20 @@ export default function SearchPage() {
     if (musicSearchType === 'artist' && artistResults.length > 0) {
       return (
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">
-            Found {artistResults.length} artists
-          </div>
-          {artistResults.map((artist) => (
-            <Card key={artist.musicbrainzId} className={artist.inLibrary ? 'opacity-60' : ''}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="h-16 w-16 rounded bg-muted flex-shrink-0 flex items-center justify-center">
-                  <HugeiconsIcon icon={MusicNote01Icon} className="h-8 w-8 text-muted-foreground/50" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium">
-                    {artist.name}
-                    {artist.disambiguation && (
-                      <span className="text-muted-foreground ml-2">({artist.disambiguation})</span>
-                    )}
-                  </h3>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                    {artist.type && <span>{artist.type}</span>}
-                    {artist.country && (
-                      <>
-                        <span>•</span>
-                        <span>{artist.country}</span>
-                      </>
-                    )}
-                    {artist.beginDate && (
-                      <>
-                        <span>•</span>
-                        <span>
-                          {artist.beginDate}
-                          {artist.endDate ? ` - ${artist.endDate}` : ''}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {artist.inLibrary ? (
-                    <Badge variant="outline" className="gap-1">
-                      <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
-                      In Library
-                    </Badge>
-                  ) : (
-                    <Button size="sm" onClick={() => openAddArtistDialog(artist)}>
-                      <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
-                      Add
-                    </Button>
-                  )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setSearchMode('direct')
-                          setSearchQuery(artist.name)
-                          search()
-                        }}
-                      >
-                        <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
-                        Search Releases
-                      </DropdownMenuItem>
-                      {!artist.inLibrary && (
-                        <DropdownMenuItem onClick={() => openAddArtistDialog(artist)}>
-                          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-                          Add to Library
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          <div className="text-sm text-muted-foreground mb-4">Found {artistResults.length} artists</div>
+          {artistResults.map((artist) =>
+            renderResultCard(
+              {
+                id: artist.musicbrainzId,
+                name: artist.name,
+                subtitle: artist.type,
+                extra: artist.country,
+                inLibrary: artist.inLibrary,
+              },
+              MusicNote01Icon,
+              () => { setSelectedArtist(artist); setAddArtistDialogOpen(true) }
+            )
+          )}
         </div>
       )
     }
@@ -818,74 +1028,20 @@ export default function SearchPage() {
     if (musicSearchType === 'album' && albumResults.length > 0) {
       return (
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">
-            Found {albumResults.length} albums
-          </div>
-          {albumResults.map((album) => (
-            <Card key={album.musicbrainzId} className={album.inLibrary ? 'opacity-60' : ''}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="h-16 w-16 rounded bg-muted flex-shrink-0 flex items-center justify-center">
-                  <HugeiconsIcon icon={Album01Icon} className="h-8 w-8 text-muted-foreground/50" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium">{album.title}</h3>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                    <span>{album.artistName}</span>
-                    {album.releaseDate && (
-                      <>
-                        <span>•</span>
-                        <span>{album.releaseDate}</span>
-                      </>
-                    )}
-                    {album.type && (
-                      <>
-                        <span>•</span>
-                        <span>{album.type}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {album.inLibrary ? (
-                    <Badge variant="outline" className="gap-1">
-                      <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
-                      In Library
-                    </Badge>
-                  ) : (
-                    <Button size="sm" onClick={() => openAddAlbumDialog(album)}>
-                      <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
-                      Add
-                    </Button>
-                  )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setSearchMode('direct')
-                          setSearchQuery(`${album.artistName} ${album.title}`)
-                          search()
-                        }}
-                      >
-                        <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
-                        Search Releases
-                      </DropdownMenuItem>
-                      {!album.inLibrary && (
-                        <DropdownMenuItem onClick={() => openAddAlbumDialog(album)}>
-                          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-                          Add to Library
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          <div className="text-sm text-muted-foreground mb-4">Found {albumResults.length} albums</div>
+          {albumResults.map((album) =>
+            renderResultCard(
+              {
+                id: album.musicbrainzId,
+                name: album.title,
+                subtitle: album.artistName,
+                extra: album.releaseDate,
+                inLibrary: album.inLibrary,
+              },
+              Album01Icon,
+              () => { setSelectedAlbum(album); setAddAlbumDialogOpen(true) }
+            )
+          )}
         </div>
       )
     }
@@ -893,110 +1049,144 @@ export default function SearchPage() {
     if (musicSearchType === 'track' && trackResults.length > 0) {
       return (
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">
-            Found {trackResults.length} tracks
-          </div>
-          {trackResults.map((track) => (
-            <Card key={track.musicbrainzId} className={track.inLibrary ? 'opacity-60' : ''}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="h-16 w-16 rounded bg-muted flex-shrink-0 flex items-center justify-center">
-                  <HugeiconsIcon icon={MusicNoteSquare01Icon} className="h-8 w-8 text-muted-foreground/50" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium">{track.title}</h3>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                    <span>{track.artistName}</span>
-                    {track.albumTitle && (
-                      <>
-                        <span>•</span>
-                        <span>{track.albumTitle}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {track.inLibrary ? (
-                    <Badge variant="outline" className="gap-1">
-                      <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
-                      In Library
-                    </Badge>
-                  ) : (
-                    <Button size="sm" disabled title="Add album to add track">
-                      <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
-                      Add
-                    </Button>
-                  )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setSearchMode('direct')
-                          setSearchQuery(`${track.artistName} ${track.title}`)
-                          search()
-                        }}
-                      >
-                        <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
-                        Search Releases
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          <div className="text-sm text-muted-foreground mb-4">Found {trackResults.length} tracks</div>
+          {trackResults.map((track) =>
+            renderResultCard(
+              {
+                id: track.musicbrainzId,
+                name: track.title,
+                subtitle: track.artistName,
+                extra: track.albumTitle,
+                inLibrary: track.inLibrary,
+              },
+              MusicNoteSquare01Icon,
+              () => toast.info('Add the album to add this track')
+            )
+          )}
         </div>
       )
     }
 
     if (hasSearched) {
-      return (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="rounded-full bg-muted p-6 mb-4">
-              <HugeiconsIcon icon={Search01Icon} className="h-12 w-12 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-medium mb-2">No results found</h3>
-            <p className="text-muted-foreground">
-              Try a different search term or check your spelling.
-            </p>
-          </CardContent>
-        </Card>
-      )
+      return <NoResults />
     }
 
     return null
   }
 
-  // Render direct search results
-  const renderDirectResults = () => {
-    if (searching) {
+  // Render movie results
+  const renderMovieResults = () => {
+    if (searching) return <SearchingSkeleton />
+
+    if (movieResults.length > 0) {
       return (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <Skeleton className="h-5 w-5" />
-                  <Skeleton className="h-6 w-12 rounded" />
-                  <Skeleton className="h-4 w-16" />
-                  <div className="flex-1">
-                    <Skeleton className="h-4 w-2/3" />
-                  </div>
-                  <Skeleton className="h-4 w-16" />
-                  <Skeleton className="h-4 w-16" />
-                  <Skeleton className="h-8 w-8" />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="space-y-2">
+          <div className="text-sm text-muted-foreground mb-4">Found {movieResults.length} movies</div>
+          {movieResults.map((movie) =>
+            renderResultCard(
+              {
+                id: movie.tmdbId,
+                name: movie.title,
+                subtitle: movie.year?.toString(),
+                extra: movie.rating ? `${movie.rating.toFixed(1)} rating` : undefined,
+                imageUrl: movie.posterUrl,
+                inLibrary: movie.inLibrary,
+              },
+              Film01Icon,
+              () => { setSelectedMovie(movie); setAddMovieDialogOpen(true) }
+            )
+          )}
+        </div>
       )
     }
+
+    if (hasSearched) return <NoResults />
+    return null
+  }
+
+  // Render TV results
+  const renderTvResults = () => {
+    if (searching) return <SearchingSkeleton />
+
+    if (tvShowResults.length > 0) {
+      return (
+        <div className="space-y-2">
+          <div className="text-sm text-muted-foreground mb-4">Found {tvShowResults.length} TV shows</div>
+          {tvShowResults.map((show) =>
+            renderResultCard(
+              {
+                id: show.tmdbId,
+                name: show.title,
+                subtitle: show.year?.toString(),
+                extra: show.status,
+                imageUrl: show.posterUrl,
+                inLibrary: show.inLibrary,
+              },
+              Tv01Icon,
+              () => { setSelectedTvShow(show); setAddTvShowDialogOpen(true) }
+            )
+          )}
+        </div>
+      )
+    }
+
+    if (hasSearched) return <NoResults />
+    return null
+  }
+
+  // Render books results
+  const renderBooksResults = () => {
+    if (searching) return <SearchingSkeleton />
+
+    if (booksSearchType === 'author' && authorResults.length > 0) {
+      return (
+        <div className="space-y-2">
+          <div className="text-sm text-muted-foreground mb-4">Found {authorResults.length} authors</div>
+          {authorResults.map((author) =>
+            renderResultCard(
+              {
+                id: author.openlibraryId,
+                name: author.name,
+                subtitle: author.birthDate,
+                inLibrary: author.inLibrary,
+              },
+              Book01Icon,
+              () => { setSelectedAuthor(author); setAddAuthorDialogOpen(true) }
+            )
+          )}
+        </div>
+      )
+    }
+
+    if (booksSearchType === 'book' && bookResults.length > 0) {
+      return (
+        <div className="space-y-2">
+          <div className="text-sm text-muted-foreground mb-4">Found {bookResults.length} books</div>
+          {bookResults.map((book) =>
+            renderResultCard(
+              {
+                id: book.openlibraryId,
+                name: book.title,
+                subtitle: book.authorName,
+                extra: book.year?.toString(),
+                imageUrl: book.coverUrl,
+                inLibrary: book.inLibrary,
+              },
+              Book01Icon,
+              () => { setSelectedBook(book); setAddBookDialogOpen(true) }
+            )
+          )}
+        </div>
+      )
+    }
+
+    if (hasSearched) return <NoResults />
+    return null
+  }
+
+  // Render direct search results
+  const renderDirectResults = () => {
+    if (searching) return <SearchingSkeleton />
 
     if (filteredIndexerResults.length > 0) {
       return (
@@ -1063,9 +1253,7 @@ export default function SearchPage() {
                         </TableCell>
                       )}
                       {isColumnVisible('indexer') && (
-                        <TableCell>
-                          <span className="text-muted-foreground">{result.indexer}</span>
-                        </TableCell>
+                        <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
                       )}
                       {isColumnVisible('size') && (
                         <TableCell className="whitespace-nowrap">{formatBytes(result.size)}</TableCell>
@@ -1075,11 +1263,7 @@ export default function SearchPage() {
                       )}
                       {isColumnVisible('category') && (
                         <TableCell>
-                          {result.category && (
-                            <Badge variant="outline" className="text-xs">
-                              {result.category}
-                            </Badge>
-                          )}
+                          {result.category && <Badge variant="outline" className="text-xs">{result.category}</Badge>}
                         </TableCell>
                       )}
                       {isColumnVisible('actions') && (
@@ -1092,12 +1276,7 @@ export default function SearchPage() {
                                 </a>
                               </Button>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openDownloadDialog(result)}
-                              className="h-8 w-8"
-                            >
+                            <Button variant="ghost" size="icon" onClick={() => openDownloadDialog(result)} className="h-8 w-8">
                               <HugeiconsIcon icon={Download01Icon} className="h-4 w-4" />
                             </Button>
                           </div>
@@ -1113,23 +1292,46 @@ export default function SearchPage() {
       )
     }
 
-    if (hasSearched) {
-      return (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="rounded-full bg-muted p-6 mb-4">
-              <HugeiconsIcon icon={Search01Icon} className="h-12 w-12 text-muted-foreground" />
+    if (hasSearched) return <NoResults />
+    return null
+  }
+
+  const SearchingSkeleton = () => (
+    <div className="space-y-2">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Card key={i}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <Skeleton className="h-16 w-16 rounded" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-3 w-1/2" />
             </div>
-            <h3 className="text-lg font-medium mb-2">No results found</h3>
-            <p className="text-muted-foreground">
-              Try a different search term or check your indexer configuration.
-            </p>
+            <Skeleton className="h-9 w-20" />
           </CardContent>
         </Card>
-      )
-    }
+      ))}
+    </div>
+  )
 
-    return null
+  const NoResults = () => (
+    <Card>
+      <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="rounded-full bg-muted p-6 mb-4">
+          <HugeiconsIcon icon={Search01Icon} className="h-12 w-12 text-muted-foreground" />
+        </div>
+        <h3 className="text-lg font-medium mb-2">No results found</h3>
+        <p className="text-muted-foreground">Try a different search term.</p>
+      </CardContent>
+    </Card>
+  )
+
+  const getSearchPlaceholder = () => {
+    if (searchMode === 'direct') return 'Search for releases on indexers...'
+    if (searchMode === 'music') return `Search for ${musicSearchType}s on MusicBrainz...`
+    if (searchMode === 'movies') return 'Search for movies on TMDB...'
+    if (searchMode === 'tv') return 'Search for TV shows on TMDB...'
+    if (searchMode === 'books') return `Search for ${booksSearchType}s on OpenLibrary...`
+    return 'Search...'
   }
 
   return (
@@ -1139,45 +1341,56 @@ export default function SearchPage() {
 
         <div className="space-y-4">
           {/* Search mode tabs */}
-          <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as SearchMode)}>
+          <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as MediaType | 'direct')}>
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
               <TabsList>
-                <TabsTrigger value="music" className="gap-2">
-                  <HugeiconsIcon icon={MusicNote01Icon} className="h-4 w-4" />
-                  Music
-                </TabsTrigger>
+                {enabledMediaTypes.map((type) => {
+                  const config = MEDIA_TYPE_CONFIG[type]
+                  return (
+                    <TabsTrigger key={type} value={type} className="gap-2">
+                      <HugeiconsIcon icon={config.icon} className="h-4 w-4" />
+                      {config.label}
+                    </TabsTrigger>
+                  )
+                })}
                 <TabsTrigger value="direct" className="gap-2">
                   <HugeiconsIcon icon={Globe02Icon} className="h-4 w-4" />
-                  Direct Search
+                  Direct
                 </TabsTrigger>
               </TabsList>
 
-              {/* Music search type selector */}
+              {/* Subtype selector for music */}
               {searchMode === 'music' && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Search for:</span>
                   <Tabs value={musicSearchType} onValueChange={(v) => setMusicSearchType(v as MusicSearchType)}>
                     <TabsList className="h-8">
-                      <TabsTrigger value="artist" className="text-xs px-2 h-6">
-                        Artist
-                      </TabsTrigger>
-                      <TabsTrigger value="album" className="text-xs px-2 h-6">
-                        Album
-                      </TabsTrigger>
-                      <TabsTrigger value="track" className="text-xs px-2 h-6">
-                        Track
-                      </TabsTrigger>
+                      <TabsTrigger value="artist" className="text-xs px-2 h-6">Artist</TabsTrigger>
+                      <TabsTrigger value="album" className="text-xs px-2 h-6">Album</TabsTrigger>
+                      <TabsTrigger value="track" className="text-xs px-2 h-6">Track</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+              )}
+
+              {/* Subtype selector for books */}
+              {searchMode === 'books' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Search for:</span>
+                  <Tabs value={booksSearchType} onValueChange={(v) => setBooksSearchType(v as 'author' | 'book')}>
+                    <TabsList className="h-8">
+                      <TabsTrigger value="author" className="text-xs px-2 h-6">Author</TabsTrigger>
+                      <TabsTrigger value="book" className="text-xs px-2 h-6">Book</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
               )}
             </div>
 
-            {/* Search input and filters */}
+            {/* Search input */}
             <Card className="mt-4">
               <CardContent className="pt-6">
                 <div className="flex flex-col gap-4">
-                  {/* Search row */}
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <HugeiconsIcon
@@ -1185,11 +1398,7 @@ export default function SearchPage() {
                         className="size-4 text-muted-foreground absolute top-1/2 -translate-y-1/2 left-2"
                       />
                       <Input
-                        placeholder={
-                          searchMode === 'direct'
-                            ? 'Search for releases on indexers...'
-                            : `Search for ${musicSearchType}s on MusicBrainz...`
-                        }
+                        placeholder={getSearchPlaceholder()}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={handleKeyDown}
@@ -1218,18 +1427,16 @@ export default function SearchPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="start">
-                            <div className="px-2 py-1.5 text-sm font-medium">Select Indexers</div>
-                            <DropdownMenuSeparator />
                             {indexers.map((indexer) => (
                               <DropdownMenuCheckboxItem
                                 key={indexer.id}
                                 checked={selectedIndexers.includes(indexer.id)}
                                 onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setSelectedIndexers([...selectedIndexers, indexer.id])
-                                  } else {
-                                    setSelectedIndexers(selectedIndexers.filter((id) => id !== indexer.id))
-                                  }
+                                  setSelectedIndexers(
+                                    checked
+                                      ? [...selectedIndexers, indexer.id]
+                                      : selectedIndexers.filter((id) => id !== indexer.id)
+                                  )
                                 }}
                               >
                                 {indexer.name}
@@ -1238,47 +1445,7 @@ export default function SearchPage() {
                             {selectedIndexers.length > 0 && (
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setSelectedIndexers([])}>
-                                  Clear selection
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Categories:</span>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              {selectedCategories.length === 0 ? 'All' : `${selectedCategories.length} selected`}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start">
-                            <div className="px-2 py-1.5 text-sm font-medium">Filter by Category</div>
-                            <DropdownMenuSeparator />
-                            {categoryOptions.map((cat) => (
-                              <DropdownMenuCheckboxItem
-                                key={cat.value}
-                                checked={selectedCategories.includes(cat.label)}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setSelectedCategories([...selectedCategories, cat.label])
-                                  } else {
-                                    setSelectedCategories(selectedCategories.filter((c) => c !== cat.label))
-                                  }
-                                }}
-                              >
-                                {cat.label}
-                              </DropdownMenuCheckboxItem>
-                            ))}
-                            {selectedCategories.length > 0 && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setSelectedCategories([])}>
-                                  Clear selection
-                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setSelectedIndexers([])}>Clear</DropdownMenuItem>
                               </>
                             )}
                           </DropdownMenuContent>
@@ -1294,18 +1461,9 @@ export default function SearchPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <div className="px-2 py-1.5 text-sm font-medium">Sort by</div>
-                            <DropdownMenuSeparator />
-                            {[
-                              { field: 'age', label: 'Age' },
-                              { field: 'title', label: 'Title' },
-                              { field: 'size', label: 'Size' },
-                              { field: 'indexer', label: 'Indexer' },
-                              { field: 'grabs', label: 'Grabs' },
-                              { field: 'category', label: 'Category' },
-                            ].map(({ field, label }) => (
-                              <DropdownMenuItem key={field} onClick={() => toggleSort(field as SortField)}>
-                                <span className="flex-1">{label}</span>
+                            {(['age', 'title', 'size', 'indexer', 'grabs'] as SortField[]).map((field) => (
+                              <DropdownMenuItem key={field} onClick={() => toggleSort(field)}>
+                                {field.charAt(0).toUpperCase() + field.slice(1)}
                                 {sortField === field && (
                                   <HugeiconsIcon
                                     icon={sortDirection === 'asc' ? ArrowUp01Icon : ArrowDown01Icon}
@@ -1325,8 +1483,6 @@ export default function SearchPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <div className="px-2 py-1.5 text-sm font-medium">Show Columns</div>
-                            <DropdownMenuSeparator />
                             {columns.map((col) => (
                               <DropdownMenuCheckboxItem
                                 key={col.id}
@@ -1354,7 +1510,7 @@ export default function SearchPage() {
                   </span>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => setSelectedResults(new Set())}>
-                      Clear selection
+                      Clear
                     </Button>
                     <Button size="sm" onClick={grabSelected} disabled={bulkDownloading}>
                       {bulkDownloading ? (
@@ -1370,13 +1526,11 @@ export default function SearchPage() {
             )}
 
             {/* Results */}
-            <TabsContent value="music" className="mt-4">
-              {renderMusicResults()}
-            </TabsContent>
-
-            <TabsContent value="direct" className="mt-4">
-              {renderDirectResults()}
-            </TabsContent>
+            <TabsContent value="music" className="mt-4">{renderMusicResults()}</TabsContent>
+            <TabsContent value="movies" className="mt-4">{renderMovieResults()}</TabsContent>
+            <TabsContent value="tv" className="mt-4">{renderTvResults()}</TabsContent>
+            <TabsContent value="books" className="mt-4">{renderBooksResults()}</TabsContent>
+            <TabsContent value="direct" className="mt-4">{renderDirectResults()}</TabsContent>
           </Tabs>
         </div>
 
@@ -1387,7 +1541,6 @@ export default function SearchPage() {
               <DialogTitle>Download Release</DialogTitle>
               <DialogDescription>Send this release to your download client?</DialogDescription>
             </DialogHeader>
-
             {selectedIndexerResult && (
               <div className="py-4 space-y-3">
                 <div>
@@ -1403,30 +1556,18 @@ export default function SearchPage() {
                     <div className="text-sm font-medium text-muted-foreground">Indexer</div>
                     <div>{selectedIndexerResult.indexer}</div>
                   </div>
-                  <div>
-                    <div className="text-sm font-medium text-muted-foreground">Age</div>
-                    <div>{formatAge(selectedIndexerResult.publishDate)}</div>
-                  </div>
                 </div>
               </div>
             )}
-
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDownloadDialogOpen(false)}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={() => setDownloadDialogOpen(false)}>Cancel</Button>
               <Button onClick={() => grabRelease()} disabled={downloading}>
                 {downloading ? (
-                  <>
-                    <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
-                    Downloading...
-                  </>
+                  <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
                 ) : (
-                  <>
-                    <HugeiconsIcon icon={Download01Icon} className="h-4 w-4 mr-2" />
-                    Download
-                  </>
+                  <HugeiconsIcon icon={Download01Icon} className="h-4 w-4 mr-2" />
                 )}
+                Download
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1439,104 +1580,69 @@ export default function SearchPage() {
               <DialogTitle>Add {selectedArtist?.name}</DialogTitle>
               <DialogDescription>Configure how this artist will be added to your library.</DialogDescription>
             </DialogHeader>
-
             {loadingOptions ? (
               <div className="space-y-4 py-4">
-                <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : (
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="rootFolder">Root Folder</Label>
+                  <Label>Root Folder</Label>
                   <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
-                    <SelectTrigger id="rootFolder">
-                      {selectedRootFolder
-                        ? rootFolders.find((f) => String(f.id) === selectedRootFolder)?.path
-                        : <span className="text-muted-foreground">Select root folder</span>}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select folder">
+                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {rootFolders.map((folder) => (
-                        <SelectItem key={folder.id} value={String(folder.id)}>
-                          {folder.path}
-                        </SelectItem>
+                      {filteredRootFolders.map((f) => (
+                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="qualityProfile">Quality Profile</Label>
+                  <Label>Quality Profile</Label>
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
-                    <SelectTrigger id="qualityProfile">
-                      {selectedQualityProfile
-                        ? qualityProfiles.find((p) => String(p.id) === selectedQualityProfile)?.name
-                        : <span className="text-muted-foreground">Select quality profile</span>}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select profile">
+                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {qualityProfiles.map((profile) => (
-                        <SelectItem key={profile.id} value={String(profile.id)}>
-                          {profile.name}
-                        </SelectItem>
+                      {qualityProfiles.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="metadataProfile">Metadata Profile</Label>
+                  <Label>Metadata Profile</Label>
                   <Select value={selectedMetadataProfile} onValueChange={setSelectedMetadataProfile}>
-                    <SelectTrigger id="metadataProfile">
-                      {selectedMetadataProfile
-                        ? metadataProfiles.find((p) => String(p.id) === selectedMetadataProfile)?.name
-                        : <span className="text-muted-foreground">Select metadata profile</span>}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select profile">
+                        {(value: string) => metadataProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {metadataProfiles.map((profile) => (
-                        <SelectItem key={profile.id} value={String(profile.id)}>
-                          {profile.name}
-                        </SelectItem>
+                      {metadataProfiles.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
                 </div>
-
                 <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="monitored"
-                    checked={monitored}
-                    onCheckedChange={(checked) => setMonitored(checked as boolean)}
-                  />
-                  <Label htmlFor="monitored" className="font-normal cursor-pointer">
-                    Monitor artist for new releases
-                  </Label>
+                  <Checkbox id="wanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
+                  <Label htmlFor="wanted" className="font-normal cursor-pointer">Mark as wanted</Label>
                 </div>
               </div>
             )}
-
             <DialogFooter>
-              <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={addArtist}
-                disabled={
-                  addingArtist ||
-                  loadingOptions ||
-                  !selectedRootFolder ||
-                  !selectedQualityProfile ||
-                  !selectedMetadataProfile
-                }
-              >
-                {addingArtist ? (
-                  <>
-                    <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
-                    Adding...
-                  </>
-                ) : (
-                  'Add Artist'
-                )}
+              <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>Cancel</Button>
+              <Button onClick={addArtist} disabled={addingArtist || !selectedRootFolder || !selectedQualityProfile}>
+                {addingArtist && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                Add Artist
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1547,119 +1653,314 @@ export default function SearchPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add {selectedAlbum?.title}</DialogTitle>
-              <DialogDescription>
-                This will add {selectedAlbum?.artistName} to your library with this album.
-              </DialogDescription>
+              <DialogDescription>This will add {selectedAlbum?.artistName} with this album.</DialogDescription>
             </DialogHeader>
-
             {loadingOptions ? (
               <div className="space-y-4 py-4">
-                <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : (
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="albumRootFolder">Root Folder</Label>
+                  <Label>Root Folder</Label>
                   <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
-                    <SelectTrigger id="albumRootFolder">
-                      {selectedRootFolder
-                        ? rootFolders.find((f) => String(f.id) === selectedRootFolder)?.path
-                        : <span className="text-muted-foreground">Select root folder</span>}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select folder">
+                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {rootFolders.map((folder) => (
-                        <SelectItem key={folder.id} value={String(folder.id)}>
-                          {folder.path}
-                        </SelectItem>
+                      {filteredRootFolders.map((f) => (
+                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="albumQualityProfile">Quality Profile</Label>
+                  <Label>Quality Profile</Label>
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
-                    <SelectTrigger id="albumQualityProfile">
-                      {selectedQualityProfile
-                        ? qualityProfiles.find((p) => String(p.id) === selectedQualityProfile)?.name
-                        : <span className="text-muted-foreground">Select quality profile</span>}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select profile">
+                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {qualityProfiles.map((profile) => (
-                        <SelectItem key={profile.id} value={String(profile.id)}>
-                          {profile.name}
-                        </SelectItem>
+                      {qualityProfiles.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="albumMetadataProfile">Metadata Profile</Label>
-                  <Select value={selectedMetadataProfile} onValueChange={setSelectedMetadataProfile}>
-                    <SelectTrigger id="albumMetadataProfile">
-                      {selectedMetadataProfile
-                        ? metadataProfiles.find((p) => String(p.id) === selectedMetadataProfile)?.name
-                        : <span className="text-muted-foreground">Select metadata profile</span>}
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {metadataProfiles.map((profile) => (
-                        <SelectItem key={profile.id} value={String(profile.id)}>
-                          {profile.name}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-
                 <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="albumMonitored"
-                    checked={monitored}
-                    onCheckedChange={(checked) => setMonitored(checked as boolean)}
-                  />
-                  <Label htmlFor="albumMonitored" className="font-normal cursor-pointer">
-                    Monitor this album
-                  </Label>
+                  <Checkbox id="albumWanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
+                  <Label htmlFor="albumWanted" className="font-normal cursor-pointer">Mark as wanted</Label>
                 </div>
-
                 <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="searchForAlbum"
-                    checked={searchForAlbum}
-                    onCheckedChange={(checked) => setSearchForAlbum(checked as boolean)}
-                  />
-                  <Label htmlFor="searchForAlbum" className="font-normal cursor-pointer">
-                    Start search for this album immediately
-                  </Label>
+                  <Checkbox id="searchOnAdd" checked={searchOnAdd} onCheckedChange={(c) => setSearchOnAdd(c as boolean)} />
+                  <Label htmlFor="searchOnAdd" className="font-normal cursor-pointer">Search for album immediately</Label>
                 </div>
               </div>
             )}
-
             <DialogFooter>
-              <Button variant="outline" onClick={() => setAddAlbumDialogOpen(false)}>
-                Cancel
+              <Button variant="outline" onClick={() => setAddAlbumDialogOpen(false)}>Cancel</Button>
+              <Button onClick={addAlbum} disabled={addingAlbum || !selectedRootFolder || !selectedQualityProfile}>
+                {addingAlbum && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                Add Album
               </Button>
-              <Button
-                onClick={addAlbum}
-                disabled={
-                  addingAlbum ||
-                  loadingOptions ||
-                  !selectedRootFolder ||
-                  !selectedQualityProfile ||
-                  !selectedMetadataProfile
-                }
-              >
-                {addingAlbum ? (
-                  <>
-                    <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
-                    Adding...
-                  </>
-                ) : (
-                  'Add Album'
-                )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add movie dialog */}
+        <Dialog open={addMovieDialogOpen} onOpenChange={setAddMovieDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add {selectedMovie?.title}</DialogTitle>
+              <DialogDescription>Configure how this movie will be added to your library.</DialogDescription>
+            </DialogHeader>
+            {loadingOptions ? (
+              <div className="space-y-4 py-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Root Folder</Label>
+                  <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select folder">
+                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {filteredRootFolders.map((f) => (
+                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Quality Profile</Label>
+                  <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select profile">
+                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {qualityProfiles.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="movieWanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
+                  <Label htmlFor="movieWanted" className="font-normal cursor-pointer">Mark as wanted</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="movieSearch" checked={searchOnAdd} onCheckedChange={(c) => setSearchOnAdd(c as boolean)} />
+                  <Label htmlFor="movieSearch" className="font-normal cursor-pointer">Search for movie immediately</Label>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAddMovieDialogOpen(false)}>Cancel</Button>
+              <Button onClick={addMovie} disabled={addingMovie || !selectedRootFolder || !selectedQualityProfile}>
+                {addingMovie && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                Add Movie
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add TV show dialog */}
+        <Dialog open={addTvShowDialogOpen} onOpenChange={setAddTvShowDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add {selectedTvShow?.title}</DialogTitle>
+              <DialogDescription>Configure how this TV show will be added to your library.</DialogDescription>
+            </DialogHeader>
+            {loadingOptions ? (
+              <div className="space-y-4 py-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Root Folder</Label>
+                  <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select folder">
+                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {filteredRootFolders.map((f) => (
+                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Quality Profile</Label>
+                  <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select profile">
+                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {qualityProfiles.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="tvWanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
+                  <Label htmlFor="tvWanted" className="font-normal cursor-pointer">Mark as wanted</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="tvSearch" checked={searchOnAdd} onCheckedChange={(c) => setSearchOnAdd(c as boolean)} />
+                  <Label htmlFor="tvSearch" className="font-normal cursor-pointer">Search for episodes immediately</Label>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAddTvShowDialogOpen(false)}>Cancel</Button>
+              <Button onClick={addTvShow} disabled={addingTvShow || !selectedRootFolder || !selectedQualityProfile}>
+                {addingTvShow && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                Add TV Show
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add author dialog */}
+        <Dialog open={addAuthorDialogOpen} onOpenChange={setAddAuthorDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add {selectedAuthor?.name}</DialogTitle>
+              <DialogDescription>Configure how this author will be added to your library.</DialogDescription>
+            </DialogHeader>
+            {loadingOptions ? (
+              <div className="space-y-4 py-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Root Folder</Label>
+                  <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select folder">
+                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {filteredRootFolders.map((f) => (
+                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Quality Profile</Label>
+                  <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select profile">
+                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {qualityProfiles.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="authorWanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
+                  <Label htmlFor="authorWanted" className="font-normal cursor-pointer">Mark as wanted</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="addBooks" checked={addBooks} onCheckedChange={(c) => setAddBooks(c as boolean)} />
+                  <Label htmlFor="addBooks" className="font-normal cursor-pointer">Also add author's books</Label>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAddAuthorDialogOpen(false)}>Cancel</Button>
+              <Button onClick={addAuthor} disabled={addingAuthor || !selectedRootFolder || !selectedQualityProfile}>
+                {addingAuthor && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                Add Author
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add book dialog */}
+        <Dialog open={addBookDialogOpen} onOpenChange={setAddBookDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add {selectedBook?.title}</DialogTitle>
+              <DialogDescription>
+                By {selectedBook?.authorName}. This will also add the author if not already in your library.
+              </DialogDescription>
+            </DialogHeader>
+            {loadingOptions ? (
+              <div className="space-y-4 py-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Root Folder</Label>
+                  <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select folder">
+                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {filteredRootFolders.map((f) => (
+                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Quality Profile</Label>
+                  <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select profile">
+                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      {qualityProfiles.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="bookWanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
+                  <Label htmlFor="bookWanted" className="font-normal cursor-pointer">Mark as wanted</Label>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAddBookDialogOpen(false)}>Cancel</Button>
+              <Button onClick={addBook} disabled={addingBook || !selectedRootFolder || !selectedQualityProfile}>
+                {addingBook && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                Add Book
               </Button>
             </DialogFooter>
           </DialogContent>

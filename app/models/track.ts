@@ -34,6 +34,9 @@ export default class Track extends BaseModel {
   declare hasFile: boolean
 
   @column()
+  declare wanted: boolean
+
+  @column()
   declare trackFileId: number | null
 
   @column.dateTime({ autoCreate: true })

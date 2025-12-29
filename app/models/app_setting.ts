@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 
-export type MediaType = 'music' | 'movies' | 'tv'
+export type MediaType = 'music' | 'movies' | 'tv' | 'books'
 
 export interface AppSettings {
   enabledMediaTypes: MediaType[]

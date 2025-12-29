@@ -41,17 +41,17 @@ interface Pagination {
   lastPage: number
 }
 
-export default function Wanted() {
+export default function Requests() {
   const [albums, setAlbums] = useState<WantedAlbum[]>([])
   const [pagination, setPagination] = useState<Pagination | null>(null)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
 
   useEffect(() => {
-    fetchWanted()
+    fetchRequests()
   }, [page])
 
-  const fetchWanted = async () => {
+  const fetchRequests = async () => {
     setLoading(true)
     try {
       const response = await fetch(`/api/v1/albums/wanted?page=${page}&limit=50`)
@@ -61,7 +61,7 @@ export default function Wanted() {
         setPagination(data.meta)
       }
     } catch (error) {
-      console.error('Failed to fetch wanted albums:', error)
+      console.error('Failed to fetch requested albums:', error)
     } finally {
       setLoading(false)
     }
@@ -69,15 +69,15 @@ export default function Wanted() {
 
   return (
     <AppLayout
-      title="Wanted"
+      title="Requests"
       actions={
-        <Button variant="outline" onClick={fetchWanted}>
+        <Button variant="outline" onClick={fetchRequests}>
           <HugeiconsIcon icon={RefreshIcon} className="h-4 w-4 mr-2" />
           Refresh
         </Button>
       }
     >
-      <Head title="Wanted" />
+      <Head title="Requests" />
 
       <div className="space-y-6">
         {loading ? (
@@ -105,7 +105,7 @@ export default function Wanted() {
               </div>
               <h3 className="text-lg font-medium mb-2">All caught up!</h3>
               <p className="text-muted-foreground">
-                No missing albums found. Your library is complete.
+                No pending requests. Your library is complete.
               </p>
             </CardContent>
           </Card>
@@ -176,7 +176,7 @@ export default function Wanted() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button size="sm" variant="outline" asChild>
-                            <Link href={`/wanted/search/${album.id}`}>
+                            <Link href={`/requests/search/${album.id}`}>
                               <HugeiconsIcon
                                 icon={Search01Icon}
                                 className="h-4 w-4 mr-1"

@@ -426,7 +426,7 @@ export default function AddArtist() {
                   onCheckedChange={(checked) => setMonitored(checked as boolean)}
                 />
                 <Label htmlFor="monitored" className="font-normal cursor-pointer">
-                  Monitor artist for new releases
+                  Automatically request new releases
                 </Label>
               </div>
             </div>

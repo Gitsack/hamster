@@ -42,6 +42,8 @@ import {
   File01Icon,
   ArrowLeft01Icon,
   Download01Icon,
+  FileImportIcon,
+  ComputerIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
@@ -112,6 +114,7 @@ export default function DownloadClients() {
   const [browsingLoading, setBrowsingLoading] = useState(false)
   const [browseError, setBrowseError] = useState<string | null>(null)
   const [importingPath, setImportingPath] = useState<string | null>(null)
+  const [downloadingPath, setDownloadingPath] = useState<string | null>(null)
 
   useEffect(() => {
     fetchClients()
@@ -197,6 +200,32 @@ export default function DownloadClients() {
       toast.error('Failed to import')
     } finally {
       setImportingPath(null)
+    }
+  }
+
+  const downloadToPC = async (pathToDownload: string, itemName: string, isDirectory: boolean) => {
+    if (!browsingClient) return
+
+    setDownloadingPath(pathToDownload)
+
+    try {
+      const url = `/api/v1/downloadclients/${browsingClient.id}/download?path=${encodeURIComponent(pathToDownload)}`
+
+      // Create a hidden link and trigger download
+      const link = document.createElement('a')
+      link.href = url
+      link.download = isDirectory ? `${itemName}.zip` : itemName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast.success(`Downloading ${isDirectory ? `${itemName}.zip` : itemName}`)
+    } catch (error) {
+      console.error('Failed to download:', error)
+      toast.error('Failed to start download')
+    } finally {
+      // Small delay before clearing state so user sees feedback
+      setTimeout(() => setDownloadingPath(null), 500)
     }
   }
 
@@ -743,7 +772,7 @@ export default function DownloadClients() {
                     <TableHead>Name</TableHead>
                     <TableHead className="w-24 text-right">Size</TableHead>
                     <TableHead className="w-40 text-right">Modified</TableHead>
-                    <TableHead className="w-20"></TableHead>
+                    <TableHead className="w-24">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -774,19 +803,34 @@ export default function DownloadClients() {
                         {formatDate(item.modifiedAt)}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => importPath(item.path)}
-                          disabled={importingPath === item.path}
-                          title="Import to library"
-                        >
-                          {importingPath === item.path ? (
-                            <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <HugeiconsIcon icon={Download01Icon} className="h-4 w-4" />
-                          )}
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => downloadToPC(item.path, item.name, item.isDirectory)}
+                            disabled={downloadingPath === item.path}
+                            title="Download to PC"
+                          >
+                            {downloadingPath === item.path ? (
+                              <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <HugeiconsIcon icon={ComputerIcon} className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => importPath(item.path)}
+                            disabled={importingPath === item.path}
+                            title="Import to library"
+                          >
+                            {importingPath === item.path ? (
+                              <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <HugeiconsIcon icon={Download01Icon} className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
