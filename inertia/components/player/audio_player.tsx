@@ -14,6 +14,7 @@ import {
   RepeatOne01Icon,
   Loading01Icon,
   MusicNote01Icon,
+  Cancel01Icon,
 } from '@hugeicons/core-free-icons'
 import { cn } from '@/lib/utils'
 
@@ -43,6 +44,7 @@ export function AudioPlayer() {
     toggleMute,
     toggleShuffle,
     toggleRepeat,
+    clearQueue,
   } = useAudioPlayer()
 
   if (!currentTrack) {
@@ -172,6 +174,16 @@ export function AudioPlayer() {
             className="w-24"
           />
         </div>
+
+        {/* Close button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          onClick={clearQueue}
+        >
+          <HugeiconsIcon icon={Cancel01Icon} className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   )

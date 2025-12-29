@@ -32,6 +32,7 @@ import {
   ArrowDown01Icon,
   PauseIcon,
   FolderSearchIcon,
+  Search01Icon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
@@ -55,6 +56,7 @@ export default function Queue() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [scanning, setScanning] = useState(false)
+  const [searchingWanted, setSearchingWanted] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -120,6 +122,24 @@ export default function Queue() {
       toast.error('Failed to scan completed downloads')
     } finally {
       setScanning(false)
+    }
+  }
+
+  const searchWanted = async () => {
+    setSearchingWanted(true)
+    try {
+      const response = await fetch('/api/v1/queue/search-wanted', { method: 'POST' })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(data.message || 'Searching for wanted albums...')
+      } else {
+        toast.error(data.error || 'Search failed')
+      }
+    } catch (err) {
+      console.error('Failed to search wanted:', err)
+      toast.error('Failed to search wanted albums')
+    } finally {
+      setSearchingWanted(false)
     }
   }
 
@@ -198,6 +218,13 @@ export default function Queue() {
       title="Queue"
       actions={
         <div className="flex gap-2">
+          <Button onClick={searchWanted} disabled={searchingWanted} variant="outline">
+            <HugeiconsIcon
+              icon={Search01Icon}
+              className={`h-4 w-4 mr-2 ${searchingWanted ? 'animate-pulse' : ''}`}
+            />
+            {searchingWanted ? 'Searching...' : 'Search Wanted'}
+          </Button>
           <Button onClick={scanCompleted} disabled={scanning} variant="outline">
             <HugeiconsIcon
               icon={FolderSearchIcon}

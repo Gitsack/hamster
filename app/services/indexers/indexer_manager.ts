@@ -28,6 +28,7 @@ export interface SearchOptions {
   query?: string
   artist?: string
   album?: string
+  track?: string
   year?: number
   indexerIds?: number[]
   useProwlarr?: boolean
@@ -90,7 +91,7 @@ export class IndexerManager {
         }
 
         let searchResults: NewznabSearchResult[]
-        const query = [options.artist, options.album, options.query]
+        const query = [options.artist, options.album, options.track, options.query]
           .filter(Boolean)
           .join(' ')
 
@@ -99,6 +100,12 @@ export class IndexerManager {
           searchResults = await newznabService.search(config, query, {
             limit: options.limit,
             categories: [], // No category filter
+          })
+        } else if (options.track) {
+          // Track-specific search - use general search with track title
+          // This might find singles, EPs, or compilations containing the track
+          searchResults = await newznabService.search(config, query, {
+            limit: options.limit,
           })
         } else {
           // Try music search first, fallback to general search

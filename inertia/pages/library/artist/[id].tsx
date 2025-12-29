@@ -35,6 +35,7 @@ import {
   Edit01Icon,
   ViewIcon,
   ViewOffIcon,
+  FileDownloadIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
@@ -461,6 +462,8 @@ export default function ArtistDetail() {
 }
 
 function AlbumCard({ album }: { album: Album }) {
+  const [downloading, setDownloading] = useState(false)
+
   const percentComplete =
     album.trackCount > 0
       ? Math.round((album.fileCount / album.trackCount) * 100)
@@ -468,6 +471,30 @@ function AlbumCard({ album }: { album: Album }) {
 
   const isComplete = percentComplete === 100
   const isWanted = album.monitored && percentComplete < 100
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    setDownloading(true)
+    try {
+      const response = await fetch(`/api/v1/albums/${album.id}/download`, {
+        method: 'POST',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        toast.success(`Download started: ${data.release?.title || data.title}`)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'No releases found')
+      }
+    } catch (error) {
+      console.error('Failed to download:', error)
+      toast.error('Failed to download album')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <Link href={`/album/${album.id}`}>
@@ -508,6 +535,24 @@ function AlbumCard({ album }: { album: Album }) {
                   Complete
                 </Badge>
               ) : null}
+            </div>
+          )}
+          {/* Download button - show on hover for incomplete albums */}
+          {!isComplete && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-12 w-12 rounded-full"
+                onClick={handleDownload}
+                disabled={downloading}
+              >
+                {downloading ? (
+                  <HugeiconsIcon icon={Loading01Icon} className="h-6 w-6 animate-spin" />
+                ) : (
+                  <HugeiconsIcon icon={FileDownloadIcon} className="h-6 w-6" />
+                )}
+              </Button>
             </div>
           )}
           {/* Progress bar at bottom - only for monitored albums */}

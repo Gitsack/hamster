@@ -4,6 +4,7 @@ import DownloadClient from '#models/download_client'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { downloadImportService } from '#services/media/download_import_service'
 import { sabnzbdService, type SabnzbdConfig } from '#services/download_clients/sabnzbd_service'
+import { wantedSearchTask } from '#services/tasks/wanted_search_task'
 
 export default class QueueController {
   /**
@@ -175,11 +176,29 @@ export default class QueueController {
         .whereNotNull('albumId')
         .preload('album')
 
+      // Also check for downloads without albumId that might need manual matching
+      const orphanedDownloads = await Download.query()
+        .whereNotNull('outputPath')
+        .whereIn('status', ['completed', 'importing'])
+        .whereNull('albumId')
+
+      if (orphanedDownloads.length > 0) {
+        results.errors.push(
+          `Found ${orphanedDownloads.length} completed downloads without album association: ${orphanedDownloads.map((d) => d.title).join(', ')}`
+        )
+      }
+
       for (const download of completedDownloads) {
         results.scanned++
 
+        console.log(`Attempting to import: ${download.title}`)
+        console.log(`  Output path: ${download.outputPath}`)
+        console.log(`  Album ID: ${download.albumId}`)
+
         try {
           const importResult = await downloadImportService.importDownload(download)
+
+          console.log(`  Import result: ${importResult.filesImported} files, errors: ${importResult.errors.join(', ')}`)
 
           if (importResult.success && importResult.filesImported > 0) {
             results.imported++
@@ -191,9 +210,9 @@ export default class QueueController {
           }
         } catch (error) {
           results.failed++
-          results.errors.push(
-            `${download.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
-          )
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+          console.error(`  Import error: ${errorMsg}`)
+          results.errors.push(`${download.title}: ${errorMsg}`)
         }
       }
 
@@ -291,5 +310,35 @@ export default class QueueController {
         error: error instanceof Error ? error.message : 'Failed to import download',
       })
     }
+  }
+
+  /**
+   * Search for all wanted albums and grab releases
+   */
+  async searchWanted({ response }: HttpContext) {
+    if (wantedSearchTask.running) {
+      return response.json({
+        status: 'running',
+        message: 'Search is already in progress',
+      })
+    }
+
+    // Run the search in background
+    wantedSearchTask.run().catch(console.error)
+
+    return response.json({
+      status: 'started',
+      message: 'Search for wanted albums started',
+    })
+  }
+
+  /**
+   * Get wanted search task status
+   */
+  async wantedStatus({ response }: HttpContext) {
+    return response.json({
+      running: wantedSearchTask.running,
+      intervalMinutes: wantedSearchTask.interval,
+    })
   }
 }

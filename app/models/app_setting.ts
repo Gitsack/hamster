@@ -4,7 +4,6 @@ import { BaseModel, column } from '@adonisjs/lucid/orm'
 export type MediaType = 'music' | 'movies' | 'tv'
 
 export interface AppSettings {
-  downloadFolder: string
   enabledMediaTypes: MediaType[]
 }
 

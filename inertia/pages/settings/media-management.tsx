@@ -33,7 +33,6 @@ import {
   MusicNote01Icon,
   Video01Icon,
   Tv01Icon,
-  Download01Icon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 import { FolderBrowser } from '@/components/folder-browser'
@@ -51,7 +50,6 @@ interface RootFolder {
 }
 
 interface AppSettings {
-  downloadFolder: string
   enabledMediaTypes: MediaType[]
 }
 
@@ -75,7 +73,6 @@ const mediaTypeInfo: Record<MediaType, { label: string; icon: any; description: 
 
 export default function MediaManagement() {
   const [settings, setSettings] = useState<AppSettings>({
-    downloadFolder: '',
     enabledMediaTypes: ['music'],
   })
   const [rootFolders, setRootFolders] = useState<RootFolder[]>([])
@@ -86,10 +83,6 @@ export default function MediaManagement() {
   const [newName, setNewName] = useState('')
   const [createIfMissing, setCreateIfMissing] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [downloadFolderInput, setDownloadFolderInput] = useState('')
-  const [downloadFolderCreateIfMissing, setDownloadFolderCreateIfMissing] = useState(false)
-  const [savingDownloadFolder, setSavingDownloadFolder] = useState(false)
-  const [downloadFolderDialogOpen, setDownloadFolderDialogOpen] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -101,7 +94,6 @@ export default function MediaManagement() {
       if (settingsRes.ok) {
         const data = await settingsRes.json()
         setSettings(data)
-        setDownloadFolderInput(data.downloadFolder || '')
       }
       if (foldersRes.ok) {
         const data = await foldersRes.json()
@@ -117,45 +109,6 @@ export default function MediaManagement() {
   useEffect(() => {
     fetchData()
   }, [])
-
-  const handleSaveDownloadFolder = async () => {
-    if (!downloadFolderInput.trim()) {
-      toast.error('Download folder path is required')
-      return
-    }
-
-    setSavingDownloadFolder(true)
-    try {
-      const response = await fetch('/api/v1/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          downloadFolder: downloadFolderInput,
-          createDownloadFolder: downloadFolderCreateIfMissing,
-        }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setSettings(data)
-        setDownloadFolderDialogOpen(false)
-        toast.success('Download folder saved')
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to save download folder')
-      }
-    } catch (error) {
-      toast.error('Failed to save download folder')
-    } finally {
-      setSavingDownloadFolder(false)
-    }
-  }
-
-  const openDownloadFolderDialog = () => {
-    setDownloadFolderInput(settings.downloadFolder || '')
-    setDownloadFolderCreateIfMissing(false)
-    setDownloadFolderDialogOpen(true)
-  }
 
   const handleToggleMediaType = async (mediaType: MediaType, enabled: boolean) => {
     try {
@@ -246,35 +199,6 @@ export default function MediaManagement() {
       <Head title="Media Management" />
 
       <div className="space-y-6">
-        {/* Download Folder */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <HugeiconsIcon icon={Download01Icon} className="size-5 text-primary" />
-              </div>
-              <div className="flex-1">
-                <CardTitle>Download Folder</CardTitle>
-                <CardDescription>
-                  Where downloaded files are placed before being imported
-                </CardDescription>
-              </div>
-              <Button onClick={openDownloadFolderDialog}>
-                <HugeiconsIcon icon={Folder01Icon} className="mr-2 size-4" />
-                {settings.downloadFolder ? 'Change' : 'Set Folder'}
-              </Button>
-            </div>
-          </CardHeader>
-          {settings.downloadFolder && (
-            <CardContent>
-              <div className="flex items-center gap-2 text-sm">
-                <HugeiconsIcon icon={Folder01Icon} className="size-4 text-muted-foreground" />
-                <code className="font-mono text-muted-foreground">{settings.downloadFolder}</code>
-              </div>
-            </CardContent>
-          )}
-        </Card>
-
         {/* Media Types */}
         <Card>
           <CardHeader>
@@ -486,33 +410,6 @@ export default function MediaManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Download Folder Dialog */}
-      <Dialog open={downloadFolderDialogOpen} onOpenChange={setDownloadFolderDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Set Download Folder</DialogTitle>
-            <DialogDescription>
-              Select the folder where downloaded files will be placed before being imported into your library.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <FolderBrowser
-              value={downloadFolderInput}
-              onChange={setDownloadFolderInput}
-              createIfMissing={downloadFolderCreateIfMissing}
-              onCreateIfMissingChange={setDownloadFolderCreateIfMissing}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDownloadFolderDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveDownloadFolder} disabled={savingDownloadFolder || !downloadFolderInput}>
-              {savingDownloadFolder ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </AppLayout>
   )
 }

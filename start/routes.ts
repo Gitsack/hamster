@@ -135,6 +135,7 @@ router
     router.get('/albums/:id', [AlbumsController, 'show'])
     router.put('/albums/:id', [AlbumsController, 'update'])
     router.get('/albums/:id/releases', [AlbumsController, 'searchReleases'])
+    router.post('/albums/:id/download', [AlbumsController, 'searchAndDownload'])
     router.get('/albums/:id/files', [AlbumsController, 'files'])
 
     // Tracks
@@ -147,6 +148,8 @@ router
     router.put('/downloadclients/:id', [DownloadClientsController, 'update'])
     router.delete('/downloadclients/:id', [DownloadClientsController, 'destroy'])
     router.post('/downloadclients/test', [DownloadClientsController, 'test'])
+    router.get('/downloadclients/:id/browse', [DownloadClientsController, 'browseDownloads'])
+    router.post('/downloadclients/:id/import', [DownloadClientsController, 'importFromPath'])
 
     // Queue
     router.get('/queue', [QueueController, 'index'])
@@ -157,6 +160,8 @@ router
     router.delete('/queue/:id', [QueueController, 'destroy'])
     router.get('/queue/history', [QueueController, 'history'])
     router.post('/queue/grab', [QueueController, 'grab'])
+    router.post('/queue/search-wanted', [QueueController, 'searchWanted'])
+    router.get('/queue/wanted-status', [QueueController, 'wantedStatus'])
 
     // Playback
     router.get('/playback/stream/:id', [PlaybackController, 'stream'])

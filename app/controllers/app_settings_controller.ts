@@ -1,6 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import AppSetting, { type MediaType } from '#models/app_setting'
-import fs from 'node:fs/promises'
 
 function ensureArray<T>(value: T[] | string | undefined, defaultValue: T[]): T[] {
   if (Array.isArray(value)) {
@@ -19,48 +18,16 @@ function ensureArray<T>(value: T[] | string | undefined, defaultValue: T[]): T[]
 
 export default class AppSettingsController {
   async index({ response }: HttpContext) {
-    const downloadFolder = (await AppSetting.get<string>('downloadFolder', '')) || ''
     const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['music'])
     const enabledMediaTypes = ensureArray(rawMediaTypes, ['music'])
 
     return response.json({
-      downloadFolder,
       enabledMediaTypes,
     })
   }
 
   async update({ request, response }: HttpContext) {
-    const { downloadFolder, enabledMediaTypes, createDownloadFolder } = request.only([
-      'downloadFolder',
-      'enabledMediaTypes',
-      'createDownloadFolder',
-    ])
-
-    if (downloadFolder !== undefined) {
-      // Check if path exists
-      try {
-        const stats = await fs.stat(downloadFolder)
-        if (!stats.isDirectory()) {
-          return response.badRequest({ error: 'Path is not a directory' })
-        }
-      } catch {
-        // Path doesn't exist - create it if requested
-        if (createDownloadFolder) {
-          try {
-            await fs.mkdir(downloadFolder, { recursive: true })
-          } catch (mkdirError) {
-            return response.badRequest({
-              error: 'Failed to create directory',
-              details: mkdirError instanceof Error ? mkdirError.message : 'Unknown error',
-            })
-          }
-        } else {
-          return response.badRequest({ error: 'Path does not exist or is not accessible' })
-        }
-      }
-
-      await AppSetting.set('downloadFolder', downloadFolder)
-    }
+    const { enabledMediaTypes } = request.only(['enabledMediaTypes'])
 
     if (enabledMediaTypes !== undefined) {
       await AppSetting.set('enabledMediaTypes', enabledMediaTypes)
@@ -69,31 +36,8 @@ export default class AppSettingsController {
     const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['music'])
 
     return response.json({
-      downloadFolder: (await AppSetting.get<string>('downloadFolder', '')) || '',
       enabledMediaTypes: ensureArray(rawMediaTypes, ['music']),
     })
-  }
-
-  async getDownloadFolder({ response }: HttpContext) {
-    const downloadFolder = await AppSetting.get<string>('downloadFolder', '')
-    return response.json({ downloadFolder })
-  }
-
-  async setDownloadFolder({ request, response }: HttpContext) {
-    const { path } = request.only(['path'])
-
-    if (!path) {
-      return response.badRequest({ error: 'Path is required' })
-    }
-
-    await AppSetting.set('downloadFolder', path)
-    return response.json({ downloadFolder: path })
-  }
-
-  async getEnabledMediaTypes({ response }: HttpContext) {
-    const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['music'])
-    const enabledMediaTypes = ensureArray(rawMediaTypes, ['music'])
-    return response.json({ enabledMediaTypes })
   }
 
   async toggleMediaType({ request, response }: HttpContext) {

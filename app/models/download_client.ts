@@ -11,6 +11,9 @@ export interface DownloadClientSettings {
   apiKey?: string
   useSsl?: boolean
   category?: string
+  // Remote path mapping (for Docker setups)
+  remotePath?: string  // Path as seen by the download client (e.g., /downloads)
+  localPath?: string   // Path as seen by MediaBox (e.g., /mnt/downloads)
 }
 
 export default class DownloadClient extends BaseModel {

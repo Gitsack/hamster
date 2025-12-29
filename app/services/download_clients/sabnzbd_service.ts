@@ -278,6 +278,32 @@ export class SabnzbdService {
     const data = (await response.json()) as { categories: string[] }
     return data.categories || []
   }
+
+  /**
+   * Get SABnzbd configuration (including folder paths)
+   */
+  async getConfig(config: SabnzbdConfig): Promise<{ completeDir?: string; incompleteDir?: string }> {
+    const url = this.buildUrl(config, { mode: 'get_config' })
+    const response = await fetch(url)
+
+    if (!response.ok) {
+      throw new Error(`Failed to get config: ${response.status}`)
+    }
+
+    const data = (await response.json()) as {
+      config?: {
+        misc?: {
+          complete_dir?: string
+          download_dir?: string
+        }
+      }
+    }
+
+    return {
+      completeDir: data.config?.misc?.complete_dir,
+      incompleteDir: data.config?.misc?.download_dir,
+    }
+  }
 }
 
 export const sabnzbdService = new SabnzbdService()

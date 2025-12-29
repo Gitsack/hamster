@@ -398,6 +398,85 @@ export default class AlbumsController {
   }
 
   /**
+   * Search and grab the best release for an album
+   */
+  async searchAndDownload({ params, request, response }: HttpContext) {
+    const album = await Album.query().where('id', params.id).preload('artist').first()
+
+    if (!album) {
+      return response.notFound({ error: 'Album not found' })
+    }
+
+    // Check if searching for a specific track
+    const trackIdParam = request.qs().trackId
+    const trackId = trackIdParam ? parseInt(String(trackIdParam), 10) : null
+    let searchQuery: { artist?: string; album?: string; track?: string; year?: number; limit: number }
+
+    if (trackId && !isNaN(trackId)) {
+      // Search for specific track (might find a single or EP)
+      const track = await Track.find(trackId)
+      if (!track) {
+        return response.notFound({ error: 'Track not found' })
+      }
+
+      searchQuery = {
+        artist: album.artist?.name,
+        track: track.title,
+        limit: 25,
+      }
+    } else {
+      // Search for full album
+      searchQuery = {
+        artist: album.artist?.name,
+        album: album.title,
+        year: album.releaseDate?.year,
+        limit: 25,
+      }
+    }
+
+    try {
+      const { indexerManager } = await import('#services/indexers/indexer_manager')
+      const { downloadManager } = await import('#services/download_clients/download_manager')
+
+      const results = await indexerManager.search(searchQuery)
+
+      if (results.length === 0) {
+        const searchType = trackId ? 'track' : 'album'
+        return response.notFound({ error: `No releases found for this ${searchType}` })
+      }
+
+      // Sort by size (prefer larger files, usually better quality) and grab the first
+      const sorted = results.sort((a, b) => b.size - a.size)
+      const bestResult = sorted[0]
+
+      const download = await downloadManager.grab({
+        title: bestResult.title,
+        downloadUrl: bestResult.downloadUrl,
+        size: bestResult.size,
+        albumId: album.id,
+        indexerId: bestResult.indexerId,
+        indexerName: bestResult.indexer,
+        guid: bestResult.id,
+      })
+
+      return response.created({
+        id: download.id,
+        title: download.title,
+        status: download.status,
+        release: {
+          title: bestResult.title,
+          indexer: bestResult.indexer,
+          size: bestResult.size,
+        },
+      })
+    } catch (error) {
+      return response.badRequest({
+        error: error instanceof Error ? error.message : 'Failed to search and download',
+      })
+    }
+  }
+
+  /**
    * Search MusicBrainz for albums (for adding new albums)
    */
   async search({ request, response }: HttpContext) {

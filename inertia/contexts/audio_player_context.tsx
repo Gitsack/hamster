@@ -283,10 +283,18 @@ export function AudioPlayerProvider({ children }: AudioPlayerProviderProps) {
   }, [])
 
   const clearQueue = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+    }
     setState((prev) => ({
       ...prev,
       playlist: [],
       currentIndex: -1,
+      currentTrack: null,
+      isPlaying: false,
+      currentTime: 0,
+      duration: 0,
     }))
   }, [])
 

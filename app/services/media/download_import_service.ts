@@ -27,6 +27,14 @@ export interface DownloadImportResult {
   importedPaths: string[]
 }
 
+export interface PathImportResult {
+  success: boolean
+  filesImported: number
+  filesSkipped: number
+  errors: string[]
+  matchedAlbum?: string
+}
+
 /**
  * Service for importing completed downloads into the library.
  * Handles scanning, matching, moving, renaming, and cleaning up downloads.
@@ -56,6 +64,24 @@ export class DownloadImportService {
         return result
       }
 
+      // Apply remote path mapping if configured
+      let outputPath = download.outputPath
+      if (download.downloadClientId) {
+        const DownloadClient = (await import('#models/download_client')).default
+        const client = await DownloadClient.find(download.downloadClientId)
+        if (client?.settings?.remotePath && client?.settings?.localPath) {
+          outputPath = outputPath.replace(client.settings.remotePath, client.settings.localPath)
+        }
+      }
+
+      // Check if path exists
+      try {
+        await fs.access(outputPath)
+      } catch {
+        result.errors.push(`Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`)
+        return result
+      }
+
       // Get the album this download is for
       const album = download.albumId ? await Album.find(download.albumId) : null
       if (!album) {
@@ -78,7 +104,7 @@ export class DownloadImportService {
 
       // Scan for audio files in download folder
       onProgress?.({ phase: 'scanning', total: 0, current: 0 })
-      const audioFiles = await this.findAudioFiles(download.outputPath)
+      const audioFiles = await this.findAudioFiles(outputPath)
 
       if (audioFiles.length === 0) {
         result.errors.push('No audio files found in download')
@@ -129,7 +155,7 @@ export class DownloadImportService {
 
       // Clean up download folder
       onProgress?.({ phase: 'cleaning', total: 1, current: 0 })
-      await this.cleanupDownloadFolder(download.outputPath)
+      await this.cleanupDownloadFolder(outputPath)
 
       // Update download status
       download.status = 'importing'
@@ -143,6 +169,130 @@ export class DownloadImportService {
       }
 
       onProgress?.({ phase: 'complete', total: audioFiles.length, current: audioFiles.length })
+    } catch (error) {
+      result.errors.push(error instanceof Error ? error.message : 'Import failed')
+    }
+
+    return result
+  }
+
+  /**
+   * Import from a path without a Download record
+   * Tries to match audio files to an album in the library
+   */
+  async importFromPath(importPath: string): Promise<PathImportResult> {
+    const result: PathImportResult = {
+      success: false,
+      filesImported: 0,
+      filesSkipped: 0,
+      errors: [],
+    }
+
+    try {
+      // Scan for audio files
+      const audioFiles = await this.findAudioFiles(importPath)
+
+      if (audioFiles.length === 0) {
+        result.errors.push('No audio files found')
+        return result
+      }
+
+      // Try to match based on folder name or file metadata
+      const folderName = path.basename(importPath)
+      let album: Album | null = null
+      let artist: Artist | null = null
+
+      // First, try to get metadata from the first audio file
+      const firstFile = audioFiles[0]
+      const mediaInfo = await mediaInfoService.getMediaInfo(firstFile)
+
+      if (mediaInfo?.artist) {
+        artist = await Artist.query()
+          .whereILike('name', `%${mediaInfo.artist}%`)
+          .first()
+      }
+
+      if (mediaInfo?.album) {
+        const albumQuery = Album.query().whereILike('title', `%${mediaInfo.album}%`)
+        if (artist) {
+          albumQuery.where('artistId', artist.id)
+        }
+        album = await albumQuery.first()
+      }
+
+      // If no match from metadata, try folder name parsing
+      if (!album) {
+        // Common patterns: "Artist - Album (Year)", "Artist - Album"
+        const match = folderName.match(/^(.+?)\s*-\s*(.+?)(?:\s*\((\d{4})\))?$/)
+        if (match) {
+          const [, artistPart, albumPart] = match
+
+          if (!artist) {
+            artist = await Artist.query()
+              .whereILike('name', `%${artistPart.trim()}%`)
+              .first()
+          }
+
+          if (artist) {
+            album = await Album.query()
+              .where('artistId', artist.id)
+              .whereILike('title', `%${albumPart.trim()}%`)
+              .first()
+          }
+        }
+      }
+
+      if (!album) {
+        result.errors.push(`Could not match to any album in library. Folder: ${folderName}`)
+        return result
+      }
+
+      result.matchedAlbum = album.title
+
+      // Get artist if not already found
+      if (!artist) {
+        artist = await Artist.find(album.artistId)
+      }
+
+      if (!artist) {
+        result.errors.push('Artist not found')
+        return result
+      }
+
+      const rootFolder = await RootFolder.find(artist.rootFolderId)
+      if (!rootFolder) {
+        result.errors.push('Root folder not found')
+        return result
+      }
+
+      // Ensure album has tracks
+      await this.ensureAlbumHasTracks(album)
+
+      // Import each audio file
+      for (const filePath of audioFiles) {
+        try {
+          const importResult = await this.importAudioFile(filePath, album, artist, rootFolder)
+
+          if (importResult.success) {
+            result.filesImported++
+          } else {
+            result.filesSkipped++
+            if (importResult.error) {
+              result.errors.push(`${path.basename(filePath)}: ${importResult.error}`)
+            }
+          }
+        } catch (error) {
+          result.filesSkipped++
+          result.errors.push(
+            `${path.basename(filePath)}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          )
+        }
+      }
+
+      // Clean up the folder after import
+      await this.cleanupDownloadFolder(importPath)
+
+      result.success = result.filesImported > 0
     } catch (error) {
       result.errors.push(error instanceof Error ? error.message : 'Import failed')
     }

@@ -38,9 +38,14 @@ import {
   Loading01Icon,
   CheckmarkCircle01Icon,
   Cancel01Icon,
+  Folder01Icon,
+  File01Icon,
+  ArrowLeft01Icon,
+  Download01Icon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
+import { FolderBrowser } from '@/components/folder-browser'
 
 interface DownloadClient {
   id: number
@@ -55,9 +60,19 @@ interface DownloadClient {
   priority: number
   removeCompletedDownloads: boolean
   removeFailedDownloads: boolean
+  remotePath: string
+  localPath: string
 }
 
 type FormData = Omit<DownloadClient, 'id'>
+
+interface DownloadItem {
+  name: string
+  path: string
+  isDirectory: boolean
+  size: number
+  modifiedAt: string | null
+}
 
 const defaultFormData: FormData = {
   name: '',
@@ -71,6 +86,8 @@ const defaultFormData: FormData = {
   priority: 1,
   removeCompletedDownloads: true,
   removeFailedDownloads: true,
+  remotePath: '',
+  localPath: '',
 }
 
 export default function DownloadClients() {
@@ -82,8 +99,19 @@ export default function DownloadClients() {
   const [formData, setFormData] = useState<FormData>(defaultFormData)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<{ success: boolean; version?: string; error?: string } | null>(null)
+  const [testResult, setTestResult] = useState<{ success: boolean; version?: string; error?: string; remotePath?: string; pathAccessible?: boolean } | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [showFolderBrowser, setShowFolderBrowser] = useState(false)
+  const [browseDialogOpen, setBrowseDialogOpen] = useState(false)
+  const [browsingClient, setBrowsingClient] = useState<DownloadClient | null>(null)
+  const [downloadItems, setDownloadItems] = useState<DownloadItem[]>([])
+  const [browsingPath, setBrowsingPath] = useState('')
+  const [browsingBasePath, setBrowsingBasePath] = useState('')
+  const [canGoUp, setCanGoUp] = useState(false)
+  const [parentPath, setParentPath] = useState('')
+  const [browsingLoading, setBrowsingLoading] = useState(false)
+  const [browseError, setBrowseError] = useState<string | null>(null)
+  const [importingPath, setImportingPath] = useState<string | null>(null)
 
   useEffect(() => {
     fetchClients()
@@ -104,10 +132,92 @@ export default function DownloadClients() {
     }
   }
 
+  const browseDownloads = async (client: DownloadClient, path?: string) => {
+    if (!path) {
+      // Initial browse - reset everything
+      setBrowsingClient(client)
+      setBrowseDialogOpen(true)
+    }
+    setBrowsingLoading(true)
+    setBrowseError(null)
+
+    try {
+      const url = path
+        ? `/api/v1/downloadclients/${client.id}/browse?path=${encodeURIComponent(path)}`
+        : `/api/v1/downloadclients/${client.id}/browse`
+      const response = await fetch(url)
+      if (response.ok) {
+        const data = await response.json()
+        setDownloadItems(data.items)
+        setBrowsingPath(data.path)
+        setBrowsingBasePath(data.basePath)
+        setCanGoUp(data.canGoUp)
+        setParentPath(data.parentPath)
+      } else {
+        const error = await response.json()
+        setBrowseError(error.error || 'Failed to browse downloads')
+      }
+    } catch (error) {
+      console.error('Failed to browse downloads:', error)
+      setBrowseError('Failed to connect to server')
+    } finally {
+      setBrowsingLoading(false)
+    }
+  }
+
+  const navigateToFolder = (folderPath: string) => {
+    if (browsingClient) {
+      browseDownloads(browsingClient, folderPath)
+    }
+  }
+
+  const importPath = async (pathToImport: string) => {
+    if (!browsingClient) return
+
+    setImportingPath(pathToImport)
+
+    try {
+      const response = await fetch(`/api/v1/downloadclients/${browsingClient.id}/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: pathToImport }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        toast.success(data.message || `Imported ${data.filesImported} files`)
+        // Refresh the folder view
+        browseDownloads(browsingClient, browsingPath)
+      } else {
+        toast.error(data.error || data.errors?.[0] || 'Import failed')
+      }
+    } catch (error) {
+      console.error('Failed to import:', error)
+      toast.error('Failed to import')
+    } finally {
+      setImportingPath(null)
+    }
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} MB`
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${bytes} B`
+  }
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '-'
+    const date = new Date(dateStr)
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
   const openAddDialog = () => {
     setEditingClient(null)
     setFormData(defaultFormData)
     setTestResult(null)
+    setShowFolderBrowser(false)
     setDialogOpen(true)
   }
 
@@ -125,8 +235,11 @@ export default function DownloadClients() {
       priority: client.priority,
       removeCompletedDownloads: client.removeCompletedDownloads,
       removeFailedDownloads: client.removeFailedDownloads,
+      remotePath: client.remotePath || '',
+      localPath: client.localPath || '',
     })
     setTestResult(null)
+    setShowFolderBrowser(false)
     setDialogOpen(true)
   }
 
@@ -152,6 +265,22 @@ export default function DownloadClients() {
 
       if (result.success) {
         toast.success(`Connected to ${formData.type} v${result.version}`)
+
+        // Auto-fill remote path mapping if detected
+        if (result.remotePath) {
+          if (result.pathAccessible) {
+            // Path is directly accessible, no mapping needed
+            toast.info('Download path is directly accessible - no path mapping needed')
+            setFormData((prev) => ({ ...prev, remotePath: '', localPath: '' }))
+          } else {
+            // Path not accessible, suggest mapping
+            toast.warning('Download path not accessible locally - please configure path mapping')
+            setFormData((prev) => ({
+              ...prev,
+              remotePath: prev.remotePath || result.remotePath,
+            }))
+          }
+        }
       } else {
         toast.error(result.error || 'Connection failed')
       }
@@ -289,13 +418,25 @@ export default function DownloadClients() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(client)}
-                        >
-                          <HugeiconsIcon icon={Edit01Icon} className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-1">
+                          {client.localPath && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => browseDownloads(client)}
+                              title="Browse downloads"
+                            >
+                              <HugeiconsIcon icon={Folder01Icon} className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(client)}
+                          >
+                            <HugeiconsIcon icon={Edit01Icon} className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -308,7 +449,7 @@ export default function DownloadClients() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className={showFolderBrowser ? "max-w-2xl" : "max-w-lg"}>
           <DialogHeader>
             <DialogTitle>
               {editingClient ? 'Edit Download Client' : 'Add Download Client'}
@@ -393,6 +534,59 @@ export default function DownloadClients() {
               />
             </div>
 
+            {/* Remote Path Mapping */}
+            <div className="space-y-4 pt-4 border-t">
+              <div>
+                <Label className="text-base font-medium">Remote Path Mapping</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Required if SABnzbd runs in Docker with different paths than MediaBox.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="remotePath">Remote Path</Label>
+                <Input
+                  id="remotePath"
+                  value={formData.remotePath}
+                  onChange={(e) => setFormData({ ...formData, remotePath: e.target.value })}
+                  placeholder="/downloads"
+                />
+                <p className="text-xs text-muted-foreground">Path as SABnzbd sees it (auto-detected when you test connection)</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="localPath">Local Path</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowFolderBrowser(!showFolderBrowser)}
+                    className="h-7 text-xs"
+                  >
+                    {showFolderBrowser ? 'Hide Browser' : 'Browse...'}
+                  </Button>
+                </div>
+                {showFolderBrowser ? (
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <FolderBrowser
+                      value={formData.localPath}
+                      onChange={(path) => setFormData({ ...formData, localPath: path })}
+                      hideSelectButton
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      id="localPath"
+                      value={formData.localPath}
+                      onChange={(e) => setFormData({ ...formData, localPath: e.target.value })}
+                      placeholder="/mnt/downloads"
+                    />
+                    <p className="text-xs text-muted-foreground">Path as MediaBox sees it</p>
+                  </>
+                )}
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
               <Checkbox
                 id="useSsl"
@@ -418,21 +612,34 @@ export default function DownloadClients() {
             {/* Test result */}
             {testResult && (
               <div
-                className={`flex items-center gap-2 p-3 rounded-md ${
+                className={`flex flex-col gap-2 p-3 rounded-md ${
                   testResult.success
                     ? 'bg-green-500/10 text-green-600'
                     : 'bg-destructive/10 text-destructive'
                 }`}
               >
-                <HugeiconsIcon
-                  icon={testResult.success ? CheckmarkCircle01Icon : Cancel01Icon}
-                  className="h-5 w-5"
-                />
-                <span>
-                  {testResult.success
-                    ? `Connected successfully (v${testResult.version})`
-                    : testResult.error || 'Connection failed'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <HugeiconsIcon
+                    icon={testResult.success ? CheckmarkCircle01Icon : Cancel01Icon}
+                    className="h-5 w-5"
+                  />
+                  <span>
+                    {testResult.success
+                      ? `Connected successfully (v${testResult.version})`
+                      : testResult.error || 'Connection failed'}
+                  </span>
+                </div>
+                {testResult.success && testResult.remotePath && (
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Complete folder: </span>
+                    <code className="bg-muted px-1 rounded">{testResult.remotePath}</code>
+                    {testResult.pathAccessible ? (
+                      <span className="text-green-600 ml-2">(accessible)</span>
+                    ) : (
+                      <span className="text-orange-500 ml-2">(needs path mapping)</span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -484,6 +691,113 @@ export default function DownloadClients() {
                 <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 mr-2 animate-spin" />
               ) : null}
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Browse Downloads Dialog */}
+      <Dialog open={browseDialogOpen} onOpenChange={setBrowseDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {canGoUp && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigateToFolder(parentPath)}
+                  className="h-8 w-8 p-0"
+                >
+                  <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
+                </Button>
+              )}
+              Downloads - {browsingClient?.name}
+            </DialogTitle>
+            <DialogDescription className="font-mono text-xs truncate">
+              {browsingPath}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-auto min-h-[300px]">
+            {browsingLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <HugeiconsIcon icon={Loading01Icon} className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : browseError ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <p className="text-destructive mb-2">{browseError}</p>
+                <p className="text-sm text-muted-foreground">
+                  Make sure the local path is configured and accessible.
+                </p>
+              </div>
+            ) : downloadItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                <HugeiconsIcon icon={Folder01Icon} className="h-12 w-12 mb-4 opacity-50" />
+                <p>No files in downloads folder</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="w-24 text-right">Size</TableHead>
+                    <TableHead className="w-40 text-right">Modified</TableHead>
+                    <TableHead className="w-20"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {downloadItems.map((item) => (
+                    <TableRow key={item.path}>
+                      <TableCell>
+                        <HugeiconsIcon
+                          icon={item.isDirectory ? Folder01Icon : File01Icon}
+                          className={`h-4 w-4 ${item.isDirectory ? 'text-blue-500' : 'text-muted-foreground'}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {item.isDirectory ? (
+                          <button
+                            onClick={() => navigateToFolder(item.path)}
+                            className="font-medium text-left hover:text-primary hover:underline transition-colors"
+                          >
+                            {item.name}
+                          </button>
+                        ) : (
+                          <span className="font-medium">{item.name}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {formatFileSize(item.size)}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground text-sm">
+                        {formatDate(item.modifiedAt)}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => importPath(item.path)}
+                          disabled={importingPath === item.path}
+                          title="Import to library"
+                        >
+                          {importingPath === item.path ? (
+                            <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <HugeiconsIcon icon={Download01Icon} className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBrowseDialogOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -44,6 +44,8 @@ interface FolderBrowserProps {
   onCreateIfMissingChange?: (create: boolean) => void
   createIfMissing?: boolean
   className?: string
+  /** Hide the "Select This Folder" button when selection is automatic via onChange */
+  hideSelectButton?: boolean
 }
 
 export function FolderBrowser({
@@ -52,6 +54,7 @@ export function FolderBrowser({
   onCreateIfMissingChange,
   createIfMissing = false,
   className,
+  hideSelectButton = false,
 }: FolderBrowserProps) {
   const [currentPath, setCurrentPath] = useState('')
   const [directories, setDirectories] = useState<DirectoryEntry[]>([])
@@ -271,15 +274,17 @@ export function FolderBrowser({
           Up
         </Button>
         <span className="flex-1 truncate font-mono text-xs">{currentPath || '/'}</span>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={handleSelectCurrent}
-          className="h-7"
-        >
-          Select This Folder
-        </Button>
+        {!hideSelectButton && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleSelectCurrent}
+            className="h-7"
+          >
+            Select This Folder
+          </Button>
+        )}
       </div>
 
       {/* Directory listing */}

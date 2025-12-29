@@ -308,7 +308,7 @@ export class DownloadManager {
   async testClient(
     type: string,
     settings: { host?: string; port?: number; apiKey?: string; useSsl?: boolean }
-  ): Promise<{ success: boolean; version?: string; error?: string }> {
+  ): Promise<{ success: boolean; version?: string; error?: string; remotePath?: string; pathAccessible?: boolean }> {
     switch (type) {
       case 'sabnzbd': {
         const config: SabnzbdConfig = {
@@ -318,7 +318,35 @@ export class DownloadManager {
           useSsl: settings.useSsl || false,
         }
 
-        return sabnzbdService.testConnection(config)
+        const result = await sabnzbdService.testConnection(config)
+
+        if (result.success) {
+          // Also fetch the complete directory to help with path mapping
+          try {
+            const sabConfig = await sabnzbdService.getConfig(config)
+            if (sabConfig.completeDir) {
+              // Check if the path is accessible locally
+              const fs = await import('node:fs/promises')
+              let pathAccessible = false
+              try {
+                await fs.access(sabConfig.completeDir)
+                pathAccessible = true
+              } catch {
+                pathAccessible = false
+              }
+
+              return {
+                ...result,
+                remotePath: sabConfig.completeDir,
+                pathAccessible,
+              }
+            }
+          } catch {
+            // Ignore config fetch errors, connection still succeeded
+          }
+        }
+
+        return result
       }
 
       default:
