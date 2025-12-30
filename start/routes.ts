@@ -28,6 +28,7 @@ const QueueController = () => import('#controllers/queue_controller')
 const PlaybackController = () => import('#controllers/playback_controller')
 const AppSettingsController = () => import('#controllers/app_settings_controller')
 const FilesystemController = () => import('#controllers/filesystem_controller')
+const FilesController = () => import('#controllers/files_controller')
 
 // Public routes
 router.on('/').renderInertia('home')
@@ -69,9 +70,9 @@ router
     // Search
     router.on('/search').renderInertia('search/index').as('search')
 
-    // Requests
-    router.on('/requests').renderInertia('requests/index').as('requests')
-    router.on('/requests/search/:id').renderInertia('requests/search/[id]').as('requests.search')
+    // Requests - redirect to library missing tab
+    router.get('/requests', async ({ response }) => response.redirect('/library?tab=missing'))
+    router.get('/requests/search/:id', async ({ response }) => response.redirect('/library?tab=missing'))
 
     // Activity
     router.on('/activity/queue').renderInertia('activity/queue').as('activity.queue')
@@ -140,11 +141,13 @@ router
     router.get('/albums', [AlbumsController, 'index'])
     router.post('/albums', [AlbumsController, 'store'])
     router.get('/albums/search', [AlbumsController, 'search'])
-    router.get('/albums/wanted', [AlbumsController, 'wanted'])
+    router.get('/albums/requested', [AlbumsController, 'requested'])
+    router.get('/albums/wanted', [AlbumsController, 'requested']) // Alias for backwards compatibility
     router.get('/albums/:id', [AlbumsController, 'show'])
     router.put('/albums/:id', [AlbumsController, 'update'])
     router.get('/albums/:id/releases', [AlbumsController, 'searchReleases'])
     router.post('/albums/:id/download', [AlbumsController, 'searchAndDownload'])
+    router.post('/albums/:id/search', [AlbumsController, 'searchNow'])
     router.get('/albums/:id/files', [AlbumsController, 'files'])
 
     // Tracks
@@ -154,21 +157,29 @@ router
     router.get('/movies', [MoviesController, 'index'])
     router.post('/movies', [MoviesController, 'store'])
     router.get('/movies/search', [MoviesController, 'search'])
+    router.get('/movies/requested', [MoviesController, 'requested'])
     router.get('/movies/:id', [MoviesController, 'show'])
     router.put('/movies/:id', [MoviesController, 'update'])
     router.delete('/movies/:id', [MoviesController, 'destroy'])
-    router.post('/movies/:id/wanted', [MoviesController, 'setWanted'])
+    router.post('/movies/:id/request', [MoviesController, 'setWanted'])
     router.post('/movies/:id/download', [MoviesController, 'download'])
+    router.post('/movies/:id/search', [MoviesController, 'searchNow'])
 
     // TV Shows
     router.get('/tvshows', [TvShowsController, 'index'])
     router.post('/tvshows', [TvShowsController, 'store'])
     router.get('/tvshows/search', [TvShowsController, 'search'])
+    router.get('/tvshows/requested', [TvShowsController, 'requested'])
+    router.get('/tvshows/preview-seasons', [TvShowsController, 'previewSeasons'])
+    router.get('/tvshows/preview-episodes', [TvShowsController, 'previewEpisodes'])
     router.get('/tvshows/:id', [TvShowsController, 'show'])
     router.put('/tvshows/:id', [TvShowsController, 'update'])
     router.delete('/tvshows/:id', [TvShowsController, 'destroy'])
     router.get('/tvshows/:id/season/:seasonNumber', [TvShowsController, 'showSeason'])
-    router.post('/tvshows/:id/episodes/:episodeId/wanted', [TvShowsController, 'setEpisodeWanted'])
+    router.post('/tvshows/:id/season/:seasonNumber/request', [TvShowsController, 'setSeasonWanted'])
+    router.post('/tvshows/:id/episodes/:episodeId/request', [TvShowsController, 'setEpisodeWanted'])
+    router.post('/tvshows/:id/search', [TvShowsController, 'searchNow'])
+    router.post('/tvshows/:id/episodes/:episodeId/search', [TvShowsController, 'searchEpisodeNow'])
 
     // Authors
     router.get('/authors', [AuthorsController, 'index'])
@@ -182,11 +193,13 @@ router
     router.get('/books', [BooksController, 'index'])
     router.post('/books', [BooksController, 'store'])
     router.get('/books/search', [BooksController, 'search'])
+    router.get('/books/requested', [BooksController, 'requested'])
     router.get('/books/:id', [BooksController, 'show'])
     router.put('/books/:id', [BooksController, 'update'])
     router.delete('/books/:id', [BooksController, 'destroy'])
-    router.post('/books/:id/wanted', [BooksController, 'setWanted'])
+    router.post('/books/:id/request', [BooksController, 'setWanted'])
     router.post('/books/:id/download', [BooksController, 'download'])
+    router.post('/books/:id/search', [BooksController, 'searchNow'])
 
     // Download clients
     router.get('/downloadclients', [DownloadClientsController, 'index'])
@@ -208,8 +221,8 @@ router
     router.delete('/queue/:id', [QueueController, 'destroy'])
     router.get('/queue/history', [QueueController, 'history'])
     router.post('/queue/grab', [QueueController, 'grab'])
-    router.post('/queue/search-wanted', [QueueController, 'searchWanted'])
-    router.get('/queue/wanted-status', [QueueController, 'wantedStatus'])
+    router.post('/queue/search-requested', [QueueController, 'searchRequested'])
+    router.get('/queue/requested-status', [QueueController, 'requestedStatus'])
 
     // Playback
     router.get('/playback/stream/:id', [PlaybackController, 'stream'])
@@ -226,6 +239,16 @@ router
     router.get('/filesystem/browse', [FilesystemController, 'browse'])
     router.get('/filesystem/quick-paths', [FilesystemController, 'quickPaths'])
     router.get('/filesystem/check', [FilesystemController, 'checkPath'])
+
+    // File downloads
+    router.get('/files/movies/:id/download', [FilesController, 'downloadMovie'])
+    router.get('/files/episodes/:id/download', [FilesController, 'downloadEpisode'])
+    router.get('/files/books/:id/download', [FilesController, 'downloadBook'])
+    router.get('/files/tracks/:id/download', [FilesController, 'downloadTrack'])
+    router.post('/files/sync-status', [FilesController, 'syncFileStatus'])
+    router.post('/files/scan-completed', [FilesController, 'scanCompletedDownloads'])
+    router.post('/files/scan-folders', [FilesController, 'scanFolders'])
+    router.post('/files/scan-all', [FilesController, 'scanAll'])
   })
   .prefix('/api/v1')
   .use(middleware.auth())

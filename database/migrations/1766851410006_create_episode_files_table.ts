@@ -5,10 +5,10 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id')
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
-      table.integer('episode_id').unsigned().references('id').inTable('episodes').onDelete('CASCADE').notNullable()
-      table.integer('tv_show_id').unsigned().references('id').inTable('tv_shows').onDelete('CASCADE').notNullable()
+      table.uuid('episode_id').references('id').inTable('episodes').onDelete('CASCADE').notNullable()
+      table.uuid('tv_show_id').references('id').inTable('tv_shows').onDelete('CASCADE').notNullable()
 
       table.string('relative_path').notNullable()
       table.bigInteger('size_bytes').notNullable()

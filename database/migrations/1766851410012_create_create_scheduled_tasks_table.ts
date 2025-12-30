@@ -5,7 +5,7 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id').notNullable()
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
       table.string('name', 255).notNullable().unique()
       table.enum('type', ['rss_sync', 'library_scan', 'cleanup', 'refresh_artist', 'backup', 'download_monitor']).notNullable()
       table.integer('interval_minutes').notNullable()

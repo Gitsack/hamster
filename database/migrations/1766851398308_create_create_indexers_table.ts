@@ -5,7 +5,7 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id').notNullable()
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
       table.string('name', 255).notNullable()
       table.enum('type', ['newznab', 'prowlarr']).notNullable()
       table.boolean('enabled').defaultTo(true).notNullable()

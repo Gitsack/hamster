@@ -56,9 +56,10 @@ interface TrackFile {
   id: number
   path: string
   size: number
-  quality: string
-  format: string
+  quality: string | null
+  format: string | null
   bitrate: number | null
+  downloadUrl: string
 }
 
 interface Album {
@@ -299,9 +300,9 @@ export default function AlbumDetail() {
             {downloading ? (
               <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 mr-2" />
+              <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
             )}
-            {downloading ? 'Searching...' : 'Download'}
+            {downloading ? 'Searching...' : 'Search releases'}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -502,7 +503,7 @@ export default function AlbumDetail() {
                                   />
                                 ) : (
                                   <HugeiconsIcon
-                                    icon={FileDownloadIcon}
+                                    icon={Search01Icon}
                                     className="h-4 w-4"
                                   />
                                 )}
@@ -536,6 +537,7 @@ export default function AlbumDetail() {
                       <TableHead className="w-24">Quality</TableHead>
                       <TableHead className="w-24">Format</TableHead>
                       <TableHead className="w-24 text-right">Size</TableHead>
+                      <TableHead className="w-16"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -545,13 +547,20 @@ export default function AlbumDetail() {
                           {file.path}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{file.quality}</Badge>
+                          {file.quality && <Badge variant="outline">{file.quality}</Badge>}
                         </TableCell>
                         <TableCell className="uppercase text-muted-foreground">
                           {file.format}
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">
                           {formatSize(file.size)}
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={file.downloadUrl} download>
+                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                            </a>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}

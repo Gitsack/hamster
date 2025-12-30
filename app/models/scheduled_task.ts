@@ -5,7 +5,7 @@ export type TaskType = 'rss_sync' | 'library_scan' | 'cleanup' | 'refresh_artist
 
 export default class ScheduledTask extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
   declare name: string

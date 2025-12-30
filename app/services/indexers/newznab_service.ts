@@ -31,7 +31,7 @@ export interface NewznabSearchResult {
   category: string
   categoryId: number
   indexer: string
-  indexerId: number
+  indexerId: string
   downloadUrl: string
   infoUrl?: string
   grabs?: number
@@ -45,7 +45,7 @@ export interface NewznabSearchResult {
 }
 
 export interface NewznabIndexerConfig {
-  id: number
+  id: string
   name: string
   url: string
   apiKey: string

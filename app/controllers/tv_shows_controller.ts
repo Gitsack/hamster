@@ -2,19 +2,27 @@ import type { HttpContext } from '@adonisjs/core/http'
 import TvShow from '#models/tv_show'
 import Season from '#models/season'
 import Episode from '#models/episode'
+import Download from '#models/download'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
+import { requestedSearchTask } from '#services/tasks/requested_search_task'
+import { downloadManager } from '#services/download_clients/download_manager'
 
 const tvShowValidator = vine.compile(
   vine.object({
     tmdbId: vine.string().optional(),
     title: vine.string().minLength(1),
     year: vine.number().optional(),
-    qualityProfileId: vine.number().optional(),
-    rootFolderId: vine.number(),
-    wanted: vine.boolean().optional(),
+    qualityProfileId: vine.string().optional(),
+    rootFolderId: vine.string(),
+    requested: vine.boolean().optional(),
     searchOnAdd: vine.boolean().optional(),
+    selectedSeasons: vine.array(vine.number()).optional(),
+    // Episode-level selection: { seasonNumber: [episodeNumbers] }
+    selectedEpisodes: vine
+      .record(vine.array(vine.number()))
+      .optional(),
   })
 )
 
@@ -35,7 +43,7 @@ export default class TvShowsController {
         posterUrl: show.posterUrl,
         status: show.status,
         network: show.network,
-        wanted: show.wanted,
+        requested: show.requested,
         seasonCount: show.seasonCount,
         episodeCount: show.episodeCount,
         qualityProfile: show.qualityProfile?.name,
@@ -97,7 +105,7 @@ export default class TvShowsController {
       title: data.title,
       sortTitle: data.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
       year: data.year,
-      wanted: data.wanted ?? true,
+      requested: data.requested ?? true,
       seasonCount: 0,
       episodeCount: 0,
       qualityProfileId: data.qualityProfileId,
@@ -140,8 +148,43 @@ export default class TvShowsController {
       try {
         const seasons = await tmdbService.getTvShowSeasons(parseInt(data.tmdbId))
 
+        // Determine which seasons should be requested
+        // If selectedSeasons is provided, only those seasons are requested
+        // If selectedSeasons is undefined, all seasons are requested (backward compatibility)
+        // If selectedSeasons is empty array, no seasons are requested
+        const selectedSeasonNumbers = data.selectedSeasons
+          ? new Set(data.selectedSeasons)
+          : null // null means all seasons
+
+        // Episode-level selection: { "1": [1, 2, 3], "2": [5, 6] }
+        const selectedEpisodeMap = data.selectedEpisodes || null
+
         for (const seasonData of seasons) {
           if (seasonData.seasonNumber === 0) continue // Skip specials for now
+
+          // Check if we have episode-level selection for this season
+          const seasonKey = String(seasonData.seasonNumber)
+          const hasEpisodeLevelSelection = selectedEpisodeMap && seasonKey in selectedEpisodeMap
+          const selectedEpisodesInSeason = hasEpisodeLevelSelection
+            ? new Set(selectedEpisodeMap[seasonKey])
+            : null
+
+          // Determine if this season should be marked as requested
+          // A season is requested if:
+          // 1. It's in selectedSeasons (season-level selection)
+          // 2. OR it has any episodes selected (episode-level selection)
+          // 3. OR no selection provided and default is true
+          let seasonRequested: boolean
+          if (selectedEpisodeMap && hasEpisodeLevelSelection) {
+            // Episode-level: season is requested if any episodes are selected
+            seasonRequested = selectedEpisodesInSeason!.size > 0
+          } else if (selectedSeasonNumbers !== null) {
+            // Season-level: use the selection
+            seasonRequested = selectedSeasonNumbers.has(seasonData.seasonNumber)
+          } else {
+            // Default: all requested
+            seasonRequested = data.requested ?? true
+          }
 
           const season = await Season.create({
             tvShowId: show.id,
@@ -152,13 +195,23 @@ export default class TvShowsController {
             airDate: seasonData.airDate ? DateTime.fromISO(seasonData.airDate) : null,
             posterUrl: seasonData.posterPath,
             episodeCount: seasonData.episodeCount,
-            wanted: data.wanted ?? true,
+            requested: seasonRequested,
           })
 
           // Fetch episodes for this season
           const { episodes } = await tmdbService.getTvShowSeason(parseInt(data.tmdbId), seasonData.seasonNumber)
 
           for (const episodeData of episodes) {
+            // Determine if this episode should be requested
+            let episodeRequested: boolean
+            if (selectedEpisodesInSeason) {
+              // Episode-level selection for this season
+              episodeRequested = selectedEpisodesInSeason.has(episodeData.episodeNumber)
+            } else {
+              // Inherit from season
+              episodeRequested = seasonRequested
+            }
+
             await Episode.create({
               tvShowId: show.id,
               seasonId: season.id,
@@ -172,7 +225,7 @@ export default class TvShowsController {
               stillUrl: episodeData.stillPath,
               rating: episodeData.voteAverage,
               votes: episodeData.voteCount,
-              wanted: data.wanted ?? true,
+              requested: episodeRequested,
               hasFile: false,
             })
           }
@@ -180,6 +233,13 @@ export default class TvShowsController {
       } catch (error) {
         console.error('Failed to fetch seasons/episodes:', error)
       }
+    }
+
+    // Trigger immediate search if requested and searchOnAdd is enabled
+    if ((data.requested ?? true) && data.searchOnAdd !== false) {
+      requestedSearchTask.searchTvShowEpisodes(show.id).catch((error) => {
+        console.error('Failed to trigger search for TV show:', error)
+      })
     }
 
     return response.created({
@@ -195,13 +255,20 @@ export default class TvShowsController {
       .preload('qualityProfile')
       .preload('rootFolder')
       .preload('seasons', (query) => {
-        query.orderBy('seasonNumber', 'asc')
+        query.orderBy('seasonNumber', 'asc').preload('episodes')
       })
       .first()
 
     if (!show) {
       return response.notFound({ error: 'TV show not found' })
     }
+
+    // Get active downloads for this show
+    const activeDownloads = await Download.query()
+      .where('tvShowId', show.id)
+      .whereIn('status', ['queued', 'downloading', 'paused', 'importing'])
+
+    const downloadingEpisodeIds = new Set(activeDownloads.map((d) => d.episodeId))
 
     return response.json({
       id: show.id,
@@ -217,19 +284,28 @@ export default class TvShowsController {
       backdropUrl: show.backdropUrl,
       rating: show.rating,
       genres: show.genres,
-      wanted: show.wanted,
+      requested: show.requested,
       seasonCount: show.seasonCount,
       episodeCount: show.episodeCount,
       qualityProfile: show.qualityProfile,
       rootFolder: show.rootFolder,
-      seasons: show.seasons.map((s) => ({
-        id: s.id,
-        seasonNumber: s.seasonNumber,
-        title: s.title,
-        episodeCount: s.episodeCount,
-        wanted: s.wanted,
-        posterUrl: s.posterUrl,
-      })),
+      seasons: show.seasons.map((s) => {
+        const downloadedCount = s.episodes.filter((e) => e.hasFile).length
+        const downloadingCount = s.episodes.filter((e) => downloadingEpisodeIds.has(e.id)).length
+        const requestedCount = s.episodes.filter((e) => e.requested && !e.hasFile && !downloadingEpisodeIds.has(e.id)).length
+
+        return {
+          id: s.id,
+          seasonNumber: s.seasonNumber,
+          title: s.title,
+          episodeCount: s.episodeCount,
+          requested: s.requested,
+          posterUrl: s.posterUrl,
+          downloadedCount,
+          downloadingCount,
+          requestedCount,
+        }
+      }),
       addedAt: show.addedAt?.toISO(),
     })
   }
@@ -239,7 +315,7 @@ export default class TvShowsController {
       .where('tvShowId', params.id)
       .where('seasonNumber', params.seasonNumber)
       .preload('episodes', (query) => {
-        query.orderBy('episodeNumber', 'asc')
+        query.orderBy('episodeNumber', 'asc').preload('episodeFile')
       })
       .first()
 
@@ -254,7 +330,7 @@ export default class TvShowsController {
       overview: season.overview,
       airDate: season.airDate?.toISODate(),
       posterUrl: season.posterUrl,
-      wanted: season.wanted,
+      requested: season.requested,
       episodes: season.episodes.map((e) => ({
         id: e.id,
         episodeNumber: e.episodeNumber,
@@ -263,8 +339,17 @@ export default class TvShowsController {
         airDate: e.airDate?.toISODate(),
         runtime: e.runtime,
         stillUrl: e.stillUrl,
-        wanted: e.wanted,
+        requested: e.requested,
         hasFile: e.hasFile,
+        episodeFile: e.episodeFile
+          ? {
+              id: e.episodeFile.id,
+              path: e.episodeFile.relativePath,
+              size: e.episodeFile.sizeBytes,
+              quality: e.episodeFile.quality,
+              downloadUrl: `/api/v1/files/episodes/${e.episodeFile.id}/download`,
+            }
+          : null,
       })),
     })
   }
@@ -275,19 +360,34 @@ export default class TvShowsController {
       return response.notFound({ error: 'TV show not found' })
     }
 
-    const { wanted, qualityProfileId, rootFolderId } = request.only([
-      'wanted',
+    const { requested, qualityProfileId, rootFolderId } = request.only([
+      'requested',
       'qualityProfileId',
       'rootFolderId',
     ])
 
-    if (wanted !== undefined) show.wanted = wanted
+    if (requested !== undefined) show.requested = requested
     if (qualityProfileId !== undefined) show.qualityProfileId = qualityProfileId
     if (rootFolderId !== undefined) show.rootFolderId = rootFolderId
 
     await show.save()
 
-    return response.json({ id: show.id, title: show.title, wanted: show.wanted })
+    // If unrequesting, cancel all active downloads for this show
+    if (requested === false) {
+      const activeDownloads = await Download.query()
+        .where('tvShowId', show.id)
+        .whereIn('status', ['queued', 'downloading', 'paused'])
+
+      for (const download of activeDownloads) {
+        try {
+          await downloadManager.cancel(download.id, true)
+        } catch (error) {
+          console.error(`[TvShowsController] Failed to cancel download ${download.id}:`, error)
+        }
+      }
+    }
+
+    return response.json({ id: show.id, title: show.title, requested: show.requested })
   }
 
   async destroy({ params, response }: HttpContext) {
@@ -306,10 +406,248 @@ export default class TvShowsController {
       return response.notFound({ error: 'Episode not found' })
     }
 
-    const { wanted } = request.only(['wanted'])
-    episode.wanted = wanted ?? true
+    const { requested } = request.only(['requested'])
+    const newStatus = requested ?? true
+    episode.requested = newStatus
     await episode.save()
 
-    return response.json({ id: episode.id, wanted: episode.wanted })
+    // If unrequesting, cancel any active download for this episode
+    if (!newStatus) {
+      const activeDownload = await Download.query()
+        .where('episodeId', episode.id)
+        .whereIn('status', ['queued', 'downloading', 'paused'])
+        .first()
+
+      if (activeDownload) {
+        try {
+          await downloadManager.cancel(activeDownload.id, true)
+        } catch (error) {
+          console.error(`[TvShowsController] Failed to cancel download ${activeDownload.id}:`, error)
+        }
+      }
+    }
+
+    // Trigger search if marking as requested and episode doesn't have file
+    if (newStatus && !episode.hasFile) {
+      requestedSearchTask.searchSingleEpisode(episode.id).catch((error) => {
+        console.error('Failed to trigger search for episode:', error)
+      })
+    }
+
+    return response.json({ id: episode.id, requested: episode.requested })
+  }
+
+  /**
+   * Set season request status (and propagate to all episodes)
+   */
+  async setSeasonWanted({ params, request, response }: HttpContext) {
+    const season = await Season.query()
+      .where('tvShowId', params.id)
+      .where('seasonNumber', params.seasonNumber)
+      .preload('episodes')
+      .first()
+
+    if (!season) {
+      return response.notFound({ error: 'Season not found' })
+    }
+
+    const { requested } = request.only(['requested'])
+    const newStatus = requested ?? true
+
+    // Update season
+    season.requested = newStatus
+    await season.save()
+
+    // Update all episodes in this season
+    await Episode.query()
+      .where('seasonId', season.id)
+      .update({ requested: newStatus })
+
+    // If unrequesting, cancel all active downloads for episodes in this season
+    if (!newStatus) {
+      const episodeIds = season.episodes.map((e) => e.id)
+
+      // First try to find downloads by episodeId
+      let activeDownloads = await Download.query()
+        .whereIn('episodeId', episodeIds)
+        .whereIn('status', ['queued', 'downloading', 'paused'])
+
+      // Fallback: also search by tvShowId for downloads that might not have episodeId set
+      // but belong to this show (matching title pattern for this season)
+      if (activeDownloads.length === 0) {
+        const showDownloads = await Download.query()
+          .where('tvShowId', params.id)
+          .whereIn('status', ['queued', 'downloading', 'paused'])
+
+        // Filter to only include downloads for this season (S0X pattern in title)
+        const seasonPattern = new RegExp(`S0?${season.seasonNumber}E`, 'i')
+        activeDownloads = showDownloads.filter((d) => seasonPattern.test(d.title))
+      }
+
+      for (const download of activeDownloads) {
+        try {
+          await downloadManager.cancel(download.id, true)
+        } catch (error) {
+          console.error(`[TvShowsController] Failed to cancel download ${download.id}:`, error)
+        }
+      }
+    }
+
+    // Trigger search if marking as requested
+    if (newStatus) {
+      const show = await TvShow.find(params.id)
+      if (show) {
+        requestedSearchTask.searchTvShowEpisodes(show.id).catch((error) => {
+          console.error('Failed to trigger search for season:', error)
+        })
+      }
+    }
+
+    return response.json({
+      seasonNumber: season.seasonNumber,
+      requested: season.requested,
+    })
+  }
+
+  /**
+   * Get requested (missing) episodes
+   */
+  async requested({ request, response }: HttpContext) {
+    const page = request.input('page', 1)
+    const limit = request.input('limit', 50)
+
+    const episodes = await Episode.query()
+      .where('requested', true)
+      .where('hasFile', false)
+      .preload('tvShow')
+      .orderBy('createdAt', 'desc')
+      .paginate(page, limit)
+
+    return response.json({
+      data: episodes.all().map((episode) => ({
+        id: episode.id,
+        title: episode.title,
+        seasonNumber: episode.seasonNumber,
+        episodeNumber: episode.episodeNumber,
+        tvShowId: episode.tvShowId,
+        tvShowTitle: episode.tvShow?.title,
+        posterUrl: episode.tvShow?.posterUrl,
+        airDate: episode.airDate?.toISODate(),
+      })),
+      meta: {
+        total: episodes.total,
+        perPage: episodes.perPage,
+        currentPage: episodes.currentPage,
+        lastPage: episodes.lastPage,
+      },
+    })
+  }
+
+  /**
+   * Preview seasons for a TV show before adding (used for season selection)
+   */
+  async previewSeasons({ request, response }: HttpContext) {
+    const tmdbId = request.input('tmdbId')
+
+    if (!tmdbId) {
+      return response.badRequest({ error: 'tmdbId is required' })
+    }
+
+    try {
+      const seasons = await tmdbService.getTvShowSeasons(parseInt(tmdbId))
+
+      return response.json(
+        seasons
+          .filter((s) => s.seasonNumber > 0) // Filter out specials
+          .map((season) => ({
+            seasonNumber: season.seasonNumber,
+            title: season.name,
+            episodeCount: season.episodeCount,
+            airDate: season.airDate,
+            posterUrl: season.posterPath,
+          }))
+      )
+    } catch (error) {
+      console.error('Failed to fetch seasons:', error)
+      return response.badRequest({ error: 'Failed to fetch seasons from TMDB' })
+    }
+  }
+
+  /**
+   * Preview episodes for a season before adding (used for episode selection in dialog)
+   */
+  async previewEpisodes({ request, response }: HttpContext) {
+    const tmdbId = request.input('tmdbId')
+    const seasonNumber = request.input('seasonNumber')
+
+    if (!tmdbId || seasonNumber === undefined) {
+      return response.badRequest({ error: 'tmdbId and seasonNumber are required' })
+    }
+
+    try {
+      const { episodes } = await tmdbService.getTvShowSeason(parseInt(tmdbId), parseInt(seasonNumber))
+
+      return response.json(
+        episodes.map((episode) => ({
+          episodeNumber: episode.episodeNumber,
+          title: episode.name,
+          overview: episode.overview,
+          airDate: episode.airDate,
+          runtime: episode.runtime,
+          stillUrl: episode.stillPath,
+        }))
+      )
+    } catch (error) {
+      console.error('Failed to fetch episodes:', error)
+      return response.badRequest({ error: 'Failed to fetch episodes from TMDB' })
+    }
+  }
+
+  /**
+   * Trigger immediate search for all requested episodes of a TV show
+   */
+  async searchNow({ params, response }: HttpContext) {
+    const show = await TvShow.find(params.id)
+    if (!show) {
+      return response.notFound({ error: 'TV show not found' })
+    }
+
+    try {
+      const result = await requestedSearchTask.searchTvShowEpisodes(show.id)
+      return response.json({
+        message: 'Search completed',
+        searched: result.searched,
+        found: result.found,
+        grabbed: result.grabbed,
+        errors: result.errors,
+      })
+    } catch (error) {
+      return response.internalServerError({
+        error: error instanceof Error ? error.message : 'Search failed',
+      })
+    }
+  }
+
+  /**
+   * Trigger immediate search for a specific episode
+   */
+  async searchEpisodeNow({ params, response }: HttpContext) {
+    const episode = await Episode.find(params.episodeId)
+    if (!episode) {
+      return response.notFound({ error: 'Episode not found' })
+    }
+
+    try {
+      const result = await requestedSearchTask.searchSingleEpisode(episode.id)
+      return response.json({
+        found: result.found,
+        grabbed: result.grabbed,
+        error: result.error,
+      })
+    } catch (error) {
+      return response.internalServerError({
+        error: error instanceof Error ? error.message : 'Search failed',
+      })
+    }
   }
 }

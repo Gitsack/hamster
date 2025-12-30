@@ -4,7 +4,7 @@ import DownloadClient from '#models/download_client'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { downloadImportService } from '#services/media/download_import_service'
 import { sabnzbdService, type SabnzbdConfig } from '#services/download_clients/sabnzbd_service'
-import { wantedSearchTask } from '#services/tasks/wanted_search_task'
+import { requestedSearchTask } from '#services/tasks/requested_search_task'
 
 export default class QueueController {
   /**
@@ -313,10 +313,10 @@ export default class QueueController {
   }
 
   /**
-   * Search for all wanted albums and grab releases
+   * Search for all requested items and grab releases
    */
-  async searchWanted({ response }: HttpContext) {
-    if (wantedSearchTask.running) {
+  async searchRequested({ response }: HttpContext) {
+    if (requestedSearchTask.running) {
       return response.json({
         status: 'running',
         message: 'Search is already in progress',
@@ -324,21 +324,21 @@ export default class QueueController {
     }
 
     // Run the search in background
-    wantedSearchTask.run().catch(console.error)
+    requestedSearchTask.run().catch(console.error)
 
     return response.json({
       status: 'started',
-      message: 'Search for wanted albums started',
+      message: 'Search for requested items started',
     })
   }
 
   /**
-   * Get wanted search task status
+   * Get requested search task status
    */
-  async wantedStatus({ response }: HttpContext) {
+  async requestedStatus({ response }: HttpContext) {
     return response.json({
-      running: wantedSearchTask.running,
-      intervalMinutes: wantedSearchTask.interval,
+      running: requestedSearchTask.running,
+      intervalMinutes: requestedSearchTask.interval,
     })
   }
 }

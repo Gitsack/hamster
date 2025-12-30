@@ -4,17 +4,18 @@ import Author from '#models/author'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { openLibraryService } from '#services/metadata/openlibrary_service'
+import { requestedSearchTask } from '#services/tasks/requested_search_task'
 
 const bookValidator = vine.compile(
   vine.object({
     openlibraryId: vine.string().optional(),
-    authorId: vine.number().optional(),
+    authorId: vine.string().optional(),
     authorKey: vine.string().optional(), // OpenLibrary author key
     authorName: vine.string().optional(),
     title: vine.string().minLength(1),
-    rootFolderId: vine.number(),
-    qualityProfileId: vine.number().optional(),
-    wanted: vine.boolean().optional(),
+    rootFolderId: vine.string(),
+    qualityProfileId: vine.string().optional(),
+    requested: vine.boolean().optional(),
   })
 )
 
@@ -41,7 +42,7 @@ export default class BooksController {
         authorName: book.author?.name,
         releaseDate: book.releaseDate?.toISODate(),
         coverUrl: book.coverUrl,
-        wanted: book.wanted,
+        requested: book.requested,
         hasFile: book.hasFile,
         seriesName: book.seriesName,
         seriesPosition: book.seriesPosition,
@@ -120,7 +121,7 @@ export default class BooksController {
               imageUrl: openLibraryService.getAuthorPhotoUrl(olAuthor.photoId, 'L'),
               rootFolderId: data.rootFolderId,
               qualityProfileId: data.qualityProfileId,
-              wanted: data.wanted ?? true,
+              requested: data.requested ?? true,
               addedAt: DateTime.now(),
             })
           }
@@ -136,7 +137,7 @@ export default class BooksController {
             sortName: data.authorName.split(' ').reverse().join(', '),
             rootFolderId: data.rootFolderId,
             qualityProfileId: data.qualityProfileId,
-            wanted: data.wanted ?? true,
+            requested: data.requested ?? true,
             addedAt: DateTime.now(),
           })
         }
@@ -151,7 +152,7 @@ export default class BooksController {
       authorId: author.id,
       title: data.title,
       sortTitle: data.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
-      wanted: data.wanted ?? true,
+      requested: data.requested ?? true,
       hasFile: false,
     }
 
@@ -192,6 +193,13 @@ export default class BooksController {
 
     const book = await Book.create(bookData)
 
+    // Trigger immediate search if requested
+    if (data.requested ?? true) {
+      requestedSearchTask.searchSingleBook(book.id).catch((error) => {
+        console.error('Failed to trigger search for book:', error)
+      })
+    }
+
     return response.created({
       id: book.id,
       title: book.title,
@@ -224,10 +232,18 @@ export default class BooksController {
       genres: book.genres,
       seriesName: book.seriesName,
       seriesPosition: book.seriesPosition,
-      wanted: book.wanted,
+      requested: book.requested,
       hasFile: book.hasFile,
       author: book.author,
-      bookFile: book.bookFile,
+      bookFile: book.bookFile
+        ? {
+            id: book.bookFile.id,
+            path: book.bookFile.relativePath,
+            size: book.bookFile.sizeBytes,
+            format: book.bookFile.format,
+            downloadUrl: `/api/v1/files/books/${book.bookFile.id}/download`,
+          }
+        : null,
     })
   }
 
@@ -237,13 +253,13 @@ export default class BooksController {
       return response.notFound({ error: 'Book not found' })
     }
 
-    const { wanted } = request.only(['wanted'])
+    const { requested } = request.only(['requested'])
 
-    if (wanted !== undefined) book.wanted = wanted
+    if (requested !== undefined) book.requested = requested
 
     await book.save()
 
-    return response.json({ id: book.id, title: book.title, wanted: book.wanted })
+    return response.json({ id: book.id, title: book.title, requested: book.requested })
   }
 
   async destroy({ params, response }: HttpContext) {
@@ -262,11 +278,53 @@ export default class BooksController {
       return response.notFound({ error: 'Book not found' })
     }
 
-    const { wanted } = request.only(['wanted'])
-    book.wanted = wanted ?? true
+    const { requested } = request.only(['requested'])
+    book.requested = requested ?? true
     await book.save()
 
-    return response.json({ id: book.id, wanted: book.wanted })
+    // Trigger immediate search if marking as requested
+    if (book.requested && !book.hasFile) {
+      requestedSearchTask.searchSingleBook(book.id).catch((error) => {
+        console.error('Failed to trigger search for book:', error)
+      })
+    }
+
+    return response.json({ id: book.id, requested: book.requested })
+  }
+
+  /**
+   * Get requested (missing) books
+   */
+  async requested({ request, response }: HttpContext) {
+    const page = request.input('page', 1)
+    const limit = request.input('limit', 50)
+
+    const books = await Book.query()
+      .where('requested', true)
+      .where('hasFile', false)
+      .preload('author')
+      .orderBy('createdAt', 'desc')
+      .paginate(page, limit)
+
+    return response.json({
+      data: books.all().map((book) => ({
+        id: book.id,
+        title: book.title,
+        authorId: book.authorId,
+        authorName: book.author?.name,
+        openlibraryId: book.openlibraryId,
+        releaseDate: book.releaseDate?.toISODate(),
+        coverUrl: book.coverUrl,
+        seriesName: book.seriesName,
+        seriesPosition: book.seriesPosition,
+      })),
+      meta: {
+        total: books.total,
+        perPage: books.perPage,
+        currentPage: books.currentPage,
+        lastPage: books.lastPage,
+      },
+    })
   }
 
   async download({ params, response }: HttpContext) {
@@ -334,6 +392,29 @@ export default class BooksController {
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search and download',
+      })
+    }
+  }
+
+  /**
+   * Trigger immediate search for a book
+   */
+  async searchNow({ params, response }: HttpContext) {
+    const book = await Book.find(params.id)
+    if (!book) {
+      return response.notFound({ error: 'Book not found' })
+    }
+
+    try {
+      const result = await requestedSearchTask.searchSingleBook(book.id)
+      return response.json({
+        found: result.found,
+        grabbed: result.grabbed,
+        error: result.error,
+      })
+    } catch (error) {
+      return response.internalServerError({
+        error: error instanceof Error ? error.message : 'Search failed',
       })
     }
   }

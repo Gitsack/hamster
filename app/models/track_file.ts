@@ -15,13 +15,13 @@ export interface MediaInfo {
 
 export default class TrackFile extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare trackId: number | null
+  declare trackId: string | null
 
   @column()
-  declare albumId: number
+  declare albumId: string
 
   @column()
   declare relativePath: string

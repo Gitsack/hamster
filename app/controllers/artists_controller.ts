@@ -10,19 +10,19 @@ import { DateTime } from 'luxon'
 const addArtistValidator = vine.compile(
   vine.object({
     musicbrainzId: vine.string(),
-    rootFolderId: vine.number(),
-    qualityProfileId: vine.number(),
-    metadataProfileId: vine.number(),
-    wanted: vine.boolean().optional(),
+    rootFolderId: vine.string(),
+    qualityProfileId: vine.string(),
+    metadataProfileId: vine.string(),
+    requested: vine.boolean().optional(),
   })
 )
 
 const updateArtistValidator = vine.compile(
   vine.object({
-    wanted: vine.boolean().optional(),
-    qualityProfileId: vine.number().optional(),
-    metadataProfileId: vine.number().optional(),
-    rootFolderId: vine.number().optional(),
+    requested: vine.boolean().optional(),
+    qualityProfileId: vine.string().optional(),
+    metadataProfileId: vine.string().optional(),
+    rootFolderId: vine.string().optional(),
   })
 )
 
@@ -52,7 +52,7 @@ export default class ArtistsController {
         country: artist.country,
         // Use artist image if available, otherwise use first album cover
         imageUrl: artist.imageUrl || artist.albums[0]?.imageUrl || null,
-        wanted: artist.wanted,
+        requested: artist.requested,
         albumCount: (artist.$extras as { albums_count?: string }).albums_count || 0,
         qualityProfile: artist.qualityProfile
           ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
@@ -98,7 +98,7 @@ export default class ArtistsController {
           releaseDate: album.releaseDate?.toISODate(),
           albumType: album.albumType,
           imageUrl: album.imageUrl,
-          wanted: album.wanted,
+          requested: album.requested,
           trackCount: Number((trackCount[0].$extras as { total: string }).total) || 0,
           fileCount: Number((fileCount[0].$extras as { total: string }).total) || 0,
         }
@@ -118,7 +118,7 @@ export default class ArtistsController {
       formedAt: artist.formedAt?.toISODate(),
       endedAt: artist.endedAt?.toISODate(),
       imageUrl: artist.imageUrl,
-      wanted: artist.wanted,
+      requested: artist.requested,
       qualityProfile: artist.qualityProfile
         ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
         : null,
@@ -161,7 +161,7 @@ export default class ArtistsController {
       country: mbArtist.country || null,
       formedAt: mbArtist.beginDate ? DateTime.fromISO(mbArtist.beginDate) : null,
       endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
-      wanted: data.wanted ?? true,
+      requested: data.requested ?? true,
       qualityProfileId: data.qualityProfileId,
       metadataProfileId: data.metadataProfileId,
       rootFolderId: data.rootFolderId,
@@ -192,7 +192,7 @@ export default class ArtistsController {
     const data = await request.validateUsing(updateArtistValidator)
 
     artist.merge({
-      wanted: data.wanted ?? artist.wanted,
+      requested: data.requested ?? artist.requested,
       qualityProfileId: data.qualityProfileId ?? artist.qualityProfileId,
       metadataProfileId: data.metadataProfileId ?? artist.metadataProfileId,
       rootFolderId: data.rootFolderId ?? artist.rootFolderId,
@@ -202,7 +202,7 @@ export default class ArtistsController {
     return response.json({
       id: artist.id,
       name: artist.name,
-      wanted: artist.wanted,
+      requested: artist.requested,
     })
   }
 
@@ -374,7 +374,7 @@ export default class ArtistsController {
         secondaryTypes: mbAlbum.secondaryTypes || [],
         releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
         imageUrl: coverUrl,
-        wanted: false, // Albums are not wanted by default - user must explicitly select them
+        requested: false, // Albums are not requested by default - user must explicitly select them
         anyReleaseOk: true,
       })
     }

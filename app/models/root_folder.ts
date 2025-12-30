@@ -6,7 +6,7 @@ import type { MediaType } from './app_setting.js'
 
 export default class RootFolder extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
   declare name: string

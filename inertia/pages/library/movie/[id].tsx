@@ -31,7 +31,7 @@ import {
   CheckmarkCircle02Icon,
   Clock01Icon,
   Calendar01Icon,
-  FileDownloadIcon,
+  Search01Icon,
   Time01Icon,
   StarIcon,
 } from '@hugeicons/core-free-icons'
@@ -52,7 +52,8 @@ interface MovieFile {
   id: number
   path: string
   size: number
-  quality: string
+  quality: string | null
+  downloadUrl: string
 }
 
 interface Movie {
@@ -70,7 +71,7 @@ interface Movie {
   backdropUrl: string | null
   rating: number | null
   genres: string[]
-  wanted: boolean
+  requested: boolean
   hasFile: boolean
   qualityProfile: QualityProfile | null
   rootFolder: RootFolder | null
@@ -117,11 +118,11 @@ export default function MovieDetail() {
       const response = await fetch(`/api/v1/movies/${movieId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wanted: !movie.wanted }),
+        body: JSON.stringify({ requested: !movie.requested }),
       })
       if (response.ok) {
-        setMovie({ ...movie, wanted: !movie.wanted })
-        toast.success(movie.wanted ? 'Movie unwanted' : 'Movie wanted')
+        setMovie({ ...movie, requested: !movie.requested })
+        toast.success(movie.requested ? 'Movie unrequested' : 'Movie requested')
       }
     } catch (error) {
       console.error('Failed to update movie:', error)
@@ -232,9 +233,9 @@ export default function MovieDetail() {
               {downloading ? (
                 <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
               ) : (
-                <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 mr-2" />
+                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
               )}
-              Download
+              Search releases
             </Button>
           )}
           <DropdownMenu>
@@ -246,10 +247,10 @@ export default function MovieDetail() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={toggleWanted}>
                 <HugeiconsIcon
-                  icon={movie.wanted ? ViewOffIcon : ViewIcon}
+                  icon={movie.requested ? ViewOffIcon : ViewIcon}
                   className="h-4 w-4 mr-2"
                 />
-                {movie.wanted ? 'Unwant' : 'Want'}
+                {movie.requested ? 'Unrequest' : 'Request'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -320,7 +321,7 @@ export default function MovieDetail() {
                   <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-3 w-3" />
                   Downloaded
                 </Badge>
-              ) : movie.wanted ? (
+              ) : movie.requested ? (
                 <Badge variant="secondary" className="gap-1">
                   <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3" />
                   Requested
@@ -423,10 +424,20 @@ export default function MovieDetail() {
                       {movie.movieFile.path.split('/').pop()}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {movie.movieFile.quality} • {formatFileSize(movie.movieFile.size)}
+                      {movie.movieFile.quality && `${movie.movieFile.quality} • `}
+                      {formatFileSize(movie.movieFile.size)}
+                    </p>
+                    <p className="text-xs text-muted-foreground/70 truncate max-w-md">
+                      {movie.movieFile.path}
                     </p>
                   </div>
                 </div>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={movie.movieFile.downloadUrl} download>
+                    <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 mr-2" />
+                    Download
+                  </a>
+                </Button>
               </div>
             </CardContent>
           </Card>

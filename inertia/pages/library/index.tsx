@@ -53,7 +53,7 @@ interface Artist {
   status: string
   artistType: string | null
   imageUrl: string | null
-  wanted: boolean
+  requested: boolean
   albumCount: number
   qualityProfile: { id: number; name: string } | null
   metadataProfile: { id: number; name: string } | null
@@ -66,7 +66,7 @@ interface Movie {
   overview: string | null
   posterUrl: string | null
   status: string | null
-  wanted: boolean
+  requested: boolean
   hasFile: boolean
   runtime: number | null
   rating: number | null
@@ -80,7 +80,7 @@ interface TvShow {
   posterUrl: string | null
   status: string | null
   network: string | null
-  wanted: boolean
+  requested: boolean
   seasonCount: number
   episodeCount: number
 }
@@ -90,7 +90,7 @@ interface Author {
   name: string
   overview: string | null
   imageUrl: string | null
-  wanted: boolean
+  requested: boolean
   bookCount: number
 }
 
@@ -107,7 +107,16 @@ interface QueueItem {
 
 type ViewMode = 'grid' | 'list'
 type SortBy = 'name' | 'recent' | 'count' | 'year'
-type MediaType = 'music' | 'movies' | 'tv' | 'books'
+type MediaType = 'music' | 'movies' | 'tv' | 'books' | 'missing'
+
+interface MissingItem {
+  id: string
+  type: 'album' | 'movie' | 'episode' | 'book'
+  title: string
+  subtitle?: string
+  imageUrl?: string | null
+  airDate?: string | null
+}
 
 const MEDIA_TYPE_CONFIG: Record<MediaType, {
   label: string
@@ -144,6 +153,13 @@ const MEDIA_TYPE_CONFIG: Record<MediaType, {
     itemLabel: 'author',
     countLabel: 'books'
   },
+  missing: {
+    label: 'Missing',
+    icon: Clock01Icon,
+    addUrl: '/search',
+    itemLabel: 'item',
+    countLabel: 'items'
+  },
 }
 
 export default function Library() {
@@ -152,6 +168,8 @@ export default function Library() {
   const [movies, setMovies] = useState<Movie[]>([])
   const [tvShows, setTvShows] = useState<TvShow[]>([])
   const [authors, setAuthors] = useState<Author[]>([])
+  const [missingItems, setMissingItems] = useState<MissingItem[]>([])
+  const [missingCounts, setMissingCounts] = useState({ albums: 0, movies: 0, episodes: 0, books: 0 })
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
@@ -173,7 +191,9 @@ export default function Library() {
         if (response.ok) {
           const data = await response.json()
           if (data.enabledMediaTypes?.length > 0) {
-            setEnabledMediaTypes(data.enabledMediaTypes)
+            // Add 'missing' tab as a special always-available option
+            const types = [...data.enabledMediaTypes, 'missing'] as MediaType[]
+            setEnabledMediaTypes(types)
             setActiveTab(data.enabledMediaTypes[0])
           }
         }
@@ -217,6 +237,77 @@ export default function Library() {
         case 'books': {
           const res = await fetch('/api/v1/authors')
           if (res.ok) setAuthors(await res.json())
+          break
+        }
+        case 'missing': {
+          // Fetch all missing items from all media types
+          const [albumsRes, moviesRes, episodesRes, booksRes] = await Promise.all([
+            fetch('/api/v1/albums/requested?limit=100'),
+            fetch('/api/v1/movies/requested?limit=100'),
+            fetch('/api/v1/tvshows/requested?limit=100'),
+            fetch('/api/v1/books/requested?limit=100'),
+          ])
+
+          const combined: MissingItem[] = []
+
+          if (albumsRes.ok) {
+            const data = await albumsRes.json()
+            setMissingCounts((prev) => ({ ...prev, albums: data.meta?.total || 0 }))
+            combined.push(
+              ...data.data.map((a: any) => ({
+                id: `album-${a.id}`,
+                type: 'album' as const,
+                title: a.title,
+                subtitle: a.artistName,
+                imageUrl: a.imageUrl,
+              }))
+            )
+          }
+
+          if (moviesRes.ok) {
+            const data = await moviesRes.json()
+            setMissingCounts((prev) => ({ ...prev, movies: data.meta?.total || 0 }))
+            combined.push(
+              ...data.data.map((m: any) => ({
+                id: `movie-${m.id}`,
+                type: 'movie' as const,
+                title: m.title,
+                subtitle: m.year?.toString(),
+                imageUrl: m.posterUrl,
+              }))
+            )
+          }
+
+          if (episodesRes.ok) {
+            const data = await episodesRes.json()
+            setMissingCounts((prev) => ({ ...prev, episodes: data.meta?.total || 0 }))
+            combined.push(
+              ...data.data.map((e: any) => ({
+                id: `episode-${e.id}`,
+                type: 'episode' as const,
+                title: `S${String(e.seasonNumber).padStart(2, '0')}E${String(e.episodeNumber).padStart(2, '0')} - ${e.title}`,
+                subtitle: e.tvShowTitle,
+                imageUrl: e.posterUrl,
+                airDate: e.airDate,
+              }))
+            )
+          }
+
+          if (booksRes.ok) {
+            const data = await booksRes.json()
+            setMissingCounts((prev) => ({ ...prev, books: data.meta?.total || 0 }))
+            combined.push(
+              ...data.data.map((b: any) => ({
+                id: `book-${b.id}`,
+                type: 'book' as const,
+                title: b.title,
+                subtitle: b.authorName,
+                imageUrl: b.coverUrl,
+              }))
+            )
+          }
+
+          setMissingItems(combined)
           break
         }
       }
@@ -421,7 +512,7 @@ export default function Library() {
     imageUrl: string | null
     subtitle?: string
     detailUrl: string
-    wanted?: boolean
+    requested?: boolean
     hasFile?: boolean
     mediaType: MediaType
   }) => {
@@ -436,7 +527,7 @@ export default function Library() {
         case 'books': return q.bookId === item.id
       }
     })
-    const isNotRequested = !item.wanted && !item.hasFile && !isDownloading
+    const isNotRequested = !item.requested && !item.hasFile && !isDownloading
 
     return (
       <Card key={imageKey} className="overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group relative">
@@ -460,9 +551,9 @@ export default function Library() {
               </div>
             )}
             {/* Status indicator */}
-            {(item.wanted || item.hasFile || isDownloading) && (
+            {(item.requested || item.hasFile || isDownloading) && (
               <div className="absolute top-2 left-2">
-                <StatusBadge requested={item.wanted || false} hasFile={item.hasFile} downloading={isDownloading} />
+                <StatusBadge requested={item.requested || false} hasFile={item.hasFile} downloading={isDownloading} />
               </div>
             )}
           </div>
@@ -517,7 +608,7 @@ export default function Library() {
     imageUrl: string | null
     subtitle?: string
     detailUrl: string
-    wanted?: boolean
+    requested?: boolean
     hasFile?: boolean
     mediaType: MediaType
     badges?: string[]
@@ -533,7 +624,7 @@ export default function Library() {
         case 'books': return q.bookId === item.id
       }
     })
-    const isNotRequested = !item.wanted && !item.hasFile && !isDownloading
+    const isNotRequested = !item.requested && !item.hasFile && !isDownloading
 
     return (
       <Card key={imageKey} className="hover:ring-2 hover:ring-primary transition-all cursor-pointer group">
@@ -566,7 +657,7 @@ export default function Library() {
             </div>
           </Link>
           <div className="flex items-center gap-2">
-            <StatusBadge requested={item.wanted || false} hasFile={item.hasFile} downloading={isDownloading} />
+            <StatusBadge requested={item.requested || false} hasFile={item.hasFile} downloading={isDownloading} />
             {item.badges?.map((badge, i) => (
               <Badge key={i} variant="outline">{badge}</Badge>
             ))}
@@ -609,7 +700,7 @@ export default function Library() {
       imageUrl: artist.imageUrl,
       subtitle: `${artist.albumCount} ${Number(artist.albumCount) === 1 ? 'album' : 'albums'}`,
       detailUrl: `/artist/${artist.id}`,
-      wanted: artist.wanted,
+      requested: artist.requested,
       mediaType: 'music' as MediaType,
     }))
 
@@ -629,7 +720,7 @@ export default function Library() {
           imageUrl: artist.imageUrl,
           subtitle: `${artist.albumCount} ${Number(artist.albumCount) === 1 ? 'album' : 'albums'}${artist.artistType ? ` • ${artist.artistType}` : ''}`,
           detailUrl: `/artist/${artist.id}`,
-          wanted: artist.wanted,
+          requested: artist.requested,
           mediaType: 'music',
           badges: artist.qualityProfile ? [artist.qualityProfile.name] : [],
         }))}
@@ -647,7 +738,7 @@ export default function Library() {
       imageUrl: movie.posterUrl,
       subtitle: movie.year ? `${movie.year}${movie.runtime ? ` • ${movie.runtime} min` : ''}` : undefined,
       detailUrl: `/movie/${movie.id}`,
-      wanted: movie.wanted,
+      requested: movie.requested,
       hasFile: movie.hasFile,
       mediaType: 'movies' as MediaType,
     }))
@@ -668,7 +759,7 @@ export default function Library() {
           imageUrl: movie.posterUrl,
           subtitle: movie.year ? `${movie.year}${movie.runtime ? ` • ${movie.runtime} min` : ''}` : undefined,
           detailUrl: `/movie/${movie.id}`,
-          wanted: movie.wanted,
+          requested: movie.requested,
           hasFile: movie.hasFile,
           mediaType: 'movies',
           badges: movie.status ? [movie.status] : [],
@@ -687,7 +778,7 @@ export default function Library() {
       imageUrl: show.posterUrl,
       subtitle: `${show.seasonCount} season${show.seasonCount !== 1 ? 's' : ''} • ${show.episodeCount} episodes`,
       detailUrl: `/tvshow/${show.id}`,
-      wanted: show.wanted,
+      requested: show.requested,
       mediaType: 'tv' as MediaType,
     }))
 
@@ -707,7 +798,7 @@ export default function Library() {
           imageUrl: show.posterUrl,
           subtitle: `${show.seasonCount} season${show.seasonCount !== 1 ? 's' : ''} • ${show.episodeCount} episodes`,
           detailUrl: `/tvshow/${show.id}`,
-          wanted: show.wanted,
+          requested: show.requested,
           mediaType: 'tv',
           badges: [show.network, show.status].filter(Boolean) as string[],
         }))}
@@ -725,7 +816,7 @@ export default function Library() {
       imageUrl: author.imageUrl,
       subtitle: `${author.bookCount} ${Number(author.bookCount) === 1 ? 'book' : 'books'}`,
       detailUrl: `/author/${author.id}`,
-      wanted: author.wanted,
+      requested: author.requested,
       mediaType: 'books' as MediaType,
     }))
 
@@ -745,9 +836,112 @@ export default function Library() {
           imageUrl: author.imageUrl,
           subtitle: `${author.bookCount} ${Number(author.bookCount) === 1 ? 'book' : 'books'}`,
           detailUrl: `/author/${author.id}`,
-          wanted: author.wanted,
+          requested: author.requested,
           mediaType: 'books',
         }))}
+      </div>
+    )
+  }
+
+  const renderMissingContent = () => {
+    if (missingItems.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-12 w-12 mx-auto text-green-500 mb-4" />
+          <h3 className="text-lg font-medium mb-2">All caught up!</h3>
+          <p className="text-muted-foreground">No missing items to download</p>
+        </div>
+      )
+    }
+
+    const getTypeIcon = (type: MissingItem['type']) => {
+      switch (type) {
+        case 'album': return MusicNote01Icon
+        case 'movie': return Film01Icon
+        case 'episode': return Tv01Icon
+        case 'book': return Book01Icon
+      }
+    }
+
+    const getTypeLabel = (type: MissingItem['type']) => {
+      switch (type) {
+        case 'album': return 'Album'
+        case 'movie': return 'Movie'
+        case 'episode': return 'Episode'
+        case 'book': return 'Book'
+      }
+    }
+
+    const handleSearch = async (item: MissingItem) => {
+      const [type, id] = item.id.split('-')
+      let endpoint = ''
+      switch (type) {
+        case 'album': endpoint = `/api/v1/albums/${id}/search`; break
+        case 'movie': endpoint = `/api/v1/movies/${id}/search`; break
+        case 'episode': endpoint = `/api/v1/tvshows/0/episodes/${id}/search`; break
+        case 'book': endpoint = `/api/v1/books/${id}/search`; break
+      }
+
+      try {
+        const res = await fetch(endpoint, { method: 'POST' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.grabbed) {
+            toast.success(`Download started for ${item.title}`)
+          } else {
+            toast.info('No results found')
+          }
+        } else {
+          toast.error('Search failed')
+        }
+      } catch (error) {
+        toast.error('Search failed')
+      }
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="text-sm text-muted-foreground mb-4">
+          {missingCounts.albums > 0 && <span className="mr-4">{missingCounts.albums} albums</span>}
+          {missingCounts.movies > 0 && <span className="mr-4">{missingCounts.movies} movies</span>}
+          {missingCounts.episodes > 0 && <span className="mr-4">{missingCounts.episodes} episodes</span>}
+          {missingCounts.books > 0 && <span className="mr-4">{missingCounts.books} books</span>}
+        </div>
+        <div className="space-y-2">
+          {missingItems.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+            >
+              <div className="h-12 w-12 rounded overflow-hidden bg-muted flex-shrink-0">
+                {item.imageUrl ? (
+                  <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center">
+                    <HugeiconsIcon icon={getTypeIcon(item.type)} className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{item.title}</div>
+                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {getTypeLabel(item.type)}
+                  </Badge>
+                  {item.subtitle && <span className="truncate">{item.subtitle}</span>}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleSearch(item)}
+              >
+                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-1" />
+                Search
+              </Button>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -758,6 +952,7 @@ export default function Library() {
       case 'movies': return renderMoviesContent()
       case 'tv': return renderTvContent()
       case 'books': return renderBooksContent()
+      case 'missing': return renderMissingContent()
     }
   }
 

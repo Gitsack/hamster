@@ -16,19 +16,19 @@ export interface NotificationSettings {
 
 export default class UserSetting extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare userId: number
+  declare userId: string
 
   @column()
   declare uiTheme: UiTheme
 
   @column()
-  declare defaultQualityProfileId: number | null
+  declare defaultQualityProfileId: string | null
 
   @column()
-  declare defaultMetadataProfileId: number | null
+  declare defaultMetadataProfileId: string | null
 
   @column()
   declare notificationSettings: NotificationSettings

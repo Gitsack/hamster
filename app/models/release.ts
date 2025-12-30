@@ -6,10 +6,10 @@ import Track from './track.js'
 
 export default class Release extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare albumId: number
+  declare albumId: string
 
   @column()
   declare musicbrainzId: string | null

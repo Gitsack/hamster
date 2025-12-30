@@ -277,7 +277,7 @@ export class ProwlarrService {
   /**
    * Get download URL (Prowlarr proxies the download)
    */
-  getDownloadUrl(config: ProwlarrConfig, guid: string, indexerId: number): string {
+  getDownloadUrl(config: ProwlarrConfig, guid: string, indexerId: string | number): string {
     return `${this.normalizeUrl(config.url)}/api/v1/search/download?guid=${encodeURIComponent(guid)}&indexerId=${indexerId}`
   }
 

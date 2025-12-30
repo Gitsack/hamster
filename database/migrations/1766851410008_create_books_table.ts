@@ -5,9 +5,9 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id')
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
-      table.integer('author_id').unsigned().references('id').inTable('authors').onDelete('CASCADE').notNullable()
+      table.uuid('author_id').references('id').inTable('authors').onDelete('CASCADE').notNullable()
 
       // External IDs
       table.string('goodreads_id').nullable()
@@ -39,7 +39,7 @@ export default class extends BaseSchema {
       table.float('series_position').nullable()
 
       // Library status
-      table.boolean('wanted').defaultTo(false)
+      table.boolean('requested').defaultTo(false)
       table.boolean('has_file').defaultTo(false)
 
       table.timestamp('added_at').nullable()

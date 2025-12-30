@@ -7,7 +7,7 @@ import MovieFile from './movie_file.js'
 
 export default class Movie extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   // External IDs
   @column()
@@ -74,17 +74,17 @@ export default class Movie extends BaseModel {
 
   // Library status
   @column()
-  declare wanted: boolean
+  declare requested: boolean
 
   @column()
   declare hasFile: boolean
 
   // Configuration
   @column()
-  declare qualityProfileId: number | null
+  declare qualityProfileId: string | null
 
   @column()
-  declare rootFolderId: number | null
+  declare rootFolderId: string | null
 
   @column.dateTime()
   declare addedAt: DateTime | null

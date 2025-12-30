@@ -7,7 +7,7 @@ const rootFolderValidator = vine.compile(
   vine.object({
     path: vine.string().minLength(1),
     name: vine.string().minLength(1).maxLength(255).optional(),
-    mediaType: vine.enum(['music', 'movies', 'tv']).optional(),
+    mediaType: vine.enum(['music', 'movies', 'tv', 'books']).optional(),
     createIfMissing: vine.boolean().optional(),
   })
 )

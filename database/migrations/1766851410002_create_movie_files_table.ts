@@ -5,9 +5,9 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id')
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
-      table.integer('movie_id').unsigned().references('id').inTable('movies').onDelete('CASCADE').notNullable()
+      table.uuid('movie_id').references('id').inTable('movies').onDelete('CASCADE').notNullable()
 
       table.string('relative_path').notNullable()
       table.bigInteger('size_bytes').notNullable()

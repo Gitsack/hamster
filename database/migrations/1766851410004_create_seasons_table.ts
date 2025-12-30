@@ -5,9 +5,9 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id')
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
-      table.integer('tv_show_id').unsigned().references('id').inTable('tv_shows').onDelete('CASCADE').notNullable()
+      table.uuid('tv_show_id').references('id').inTable('tv_shows').onDelete('CASCADE').notNullable()
 
       // External IDs
       table.string('tmdb_id').nullable()
@@ -25,7 +25,7 @@ export default class extends BaseSchema {
       table.integer('episode_count').defaultTo(0)
 
       // Library status
-      table.boolean('wanted').defaultTo(false)
+      table.boolean('requested').defaultTo(false)
 
       table.timestamp('created_at').notNullable()
       table.timestamp('updated_at').nullable()

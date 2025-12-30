@@ -5,7 +5,7 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id').notNullable()
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
       table.uuid('musicbrainz_id').unique().index()
       table.string('name', 500).notNullable().index()
       table.string('sort_name', 500).nullable()
@@ -18,9 +18,10 @@ export default class extends BaseSchema {
       table.date('ended_at').nullable()
       table.text('image_url').nullable()
       table.boolean('monitored').defaultTo(true).notNullable()
-      table.integer('quality_profile_id').unsigned().references('id').inTable('quality_profiles').onDelete('SET NULL')
-      table.integer('metadata_profile_id').unsigned().references('id').inTable('metadata_profiles').onDelete('SET NULL')
-      table.integer('root_folder_id').unsigned().references('id').inTable('root_folders').onDelete('SET NULL')
+      table.boolean('requested').defaultTo(false).notNullable()
+      table.uuid('quality_profile_id').references('id').inTable('quality_profiles').onDelete('SET NULL')
+      table.uuid('metadata_profile_id').references('id').inTable('metadata_profiles').onDelete('SET NULL')
+      table.uuid('root_folder_id').references('id').inTable('root_folders').onDelete('SET NULL')
       table.timestamp('added_at').nullable()
 
       table.timestamp('created_at').notNullable()

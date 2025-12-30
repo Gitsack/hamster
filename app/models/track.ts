@@ -7,13 +7,13 @@ import TrackFile from './track_file.js'
 
 export default class Track extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare releaseId: number | null
+  declare releaseId: string | null
 
   @column()
-  declare albumId: number
+  declare albumId: string
 
   @column()
   declare musicbrainzId: string | null
@@ -34,10 +34,10 @@ export default class Track extends BaseModel {
   declare hasFile: boolean
 
   @column()
-  declare wanted: boolean
+  declare requested: boolean
 
   @column()
-  declare trackFileId: number | null
+  declare trackFileId: string | null
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

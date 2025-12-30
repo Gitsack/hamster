@@ -7,13 +7,13 @@ import EpisodeFile from './episode_file.js'
 
 export default class Episode extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare tvShowId: number
+  declare tvShowId: string
 
   @column()
-  declare seasonId: number
+  declare seasonId: string
 
   // External IDs
   @column()
@@ -54,13 +54,13 @@ export default class Episode extends BaseModel {
 
   // Library status
   @column()
-  declare wanted: boolean
+  declare requested: boolean
 
   @column()
   declare hasFile: boolean
 
   @column()
-  declare episodeFileId: number | null
+  declare episodeFileId: string | null
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

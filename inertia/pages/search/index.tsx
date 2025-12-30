@@ -62,6 +62,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect, useMemo, useCallback, Component, ErrorInfo, ReactNode } from 'react'
 import { toast } from 'sonner'
+import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
 
 // Error boundary to catch rendering errors
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -207,18 +208,18 @@ interface DownloadClient {
 }
 
 interface RootFolder {
-  id: number
+  id: string
   path: string
   mediaType?: string
 }
 
 interface QualityProfile {
-  id: number
+  id: string
   name: string
 }
 
 interface MetadataProfile {
-  id: number
+  id: string
   name: string
 }
 
@@ -357,6 +358,8 @@ export default function SearchPage() {
   // TV add state
   const [selectedTvShow, setSelectedTvShow] = useState<TvShowSearchResult | null>(null)
   const [addTvShowDialogOpen, setAddTvShowDialogOpen] = useState(false)
+  const [seasonPickerOpen, setSeasonPickerOpen] = useState(false)
+  const [episodeSelection, setEpisodeSelection] = useState<SeasonEpisodeSelection | null>(null)
   const [addingTvShow, setAddingTvShow] = useState(false)
 
   // Books add state
@@ -372,7 +375,7 @@ export default function SearchPage() {
   const [selectedRootFolder, setSelectedRootFolder] = useState<string>('')
   const [selectedQualityProfile, setSelectedQualityProfile] = useState<string>('')
   const [selectedMetadataProfile, setSelectedMetadataProfile] = useState<string>('')
-  const [wanted, setWanted] = useState(true)
+  const [requested, setWanted] = useState(true)
   const [searchOnAdd, setSearchOnAdd] = useState(true)
   const [addingArtist, setAddingArtist] = useState(false)
   const [addingAlbum, setAddingAlbum] = useState(false)
@@ -417,9 +420,9 @@ export default function SearchPage() {
         setRootFolders(rf)
         setQualityProfiles(qp)
         setMetadataProfiles(mp)
-        if (rf.length > 0) setSelectedRootFolder(String(rf[0].id))
-        if (qp.length > 0) setSelectedQualityProfile(String(qp[0].id))
-        if (mp.length > 0) setSelectedMetadataProfile(String(mp[0].id))
+        if (rf.length > 0) setSelectedRootFolder(rf[0].id)
+        if (qp.length > 0) setSelectedQualityProfile(qp[0].id)
+        if (mp.length > 0) setSelectedMetadataProfile(mp[0].id)
       })
       .catch(console.error)
       .finally(() => setLoadingOptions(false))
@@ -681,10 +684,10 @@ export default function SearchPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           musicbrainzId: selectedArtist.musicbrainzId,
-          rootFolderId: parseInt(selectedRootFolder),
-          qualityProfileId: parseInt(selectedQualityProfile),
-          metadataProfileId: parseInt(selectedMetadataProfile),
-          wanted,
+          rootFolderId: selectedRootFolder,
+          qualityProfileId: selectedQualityProfile,
+          metadataProfileId: selectedMetadataProfile,
+          requested,
         }),
       })
 
@@ -719,10 +722,10 @@ export default function SearchPage() {
         body: JSON.stringify({
           musicbrainzId: selectedAlbum.musicbrainzId,
           artistMusicbrainzId: selectedAlbum.artistMusicbrainzId,
-          rootFolderId: parseInt(selectedRootFolder),
-          qualityProfileId: parseInt(selectedQualityProfile),
-          metadataProfileId: parseInt(selectedMetadataProfile),
-          wanted,
+          rootFolderId: selectedRootFolder,
+          qualityProfileId: selectedQualityProfile,
+          metadataProfileId: selectedMetadataProfile,
+          requested,
           searchOnAdd,
         }),
       })
@@ -759,9 +762,9 @@ export default function SearchPage() {
           tmdbId: selectedMovie.tmdbId,
           title: selectedMovie.title,
           year: selectedMovie.year,
-          rootFolderId: parseInt(selectedRootFolder),
-          qualityProfileId: parseInt(selectedQualityProfile),
-          wanted,
+          rootFolderId: selectedRootFolder,
+          qualityProfileId: selectedQualityProfile,
+          requested,
           searchOnAdd,
         }),
       })
@@ -798,10 +801,13 @@ export default function SearchPage() {
           tmdbId: selectedTvShow.tmdbId,
           title: selectedTvShow.title,
           year: selectedTvShow.year,
-          rootFolderId: parseInt(selectedRootFolder),
-          qualityProfileId: parseInt(selectedQualityProfile),
-          wanted,
+          rootFolderId: selectedRootFolder,
+          qualityProfileId: selectedQualityProfile,
+          requested: true, // Always request when adding
           searchOnAdd,
+          // Pass episode selection
+          selectedSeasons: episodeSelection?.selectedSeasons,
+          selectedEpisodes: episodeSelection?.selectedEpisodes,
         }),
       })
 
@@ -809,10 +815,11 @@ export default function SearchPage() {
         const data = await response.json()
         toast.success(`${selectedTvShow.title} added to library`)
         setAddTvShowDialogOpen(false)
+        setEpisodeSelection(null)
         setTvShowResults((prev) =>
           prev.map((r) => r.tmdbId === selectedTvShow.tmdbId ? { ...r, inLibrary: true } : r)
         )
-        router.visit(`/tvshow/${data.id}`)
+        router.visit(`/library/tvshow/${data.id}`)
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to add TV show')
@@ -836,9 +843,9 @@ export default function SearchPage() {
         body: JSON.stringify({
           openlibraryId: selectedAuthor.openlibraryId,
           name: selectedAuthor.name,
-          rootFolderId: parseInt(selectedRootFolder),
-          qualityProfileId: parseInt(selectedQualityProfile),
-          wanted,
+          rootFolderId: selectedRootFolder,
+          qualityProfileId: selectedQualityProfile,
+          requested,
           addBooks,
         }),
       })
@@ -876,9 +883,9 @@ export default function SearchPage() {
           title: selectedBook.title,
           authorKey: selectedBook.authorKey,
           authorName: selectedBook.authorName,
-          rootFolderId: parseInt(selectedRootFolder),
-          qualityProfileId: parseInt(selectedQualityProfile),
-          wanted,
+          rootFolderId: selectedRootFolder,
+          qualityProfileId: selectedQualityProfile,
+          requested,
         }),
       })
 
@@ -1123,7 +1130,7 @@ export default function SearchPage() {
                 inLibrary: show.inLibrary,
               },
               Tv01Icon,
-              () => { setSelectedTvShow(show); setAddTvShowDialogOpen(true) }
+              () => { setSelectedTvShow(show); setSeasonPickerOpen(true) }
             )
           )}
         </div>
@@ -1592,12 +1599,12 @@ export default function SearchPage() {
                   <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
+                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
@@ -1607,12 +1614,12 @@ export default function SearchPage() {
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {qualityProfiles.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
@@ -1622,19 +1629,15 @@ export default function SearchPage() {
                   <Select value={selectedMetadataProfile} onValueChange={setSelectedMetadataProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => metadataProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                        {(value: string) => metadataProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {metadataProfiles.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="wanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
-                  <Label htmlFor="wanted" className="font-normal cursor-pointer">Mark as wanted</Label>
                 </div>
               </div>
             )}
@@ -1667,12 +1670,12 @@ export default function SearchPage() {
                   <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
+                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
@@ -1682,19 +1685,15 @@ export default function SearchPage() {
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {qualityProfiles.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="albumWanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
-                  <Label htmlFor="albumWanted" className="font-normal cursor-pointer">Mark as wanted</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <Checkbox id="searchOnAdd" checked={searchOnAdd} onCheckedChange={(c) => setSearchOnAdd(c as boolean)} />
@@ -1731,12 +1730,12 @@ export default function SearchPage() {
                   <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
+                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
@@ -1746,19 +1745,15 @@ export default function SearchPage() {
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {qualityProfiles.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="movieWanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
-                  <Label htmlFor="movieWanted" className="font-normal cursor-pointer">Mark as wanted</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <Checkbox id="movieSearch" checked={searchOnAdd} onCheckedChange={(c) => setSearchOnAdd(c as boolean)} />
@@ -1775,6 +1770,21 @@ export default function SearchPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Season picker dialog */}
+        {selectedTvShow && (
+          <SeasonPickerDialog
+            tmdbId={selectedTvShow.tmdbId}
+            showTitle={selectedTvShow.title}
+            open={seasonPickerOpen}
+            onOpenChange={setSeasonPickerOpen}
+            onConfirm={(selection) => {
+              setEpisodeSelection(selection)
+              setSeasonPickerOpen(false)
+              setAddTvShowDialogOpen(true)
+            }}
+          />
+        )}
 
         {/* Add TV show dialog */}
         <Dialog open={addTvShowDialogOpen} onOpenChange={setAddTvShowDialogOpen}>
@@ -1795,12 +1805,12 @@ export default function SearchPage() {
                   <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
+                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
@@ -1810,20 +1820,37 @@ export default function SearchPage() {
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {qualityProfiles.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="tvWanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
-                  <Label htmlFor="tvWanted" className="font-normal cursor-pointer">Mark as wanted</Label>
-                </div>
+                {episodeSelection && (
+                  <div className="text-sm text-muted-foreground border rounded-md p-3 bg-muted/50">
+                    {episodeSelection.selectedSeasons
+                      ? `${episodeSelection.selectedSeasons.length} season${episodeSelection.selectedSeasons.length !== 1 ? 's' : ''} selected`
+                      : episodeSelection.selectedEpisodes
+                        ? `${Object.values(episodeSelection.selectedEpisodes).reduce((sum, eps) => sum + eps.length, 0)} episodes selected`
+                        : 'All episodes selected'
+                    }
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="ml-2 h-auto p-0"
+                      onClick={() => {
+                        setAddTvShowDialogOpen(false)
+                        setSeasonPickerOpen(true)
+                      }}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <Checkbox id="tvSearch" checked={searchOnAdd} onCheckedChange={(c) => setSearchOnAdd(c as boolean)} />
                   <Label htmlFor="tvSearch" className="font-normal cursor-pointer">Search for episodes immediately</Label>
@@ -1859,12 +1886,12 @@ export default function SearchPage() {
                   <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
+                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
@@ -1874,19 +1901,15 @@ export default function SearchPage() {
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {qualityProfiles.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="authorWanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
-                  <Label htmlFor="authorWanted" className="font-normal cursor-pointer">Mark as wanted</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <Checkbox id="addBooks" checked={addBooks} onCheckedChange={(c) => setAddBooks(c as boolean)} />
@@ -1925,12 +1948,12 @@ export default function SearchPage() {
                   <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => String(f.id) === value)?.path || 'Select folder'}
+                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={String(f.id)}>{f.path}</SelectItem>
+                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
@@ -1940,19 +1963,15 @@ export default function SearchPage() {
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => String(p.id) === value)?.name || 'Select profile'}
+                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
                       {qualityProfiles.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
                   </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="bookWanted" checked={wanted} onCheckedChange={(c) => setWanted(c as boolean)} />
-                  <Label htmlFor="bookWanted" className="font-normal cursor-pointer">Mark as wanted</Label>
                 </div>
               </div>
             )}

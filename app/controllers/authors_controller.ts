@@ -11,7 +11,7 @@ const authorValidator = vine.compile(
     name: vine.string().minLength(1),
     qualityProfileId: vine.number().optional(),
     rootFolderId: vine.number(),
-    wanted: vine.boolean().optional(),
+    requested: vine.boolean().optional(),
     addBooks: vine.boolean().optional(),
   })
 )
@@ -30,7 +30,7 @@ export default class AuthorsController {
         name: author.name,
         overview: author.overview,
         imageUrl: author.imageUrl,
-        wanted: author.wanted,
+        requested: author.requested,
         bookCount: author.$extras.books_count,
         qualityProfile: author.qualityProfile?.name,
         rootFolder: author.rootFolder?.path,
@@ -82,7 +82,7 @@ export default class AuthorsController {
     let authorData: any = {
       name: data.name,
       sortName: data.name.split(' ').reverse().join(', '),
-      wanted: data.wanted ?? true,
+      requested: data.requested ?? true,
       qualityProfileId: data.qualityProfileId,
       rootFolderId: data.rootFolderId,
       addedAt: DateTime.now(),
@@ -123,7 +123,7 @@ export default class AuthorsController {
             overview: work.description,
             coverUrl: openLibraryService.getCoverUrl(work.coverId, 'L'),
             genres: work.subjects || [],
-            wanted: data.wanted ?? true,
+            requested: data.requested ?? true,
             hasFile: false,
           })
         }
@@ -158,7 +158,7 @@ export default class AuthorsController {
       name: author.name,
       overview: author.overview,
       imageUrl: author.imageUrl,
-      wanted: author.wanted,
+      requested: author.requested,
       qualityProfile: author.qualityProfile,
       rootFolder: author.rootFolder,
       books: author.books.map((b) => ({
@@ -166,7 +166,7 @@ export default class AuthorsController {
         title: b.title,
         releaseDate: b.releaseDate?.toISODate(),
         coverUrl: b.coverUrl,
-        wanted: b.wanted,
+        requested: b.requested,
         hasFile: b.hasFile,
         seriesName: b.seriesName,
         seriesPosition: b.seriesPosition,
@@ -181,19 +181,19 @@ export default class AuthorsController {
       return response.notFound({ error: 'Author not found' })
     }
 
-    const { wanted, qualityProfileId, rootFolderId } = request.only([
-      'wanted',
+    const { requested, qualityProfileId, rootFolderId } = request.only([
+      'requested',
       'qualityProfileId',
       'rootFolderId',
     ])
 
-    if (wanted !== undefined) author.wanted = wanted
+    if (requested !== undefined) author.requested = requested
     if (qualityProfileId !== undefined) author.qualityProfileId = qualityProfileId
     if (rootFolderId !== undefined) author.rootFolderId = rootFolderId
 
     await author.save()
 
-    return response.json({ id: author.id, name: author.name, wanted: author.wanted })
+    return response.json({ id: author.id, name: author.name, requested: author.requested })
   }
 
   async destroy({ params, response }: HttpContext) {

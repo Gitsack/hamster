@@ -5,7 +5,7 @@ import Artist from './artist.js'
 
 export default class MetadataProfile extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
   declare name: string

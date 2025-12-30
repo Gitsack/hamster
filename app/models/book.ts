@@ -6,10 +6,10 @@ import BookFile from './book_file.js'
 
 export default class Book extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare authorId: number
+  declare authorId: string
 
   // External IDs
   @column()
@@ -83,7 +83,7 @@ export default class Book extends BaseModel {
 
   // Library status
   @column()
-  declare wanted: boolean
+  declare requested: boolean
 
   @column()
   declare hasFile: boolean

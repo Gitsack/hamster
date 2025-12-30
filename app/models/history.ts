@@ -12,7 +12,7 @@ export default class History extends BaseModel {
   static table = 'history'
 
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
   declare eventType: HistoryEventType
@@ -21,16 +21,16 @@ export default class History extends BaseModel {
   declare sourceTitle: string | null
 
   @column()
-  declare albumId: number | null
+  declare albumId: string | null
 
   @column()
-  declare artistId: number | null
+  declare artistId: string | null
 
   @column()
-  declare trackFileId: number | null
+  declare trackFileId: string | null
 
   @column()
-  declare downloadId: number | null
+  declare downloadId: string | null
 
   @column()
   declare quality: string | null

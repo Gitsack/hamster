@@ -7,7 +7,7 @@ import Book from './book.js'
 
 export default class Author extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   // External IDs
   @column()
@@ -32,14 +32,14 @@ export default class Author extends BaseModel {
 
   // Library status
   @column()
-  declare wanted: boolean
+  declare requested: boolean
 
   // Configuration
   @column()
-  declare qualityProfileId: number | null
+  declare qualityProfileId: string | null
 
   @column()
-  declare rootFolderId: number | null
+  declare rootFolderId: string | null
 
   @column.dateTime()
   declare addedAt: DateTime | null

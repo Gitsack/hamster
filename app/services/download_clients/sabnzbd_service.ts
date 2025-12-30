@@ -9,7 +9,7 @@ export interface SabnzbdConfig {
 export interface SabnzbdQueueItem {
   nzo_id: string
   filename: string
-  status: 'Queued' | 'Downloading' | 'Paused' | 'Grabbing' | 'Fetching'
+  status: 'Queued' | 'Downloading' | 'Paused' | 'Grabbing' | 'Fetching' | 'Verifying' | 'Repairing' | 'Extracting' | 'Moving' | 'Running'
   percentage: string
   mb: string
   mbleft: string
@@ -25,7 +25,7 @@ export interface SabnzbdQueueItem {
 export interface SabnzbdHistoryItem {
   nzo_id: string
   name: string
-  status: 'Completed' | 'Failed' | 'Extracting' | 'Running'
+  status: 'Completed' | 'Failed' | 'Extracting' | 'Verifying' | 'Repairing' | 'Running' | 'Moving'
   category: string
   bytes: number
   download_time: number

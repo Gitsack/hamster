@@ -19,8 +19,8 @@ export interface ImportProgress {
 
 export interface DownloadImportResult {
   success: boolean
-  downloadId: number
-  albumId: number | null
+  downloadId: string
+  albumId: string | null
   filesImported: number
   filesSkipped: number
   errors: string[]
@@ -491,7 +491,7 @@ export class DownloadImportService {
   /**
    * Get next track number for an album
    */
-  private async getNextTrackNumber(albumId: number): Promise<number> {
+  private async getNextTrackNumber(albumId: string): Promise<number> {
     const result = await Track.query()
       .where('albumId', albumId)
       .max('trackNumber as maxTrack')

@@ -10,10 +10,10 @@ export type AlbumType = 'album' | 'ep' | 'single' | 'compilation' | 'live' | 're
 
 export default class Album extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare artistId: number
+  declare artistId: string
 
   @column()
   declare musicbrainzId: string | null
@@ -43,7 +43,7 @@ export default class Album extends BaseModel {
   declare monitored: boolean
 
   @column()
-  declare wanted: boolean
+  declare requested: boolean
 
   @column()
   declare anyReleaseOk: boolean

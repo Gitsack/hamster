@@ -5,7 +5,7 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id').notNullable()
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
       table.text('base_url').notNullable()
       table.text('api_key').notNullable()
       table.boolean('sync_enabled').defaultTo(true).notNullable()

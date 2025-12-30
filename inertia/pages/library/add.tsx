@@ -46,17 +46,17 @@ interface SearchResult {
 }
 
 interface RootFolder {
-  id: number
+  id: string
   path: string
 }
 
 interface QualityProfile {
-  id: number
+  id: string
   name: string
 }
 
 interface MetadataProfile {
-  id: number
+  id: string
   name: string
 }
 
@@ -94,9 +94,9 @@ export default function AddArtist() {
         setMetadataProfiles(mp)
 
         // Set defaults
-        if (rf.length > 0) setSelectedRootFolder(String(rf[0].id))
-        if (qp.length > 0) setSelectedQualityProfile(String(qp[0].id))
-        if (mp.length > 0) setSelectedMetadataProfile(String(mp[0].id))
+        if (rf.length > 0) setSelectedRootFolder(rf[0].id)
+        if (qp.length > 0) setSelectedQualityProfile(qp[0].id)
+        if (mp.length > 0) setSelectedMetadataProfile(mp[0].id)
       })
       .catch((error) => {
         console.error('Failed to load options:', error)
@@ -155,9 +155,9 @@ export default function AddArtist() {
         },
         body: JSON.stringify({
           musicbrainzId: selectedArtist.musicbrainzId,
-          rootFolderId: parseInt(selectedRootFolder),
-          qualityProfileId: parseInt(selectedQualityProfile),
-          metadataProfileId: parseInt(selectedMetadataProfile),
+          rootFolderId: selectedRootFolder,
+          qualityProfileId: selectedQualityProfile,
+          metadataProfileId: selectedMetadataProfile,
           monitored,
         }),
       })
@@ -364,7 +364,7 @@ export default function AddArtist() {
                 >
                   <SelectTrigger id="rootFolder">
                     {selectedRootFolder
-                      ? rootFolders.find((f) => String(f.id) === selectedRootFolder)?.path
+                      ? rootFolders.find((f) => f.id === selectedRootFolder)?.path
                       : <span className="text-muted-foreground">Select root folder</span>}
                   </SelectTrigger>
                   <SelectPopup>
@@ -385,7 +385,7 @@ export default function AddArtist() {
                 >
                   <SelectTrigger id="qualityProfile">
                     {selectedQualityProfile
-                      ? qualityProfiles.find((p) => String(p.id) === selectedQualityProfile)?.name
+                      ? qualityProfiles.find((p) => p.id === selectedQualityProfile)?.name
                       : <span className="text-muted-foreground">Select quality profile</span>}
                   </SelectTrigger>
                   <SelectPopup>
@@ -406,7 +406,7 @@ export default function AddArtist() {
                 >
                   <SelectTrigger id="metadataProfile">
                     {selectedMetadataProfile
-                      ? metadataProfiles.find((p) => String(p.id) === selectedMetadataProfile)?.name
+                      ? metadataProfiles.find((p) => p.id === selectedMetadataProfile)?.name
                       : <span className="text-muted-foreground">Select metadata profile</span>}
                   </SelectTrigger>
                   <SelectPopup>

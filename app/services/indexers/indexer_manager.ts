@@ -7,7 +7,7 @@ export interface UnifiedSearchResult {
   id: string
   title: string
   indexer: string
-  indexerId: number
+  indexerId: string
   size: number
   publishDate: string
   downloadUrl: string
@@ -30,7 +30,7 @@ export interface SearchOptions {
   album?: string
   track?: string
   year?: number
-  indexerIds?: number[]
+  indexerIds?: string[]
   useProwlarr?: boolean
   limit?: number
   // If true, use general search without music-specific filters
@@ -44,7 +44,7 @@ export interface MovieSearchOptions {
   year?: number
   imdbId?: string
   tmdbId?: string
-  indexerIds?: number[]
+  indexerIds?: string[]
   limit?: number
 }
 
@@ -54,14 +54,14 @@ export interface TvSearchOptions {
   episode?: number
   tvdbId?: string
   imdbId?: string
-  indexerIds?: number[]
+  indexerIds?: string[]
   limit?: number
 }
 
 export interface BookSearchOptions {
   title: string
   author?: string
-  indexerIds?: number[]
+  indexerIds?: string[]
   limit?: number
 }
 
@@ -218,6 +218,32 @@ export class IndexerManager {
         .filter((cat) => cat.id >= 3000 && cat.id < 4000)
         .flatMap((cat) => [cat.id, ...(cat.subCategories?.map((sub) => sub.id) || [])])
 
+      // Also verify search works (caps endpoint often works without proper auth)
+      try {
+        await newznabService.search(
+          {
+            id: 'test',
+            name: 'Test',
+            url,
+            apiKey,
+            categories: [],
+            enabled: true,
+          },
+          'test',
+          { limit: 1 }
+        )
+      } catch (searchError) {
+        // If search fails with auth error, report it
+        const message = searchError instanceof Error ? searchError.message : 'Search failed'
+        if (message.toLowerCase().includes('credentials') || message.toLowerCase().includes('auth')) {
+          return {
+            success: false,
+            error: `Capabilities OK but search failed: ${message}`,
+          }
+        }
+        // Other search errors (no results, etc.) are OK for test
+      }
+
       return {
         success: true,
         categories: musicCategories,
@@ -257,7 +283,7 @@ export class IndexerManager {
       id: result.guid,
       title: result.title,
       indexer: result.indexer,
-      indexerId: result.indexerId,
+      indexerId: String(result.indexerId),
       size: result.size,
       publishDate: result.publishDate,
       downloadUrl: result.downloadUrl,
@@ -337,7 +363,7 @@ export class IndexerManager {
             year: options.year,
             imdbId: options.imdbId,
             tmdbId: options.tmdbId,
-            indexerIds: options.indexerIds,
+            // Don't pass indexerIds to Prowlarr - our UUIDs don't match Prowlarr's numeric IDs
             limit: options.limit || 50,
           }
         )
@@ -347,7 +373,7 @@ export class IndexerManager {
             id: result.guid,
             title: result.title,
             indexer: result.indexer,
-            indexerId: result.indexerId,
+            indexerId: String(result.indexerId),
             size: result.size,
             publishDate: result.publishDate,
             downloadUrl: result.downloadUrl,
@@ -448,7 +474,7 @@ export class IndexerManager {
             episode: options.episode,
             tvdbId: options.tvdbId,
             imdbId: options.imdbId,
-            indexerIds: options.indexerIds,
+            // Don't pass indexerIds to Prowlarr - our UUIDs don't match Prowlarr's numeric IDs
             limit: options.limit || 50,
           }
         )
@@ -458,7 +484,7 @@ export class IndexerManager {
             id: result.guid,
             title: result.title,
             indexer: result.indexer,
-            indexerId: result.indexerId,
+            indexerId: String(result.indexerId),
             size: result.size,
             publishDate: result.publishDate,
             downloadUrl: result.downloadUrl,
@@ -559,7 +585,7 @@ export class IndexerManager {
           {
             title: options.title,
             author: options.author,
-            indexerIds: options.indexerIds,
+            // Don't pass indexerIds to Prowlarr - our UUIDs don't match Prowlarr's numeric IDs
             limit: options.limit || 50,
           }
         )
@@ -569,7 +595,7 @@ export class IndexerManager {
             id: result.guid,
             title: result.title,
             indexer: result.indexer,
-            indexerId: result.indexerId,
+            indexerId: String(result.indexerId),
             size: result.size,
             publishDate: result.publishDate,
             downloadUrl: result.downloadUrl,

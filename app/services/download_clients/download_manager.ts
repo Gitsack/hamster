@@ -2,25 +2,28 @@ import DownloadClient from '#models/download_client'
 import Download from '#models/download'
 import { sabnzbdService, type SabnzbdConfig } from './sabnzbd_service.js'
 import { downloadImportService } from '#services/media/download_import_service'
+import { movieImportService } from '#services/media/movie_import_service'
+import { episodeImportService } from '#services/media/episode_import_service'
+import { bookImportService } from '#services/media/book_import_service'
 import { DateTime } from 'luxon'
 
 export interface DownloadRequest {
   title: string
   downloadUrl: string
   size?: number
-  albumId?: number
-  movieId?: number
-  tvShowId?: number
-  episodeId?: number
-  bookId?: number
-  releaseId?: number
-  indexerId?: number
+  albumId?: string
+  movieId?: string
+  tvShowId?: string
+  episodeId?: string
+  bookId?: string
+  releaseId?: string
+  indexerId?: string
   indexerName?: string
   guid?: string
 }
 
 export interface QueueItem {
-  id: number
+  id: string
   externalId: string | null
   title: string
   status: string
@@ -28,7 +31,12 @@ export interface QueueItem {
   size: number | null
   remaining: number | null
   eta: number | null
-  albumId: number | null
+  albumId: string | null
+  movieId: string | null
+  tvShowId: string | null
+  episodeId: string | null
+  bookId: string | null
+  artistId: string | null
   downloadClient: string
   startedAt: string | null
 }
@@ -38,6 +46,31 @@ export class DownloadManager {
    * Send a release to the download client
    */
   async grab(request: DownloadRequest): Promise<Download> {
+    // Check for existing active downloads for the same media item
+    // This prevents duplicate downloads when multiple search tasks run concurrently
+    const existingDownloadQuery = Download.query().whereIn('status', [
+      'queued',
+      'downloading',
+      'paused',
+      'importing',
+    ])
+
+    if (request.episodeId) {
+      existingDownloadQuery.where('episodeId', request.episodeId)
+    } else if (request.movieId) {
+      existingDownloadQuery.where('movieId', request.movieId)
+    } else if (request.albumId) {
+      existingDownloadQuery.where('albumId', request.albumId)
+    } else if (request.bookId) {
+      existingDownloadQuery.where('bookId', request.bookId)
+    }
+
+    const existingDownload = await existingDownloadQuery.first()
+    if (existingDownload) {
+      console.log(`[DownloadManager] Skipping duplicate download for: ${request.title} (existing download: ${existingDownload.id})`)
+      return existingDownload
+    }
+
     // Get enabled download client
     const client = await DownloadClient.query().where('enabled', true).orderBy('priority', 'asc').first()
 
@@ -131,6 +164,11 @@ export class DownloadManager {
       remaining: d.remainingBytes,
       eta: d.etaSeconds,
       albumId: d.albumId,
+      movieId: d.movieId,
+      tvShowId: d.tvShowId,
+      episodeId: d.episodeId,
+      bookId: d.bookId,
+      artistId: null, // We'd need to fetch this from album if needed
       downloadClient: d.downloadClient?.name || 'Unknown',
       startedAt: d.startedAt?.toISO() || null,
     }))
@@ -166,8 +204,13 @@ export class DownloadManager {
 
         const queue = await sabnzbdService.getQueue(config)
 
-        // Update local downloads
+        // Track all external IDs found in SABnzbd (queue + history)
+        const foundExternalIds = new Set<string>()
+
+        // Update local downloads from queue
         for (const slot of queue.slots) {
+          foundExternalIds.add(slot.nzo_id)
+
           const download = await Download.query()
             .where('downloadClientId', client.id)
             .where('externalId', slot.nzo_id)
@@ -176,39 +219,87 @@ export class DownloadManager {
           if (download) {
             download.progress = parseFloat(slot.percentage)
             download.status = this.mapSabnzbdStatus(slot.status)
-            download.remainingBytes = parseFloat(slot.mbleft) * 1024 * 1024
+            download.remainingBytes = Math.floor(parseFloat(slot.mbleft) * 1024 * 1024)
             download.etaSeconds = this.parseTimeLeft(slot.timeleft)
             await download.save()
           }
         }
 
-        // Check history for completed downloads
-        const history = await sabnzbdService.getHistory(config, 20)
+        // Check history for completed downloads (increased limit to 100)
+        const history = await sabnzbdService.getHistory(config, 100)
+        console.log(`[DownloadManager] Checking SABnzbd history: ${history.slots.length} items`)
 
         for (const slot of history.slots) {
+          foundExternalIds.add(slot.nzo_id)
+
           const download = await Download.query()
             .where('downloadClientId', client.id)
             .where('externalId', slot.nzo_id)
             .first()
 
-          if (download && download.status !== 'completed' && download.status !== 'failed' && download.status !== 'importing') {
+          if (download) {
+            console.log(`[DownloadManager] Found download in history: ${download.title}, SABnzbd status: ${slot.status}, DB status: ${download.status}, outputPath: ${download.outputPath || 'none'}`)
+          }
+
+          if (download && download.status !== 'completed' && download.status !== 'failed') {
             if (slot.status === 'Completed') {
+              console.log(`[DownloadManager] SABnzbd shows Completed for: ${download.title}`)
+
+              // Check if import is stuck (status is 'importing' for more than 2 minutes)
+              const isStuck =
+                download.status === 'importing' &&
+                download.completedAt &&
+                download.completedAt < DateTime.now().minus({ minutes: 2 })
+
+              // Trigger import if we haven't already OR if it's stuck
+              const shouldTriggerImport = !download.outputPath || isStuck
+              console.log(`[DownloadManager] shouldTriggerImport: ${shouldTriggerImport}, isStuck: ${isStuck}, storage path: ${slot.storage}`)
+
               // Mark as importing and save the output path
               download.status = 'importing'
               download.progress = 100
-              download.completedAt = DateTime.now()
+              if (!download.completedAt) {
+                download.completedAt = DateTime.now()
+              }
               download.outputPath = slot.storage
               await download.save()
 
               // Trigger import in background
-              this.triggerImport(download).catch((error) => {
-                console.error(`Failed to import download ${download.id}:`, error)
-              })
+              if (shouldTriggerImport) {
+                console.log(`[DownloadManager] Triggering import for: ${download.title}${isStuck ? ' (retry - was stuck)' : ''}`)
+                this.triggerImport(download).catch((error) => {
+                  console.error(`[DownloadManager] Failed to import download ${download.id}:`, error)
+                })
+              } else {
+                console.log(`[DownloadManager] Import recently triggered for: ${download.title}`)
+              }
             } else if (slot.status === 'Failed') {
               download.status = 'failed'
               download.errorMessage = slot.fail_message || 'Download failed'
               await download.save()
+            } else {
+              // Post-processing statuses (Extracting, Verifying, Repairing, Moving, Running)
+              console.log(`[DownloadManager] SABnzbd post-processing: ${download.title} - ${slot.status}`)
+              if (download.status !== 'importing') {
+                download.status = 'importing'
+                download.progress = 100
+                await download.save()
+              }
             }
+          }
+        }
+
+        // Remove orphaned downloads that no longer exist in SABnzbd
+        // These are downloads with an externalId that wasn't found in queue or history
+        const orphanedDownloads = await Download.query()
+          .where('downloadClientId', client.id)
+          .whereNotNull('externalId')
+          .whereIn('status', ['queued', 'downloading', 'paused'])
+
+        for (const orphan of orphanedDownloads) {
+          if (orphan.externalId && !foundExternalIds.has(orphan.externalId)) {
+            console.log(`[DownloadManager] Removing orphaned download: ${orphan.title} (externalId: ${orphan.externalId})`)
+            await orphan.delete()
           }
         }
 
@@ -219,27 +310,77 @@ export class DownloadManager {
 
   /**
    * Trigger import for a completed download
+   * Routes to the appropriate import service based on media type
    */
   private async triggerImport(download: Download): Promise<void> {
-    console.log(`Starting import for download: ${download.title}`)
+    console.log(`[DownloadManager] Starting import for download: ${download.title}`)
+    console.log(`[DownloadManager]   Original output path: ${download.outputPath}`)
 
     try {
-      const result = await downloadImportService.importDownload(download, (progress) => {
-        console.log(`Import progress: ${progress.phase} - ${progress.current}/${progress.total}`)
-      })
+      // Apply remote path mapping if configured
+      if (download.downloadClientId && download.outputPath) {
+        const client = await DownloadClient.find(download.downloadClientId)
+        if (client?.settings?.remotePath && client?.settings?.localPath) {
+          if (download.outputPath.startsWith(client.settings.remotePath)) {
+            const oldPath = download.outputPath
+            download.outputPath = download.outputPath.replace(
+              client.settings.remotePath,
+              client.settings.localPath
+            )
+            console.log(`[DownloadManager]   Mapped path: ${oldPath} -> ${download.outputPath}`)
+            await download.save()
+          }
+        }
+      }
+
+      let result: { success: boolean; filesImported: number; errors: string[] }
+
+      // Route to appropriate import service based on media type
+      if (download.albumId) {
+        // Music album
+        console.log(`[DownloadManager] Importing as music album (albumId: ${download.albumId})`)
+        result = await downloadImportService.importDownload(download, (progress) => {
+          console.log(`[DownloadManager] Music import progress: ${progress.phase} - ${progress.current}/${progress.total}`)
+        })
+      } else if (download.movieId) {
+        // Movie
+        console.log(`[DownloadManager] Importing as movie (movieId: ${download.movieId})`)
+        result = await movieImportService.importDownload(download, (progress) => {
+          console.log(`[DownloadManager] Movie import progress: ${progress.phase} - ${progress.current}/${progress.total}`)
+        })
+      } else if (download.tvShowId || download.episodeId) {
+        // TV Episode
+        console.log(`[DownloadManager] Importing as TV episode (tvShowId: ${download.tvShowId}, episodeId: ${download.episodeId})`)
+        result = await episodeImportService.importDownload(download, (progress) => {
+          console.log(`[DownloadManager] Episode import progress: ${progress.phase} - ${progress.current}/${progress.total}`)
+        })
+      } else if (download.bookId) {
+        // Book
+        console.log(`[DownloadManager] Importing as book (bookId: ${download.bookId})`)
+        result = await bookImportService.importDownload(download, (progress) => {
+          console.log(`[DownloadManager] Book import progress: ${progress.phase} - ${progress.current}/${progress.total}`)
+        })
+      } else {
+        // Unknown media type
+        console.error(`[DownloadManager] Unknown media type for download: ${download.title}`)
+        download.status = 'failed'
+        download.errorMessage = 'Unknown media type - cannot determine import service'
+        await download.save()
+        return
+      }
 
       if (result.success) {
-        console.log(`Import completed: ${result.filesImported} files imported for ${download.title}`)
+        console.log(`[DownloadManager] Import completed: ${result.filesImported} files imported for ${download.title}`)
         download.status = 'completed'
       } else {
-        console.error(`Import failed for ${download.title}:`, result.errors)
+        console.error(`[DownloadManager] Import failed for ${download.title}:`, result.errors)
         download.status = 'failed'
         download.errorMessage = result.errors.join('; ') || 'Import failed'
       }
 
       await download.save()
     } catch (error) {
-      console.error(`Import error for ${download.title}:`, error)
+      console.error(`[DownloadManager] Import error for ${download.title}:`, error)
       download.status = 'failed'
       download.errorMessage = error instanceof Error ? error.message : 'Import failed'
       await download.save()
@@ -261,6 +402,13 @@ export class DownloadManager {
         return 'paused'
       case 'Queued':
         return 'queued'
+      // Post-processing states - show as importing
+      case 'Verifying':
+      case 'Repairing':
+      case 'Extracting':
+      case 'Moving':
+      case 'Running':
+        return 'importing'
       default:
         return 'queued'
     }
@@ -282,7 +430,7 @@ export class DownloadManager {
   /**
    * Cancel a download
    */
-  async cancel(downloadId: number, deleteFiles = false): Promise<void> {
+  async cancel(downloadId: string, deleteFiles = false): Promise<void> {
     const download = await Download.query().where('id', downloadId).preload('downloadClient').first()
 
     if (!download) {

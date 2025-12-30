@@ -18,7 +18,7 @@ export interface DownloadClientSettings {
 
 export default class DownloadClient extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
   declare name: string

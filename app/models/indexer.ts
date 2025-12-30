@@ -11,7 +11,7 @@ export interface IndexerSettings {
 
 export default class Indexer extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
   declare name: string

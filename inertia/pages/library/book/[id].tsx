@@ -32,6 +32,7 @@ import {
   Clock01Icon,
   Calendar01Icon,
   FileDownloadIcon,
+  Search01Icon,
   UserIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect } from 'react'
@@ -46,7 +47,8 @@ interface BookFile {
   id: number
   path: string
   size: number
-  format: string
+  format: string | null
+  downloadUrl: string
 }
 
 interface Book {
@@ -64,7 +66,7 @@ interface Book {
   genres: string[]
   seriesName: string | null
   seriesPosition: number | null
-  wanted: boolean
+  requested: boolean
   hasFile: boolean
   author: Author
   bookFile: BookFile | null
@@ -109,11 +111,11 @@ export default function BookDetail() {
       const response = await fetch(`/api/v1/books/${bookId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wanted: !book.wanted }),
+        body: JSON.stringify({ requested: !book.requested }),
       })
       if (response.ok) {
-        setBook({ ...book, wanted: !book.wanted })
-        toast.success(book.wanted ? 'Book unwanted' : 'Book wanted')
+        setBook({ ...book, requested: !book.requested })
+        toast.success(book.requested ? 'Book unrequested' : 'Book requested')
       }
     } catch (error) {
       console.error('Failed to update book:', error)
@@ -222,9 +224,9 @@ export default function BookDetail() {
               {downloading ? (
                 <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
               ) : (
-                <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 mr-2" />
+                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
               )}
-              Download
+              Search releases
             </Button>
           )}
           <DropdownMenu>
@@ -236,10 +238,10 @@ export default function BookDetail() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={toggleWanted}>
                 <HugeiconsIcon
-                  icon={book.wanted ? ViewOffIcon : ViewIcon}
+                  icon={book.requested ? ViewOffIcon : ViewIcon}
                   className="h-4 w-4 mr-2"
                 />
-                {book.wanted ? 'Unwant' : 'Want'}
+                {book.requested ? 'Unrequest' : 'Request'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -295,14 +297,14 @@ export default function BookDetail() {
             </div>
 
             {/* Status */}
-            {(book.hasFile || book.wanted) && (
+            {(book.hasFile || book.requested) && (
               <div className="flex items-center gap-2">
                 {book.hasFile ? (
                   <Badge variant="default" className="bg-green-600 gap-1">
                     <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-3 w-3" />
                     Downloaded
                   </Badge>
-                ) : book.wanted ? (
+                ) : book.requested ? (
                   <Badge variant="secondary" className="gap-1">
                     <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3" />
                     Requested
@@ -384,10 +386,20 @@ export default function BookDetail() {
                   <div>
                     <p className="font-medium truncate max-w-md">{book.bookFile.path.split('/').pop()}</p>
                     <p className="text-sm text-muted-foreground">
-                      {book.bookFile.format?.toUpperCase()} • {formatFileSize(book.bookFile.size)}
+                      {book.bookFile.format && `${book.bookFile.format.toUpperCase()} • `}
+                      {formatFileSize(book.bookFile.size)}
+                    </p>
+                    <p className="text-xs text-muted-foreground/70 truncate max-w-md">
+                      {book.bookFile.path}
                     </p>
                   </div>
                 </div>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={book.bookFile.downloadUrl} download>
+                    <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 mr-2" />
+                    Download
+                  </a>
+                </Button>
               </div>
             </CardContent>
           </Card>

@@ -41,7 +41,7 @@ interface Book {
   title: string
   releaseDate: string | null
   coverUrl: string | null
-  wanted: boolean
+  requested: boolean
   hasFile: boolean
   seriesName: string | null
   seriesPosition: number | null
@@ -53,7 +53,7 @@ interface Author {
   openlibraryId: string | null
   overview: string | null
   imageUrl: string | null
-  wanted: boolean
+  requested: boolean
   qualityProfile: { id: number; name: string } | null
   rootFolder: { id: number; path: string } | null
   books: Book[]
@@ -98,11 +98,11 @@ export default function AuthorDetail() {
       const response = await fetch(`/api/v1/authors/${authorId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wanted: !author.wanted }),
+        body: JSON.stringify({ requested: !author.requested }),
       })
       if (response.ok) {
-        setAuthor({ ...author, wanted: !author.wanted })
-        toast.success(author.wanted ? 'Author unwanted' : 'Author wanted')
+        setAuthor({ ...author, requested: !author.requested })
+        toast.success(author.requested ? 'Author unrequested' : 'Author requested')
       }
     } catch (error) {
       console.error('Failed to update author:', error)
@@ -135,7 +135,7 @@ export default function AuthorDetail() {
   // Calculate statistics
   const totalBooks = author?.books.length || 0
   const downloadedBooks = author?.books.filter((b) => b.hasFile).length || 0
-  const wantedBooks = author?.books.filter((b) => b.wanted && !b.hasFile).length || 0
+  const requestedBooks = author?.books.filter((b) => b.requested && !b.hasFile).length || 0
 
   if (loading) {
     return (
@@ -186,10 +186,10 @@ export default function AuthorDetail() {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={toggleWanted}>
                 <HugeiconsIcon
-                  icon={author.wanted ? ViewOffIcon : ViewIcon}
+                  icon={author.requested ? ViewOffIcon : ViewIcon}
                   className="h-4 w-4 mr-2"
                 />
-                {author.wanted ? 'Unwant' : 'Want'}
+                {author.requested ? 'Unrequest' : 'Request'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -251,9 +251,9 @@ export default function AuthorDetail() {
                   </Badge>
                 </div>
               )}
-              {wantedBooks > 0 && (
+              {requestedBooks > 0 && (
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{wantedBooks} requested</Badge>
+                  <Badge variant="secondary">{requestedBooks} requested</Badge>
                 </div>
               )}
             </div>
@@ -274,7 +274,7 @@ export default function AuthorDetail() {
         <Tabs defaultValue="all" className="space-y-4">
           <TabsList>
             <TabsTrigger value="all">All ({totalBooks})</TabsTrigger>
-            <TabsTrigger value="requested">Requested ({wantedBooks})</TabsTrigger>
+            <TabsTrigger value="requested">Requested ({requestedBooks})</TabsTrigger>
             <TabsTrigger value="downloaded">Downloaded ({downloadedBooks})</TabsTrigger>
           </TabsList>
 
@@ -301,7 +301,7 @@ export default function AuthorDetail() {
           </TabsContent>
 
           <TabsContent value="requested" className="space-y-4">
-            {wantedBooks === 0 ? (
+            {requestedBooks === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                   <h3 className="text-lg font-medium mb-2">No requested books</h3>
@@ -313,7 +313,7 @@ export default function AuthorDetail() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {author.books
-                  .filter((b) => b.wanted && !b.hasFile)
+                  .filter((b) => b.requested && !b.hasFile)
                   .map((book) => (
                     <BookCard key={book.id} book={book} />
                   ))}
@@ -399,7 +399,7 @@ function BookCard({ book }: { book: Book }) {
                 <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-3 w-3" />
                 Downloaded
               </Badge>
-            ) : book.wanted ? (
+            ) : book.requested ? (
               <Badge variant="secondary" className="gap-1">
                 <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3" />
                 Requested

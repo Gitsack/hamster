@@ -3,15 +3,16 @@ import Movie from '#models/movie'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
+import { requestedSearchTask } from '#services/tasks/requested_search_task'
 
 const movieValidator = vine.compile(
   vine.object({
     tmdbId: vine.string().optional(),
     title: vine.string().minLength(1),
     year: vine.number().optional(),
-    qualityProfileId: vine.number().optional(),
-    rootFolderId: vine.number(),
-    wanted: vine.boolean().optional(),
+    qualityProfileId: vine.string().optional(),
+    rootFolderId: vine.string(),
+    requested: vine.boolean().optional(),
     searchOnAdd: vine.boolean().optional(),
   })
 )
@@ -33,7 +34,7 @@ export default class MoviesController {
         overview: movie.overview,
         posterUrl: movie.posterUrl,
         status: movie.status,
-        wanted: movie.wanted,
+        requested: movie.requested,
         hasFile: movie.hasFile,
         qualityProfile: movie.qualityProfile?.name,
         rootFolder: movie.rootFolder?.path,
@@ -92,7 +93,7 @@ export default class MoviesController {
       title: data.title,
       sortTitle: data.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
       year: data.year,
-      wanted: data.wanted ?? true,
+      requested: data.requested ?? true,
       hasFile: false,
       qualityProfileId: data.qualityProfileId,
       rootFolderId: data.rootFolderId,
@@ -127,7 +128,12 @@ export default class MoviesController {
 
     const movie = await Movie.create(movieData)
 
-    // TODO: If searchOnAdd, trigger search
+    // Trigger immediate search if requested and searchOnAdd is enabled
+    if ((data.requested ?? true) && data.searchOnAdd !== false) {
+      requestedSearchTask.searchSingleMovie(movie.id).catch((error) => {
+        console.error('Failed to trigger search for movie:', error)
+      })
+    }
 
     return response.created({
       id: movie.id,
@@ -163,11 +169,19 @@ export default class MoviesController {
       backdropUrl: movie.backdropUrl,
       rating: movie.rating,
       genres: movie.genres,
-      wanted: movie.wanted,
+      requested: movie.requested,
       hasFile: movie.hasFile,
       qualityProfile: movie.qualityProfile,
       rootFolder: movie.rootFolder,
-      movieFile: movie.movieFile,
+      movieFile: movie.movieFile
+        ? {
+            id: movie.movieFile.id,
+            path: movie.movieFile.relativePath,
+            size: movie.movieFile.sizeBytes,
+            quality: movie.movieFile.quality,
+            downloadUrl: `/api/v1/files/movies/${movie.movieFile.id}/download`,
+          }
+        : null,
       addedAt: movie.addedAt?.toISO(),
     })
   }
@@ -178,19 +192,19 @@ export default class MoviesController {
       return response.notFound({ error: 'Movie not found' })
     }
 
-    const { wanted, qualityProfileId, rootFolderId } = request.only([
-      'wanted',
+    const { requested, qualityProfileId, rootFolderId } = request.only([
+      'requested',
       'qualityProfileId',
       'rootFolderId',
     ])
 
-    if (wanted !== undefined) movie.wanted = wanted
+    if (requested !== undefined) movie.requested = requested
     if (qualityProfileId !== undefined) movie.qualityProfileId = qualityProfileId
     if (rootFolderId !== undefined) movie.rootFolderId = rootFolderId
 
     await movie.save()
 
-    return response.json({ id: movie.id, title: movie.title, wanted: movie.wanted })
+    return response.json({ id: movie.id, title: movie.title, requested: movie.requested })
   }
 
   async destroy({ params, response }: HttpContext) {
@@ -211,13 +225,49 @@ export default class MoviesController {
       return response.notFound({ error: 'Movie not found' })
     }
 
-    const { wanted } = request.only(['wanted'])
-    movie.wanted = wanted ?? true
+    const { requested } = request.only(['requested'])
+    movie.requested = requested ?? true
     await movie.save()
 
-    // TODO: If wanted is true, trigger immediate search
+    // Trigger immediate search if marking as requested
+    if (movie.requested && !movie.hasFile) {
+      requestedSearchTask.searchSingleMovie(movie.id).catch((error) => {
+        console.error('Failed to trigger search for movie:', error)
+      })
+    }
 
-    return response.json({ id: movie.id, wanted: movie.wanted })
+    return response.json({ id: movie.id, requested: movie.requested })
+  }
+
+  /**
+   * Get requested (missing) movies
+   */
+  async requested({ request, response }: HttpContext) {
+    const page = request.input('page', 1)
+    const limit = request.input('limit', 50)
+
+    const movies = await Movie.query()
+      .where('requested', true)
+      .where('hasFile', false)
+      .orderBy('addedAt', 'desc')
+      .paginate(page, limit)
+
+    return response.json({
+      data: movies.all().map((movie) => ({
+        id: movie.id,
+        tmdbId: movie.tmdbId,
+        title: movie.title,
+        year: movie.year,
+        posterUrl: movie.posterUrl,
+        releaseDate: movie.releaseDate?.toISODate(),
+      })),
+      meta: {
+        total: movies.total,
+        perPage: movies.perPage,
+        currentPage: movies.currentPage,
+        lastPage: movies.lastPage,
+      },
+    })
   }
 
   async download({ params, response }: HttpContext) {
@@ -284,6 +334,29 @@ export default class MoviesController {
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search and download',
+      })
+    }
+  }
+
+  /**
+   * Trigger immediate search for a movie
+   */
+  async searchNow({ params, response }: HttpContext) {
+    const movie = await Movie.find(params.id)
+    if (!movie) {
+      return response.notFound({ error: 'Movie not found' })
+    }
+
+    try {
+      const result = await requestedSearchTask.searchSingleMovie(movie.id)
+      return response.json({
+        found: result.found,
+        grabbed: result.grabbed,
+        error: result.error,
+      })
+    } catch (error) {
+      return response.internalServerError({
+        error: error instanceof Error ? error.message : 'Search failed',
       })
     }
   }

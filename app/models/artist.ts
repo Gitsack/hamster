@@ -10,7 +10,7 @@ export type ArtistStatus = 'continuing' | 'ended' | 'unknown'
 
 export default class Artist extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
   declare musicbrainzId: string | null
@@ -49,16 +49,16 @@ export default class Artist extends BaseModel {
   declare monitored: boolean
 
   @column()
-  declare wanted: boolean
+  declare requested: boolean
 
   @column()
-  declare qualityProfileId: number | null
+  declare qualityProfileId: string | null
 
   @column()
-  declare metadataProfileId: number | null
+  declare metadataProfileId: string | null
 
   @column()
-  declare rootFolderId: number | null
+  declare rootFolderId: string | null
 
   @column.dateTime()
   declare addedAt: DateTime | null

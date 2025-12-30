@@ -14,10 +14,10 @@ export interface VideoMediaInfo {
 
 export default class MovieFile extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare movieId: number
+  declare movieId: string
 
   @column()
   declare relativePath: string

@@ -5,9 +5,10 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id').notNullable()
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
       table.string('name', 255).notNullable()
       table.text('path').notNullable().unique()
+      table.string('media_type', 50).nullable()
       table.boolean('accessible').defaultTo(true).notNullable()
       table.bigInteger('free_space_bytes').nullable()
       table.bigInteger('total_space_bytes').nullable()

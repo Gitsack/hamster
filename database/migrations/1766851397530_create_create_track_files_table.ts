@@ -5,9 +5,9 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id').notNullable()
-      table.integer('track_id').unsigned().references('id').inTable('tracks').onDelete('CASCADE')
-      table.integer('album_id').unsigned().notNullable().references('id').inTable('albums').onDelete('CASCADE').index()
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
+      table.uuid('track_id').references('id').inTable('tracks').onDelete('CASCADE')
+      table.uuid('album_id').notNullable().references('id').inTable('albums').onDelete('CASCADE').index()
       table.text('relative_path').notNullable()
       table.bigInteger('size_bytes').notNullable()
       table.string('quality', 50).nullable()

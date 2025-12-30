@@ -145,9 +145,9 @@ export default function ManualSearch() {
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-            <Link href="/wanted">
+            <Link href="/requests">
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
-              Back to Wanted
+              Back to Requests
             </Link>
           </Button>
           <Button onClick={searchReleases} disabled={searching}>

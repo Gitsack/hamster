@@ -35,7 +35,7 @@ import {
   Edit01Icon,
   ViewIcon,
   ViewOffIcon,
-  FileDownloadIcon,
+  Search01Icon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
@@ -524,7 +524,7 @@ function AlbumCard({ album }: { album: Album }) {
                 {downloading ? (
                   <HugeiconsIcon icon={Loading01Icon} className="h-6 w-6 animate-spin" />
                 ) : (
-                  <HugeiconsIcon icon={FileDownloadIcon} className="h-6 w-6" />
+                  <HugeiconsIcon icon={Search01Icon} className="h-6 w-6" />
                 )}
               </Button>
             </div>

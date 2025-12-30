@@ -5,7 +5,7 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id')
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
       // External IDs
       table.string('tmdb_id').nullable().unique()
@@ -39,11 +39,11 @@ export default class extends BaseSchema {
       table.integer('episode_count').defaultTo(0)
 
       // Library status
-      table.boolean('wanted').defaultTo(false)
+      table.boolean('requested').defaultTo(false)
 
       // Configuration
-      table.integer('quality_profile_id').unsigned().references('id').inTable('quality_profiles').onDelete('SET NULL')
-      table.integer('root_folder_id').unsigned().references('id').inTable('root_folders').onDelete('SET NULL')
+      table.uuid('quality_profile_id').references('id').inTable('quality_profiles').onDelete('SET NULL')
+      table.uuid('root_folder_id').references('id').inTable('root_folders').onDelete('SET NULL')
 
       table.timestamp('added_at').nullable()
       table.timestamp('created_at').notNullable()

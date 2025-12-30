@@ -5,7 +5,7 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id').notNullable()
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
       table.string('name', 255).notNullable()
       table.specificType('primary_album_types', 'varchar[]').defaultTo('{}')
       table.specificType('secondary_album_types', 'varchar[]').defaultTo('{}')

@@ -6,10 +6,10 @@ import Episode from './episode.js'
 
 export default class Season extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare tvShowId: number
+  declare tvShowId: string
 
   // External IDs
   @column()
@@ -38,7 +38,7 @@ export default class Season extends BaseModel {
 
   // Library status
   @column()
-  declare wanted: boolean
+  declare requested: boolean
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

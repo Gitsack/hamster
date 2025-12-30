@@ -5,8 +5,8 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.increments('id').notNullable()
-      table.integer('album_id').unsigned().notNullable().references('id').inTable('albums').onDelete('CASCADE').index()
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
+      table.uuid('album_id').notNullable().references('id').inTable('albums').onDelete('CASCADE').index()
       table.uuid('musicbrainz_id').unique().index()
       table.string('title', 500).nullable()
       table.string('country', 3).nullable()

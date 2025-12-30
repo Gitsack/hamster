@@ -7,22 +7,23 @@ import vine from '@vinejs/vine'
 import { musicBrainzService } from '#services/metadata/musicbrainz_service'
 import { coverArtService } from '#services/metadata/cover_art_service'
 import { DateTime } from 'luxon'
+import { requestedSearchTask } from '#services/tasks/requested_search_task'
 
 const addAlbumValidator = vine.compile(
   vine.object({
     musicbrainzId: vine.string(), // Release group ID
     artistMusicbrainzId: vine.string(),
-    rootFolderId: vine.number(),
-    qualityProfileId: vine.number(),
-    metadataProfileId: vine.number(),
-    wanted: vine.boolean().optional(),
+    rootFolderId: vine.string(),
+    qualityProfileId: vine.string(),
+    metadataProfileId: vine.string(),
+    requested: vine.boolean().optional(),
     searchForAlbum: vine.boolean().optional(),
   })
 )
 
 const updateAlbumValidator = vine.compile(
   vine.object({
-    wanted: vine.boolean().optional(),
+    requested: vine.boolean().optional(),
     anyReleaseOk: vine.boolean().optional(),
   })
 )
@@ -60,7 +61,7 @@ export default class AlbumsController {
           albumType: album.albumType,
           secondaryTypes: album.secondaryTypes,
           imageUrl: album.imageUrl,
-          wanted: album.wanted,
+          requested: album.requested,
           trackCount: Number((trackCount[0].$extras as { total: string }).total) || 0,
           fileCount: Number((fileCount[0].$extras as { total: string }).total) || 0,
         }
@@ -93,7 +94,7 @@ export default class AlbumsController {
         return response.notFound({ error: 'Artist not found on MusicBrainz' })
       }
 
-      // Create artist with wanted=false so we don't auto-fetch all albums
+      // Create artist with requested=false so we don't auto-fetch all albums
       artist = await Artist.create({
         musicbrainzId: data.artistMusicbrainzId,
         name: mbArtist.name,
@@ -104,7 +105,7 @@ export default class AlbumsController {
         country: mbArtist.country || null,
         formedAt: mbArtist.beginDate ? DateTime.fromISO(mbArtist.beginDate) : null,
         endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
-        wanted: false, // Artist not wanted - only specific albums
+        requested: false, // Artist not requested - only specific albums
         qualityProfileId: data.qualityProfileId,
         metadataProfileId: data.metadataProfileId,
         rootFolderId: data.rootFolderId,
@@ -135,7 +136,7 @@ export default class AlbumsController {
       secondaryTypes: mbAlbum.secondaryTypes || [],
       releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
       imageUrl: coverUrl,
-      wanted: data.wanted ?? true,
+      requested: data.requested ?? true,
       anyReleaseOk: true,
     })
 
@@ -151,7 +152,7 @@ export default class AlbumsController {
       title: album.title,
       artistId: artist.id,
       artistName: artist.name,
-      wanted: album.wanted,
+      requested: album.requested,
     })
   }
 
@@ -246,7 +247,7 @@ export default class AlbumsController {
       albumType: album.albumType,
       secondaryTypes: album.secondaryTypes,
       imageUrl: album.imageUrl,
-      wanted: album.wanted,
+      requested: album.requested,
       anyReleaseOk: album.anyReleaseOk,
       tracks: album.tracks.map((track) => ({
         id: track.id,
@@ -264,6 +265,7 @@ export default class AlbumsController {
         quality: file.quality,
         format: file.mediaInfo?.codec,
         bitrate: file.mediaInfo?.bitrate,
+        downloadUrl: `/api/v1/files/tracks/${file.id}/download`,
       })),
     })
   }
@@ -280,7 +282,7 @@ export default class AlbumsController {
     const data = await request.validateUsing(updateAlbumValidator)
 
     album.merge({
-      wanted: data.wanted ?? album.wanted,
+      requested: data.requested ?? album.requested,
       anyReleaseOk: data.anyReleaseOk ?? album.anyReleaseOk,
     })
     await album.save()
@@ -288,21 +290,21 @@ export default class AlbumsController {
     return response.json({
       id: album.id,
       title: album.title,
-      wanted: album.wanted,
+      requested: album.requested,
       anyReleaseOk: album.anyReleaseOk,
     })
   }
 
   /**
-   * Get wanted (missing) albums
+   * Get requested (missing) albums
    */
-  async wanted({ request, response }: HttpContext) {
+  async requested({ request, response }: HttpContext) {
     const page = request.input('page', 1)
     const limit = request.input('limit', 50)
 
-    // Get albums that are wanted but have no track files
+    // Get albums that are requested but have no track files
     const albums = await Album.query()
-      .where('wanted', true)
+      .where('requested', true)
       .whereDoesntHave('trackFiles', () => {})
       .preload('artist')
       .orderBy('releaseDate', 'desc')
@@ -525,5 +527,28 @@ export default class AlbumsController {
         inLibrary: existingSet.has(album.id),
       }))
     )
+  }
+
+  /**
+   * Trigger immediate search for an album
+   */
+  async searchNow({ params, response }: HttpContext) {
+    const album = await Album.find(params.id)
+    if (!album) {
+      return response.notFound({ error: 'Album not found' })
+    }
+
+    try {
+      const result = await requestedSearchTask.searchSingleAlbum(album.id)
+      return response.json({
+        found: result.found,
+        grabbed: result.grabbed,
+        error: result.error,
+      })
+    } catch (error) {
+      return response.internalServerError({
+        error: error instanceof Error ? error.message : 'Search failed',
+      })
+    }
   }
 }

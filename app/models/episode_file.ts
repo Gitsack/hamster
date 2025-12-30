@@ -7,13 +7,13 @@ import type { VideoMediaInfo } from './movie_file.js'
 
 export default class EpisodeFile extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare episodeId: number
+  declare episodeId: string
 
   @column()
-  declare tvShowId: number
+  declare tvShowId: string
 
   @column()
   declare relativePath: string

@@ -23,10 +23,10 @@ export interface NzbInfo {
 
 export default class Download extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare downloadClientId: number | null
+  declare downloadClientId: string | null
 
   @column()
   declare externalId: string | null
@@ -53,25 +53,25 @@ export default class Download extends BaseModel {
   declare mediaType: MediaType | null
 
   @column()
-  declare albumId: number | null
+  declare albumId: string | null
 
   @column()
-  declare releaseId: number | null
+  declare releaseId: string | null
 
   @column()
-  declare movieId: number | null
+  declare movieId: string | null
 
   @column()
-  declare tvShowId: number | null
+  declare tvShowId: string | null
 
   @column()
-  declare episodeId: number | null
+  declare episodeId: string | null
 
   @column()
-  declare bookId: number | null
+  declare bookId: string | null
 
   @column()
-  declare indexerId: number | null
+  declare indexerId: string | null
 
   @column()
   declare nzbInfo: NzbInfo

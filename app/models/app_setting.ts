@@ -9,7 +9,7 @@ export interface AppSettings {
 
 export default class AppSetting extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
   declare key: string

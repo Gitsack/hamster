@@ -51,11 +51,6 @@ const mainNavItems: NavItem[] = [
     url: '/search',
     icon: Search01Icon,
   },
-  {
-    title: 'Requests',
-    url: '/requests',
-    icon: HeartCheckIcon,
-  },
 ]
 
 const activityNavItems: NavItem[] = [

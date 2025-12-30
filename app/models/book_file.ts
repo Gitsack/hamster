@@ -5,10 +5,10 @@ import Book from './book.js'
 
 export default class BookFile extends BaseModel {
   @column({ isPrimary: true })
-  declare id: number
+  declare id: string
 
   @column()
-  declare bookId: number
+  declare bookId: string
 
   @column()
   declare relativePath: string
