@@ -173,16 +173,19 @@ export default class TvShowsController {
           // A season is requested if:
           // 1. It's in selectedSeasons (season-level selection)
           // 2. OR it has any episodes selected (episode-level selection)
-          // 3. OR no selection provided and default is true
+          // 3. OR no selection provided at all and default is true
           let seasonRequested: boolean
           if (selectedEpisodeMap && hasEpisodeLevelSelection) {
-            // Episode-level: season is requested if any episodes are selected
+            // Episode-level selection for this season: requested if any episodes selected
             seasonRequested = selectedEpisodesInSeason!.size > 0
+          } else if (selectedEpisodeMap && !hasEpisodeLevelSelection) {
+            // Episode-level selection exists but NOT for this season: NOT requested
+            seasonRequested = false
           } else if (selectedSeasonNumbers !== null) {
-            // Season-level: use the selection
+            // Season-level selection: use the selection
             seasonRequested = selectedSeasonNumbers.has(seasonData.seasonNumber)
           } else {
-            // Default: all requested
+            // No selection provided at all: default to requested
             seasonRequested = data.requested ?? true
           }
 
@@ -205,10 +208,13 @@ export default class TvShowsController {
             // Determine if this episode should be requested
             let episodeRequested: boolean
             if (selectedEpisodesInSeason) {
-              // Episode-level selection for this season
+              // Episode-level selection for this season: check if this episode is selected
               episodeRequested = selectedEpisodesInSeason.has(episodeData.episodeNumber)
+            } else if (selectedEpisodeMap && !hasEpisodeLevelSelection) {
+              // Episode-level selection exists but NOT for this season: NOT requested
+              episodeRequested = false
             } else {
-              // Inherit from season
+              // Inherit from season (no episode-level selection)
               episodeRequested = seasonRequested
             }
 

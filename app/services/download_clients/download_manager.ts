@@ -202,6 +202,15 @@ export class DownloadManager {
           useSsl: client.settings.useSsl || false,
         }
 
+        // Load all downloads for this client at once to avoid N+1 queries
+        const allDownloads = await Download.query().where('downloadClientId', client.id)
+        const downloadsByExternalId = new Map<string, Download>()
+        for (const dl of allDownloads) {
+          if (dl.externalId) {
+            downloadsByExternalId.set(dl.externalId, dl)
+          }
+        }
+
         const queue = await sabnzbdService.getQueue(config)
 
         // Track all external IDs found in SABnzbd (queue + history)
@@ -211,10 +220,7 @@ export class DownloadManager {
         for (const slot of queue.slots) {
           foundExternalIds.add(slot.nzo_id)
 
-          const download = await Download.query()
-            .where('downloadClientId', client.id)
-            .where('externalId', slot.nzo_id)
-            .first()
+          const download = downloadsByExternalId.get(slot.nzo_id)
 
           if (download) {
             download.progress = parseFloat(slot.percentage)
@@ -225,17 +231,14 @@ export class DownloadManager {
           }
         }
 
-        // Check history for completed downloads (increased limit to 100)
-        const history = await sabnzbdService.getHistory(config, 100)
+        // Check history for completed downloads (reduced limit to 50 for performance)
+        const history = await sabnzbdService.getHistory(config, 50)
         console.log(`[DownloadManager] Checking SABnzbd history: ${history.slots.length} items`)
 
         for (const slot of history.slots) {
           foundExternalIds.add(slot.nzo_id)
 
-          const download = await Download.query()
-            .where('downloadClientId', client.id)
-            .where('externalId', slot.nzo_id)
-            .first()
+          const download = downloadsByExternalId.get(slot.nzo_id)
 
           if (download) {
             console.log(`[DownloadManager] Found download in history: ${download.title}, SABnzbd status: ${slot.status}, DB status: ${download.status}, outputPath: ${download.outputPath || 'none'}`)

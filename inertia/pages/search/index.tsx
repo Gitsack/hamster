@@ -431,8 +431,21 @@ export default function SearchPage() {
   // Get filtered root folders for current media type
   const filteredRootFolders = useMemo(() => {
     if (searchMode === 'direct') return rootFolders
-    return rootFolders.filter((rf) => !rf.mediaType || rf.mediaType === searchMode)
+    const filtered = rootFolders.filter((rf) => !rf.mediaType || rf.mediaType === searchMode)
+    console.log('[Search] Root folders:', rootFolders.map(rf => ({ id: rf.id, path: rf.path, mediaType: rf.mediaType })))
+    console.log('[Search] Search mode:', searchMode, '-> Filtered:', filtered.length)
+    return filtered
   }, [rootFolders, searchMode])
+
+  // Update selected root folder when filtered list changes
+  useEffect(() => {
+    if (filteredRootFolders.length > 0) {
+      const currentIsValid = filteredRootFolders.some((rf) => rf.id === selectedRootFolder)
+      if (!currentIsValid) {
+        setSelectedRootFolder(filteredRootFolders[0].id)
+      }
+    }
+  }, [filteredRootFolders, selectedRootFolder])
 
   // Filtered and sorted results for direct search
   const filteredIndexerResults = useMemo(() => {
@@ -819,7 +832,7 @@ export default function SearchPage() {
         setTvShowResults((prev) =>
           prev.map((r) => r.tmdbId === selectedTvShow.tmdbId ? { ...r, inLibrary: true } : r)
         )
-        router.visit(`/library/tvshow/${data.id}`)
+        router.visit(`/tvshow/${data.id}`)
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to add TV show')
@@ -1723,6 +1736,11 @@ export default function SearchPage() {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
+            ) : filteredRootFolders.length === 0 ? (
+              <div className="py-4 text-sm text-muted-foreground">
+                <p className="mb-2">No root folder configured for movies.</p>
+                <p>Go to <strong>Settings → Media Management</strong> and add a root folder with media type set to <strong>Movies</strong>.</p>
+              </div>
             ) : (
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -1763,7 +1781,7 @@ export default function SearchPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddMovieDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addMovie} disabled={addingMovie || !selectedRootFolder || !selectedQualityProfile}>
+              <Button onClick={addMovie} disabled={addingMovie || !selectedRootFolder || !selectedQualityProfile || filteredRootFolders.length === 0}>
                 {addingMovie && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
                 Add Movie
               </Button>
@@ -1797,6 +1815,11 @@ export default function SearchPage() {
               <div className="space-y-4 py-4">
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
+              </div>
+            ) : filteredRootFolders.length === 0 ? (
+              <div className="py-4 text-sm text-muted-foreground">
+                <p className="mb-2">No root folder configured for TV shows.</p>
+                <p>Go to <strong>Settings → Media Management</strong> and add a root folder with media type set to <strong>TV</strong>.</p>
               </div>
             ) : (
               <div className="space-y-4 py-4">
@@ -1859,7 +1882,7 @@ export default function SearchPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddTvShowDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addTvShow} disabled={addingTvShow || !selectedRootFolder || !selectedQualityProfile}>
+              <Button onClick={addTvShow} disabled={addingTvShow || !selectedRootFolder || !selectedQualityProfile || filteredRootFolders.length === 0}>
                 {addingTvShow && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
                 Add TV Show
               </Button>

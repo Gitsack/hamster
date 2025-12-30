@@ -134,12 +134,11 @@ export class EpisodeImportService {
         }
       }
 
-      // Clean up download folder
-      onProgress?.({ phase: 'cleaning', total: 1, current: 0 })
-      await this.cleanupDownloadFolder(outputPath)
-
+      // Only clean up download folder if files were actually imported
       if (result.filesImported > 0) {
         result.success = true
+        onProgress?.({ phase: 'cleaning', total: 1, current: 0 })
+        await this.cleanupDownloadFolder(outputPath)
       }
 
       onProgress?.({ phase: 'complete', total: videoFiles.length, current: videoFiles.length })

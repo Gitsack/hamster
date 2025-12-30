@@ -70,13 +70,31 @@ export class NewznabService {
     attributeNamePrefix: '@_',
   })
 
+  // Default timeout for fetch requests (5 seconds)
+  private fetchTimeout = 5000
+
+  /**
+   * Fetch with timeout to prevent slow indexers from blocking
+   */
+  private async fetchWithTimeout(url: string, timeoutMs?: number): Promise<Response> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs || this.fetchTimeout)
+
+    try {
+      const response = await fetch(url, { signal: controller.signal })
+      return response
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
   /**
    * Test connection and get indexer capabilities
    */
   async getCapabilities(url: string, apiKey: string): Promise<NewznabCapabilities> {
     const capsUrl = `${this.normalizeUrl(url)}/api?t=caps&apikey=${apiKey}`
 
-    const response = await fetch(capsUrl)
+    const response = await this.fetchWithTimeout(capsUrl, 10000) // 10s for caps check
     if (!response.ok) {
       throw new Error(`Failed to get capabilities: ${response.status}`)
     }
@@ -173,7 +191,7 @@ export class NewznabService {
 
     const searchUrl = `${this.normalizeUrl(config.url)}/api?${params.toString()}`
 
-    const response = await fetch(searchUrl)
+    const response = await this.fetchWithTimeout(searchUrl)
     if (!response.ok) {
       throw new Error(`Search failed: ${response.status}`)
     }
@@ -210,7 +228,7 @@ export class NewznabService {
 
     const searchUrl = `${this.normalizeUrl(config.url)}/api?${params.toString()}`
 
-    const response = await fetch(searchUrl)
+    const response = await this.fetchWithTimeout(searchUrl)
     if (!response.ok) {
       throw new Error(`Search failed: ${response.status}`)
     }

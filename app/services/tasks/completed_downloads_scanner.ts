@@ -20,6 +20,12 @@ class CompletedDownloadsScanner {
   private isRunning = false
   private intervalId: NodeJS.Timeout | null = null
 
+  // Cached library data to avoid repeated queries
+  private cachedMovies: Movie[] = []
+  private cachedShows: TvShow[] = []
+  private cachedAlbums: Array<Album & { artist?: { name: string } }> = []
+  private cachedBooks: Array<Book & { author?: { name: string } }> = []
+
   /**
    * Start periodic scanning
    */
@@ -52,6 +58,41 @@ class CompletedDownloadsScanner {
   }
 
   /**
+   * Yield to event loop to prevent blocking
+   */
+  private yield(): Promise<void> {
+    return new Promise((resolve) => setImmediate(resolve))
+  }
+
+  /**
+   * Load library items into cache for efficient matching
+   */
+  private async loadCache(): Promise<void> {
+    console.log('[CompletedScanner] Loading library cache...')
+    const [movies, shows, albums, books] = await Promise.all([
+      Movie.query().where('requested', true),
+      TvShow.query().where('requested', true),
+      Album.query().where('requested', true).preload('artist'),
+      Book.query().where('requested', true).preload('author'),
+    ])
+    this.cachedMovies = movies
+    this.cachedShows = shows
+    this.cachedAlbums = albums as any
+    this.cachedBooks = books as any
+    console.log(`[CompletedScanner] Cache loaded: ${movies.length} movies, ${shows.length} shows, ${albums.length} albums, ${books.length} books`)
+  }
+
+  /**
+   * Clear the cache after scan
+   */
+  private clearCache(): void {
+    this.cachedMovies = []
+    this.cachedShows = []
+    this.cachedAlbums = []
+    this.cachedBooks = []
+  }
+
+  /**
    * Run a single scan
    */
   async scan(): Promise<{ processed: number; imported: number; errors: string[] }> {
@@ -65,6 +106,9 @@ class CompletedDownloadsScanner {
 
     try {
       console.log('[CompletedScanner] Scanning for orphaned completed downloads...')
+
+      // Load library items once at the start
+      await this.loadCache()
 
       const clients = await DownloadClient.query().where('enabled', true)
 
@@ -83,6 +127,7 @@ class CompletedDownloadsScanner {
 
       console.log(`[CompletedScanner] Scan complete: ${results.processed} processed, ${results.imported} imported`)
     } finally {
+      this.clearCache()
       this.isRunning = false
     }
 
@@ -104,12 +149,15 @@ class CompletedDownloadsScanner {
           useSsl: client.settings.useSsl || false,
         }
 
-        // Get history with a larger limit to catch older orphans
-        const history = await sabnzbdService.getHistory(config, 100)
+        // Get history with a smaller limit to reduce processing time
+        const history = await sabnzbdService.getHistory(config, 50)
 
         for (const slot of history.slots) {
           if (slot.status !== 'Completed') continue
           results.processed++
+
+          // Yield to event loop every item to prevent blocking HTTP requests
+          await this.yield()
 
           try {
             const importResult = await this.processCompletedDownload(client, slot)
@@ -297,15 +345,15 @@ class CompletedDownloadsScanner {
     // Parse the folder name to extract title and year
     const parsed = this.parseFolderName(folderName)
 
-    // Try matching movie
+    // Try matching movie (synchronous, uses cache)
     if (parsed.title) {
-      const movieMatch = await this.matchMovie(parsed.title, parsed.year)
+      const movieMatch = this.matchMovie(parsed.title, parsed.year)
       if (movieMatch) {
         return { type: 'movie', id: movieMatch.id, title: movieMatch.title }
       }
     }
 
-    // Try matching TV episode
+    // Try matching TV episode (async due to episode query)
     if (parsed.title && (parsed.season !== undefined || parsed.episode !== undefined)) {
       const episodeMatch = await this.matchEpisode(parsed.title, parsed.season, parsed.episode)
       if (episodeMatch) {
@@ -313,17 +361,17 @@ class CompletedDownloadsScanner {
       }
     }
 
-    // Try matching album (artist - album format common in music)
+    // Try matching album (synchronous, uses cache)
     if (parsed.artist && parsed.album) {
-      const albumMatch = await this.matchAlbum(parsed.artist, parsed.album)
+      const albumMatch = this.matchAlbum(parsed.artist, parsed.album)
       if (albumMatch) {
         return { type: 'album', id: albumMatch.id, title: albumMatch.title }
       }
     }
 
-    // Try matching book (author - title format)
+    // Try matching book (synchronous, uses cache)
     if (parsed.author && parsed.bookTitle) {
-      const bookMatch = await this.matchBook(parsed.author, parsed.bookTitle)
+      const bookMatch = this.matchBook(parsed.author, parsed.bookTitle)
       if (bookMatch) {
         return { type: 'book', id: bookMatch.id, title: bookMatch.title }
       }
@@ -331,7 +379,7 @@ class CompletedDownloadsScanner {
 
     // If we have a title but no year/season info, try movie as fallback
     if (parsed.title && !parsed.season && !parsed.episode) {
-      const movieMatch = await this.matchMovie(parsed.title, undefined)
+      const movieMatch = this.matchMovie(parsed.title, undefined)
       if (movieMatch) {
         return { type: 'movie', id: movieMatch.id, title: movieMatch.title }
       }
@@ -407,31 +455,13 @@ class CompletedDownloadsScanner {
   }
 
   /**
-   * Match a parsed title to a movie in the library
+   * Match a parsed title to a movie in the library (uses cache)
    */
-  private async matchMovie(title: string, year?: number): Promise<{ id: string; title: string } | null> {
+  private matchMovie(title: string, year?: number): { id: string; title: string } | null {
     // Normalize title for matching
     const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-    let query = Movie.query().where('requested', true)
-
-    if (year) {
-      // First try exact year match
-      const exactMatch = await query
-        .clone()
-        .where('year', year)
-        .whereRaw(`LOWER(REPLACE(REPLACE(title, ' ', ''), '''', '')) LIKE ?`, [`%${normalizedTitle}%`])
-        .first()
-
-      if (exactMatch) {
-        return { id: exactMatch.id, title: exactMatch.title }
-      }
-    }
-
-    // Try fuzzy title match
-    const movies = await Movie.query().where('requested', true)
-
-    for (const movie of movies) {
+    for (const movie of this.cachedMovies) {
       const movieNormalized = movie.title.toLowerCase().replace(/[^a-z0-9]/g, '')
 
       // Check if titles are similar enough
@@ -448,7 +478,7 @@ class CompletedDownloadsScanner {
   }
 
   /**
-   * Match a parsed title to a TV episode in the library
+   * Match a parsed title to a TV episode in the library (uses cache for shows)
    */
   private async matchEpisode(
     title: string,
@@ -457,13 +487,11 @@ class CompletedDownloadsScanner {
   ): Promise<{ id: string; title: string; tvShowId: string } | null> {
     const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-    const shows = await TvShow.query().where('requested', true)
-
-    for (const show of shows) {
+    for (const show of this.cachedShows) {
       const showNormalized = show.title.toLowerCase().replace(/[^a-z0-9]/g, '')
 
       if (this.isSimilar(normalizedTitle, showNormalized)) {
-        // Found the show, now find the episode
+        // Found the show, now find the episode (this query is necessary)
         if (season !== undefined && episode !== undefined) {
           const ep = await Episode.query()
             .where('tvShowId', show.id)
@@ -482,20 +510,18 @@ class CompletedDownloadsScanner {
   }
 
   /**
-   * Match to an album in the library
+   * Match to an album in the library (uses cache)
    */
-  private async matchAlbum(artist: string, albumTitle: string): Promise<{ id: string; title: string } | null> {
+  private matchAlbum(artist: string, albumTitle: string): { id: string; title: string } | null {
     const normalizedArtist = artist.toLowerCase().replace(/[^a-z0-9]/g, '')
     const normalizedAlbum = albumTitle.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-    const albums = await Album.query().where('requested', true).preload('artist')
-
-    for (const album of albums) {
+    for (const album of this.cachedAlbums) {
       const albumNormalized = album.title.toLowerCase().replace(/[^a-z0-9]/g, '')
-      const artistNormalized = album.artist?.name.toLowerCase().replace(/[^a-z0-9]/g, '') || ''
+      const artistNormalized = (album as any).artist?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || ''
 
       if (this.isSimilar(normalizedAlbum, albumNormalized) && this.isSimilar(normalizedArtist, artistNormalized)) {
-        return { id: album.id, title: `${album.artist?.name} - ${album.title}` }
+        return { id: album.id, title: `${(album as any).artist?.name} - ${album.title}` }
       }
     }
 
@@ -503,20 +529,18 @@ class CompletedDownloadsScanner {
   }
 
   /**
-   * Match to a book in the library
+   * Match to a book in the library (uses cache)
    */
-  private async matchBook(author: string, bookTitle: string): Promise<{ id: string; title: string } | null> {
+  private matchBook(author: string, bookTitle: string): { id: string; title: string } | null {
     const normalizedAuthor = author.toLowerCase().replace(/[^a-z0-9]/g, '')
     const normalizedTitle = bookTitle.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-    const books = await Book.query().where('requested', true).preload('author')
-
-    for (const book of books) {
+    for (const book of this.cachedBooks) {
       const titleNormalized = book.title.toLowerCase().replace(/[^a-z0-9]/g, '')
-      const authorNormalized = book.author?.name.toLowerCase().replace(/[^a-z0-9]/g, '') || ''
+      const authorNormalized = (book as any).author?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || ''
 
       if (this.isSimilar(normalizedTitle, titleNormalized) && this.isSimilar(normalizedAuthor, authorNormalized)) {
-        return { id: book.id, title: `${book.author?.name} - ${book.title}` }
+        return { id: book.id, title: `${(book as any).author?.name} - ${book.title}` }
       }
     }
 

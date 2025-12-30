@@ -475,12 +475,16 @@ class RequestedSearchTask {
   private async searchEpisodes(result: RequestedSearchResult) {
     console.log('[RequestedSearch] Searching for requested episodes...')
 
+    // Limit episodes per run to prevent blocking the server for too long
+    const MAX_EPISODES_PER_RUN = 10
+
     const requestedEpisodes = await Episode.query()
       .where('requested', true)
       .where('hasFile', false)
       .preload('tvShow')
+      .limit(MAX_EPISODES_PER_RUN * 3) // Fetch a few more in case some are skipped
 
-    console.log(`[RequestedSearch] Found ${requestedEpisodes.length} requested episodes`)
+    console.log(`[RequestedSearch] Found ${requestedEpisodes.length} requested episodes (processing max ${MAX_EPISODES_PER_RUN})`)
 
     // Get episodes that already have active downloads
     const activeDownloads = await Download.query()
@@ -489,7 +493,17 @@ class RequestedSearchTask {
 
     const episodesWithActiveDownloads = new Set(activeDownloads.map((d) => d.episodeId))
 
+    let processedCount = 0
+
     for (const episode of requestedEpisodes) {
+      // Stop after processing max episodes
+      if (processedCount >= MAX_EPISODES_PER_RUN) {
+        console.log(`[RequestedSearch] Reached max episodes per run (${MAX_EPISODES_PER_RUN}), stopping`)
+        break
+      }
+
+      // Yield to event loop to allow HTTP requests to be processed
+      await new Promise((resolve) => setImmediate(resolve))
       if (episodesWithActiveDownloads.has(episode.id)) {
         console.log(
           `[RequestedSearch] Skipping episode ${episode.tvShow?.title} S${episode.seasonNumber}E${episode.episodeNumber} - already has active download`
@@ -509,6 +523,7 @@ class RequestedSearchTask {
         continue
       }
 
+      processedCount++
       result.episodes.searched++
 
       try {

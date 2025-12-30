@@ -130,12 +130,11 @@ export class MovieImportService {
         result.errors.push(error instanceof Error ? error.message : 'Unknown error')
       }
 
-      // Clean up download folder
-      onProgress?.({ phase: 'cleaning', total: 1, current: 0 })
-      await this.cleanupDownloadFolder(outputPath)
-
+      // Only clean up download folder if files were actually imported
       if (result.filesImported > 0) {
         result.success = true
+        onProgress?.({ phase: 'cleaning', total: 1, current: 0 })
+        await this.cleanupDownloadFolder(outputPath)
       }
 
       onProgress?.({ phase: 'complete', total: 1, current: 1 })
