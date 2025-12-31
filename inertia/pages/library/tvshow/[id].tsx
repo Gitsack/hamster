@@ -34,21 +34,18 @@ import {
   Loading01Icon,
   ViewIcon,
   ViewOffIcon,
-  Clock01Icon,
   Calendar01Icon,
   StarIcon,
   ArrowDown01Icon,
   ArrowUp01Icon,
   FileDownloadIcon,
-  Cancel01Icon,
   Add01Icon,
-  Download01Icon,
-  PackageMovingIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { StatusBadge, type ItemStatus } from '@/components/library/status-badge'
+import { StatusBadge } from '@/components/library/status-badge'
+import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 
 interface QualityProfile {
   id: number
@@ -199,7 +196,7 @@ export default function TvShowDetail() {
     }
   }
 
-  const getEpisodeStatus = (episode: Episode): { status: ItemStatus | 'importing'; progress: number } => {
+  const getEpisodeStatus = (episode: Episode): { status: MediaItemStatus; progress: number } => {
     if (episode.hasFile) {
       return { status: 'downloaded', progress: 100 }
     }
@@ -841,6 +838,7 @@ export default function TvShowDetail() {
                                   {(() => {
                                     const { status, progress } = getEpisodeStatus(episode)
 
+                                    // Downloaded: Show status badge + file action buttons
                                     if (status === 'downloaded') {
                                       return (
                                         <>
@@ -871,91 +869,14 @@ export default function TvShowDetail() {
                                       )
                                     }
 
-                                    if (status === 'downloading') {
-                                      return (
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Badge
-                                                variant="default"
-                                                className="gap-1 cursor-pointer bg-blue-600 hover:bg-destructive text-white transition-colors group"
-                                                onClick={() => toggleEpisodeRequested(episode.id, true, season.seasonNumber)}
-                                              >
-                                                <HugeiconsIcon icon={Download01Icon} className="h-3 w-3 group-hover:hidden" />
-                                                <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover:block" />
-                                                <span className="group-hover:hidden">{Math.round(progress)}%</span>
-                                                <span className="hidden group-hover:inline">Cancel</span>
-                                              </Badge>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Click to cancel download</TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      )
-                                    }
-
-                                    if (status === 'importing') {
-                                      return (
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Badge
-                                                variant="default"
-                                                className="gap-1 cursor-pointer bg-purple-600 hover:bg-destructive text-white transition-colors group"
-                                                onClick={() => toggleEpisodeRequested(episode.id, true, season.seasonNumber)}
-                                              >
-                                                <HugeiconsIcon icon={PackageMovingIcon} className="h-3 w-3 group-hover:hidden animate-pulse" />
-                                                <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover:block" />
-                                                <span className="group-hover:hidden">Importing</span>
-                                                <span className="hidden group-hover:inline">Cancel</span>
-                                              </Badge>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Processing download, click to cancel</TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      )
-                                    }
-
-                                    if (togglingEpisodes.has(episode.id)) {
-                                      return (
-                                        <Badge variant="secondary" className="bg-muted text-muted-foreground gap-1">
-                                          <HugeiconsIcon icon={Loading01Icon} className="h-3 w-3 animate-spin" />
-                                          {episode.requested ? 'Requesting...' : 'Unrequesting...'}
-                                        </Badge>
-                                      )
-                                    }
-
-                                    if (status === 'requested') {
-                                      return (
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Badge
-                                                variant="secondary"
-                                                className="gap-1 cursor-pointer bg-yellow-600 hover:bg-destructive text-white transition-colors group"
-                                                onClick={() => toggleEpisodeRequested(episode.id, true, season.seasonNumber)}
-                                              >
-                                                <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3 group-hover:hidden" />
-                                                <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover:block" />
-                                                <span className="group-hover:hidden">Requested</span>
-                                                <span className="hidden group-hover:inline">Unrequest</span>
-                                              </Badge>
-                                            </TooltipTrigger>
-                                            <TooltipContent>Click to unrequest</TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      )
-                                    }
-
+                                    // All other statuses: Use unified MediaStatusBadge
                                     return (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-7 px-2 text-xs"
-                                        onClick={() => toggleEpisodeRequested(episode.id, false, season.seasonNumber)}
-                                      >
-                                        <HugeiconsIcon icon={Add01Icon} className="h-3 w-3 mr-1" />
-                                        Request
-                                      </Button>
+                                      <MediaStatusBadge
+                                        status={status}
+                                        progress={progress}
+                                        isToggling={togglingEpisodes.has(episode.id)}
+                                        onToggleRequest={() => toggleEpisodeRequested(episode.id, episode.requested, season.seasonNumber)}
+                                      />
                                     )
                                   })()}
                                 </div>

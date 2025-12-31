@@ -20,12 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
@@ -36,14 +30,10 @@ import {
   ViewIcon,
   ViewOffIcon,
   Add01Icon,
-  Clock01Icon,
-  Cancel01Icon,
-  Download01Icon,
-  PackageMovingIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { StatusBadge, type ItemStatus } from '@/components/library/status-badge'
+import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 
 interface Book {
   id: number
@@ -561,7 +551,7 @@ interface BookCardProps {
 }
 
 function BookCard({ book, downloadInfo, isToggling, onToggleRequest }: BookCardProps) {
-  const getBookStatus = (): ItemStatus | 'importing' => {
+  const getBookStatus = (): MediaItemStatus => {
     if (book.hasFile) return 'downloaded'
     if (downloadInfo) {
       if (downloadInfo.status === 'importing') return 'importing'
@@ -574,9 +564,9 @@ function BookCard({ book, downloadInfo, isToggling, onToggleRequest }: BookCardP
   const status = getBookStatus()
   const isNotRequested = status === 'none'
 
-  const handleToggleRequest = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
+  const handleToggleRequest = (e?: React.MouseEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
     onToggleRequest?.(book.id, book.requested)
   }
 
@@ -602,99 +592,13 @@ function BookCard({ book, downloadInfo, isToggling, onToggleRequest }: BookCardP
           )}
           {/* Status badge / Request button */}
           <div className="absolute top-2 left-2 right-2 flex justify-between items-start">
-            {(() => {
-              if (status === 'downloaded') {
-                return <StatusBadge status="downloaded" />
-              }
-
-              if (status === 'downloading') {
-                return (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Badge
-                          variant="default"
-                          className="gap-1 cursor-pointer bg-blue-600 hover:bg-destructive text-white transition-colors group/badge"
-                          onClick={handleToggleRequest}
-                        >
-                          <HugeiconsIcon icon={Download01Icon} className="h-3 w-3 group-hover/badge:hidden" />
-                          <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover/badge:block" />
-                          <span className="group-hover/badge:hidden">{Math.round(downloadInfo?.progress || 0)}%</span>
-                          <span className="hidden group-hover/badge:inline">Cancel</span>
-                        </Badge>
-                      </TooltipTrigger>
-                      <TooltipContent>Click to cancel download</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )
-              }
-
-              if (status === 'importing') {
-                return (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Badge
-                          variant="default"
-                          className="gap-1 cursor-pointer bg-purple-600 hover:bg-destructive text-white transition-colors group/badge"
-                          onClick={handleToggleRequest}
-                        >
-                          <HugeiconsIcon icon={PackageMovingIcon} className="h-3 w-3 group-hover/badge:hidden animate-pulse" />
-                          <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover/badge:block" />
-                          <span className="group-hover/badge:hidden">Importing</span>
-                          <span className="hidden group-hover/badge:inline">Cancel</span>
-                        </Badge>
-                      </TooltipTrigger>
-                      <TooltipContent>Processing download, click to cancel</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )
-              }
-
-              if (isToggling) {
-                return (
-                  <Badge variant="secondary" className="bg-muted text-muted-foreground gap-1">
-                    <HugeiconsIcon icon={Loading01Icon} className="h-3 w-3 animate-spin" />
-                    {book.requested ? 'Unrequesting...' : 'Requesting...'}
-                  </Badge>
-                )
-              }
-
-              if (status === 'requested') {
-                return (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Badge
-                          variant="secondary"
-                          className="gap-1 cursor-pointer bg-yellow-600 hover:bg-destructive text-white transition-colors group/badge"
-                          onClick={handleToggleRequest}
-                        >
-                          <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3 group-hover/badge:hidden" />
-                          <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover/badge:block" />
-                          <span className="group-hover/badge:hidden">Requested</span>
-                          <span className="hidden group-hover/badge:inline">Unrequest</span>
-                        </Badge>
-                      </TooltipTrigger>
-                      <TooltipContent>Click to unrequest</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )
-              }
-
-              // Not requested - show request button on hover
-              return (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-7 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={handleToggleRequest}
-                >
-                  <HugeiconsIcon icon={Add01Icon} className="h-3 w-3 mr-1" />
-                  Request
-                </Button>
-              )
-            })()}
+            <CardStatusBadge
+              status={status}
+              progress={downloadInfo?.progress || 0}
+              isToggling={isToggling}
+              onToggleRequest={handleToggleRequest}
+              showOnHover={status === 'none'}
+            />
           </div>
         </div>
         <CardContent className={`p-3 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}>

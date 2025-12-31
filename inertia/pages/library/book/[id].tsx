@@ -19,12 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
@@ -34,18 +28,14 @@ import {
   Loading01Icon,
   ViewIcon,
   ViewOffIcon,
-  Clock01Icon,
   Calendar01Icon,
   FileDownloadIcon,
   Search01Icon,
   UserIcon,
-  Cancel01Icon,
-  Download01Icon,
-  PackageMovingIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { StatusBadge, type ItemStatus } from '@/components/library/status-badge'
+import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
 
 interface Author {
   id: number
@@ -140,20 +130,9 @@ export default function BookDetail() {
     }
   }
 
-  const getBookStatus = (): { status: ItemStatus | 'importing'; progress: number } => {
-    if (book?.hasFile) {
-      return { status: 'downloaded', progress: 100 }
-    }
-    if (activeDownload) {
-      if (activeDownload.status === 'importing') {
-        return { status: 'importing', progress: 100 }
-      }
-      return { status: 'downloading', progress: activeDownload.progress }
-    }
-    if (book?.requested) {
-      return { status: 'requested', progress: 0 }
-    }
-    return { status: 'none', progress: 0 }
+  const getBookStatus = () => {
+    if (!book) return { status: 'none' as const, progress: 0 }
+    return getMediaItemStatus(book, activeDownload)
   }
 
   const toggleWanted = async () => {
@@ -388,87 +367,14 @@ export default function BookDetail() {
             <div className="flex items-center gap-2 flex-wrap">
               {(() => {
                 const { status, progress } = getBookStatus()
-
-                if (status === 'downloaded') {
-                  return <StatusBadge status="downloaded" />
-                }
-
-                if (status === 'downloading') {
-                  return (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant="default"
-                            className="gap-1 cursor-pointer bg-blue-600 hover:bg-destructive text-white transition-colors group"
-                            onClick={toggleWanted}
-                          >
-                            <HugeiconsIcon icon={Download01Icon} className="h-3 w-3 group-hover:hidden" />
-                            <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover:block" />
-                            <span className="group-hover:hidden">{Math.round(progress)}%</span>
-                            <span className="hidden group-hover:inline">Cancel</span>
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>Click to cancel download</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )
-                }
-
-                if (status === 'importing') {
-                  return (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant="default"
-                            className="gap-1 cursor-pointer bg-purple-600 hover:bg-destructive text-white transition-colors group"
-                            onClick={toggleWanted}
-                          >
-                            <HugeiconsIcon icon={PackageMovingIcon} className="h-3 w-3 group-hover:hidden animate-pulse" />
-                            <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover:block" />
-                            <span className="group-hover:hidden">Importing</span>
-                            <span className="hidden group-hover:inline">Cancel</span>
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>Processing download, click to cancel</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )
-                }
-
-                if (toggling) {
-                  return (
-                    <Badge variant="secondary" className="bg-muted text-muted-foreground gap-1">
-                      <HugeiconsIcon icon={Loading01Icon} className="h-3 w-3 animate-spin" />
-                      {book.requested ? 'Unrequesting...' : 'Requesting...'}
-                    </Badge>
-                  )
-                }
-
-                if (status === 'requested') {
-                  return (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant="secondary"
-                            className="gap-1 cursor-pointer bg-yellow-600 hover:bg-destructive text-white transition-colors group"
-                            onClick={toggleWanted}
-                          >
-                            <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3 group-hover:hidden" />
-                            <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover:block" />
-                            <span className="group-hover:hidden">Requested</span>
-                            <span className="hidden group-hover:inline">Unrequest</span>
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>Click to unrequest</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )
-                }
-
-                return null
+                return (
+                  <MediaStatusBadge
+                    status={status}
+                    progress={progress}
+                    isToggling={toggling}
+                    onToggleRequest={toggleWanted}
+                  />
+                )
               })()}
             </div>
 
