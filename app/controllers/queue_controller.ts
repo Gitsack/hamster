@@ -7,10 +7,28 @@ import { sabnzbdService, type SabnzbdConfig } from '#services/download_clients/s
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
 
 export default class QueueController {
+  private static lastRefresh: Date | null = null
+  private static REFRESH_INTERVAL_MS = 3000 // Refresh from SABnzbd at most every 3 seconds
+
   /**
-   * Get active download queue
+   * Get active download queue - auto-refreshes from SABnzbd if stale
    */
   async index({ response }: HttpContext) {
+    // Auto-refresh from SABnzbd if it's been more than 3 seconds since last refresh
+    const now = new Date()
+    if (
+      !QueueController.lastRefresh ||
+      now.getTime() - QueueController.lastRefresh.getTime() > QueueController.REFRESH_INTERVAL_MS
+    ) {
+      try {
+        await downloadManager.refreshQueue()
+        QueueController.lastRefresh = now
+      } catch (error) {
+        console.error('[QueueController] Failed to refresh queue from download client:', error)
+        // Continue to return cached queue data even if refresh fails
+      }
+    }
+
     const queue = await downloadManager.getQueue()
     return response.json(queue)
   }

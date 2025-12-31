@@ -59,6 +59,8 @@ import {
   Film01Icon,
   Tv01Icon,
   Book01Icon,
+  ArrowRight01Icon,
+  ViewIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect, useMemo, useCallback, Component, ErrorInfo, ReactNode } from 'react'
 import { toast } from 'sonner'
@@ -379,6 +381,15 @@ export default function SearchPage() {
   const [searchOnAdd, setSearchOnAdd] = useState(true)
   const [addingArtist, setAddingArtist] = useState(false)
   const [addingAlbum, setAddingAlbum] = useState(false)
+
+  // Music exploration state
+  const [expandedArtistId, setExpandedArtistId] = useState<string | null>(null)
+  const [expandedAlbumId, setExpandedAlbumId] = useState<string | null>(null)
+  const [artistAlbums, setArtistAlbums] = useState<Record<string, AlbumSearchResult[]>>({})
+  const [albumTracks, setAlbumTracks] = useState<Record<string, TrackSearchResult[]>>({})
+  const [loadingArtistAlbums, setLoadingArtistAlbums] = useState<Set<string>>(new Set())
+  const [loadingAlbumTracks, setLoadingAlbumTracks] = useState<Set<string>>(new Set())
+  const [selectedTrackName, setSelectedTrackName] = useState<string | null>(null)
 
   // Load enabled media types
   useEffect(() => {
@@ -922,6 +933,91 @@ export default function SearchPage() {
     }
   }
 
+  // Fetch artist albums
+  const fetchArtistAlbums = async (artistMbid: string) => {
+    if (artistAlbums[artistMbid] || loadingArtistAlbums.has(artistMbid)) return
+
+    setLoadingArtistAlbums((prev) => new Set(prev).add(artistMbid))
+    try {
+      const response = await fetch(`/api/v1/artists/${artistMbid}/albums`)
+      if (response.ok) {
+        const albums = await response.json()
+        setArtistAlbums((prev) => ({ ...prev, [artistMbid]: albums }))
+      }
+    } catch (error) {
+      console.error('Failed to fetch artist albums:', error)
+    } finally {
+      setLoadingArtistAlbums((prev) => {
+        const next = new Set(prev)
+        next.delete(artistMbid)
+        return next
+      })
+    }
+  }
+
+  // Fetch album tracks
+  const fetchAlbumTracks = async (albumMbid: string) => {
+    if (albumTracks[albumMbid] || loadingAlbumTracks.has(albumMbid)) return
+
+    setLoadingAlbumTracks((prev) => new Set(prev).add(albumMbid))
+    try {
+      const response = await fetch(`/api/v1/albums/${albumMbid}/tracks`)
+      if (response.ok) {
+        const tracks = await response.json()
+        setAlbumTracks((prev) => ({ ...prev, [albumMbid]: tracks }))
+      }
+    } catch (error) {
+      console.error('Failed to fetch album tracks:', error)
+    } finally {
+      setLoadingAlbumTracks((prev) => {
+        const next = new Set(prev)
+        next.delete(albumMbid)
+        return next
+      })
+    }
+  }
+
+  // Toggle artist expansion
+  const toggleArtistExpand = (artistMbid: string) => {
+    if (expandedArtistId === artistMbid) {
+      setExpandedArtistId(null)
+    } else {
+      setExpandedArtistId(artistMbid)
+      fetchArtistAlbums(artistMbid)
+    }
+  }
+
+  // Toggle album expansion
+  const toggleAlbumExpand = (albumMbid: string) => {
+    if (expandedAlbumId === albumMbid) {
+      setExpandedAlbumId(null)
+    } else {
+      setExpandedAlbumId(albumMbid)
+      fetchAlbumTracks(albumMbid)
+    }
+  }
+
+  // Navigate to artist search
+  const navigateToArtist = (artistName: string, artistMbid: string) => {
+    setMusicSearchType('artist')
+    setSearchQuery(artistName)
+    // Find the artist in results or search for it
+    const existingArtist = artistResults.find((a) => a.musicbrainzId === artistMbid)
+    if (existingArtist) {
+      setExpandedArtistId(artistMbid)
+      fetchArtistAlbums(artistMbid)
+    } else {
+      search()
+    }
+  }
+
+  // Navigate to album search
+  const navigateToAlbum = (albumTitle: string, albumMbid: string) => {
+    setMusicSearchType('album')
+    setSearchQuery(albumTitle)
+    search()
+  }
+
   // Track failed images
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
 
@@ -1003,6 +1099,13 @@ export default function SearchPage() {
     )
   }
 
+  // Format duration in mm:ss
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
   // Render music results
   const renderMusicResults = () => {
     if (searching) {
@@ -1028,19 +1131,174 @@ export default function SearchPage() {
       return (
         <div className="space-y-2">
           <div className="text-sm text-muted-foreground mb-4">Found {artistResults.length} artists</div>
-          {artistResults.map((artist) =>
-            renderResultCard(
-              {
-                id: artist.musicbrainzId,
-                name: artist.name,
-                subtitle: artist.type,
-                extra: artist.country,
-                inLibrary: artist.inLibrary,
-              },
-              MusicNote01Icon,
-              () => { setSelectedArtist(artist); setAddArtistDialogOpen(true) }
+          {artistResults.map((artist) => {
+            const isExpanded = expandedArtistId === artist.musicbrainzId
+            const albums = artistAlbums[artist.musicbrainzId] || []
+            const isLoading = loadingArtistAlbums.has(artist.musicbrainzId)
+
+            return (
+              <Card key={artist.musicbrainzId} className={artist.inLibrary ? 'opacity-60' : ''}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      <HugeiconsIcon icon={MusicNote01Icon} className="h-8 w-8 text-muted-foreground/50" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium">{artist.name}</h3>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                        {artist.type && <span>{artist.type}</span>}
+                        {artist.country && (
+                          <>
+                            <span>•</span>
+                            <span>{artist.country}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {artist.inLibrary ? (
+                        <Badge variant="outline" className="gap-1">
+                          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                          In Library
+                        </Badge>
+                      ) : (
+                        <Button size="sm" onClick={() => { setSelectedArtist(artist); setAddArtistDialogOpen(true) }}>
+                          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
+                          Add
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => toggleArtistExpand(artist.musicbrainzId)}
+                      >
+                        <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-1" />
+                        {isExpanded ? 'Hide' : 'Explore'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Expanded albums section */}
+                  {isExpanded && (
+                    <div className="mt-4 pt-4 border-t">
+                      <h4 className="text-sm font-medium mb-3">Albums</h4>
+                      {isLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
+                          Loading albums...
+                        </div>
+                      ) : albums.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No albums found</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {albums.map((album) => {
+                            const isAlbumExpanded = expandedAlbumId === album.musicbrainzId
+                            const tracks = albumTracks[album.musicbrainzId] || []
+                            const isTracksLoading = loadingAlbumTracks.has(album.musicbrainzId)
+                            const coverUrl = `https://coverartarchive.org/release-group/${album.musicbrainzId}/front-250`
+                            const imageKey = `album-${album.musicbrainzId}`
+
+                            return (
+                              <div key={album.musicbrainzId} className="border rounded-md">
+                                <div className="flex items-center gap-3 p-3">
+                                  <div className="h-12 w-12 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                                    {!failedImages.has(imageKey) ? (
+                                      <img
+                                        src={coverUrl}
+                                        alt={album.title}
+                                        className="h-full w-full object-cover"
+                                        onError={() => handleImageError(imageKey)}
+                                      />
+                                    ) : (
+                                      <HugeiconsIcon icon={Album01Icon} className="h-6 w-6 text-muted-foreground/50" />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-sm truncate">{album.title}</p>
+                                    <p className="text-xs text-muted-foreground">{album.releaseDate || 'Unknown date'}</p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {album.inLibrary ? (
+                                      <Badge variant="outline" className="text-xs gap-1">
+                                        <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                                        In Library
+                                      </Badge>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs"
+                                        onClick={() => { setSelectedTrackName(null); setSelectedAlbum(album); setAddAlbumDialogOpen(true) }}
+                                      >
+                                        <HugeiconsIcon icon={Add01Icon} className="h-3 w-3 mr-1" />
+                                        Add
+                                      </Button>
+                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-xs"
+                                      onClick={() => toggleAlbumExpand(album.musicbrainzId)}
+                                    >
+                                      <HugeiconsIcon
+                                        icon={ArrowRight01Icon}
+                                        className={`h-3 w-3 transition-transform ${isAlbumExpanded ? 'rotate-90' : ''}`}
+                                      />
+                                      Tracks
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {/* Expanded tracks section */}
+                                {isAlbumExpanded && (
+                                  <div className="border-t bg-muted/30 p-3">
+                                    {isTracksLoading ? (
+                                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <HugeiconsIcon icon={Loading01Icon} className="h-3 w-3 animate-spin" />
+                                        Loading tracks...
+                                      </div>
+                                    ) : tracks.length === 0 ? (
+                                      <p className="text-xs text-muted-foreground">No tracks found</p>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {tracks.map((track, idx) => (
+                                          <div key={track.musicbrainzId} className="flex items-center gap-2 text-xs py-1 group">
+                                            <span className="text-muted-foreground w-5 text-right">{idx + 1}.</span>
+                                            <span className="flex-1 truncate">{track.title}</span>
+                                            {track.duration && (
+                                              <span className="text-muted-foreground">{formatDuration(track.duration)}</span>
+                                            )}
+                                            {!album.inLibrary && (
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                                onClick={() => {
+                                                  setSelectedTrackName(track.title)
+                                                  setSelectedAlbum(album)
+                                                  setAddAlbumDialogOpen(true)
+                                                }}
+                                              >
+                                                <HugeiconsIcon icon={Add01Icon} className="h-3 w-3" />
+                                              </Button>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )
-          )}
+          })}
         </div>
       )
     }
@@ -1049,19 +1307,91 @@ export default function SearchPage() {
       return (
         <div className="space-y-2">
           <div className="text-sm text-muted-foreground mb-4">Found {albumResults.length} albums</div>
-          {albumResults.map((album) =>
-            renderResultCard(
-              {
-                id: album.musicbrainzId,
-                name: album.title,
-                subtitle: album.artistName,
-                extra: album.releaseDate,
-                inLibrary: album.inLibrary,
-              },
-              Album01Icon,
-              () => { setSelectedAlbum(album); setAddAlbumDialogOpen(true) }
+          {albumResults.map((album) => {
+            const isExpanded = expandedAlbumId === album.musicbrainzId
+            const tracks = albumTracks[album.musicbrainzId] || []
+            const isLoading = loadingAlbumTracks.has(album.musicbrainzId)
+
+            return (
+              <Card key={album.musicbrainzId} className={album.inLibrary ? 'opacity-60' : ''}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      <HugeiconsIcon icon={Album01Icon} className="h-8 w-8 text-muted-foreground/50" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium">{album.title}</h3>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                        <button
+                          className="hover:text-primary hover:underline transition-colors"
+                          onClick={() => navigateToArtist(album.artistName, album.artistMusicbrainzId)}
+                        >
+                          {album.artistName}
+                        </button>
+                        {album.releaseDate && (
+                          <>
+                            <span>•</span>
+                            <span>{album.releaseDate}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {album.inLibrary ? (
+                        <Badge variant="outline" className="gap-1">
+                          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                          In Library
+                        </Badge>
+                      ) : (
+                        <Button size="sm" onClick={() => { setSelectedTrackName(null); setSelectedAlbum(album); setAddAlbumDialogOpen(true) }}>
+                          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
+                          Add
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => toggleAlbumExpand(album.musicbrainzId)}
+                      >
+                        <HugeiconsIcon
+                          icon={ArrowRight01Icon}
+                          className={`h-4 w-4 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                        />
+                        {isExpanded ? 'Hide' : 'Tracks'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Expanded tracks section */}
+                  {isExpanded && (
+                    <div className="mt-4 pt-4 border-t">
+                      <h4 className="text-sm font-medium mb-3">Tracks</h4>
+                      {isLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
+                          Loading tracks...
+                        </div>
+                      ) : tracks.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No tracks found</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {tracks.map((track, idx) => (
+                            <div key={track.musicbrainzId} className="flex items-center gap-3 text-sm py-1.5 px-2 rounded hover:bg-muted/50">
+                              <span className="text-muted-foreground w-6 text-right">{idx + 1}.</span>
+                              <span className="flex-1 truncate">{track.title}</span>
+                              {track.duration && (
+                                <span className="text-muted-foreground">{formatDuration(track.duration)}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )
-          )}
+          })}
         </div>
       )
     }
@@ -1070,19 +1400,74 @@ export default function SearchPage() {
       return (
         <div className="space-y-2">
           <div className="text-sm text-muted-foreground mb-4">Found {trackResults.length} tracks</div>
-          {trackResults.map((track) =>
-            renderResultCard(
-              {
-                id: track.musicbrainzId,
-                name: track.title,
-                subtitle: track.artistName,
-                extra: track.albumTitle,
-                inLibrary: track.inLibrary,
-              },
-              MusicNoteSquare01Icon,
-              () => toast.info('Add the album to add this track')
-            )
-          )}
+          {trackResults.map((track) => (
+            <Card key={track.musicbrainzId} className={track.inLibrary ? 'opacity-60' : ''}>
+              <CardContent className="flex items-center gap-4 p-4">
+                <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                  <HugeiconsIcon icon={MusicNoteSquare01Icon} className="h-8 w-8 text-muted-foreground/50" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium">{track.title}</h3>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                    <button
+                      className="hover:text-primary hover:underline transition-colors"
+                      onClick={() => navigateToArtist(track.artistName, track.artistMusicbrainzId)}
+                    >
+                      {track.artistName}
+                    </button>
+                    {track.albumTitle && track.albumMusicbrainzId && (
+                      <>
+                        <span>•</span>
+                        <button
+                          className="hover:text-primary hover:underline transition-colors"
+                          onClick={() => navigateToAlbum(track.albumTitle!, track.albumMusicbrainzId!)}
+                        >
+                          {track.albumTitle}
+                        </button>
+                      </>
+                    )}
+                    {track.duration && (
+                      <>
+                        <span>•</span>
+                        <span>{formatDuration(track.duration)}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {track.inLibrary ? (
+                    <Badge variant="outline" className="gap-1">
+                      <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                      In Library
+                    </Badge>
+                  ) : track.albumMusicbrainzId ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        // Find the album and open add dialog
+                        const album: AlbumSearchResult = {
+                          musicbrainzId: track.albumMusicbrainzId!,
+                          title: track.albumTitle || 'Unknown Album',
+                          artistName: track.artistName,
+                          artistMusicbrainzId: track.artistMusicbrainzId,
+                          inLibrary: false,
+                        }
+                        setSelectedTrackName(track.title)
+                        setSelectedAlbum(album)
+                        setAddAlbumDialogOpen(true)
+                      }}
+                    >
+                      <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
+                      Add
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No album linked</span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )
     }
@@ -1210,14 +1595,14 @@ export default function SearchPage() {
 
     if (filteredIndexerResults.length > 0) {
       return (
-        <Card>
-          <CardContent className="pt-6">
+        <Card className="min-w-0 overflow-hidden">
+          <CardContent className="pt-6 min-w-0">
             <div className="text-sm text-muted-foreground mb-4">
               Found {filteredIndexerResults.length} results
               {selectedCategories.length > 0 && ` (filtered from ${indexerResults.length})`}
             </div>
-            <div className="overflow-x-auto">
-              <Table>
+            <div className="overflow-x-auto -mx-6 px-6">
+              <Table className="w-full">
                 <TableHeader>
                   <TableRow>
                     {isColumnVisible('select') && (
@@ -1264,7 +1649,7 @@ export default function SearchPage() {
                       {isColumnVisible('title') && (
                         <TableCell>
                           <div
-                            className="font-medium truncate max-w-md cursor-pointer hover:text-primary"
+                            className="font-medium truncate max-w-md cursor-pointer hover:text-primary min-w-0"
                             title={result.title}
                             onClick={() => openDownloadDialog(result)}
                           >
@@ -1665,11 +2050,21 @@ export default function SearchPage() {
         </Dialog>
 
         {/* Add album dialog */}
-        <Dialog open={addAlbumDialogOpen} onOpenChange={setAddAlbumDialogOpen}>
+        <Dialog open={addAlbumDialogOpen} onOpenChange={(open) => {
+          setAddAlbumDialogOpen(open)
+          if (!open) setSelectedTrackName(null)
+        }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add {selectedAlbum?.title}</DialogTitle>
-              <DialogDescription>This will add {selectedAlbum?.artistName} with this album.</DialogDescription>
+              <DialogTitle>
+                {selectedTrackName ? `Add "${selectedTrackName}"` : `Add ${selectedAlbum?.title}`}
+              </DialogTitle>
+              <DialogDescription>
+                {selectedTrackName
+                  ? `To get this track, the album "${selectedAlbum?.title}" by ${selectedAlbum?.artistName} will be added.`
+                  : `This will add ${selectedAlbum?.artistName} with this album.`
+                }
+              </DialogDescription>
             </DialogHeader>
             {loadingOptions ? (
               <div className="space-y-4 py-4">

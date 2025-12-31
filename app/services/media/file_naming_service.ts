@@ -6,6 +6,12 @@ import TvShow from '#models/tv_show'
 import Episode from '#models/episode'
 import Author from '#models/author'
 import Book from '#models/book'
+import AppSetting from '#models/app_setting'
+import {
+  namingTemplateService,
+  defaultNamingPatterns,
+  type NamingPatterns,
+} from './naming_template_service.js'
 
 interface TrackNamingData {
   track: Track
@@ -69,6 +75,39 @@ export class FileNamingService {
     'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
   ]
 
+  private patternsCache: NamingPatterns | null = null
+  private patternsCacheTime: number = 0
+  private readonly cacheMaxAge = 60000 // 1 minute cache
+
+  /**
+   * Get naming patterns from database or defaults
+   */
+  async getPatterns(): Promise<NamingPatterns> {
+    const now = Date.now()
+    if (this.patternsCache && now - this.patternsCacheTime < this.cacheMaxAge) {
+      return this.patternsCache
+    }
+
+    const stored = await AppSetting.get<Partial<NamingPatterns>>('namingPatterns')
+    this.patternsCache = {
+      music: { ...defaultNamingPatterns.music, ...stored?.music },
+      movies: { ...defaultNamingPatterns.movies, ...stored?.movies },
+      tv: { ...defaultNamingPatterns.tv, ...stored?.tv },
+      books: { ...defaultNamingPatterns.books, ...stored?.books },
+    }
+    this.patternsCacheTime = now
+
+    return this.patternsCache
+  }
+
+  /**
+   * Clear the patterns cache (call after updating patterns)
+   */
+  clearCache(): void {
+    this.patternsCache = null
+    this.patternsCacheTime = 0
+  }
+
   /**
    * Sanitize a string for use in file/folder names
    */
@@ -104,65 +143,64 @@ export class FileNamingService {
   }
 
   /**
-   * Generate artist folder name
-   * Format: "Artist Name"
+   * Generate artist folder name using configurable pattern
    */
-  getArtistFolderName(data: ArtistFolderData): string {
-    const artistName = this.sanitize(data.artist.name)
-    return artistName
+  async getArtistFolderName(data: ArtistFolderData): Promise<string> {
+    const patterns = await this.getPatterns()
+    const result = namingTemplateService.parseTemplate(patterns.music.artistFolder, {
+      artist_name: data.artist.name,
+    })
+    return this.sanitize(result)
   }
 
   /**
-   * Generate album folder name
-   * Format: "[Year] Album Name" or "Album Name" if no year
+   * Generate album folder name using configurable pattern
    */
-  getAlbumFolderName(data: AlbumFolderData): string {
-    const albumName = this.sanitize(data.album.title)
+  async getAlbumFolderName(data: AlbumFolderData): Promise<string> {
+    const patterns = await this.getPatterns()
     const year = data.album.releaseDate
       ? new Date(data.album.releaseDate.toString()).getFullYear()
       : null
+    const validYear = year && year > 1900 && year < 2100 ? String(year) : ''
 
-    if (year && year > 1900 && year < 2100) {
-      return `[${year}] ${albumName}`
-    }
-
-    return albumName
+    const result = namingTemplateService.parseTemplate(patterns.music.albumFolder, {
+      album_title: data.album.title,
+      year: validYear,
+    })
+    return this.sanitize(result)
   }
 
   /**
    * Generate full album path relative to root folder
-   * Format: "Artist Name/[Year] Album Name"
    */
-  getAlbumPath(data: AlbumFolderData): string {
-    const artistFolder = this.getArtistFolderName({ artist: data.artist })
-    const albumFolder = this.getAlbumFolderName(data)
+  async getAlbumPath(data: AlbumFolderData): Promise<string> {
+    const artistFolder = await this.getArtistFolderName({ artist: data.artist })
+    const albumFolder = await this.getAlbumFolderName(data)
     return `${artistFolder}/${albumFolder}`
   }
 
   /**
-   * Generate track file name (without extension)
-   * Format: "01 - Track Title" or "01 Track Title" depending on settings
+   * Generate track file name (without extension) using configurable pattern
    */
-  getTrackFileName(data: TrackNamingData): string {
+  async getTrackFileName(data: TrackNamingData): Promise<string> {
+    const patterns = await this.getPatterns()
     const trackNumber = String(data.track.trackNumber || 1).padStart(2, '0')
-    const trackTitle = this.sanitize(data.track.title)
-
-    // If multi-disc album (disc number > 1), include disc number in filename
     const discNumber = data.track.discNumber || 1
-    if (discNumber > 1) {
-      return `${discNumber}-${trackNumber} - ${trackTitle}`
-    }
 
-    return `${trackNumber} - ${trackTitle}`
+    const result = namingTemplateService.parseTemplate(patterns.music.trackFile, {
+      track_number: trackNumber,
+      track_title: data.track.title,
+      disc_number: String(discNumber),
+    })
+    return this.sanitize(result)
   }
 
   /**
    * Generate full track path relative to root folder
-   * Format: "Artist Name/[Year] Album Name/01 - Track Title.flac"
    */
-  getTrackPath(data: TrackNamingData, extension: string): string {
-    const albumPath = this.getAlbumPath({ album: data.album, artist: data.artist })
-    const trackFileName = this.getTrackFileName(data)
+  async getTrackPath(data: TrackNamingData, extension: string): Promise<string> {
+    const albumPath = await this.getAlbumPath({ album: data.album, artist: data.artist })
+    const trackFileName = await this.getTrackFileName(data)
     const ext = extension.startsWith('.') ? extension : `.${extension}`
     return `${albumPath}/${trackFileName}${ext}`
   }
@@ -269,41 +307,42 @@ export class FileNamingService {
   // =====================
 
   /**
-   * Generate movie folder name
-   * Format: "Movie Name (Year)" following Jellyfin conventions
+   * Generate movie folder name using configurable pattern
    */
-  getMovieFolderName(data: MovieNamingData): string {
-    const movieName = this.sanitize(data.movie.title)
+  async getMovieFolderName(data: MovieNamingData): Promise<string> {
+    const patterns = await this.getPatterns()
     const year = data.movie.year
+    const validYear = year && year > 1900 && year < 2100 ? String(year) : ''
 
-    if (year && year > 1900 && year < 2100) {
-      return `${movieName} (${year})`
-    }
-
-    return movieName
+    const result = namingTemplateService.parseTemplate(patterns.movies.movieFolder, {
+      movie_title: data.movie.title,
+      year: validYear,
+    })
+    return this.sanitize(result)
   }
 
   /**
-   * Generate movie file name (without extension)
-   * Format: "Movie Name (Year)" or "Movie Name (Year) - Quality"
+   * Generate movie file name (without extension) using configurable pattern
    */
-  getMovieFileName(data: MovieNamingData): string {
-    const baseName = this.getMovieFolderName(data)
+  async getMovieFileName(data: MovieNamingData): Promise<string> {
+    const patterns = await this.getPatterns()
+    const year = data.movie.year
+    const validYear = year && year > 1900 && year < 2100 ? String(year) : ''
 
-    if (data.quality) {
-      return `${baseName} - ${data.quality}`
-    }
-
-    return baseName
+    const result = namingTemplateService.parseTemplate(patterns.movies.movieFile, {
+      movie_title: data.movie.title,
+      year: validYear,
+      quality: data.quality || '',
+    })
+    return this.sanitize(result)
   }
 
   /**
    * Generate full movie path relative to root folder
-   * Format: "Movie Name (Year)/Movie Name (Year).mkv"
    */
-  getMoviePath(data: MovieNamingData, extension: string): string {
-    const folderName = this.getMovieFolderName(data)
-    const fileName = this.getMovieFileName(data)
+  async getMoviePath(data: MovieNamingData, extension: string): Promise<string> {
+    const folderName = await this.getMovieFolderName(data)
+    const fileName = await this.getMovieFileName(data)
     const ext = extension.startsWith('.') ? extension : `.${extension}`
     return `${folderName}/${fileName}${ext}`
   }
@@ -331,54 +370,55 @@ export class FileNamingService {
   // =====================
 
   /**
-   * Generate TV show folder name
-   * Format: "Show Name (Year)" following Jellyfin conventions
+   * Generate TV show folder name using configurable pattern
    */
-  getTvShowFolderName(data: TvShowFolderData): string {
-    const showName = this.sanitize(data.tvShow.title)
+  async getTvShowFolderName(data: TvShowFolderData): Promise<string> {
+    const patterns = await this.getPatterns()
     const year = data.tvShow.year
+    const validYear = year && year > 1900 && year < 2100 ? String(year) : ''
 
-    if (year && year > 1900 && year < 2100) {
-      return `${showName} (${year})`
-    }
-
-    return showName
+    const result = namingTemplateService.parseTemplate(patterns.tv.showFolder, {
+      show_title: data.tvShow.title,
+      year: validYear,
+    })
+    return this.sanitize(result)
   }
 
   /**
-   * Generate season folder name
-   * Format: "Season 01"
+   * Generate season folder name using configurable pattern
    */
-  getSeasonFolderName(seasonNumber: number): string {
-    return `Season ${String(seasonNumber).padStart(2, '0')}`
+  async getSeasonFolderName(seasonNumber: number): Promise<string> {
+    const patterns = await this.getPatterns()
+    const result = namingTemplateService.parseTemplate(patterns.tv.seasonFolder, {
+      season_number: String(seasonNumber).padStart(2, '0'),
+    })
+    return this.sanitize(result)
   }
 
   /**
-   * Generate episode file name (without extension)
-   * Format: "Show Name - S01E01 - Episode Title" or "Show Name - S01E01"
+   * Generate episode file name (without extension) using configurable pattern
    */
-  getEpisodeFileName(data: EpisodeNamingData): string {
-    const showName = this.sanitize(data.tvShow.title)
+  async getEpisodeFileName(data: EpisodeNamingData): Promise<string> {
+    const patterns = await this.getPatterns()
     const seasonNum = String(data.episode.seasonNumber).padStart(2, '0')
     const episodeNum = String(data.episode.episodeNumber).padStart(2, '0')
-    const episodeCode = `S${seasonNum}E${episodeNum}`
 
-    if (data.episode.title) {
-      const episodeTitle = this.sanitize(data.episode.title)
-      return `${showName} - ${episodeCode} - ${episodeTitle}`
-    }
-
-    return `${showName} - ${episodeCode}`
+    const result = namingTemplateService.parseTemplate(patterns.tv.episodeFile, {
+      show_title: data.tvShow.title,
+      season_number: seasonNum,
+      episode_number: episodeNum,
+      episode_title: data.episode.title || '',
+    })
+    return this.sanitize(result)
   }
 
   /**
    * Generate full episode path relative to root folder
-   * Format: "Show Name (Year)/Season 01/Show Name - S01E01 - Episode Title.mkv"
    */
-  getEpisodePath(data: EpisodeNamingData, extension: string): string {
-    const showFolder = this.getTvShowFolderName({ tvShow: data.tvShow })
-    const seasonFolder = this.getSeasonFolderName(data.episode.seasonNumber)
-    const fileName = this.getEpisodeFileName(data)
+  async getEpisodePath(data: EpisodeNamingData, extension: string): Promise<string> {
+    const showFolder = await this.getTvShowFolderName({ tvShow: data.tvShow })
+    const seasonFolder = await this.getSeasonFolderName(data.episode.seasonNumber)
+    const fileName = await this.getEpisodeFileName(data)
     const ext = extension.startsWith('.') ? extension : `.${extension}`
     return `${showFolder}/${seasonFolder}/${fileName}${ext}`
   }
@@ -432,37 +472,39 @@ export class FileNamingService {
   // =====================
 
   /**
-   * Generate author folder name
-   * Format: "Author Name"
+   * Generate author folder name using configurable pattern
    */
-  getAuthorFolderName(data: AuthorFolderData): string {
-    return this.sanitize(data.author.name)
+  async getAuthorFolderName(data: AuthorFolderData): Promise<string> {
+    const patterns = await this.getPatterns()
+    const result = namingTemplateService.parseTemplate(patterns.books.authorFolder, {
+      author_name: data.author.name,
+    })
+    return this.sanitize(result)
   }
 
   /**
-   * Generate book file name (without extension)
-   * Format: "Book Title" or "Book Title (Year)"
+   * Generate book file name (without extension) using configurable pattern
    */
-  getBookFileName(data: BookNamingData): string {
-    const bookTitle = this.sanitize(data.book.title)
+  async getBookFileName(data: BookNamingData): Promise<string> {
+    const patterns = await this.getPatterns()
     const year = data.book.releaseDate
       ? new Date(data.book.releaseDate.toString()).getFullYear()
       : null
+    const validYear = year && year > 1900 && year < 2100 ? String(year) : ''
 
-    if (year && year > 1900 && year < 2100) {
-      return `${bookTitle} (${year})`
-    }
-
-    return bookTitle
+    const result = namingTemplateService.parseTemplate(patterns.books.bookFile, {
+      book_title: data.book.title,
+      year: validYear,
+    })
+    return this.sanitize(result)
   }
 
   /**
    * Generate full book path relative to root folder
-   * Format: "Author Name/Book Title.epub"
    */
-  getBookPath(data: BookNamingData, extension: string): string {
-    const authorFolder = this.getAuthorFolderName({ author: data.author })
-    const fileName = this.getBookFileName(data)
+  async getBookPath(data: BookNamingData, extension: string): Promise<string> {
+    const authorFolder = await this.getAuthorFolderName({ author: data.author })
+    const fileName = await this.getBookFileName(data)
     const ext = extension.startsWith('.') ? extension : `.${extension}`
     return `${authorFolder}/${fileName}${ext}`
   }

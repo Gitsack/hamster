@@ -1,11 +1,17 @@
 import DownloadClient from '#models/download_client'
 import Download from '#models/download'
+import Movie from '#models/movie'
+import Episode from '#models/episode'
+import Book from '#models/book'
 import { sabnzbdService, type SabnzbdConfig } from './sabnzbd_service.js'
 import { downloadImportService } from '#services/media/download_import_service'
 import { movieImportService } from '#services/media/movie_import_service'
 import { episodeImportService } from '#services/media/episode_import_service'
 import { bookImportService } from '#services/media/book_import_service'
+import { fileNamingService } from '#services/media/file_naming_service'
 import { DateTime } from 'luxon'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
 
 export interface DownloadRequest {
   title: string
@@ -43,6 +49,189 @@ export interface QueueItem {
 
 export class DownloadManager {
   /**
+   * Check if a media item already has a file in the library
+   * Returns true if file exists (and updates hasFile flag if needed), false otherwise
+   */
+  private async checkFileExistsInLibrary(request: DownloadRequest): Promise<boolean> {
+    try {
+      if (request.movieId) {
+        return await this.checkMovieFileExists(request.movieId)
+      }
+
+      if (request.episodeId) {
+        return await this.checkEpisodeFileExists(request.episodeId)
+      }
+
+      if (request.bookId) {
+        return await this.checkBookFileExists(request.bookId)
+      }
+
+      // For albums/music, we don't have a simple single-file check
+      return false
+    } catch (error) {
+      console.error('[DownloadManager] Error checking if file exists in library:', error)
+      return false
+    }
+  }
+
+  /**
+   * Check if a movie file already exists in the library
+   */
+  private async checkMovieFileExists(movieId: string): Promise<boolean> {
+    const movie = await Movie.query()
+      .where('id', movieId)
+      .preload('rootFolder')
+      .first()
+
+    if (!movie || !movie.rootFolder) {
+      return false
+    }
+
+    // Generate expected folder path
+    const folderName = await fileNamingService.getMovieFolderName({ movie })
+    const expectedFolderPath = path.join(movie.rootFolder.path, folderName)
+
+    // Check if folder exists and contains a video file
+    try {
+      const files = await fs.readdir(expectedFolderPath)
+      const videoExtensions = fileNamingService.getSupportedVideoExtensions()
+
+      for (const file of files) {
+        const ext = path.extname(file).toLowerCase()
+        if (videoExtensions.includes(ext)) {
+          console.log(`[DownloadManager] Movie file already exists: ${path.join(expectedFolderPath, file)}`)
+
+          // Update hasFile flag if not already set
+          if (!movie.hasFile) {
+            movie.hasFile = true
+            movie.requested = false
+            await movie.save()
+            console.log(`[DownloadManager] Updated movie hasFile=true for: ${movie.title}`)
+          }
+
+          return true
+        }
+      }
+    } catch {
+      // Folder doesn't exist, which is fine
+    }
+
+    return false
+  }
+
+  /**
+   * Check if an episode file already exists in the library
+   */
+  private async checkEpisodeFileExists(episodeId: string): Promise<boolean> {
+    const episode = await Episode.query()
+      .where('id', episodeId)
+      .preload('tvShow', (query) => query.preload('rootFolder'))
+      .first()
+
+    if (!episode || !episode.tvShow || !episode.tvShow.rootFolder) {
+      return false
+    }
+
+    // Generate expected folder path
+    const showFolder = await fileNamingService.getTvShowFolderName({ tvShow: episode.tvShow })
+    const seasonFolder = await fileNamingService.getSeasonFolderName(episode.seasonNumber)
+    const expectedFolderPath = path.join(episode.tvShow.rootFolder.path, showFolder, seasonFolder)
+
+    // Generate expected filename pattern
+    const episodeFileName = await fileNamingService.getEpisodeFileName({
+      episode,
+      tvShow: episode.tvShow,
+    })
+
+    // Check if folder exists and contains a matching episode file
+    try {
+      const files = await fs.readdir(expectedFolderPath)
+      const videoExtensions = fileNamingService.getSupportedVideoExtensions()
+
+      for (const file of files) {
+        const ext = path.extname(file).toLowerCase()
+        const nameWithoutExt = path.basename(file, ext)
+
+        // Check if it's a video file and matches the expected episode pattern
+        if (videoExtensions.includes(ext)) {
+          // Match by expected name or by S##E## pattern
+          const seasonNum = String(episode.seasonNumber).padStart(2, '0')
+          const episodeNum = String(episode.episodeNumber).padStart(2, '0')
+          const episodePattern = `S${seasonNum}E${episodeNum}`
+
+          if (nameWithoutExt === episodeFileName || nameWithoutExt.toUpperCase().includes(episodePattern)) {
+            console.log(`[DownloadManager] Episode file already exists: ${path.join(expectedFolderPath, file)}`)
+
+            // Update hasFile flag if not already set
+            if (!episode.hasFile) {
+              episode.hasFile = true
+              episode.requested = false
+              await episode.save()
+              console.log(`[DownloadManager] Updated episode hasFile=true for: S${seasonNum}E${episodeNum}`)
+            }
+
+            return true
+          }
+        }
+      }
+    } catch {
+      // Folder doesn't exist, which is fine
+    }
+
+    return false
+  }
+
+  /**
+   * Check if a book file already exists in the library
+   */
+  private async checkBookFileExists(bookId: string): Promise<boolean> {
+    const book = await Book.query()
+      .where('id', bookId)
+      .preload('author', (query) => query.preload('rootFolder'))
+      .first()
+
+    if (!book || !book.author || !book.author.rootFolder) {
+      return false
+    }
+
+    // Generate expected folder path (author folder)
+    const authorFolder = await fileNamingService.getAuthorFolderName({ author: book.author })
+    const expectedFolderPath = path.join(book.author.rootFolder.path, authorFolder)
+
+    // Generate expected filename
+    const bookFileName = await fileNamingService.getBookFileName({ book, author: book.author })
+
+    // Check if folder exists and contains a matching book file
+    try {
+      const files = await fs.readdir(expectedFolderPath)
+      const bookExtensions = fileNamingService.getSupportedBookExtensions()
+
+      for (const file of files) {
+        const ext = path.extname(file).toLowerCase()
+        const nameWithoutExt = path.basename(file, ext)
+
+        if (bookExtensions.includes(ext) && nameWithoutExt === bookFileName) {
+          console.log(`[DownloadManager] Book file already exists: ${path.join(expectedFolderPath, file)}`)
+
+          // Update hasFile flag if not already set
+          if (!book.hasFile) {
+            book.hasFile = true
+            book.requested = false
+            await book.save()
+            console.log(`[DownloadManager] Updated book hasFile=true for: ${book.title}`)
+          }
+
+          return true
+        }
+      }
+    } catch {
+      // Folder doesn't exist, which is fine
+    }
+
+    return false
+  }
+
+  /**
    * Send a release to the download client
    */
   async grab(request: DownloadRequest): Promise<Download> {
@@ -69,6 +258,13 @@ export class DownloadManager {
     if (existingDownload) {
       console.log(`[DownloadManager] Skipping duplicate download for: ${request.title} (existing download: ${existingDownload.id})`)
       return existingDownload
+    }
+
+    // Check if file already exists in the library (based on expected path from naming settings)
+    const fileAlreadyExists = await this.checkFileExistsInLibrary(request)
+    if (fileAlreadyExists) {
+      console.log(`[DownloadManager] Skipping download for: ${request.title} (file already exists in library)`)
+      throw new Error('File already exists in library')
     }
 
     // Get enabled download client

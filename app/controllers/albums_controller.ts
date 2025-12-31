@@ -494,6 +494,53 @@ export default class AlbumsController {
   }
 
   /**
+   * Get tracks for an album by MusicBrainz ID (for search exploration)
+   */
+  async tracksByMbid({ params, response }: HttpContext) {
+    const mbid = params.mbid
+
+    try {
+      // Get releases for this release group
+      const releases = await musicBrainzService.getAlbumReleases(mbid)
+
+      if (releases.length === 0) {
+        return response.json([])
+      }
+
+      // Use the first release with the most tracks
+      const bestRelease = releases.reduce((best, current) =>
+        current.trackCount > best.trackCount ? current : best
+      )
+
+      // Flatten tracks from all media
+      const tracks: Array<{
+        musicbrainzId: string
+        title: string
+        position: number
+        duration?: number
+        artistName?: string
+      }> = []
+
+      for (const medium of bestRelease.media) {
+        for (const track of medium.tracks) {
+          tracks.push({
+            musicbrainzId: track.id,
+            title: track.title,
+            position: track.position,
+            duration: track.length ? Math.round(track.length / 1000) : undefined, // Convert ms to seconds
+            artistName: track.artistName,
+          })
+        }
+      }
+
+      return response.json(tracks)
+    } catch (error) {
+      console.error(`Failed to get tracks for album ${mbid}:`, error)
+      return response.json([])
+    }
+  }
+
+  /**
    * Search MusicBrainz for albums (for adding new albums)
    */
   async search({ request, response }: HttpContext) {

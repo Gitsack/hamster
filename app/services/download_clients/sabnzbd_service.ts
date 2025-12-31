@@ -52,6 +52,9 @@ export interface SabnzbdHistory {
 }
 
 export class SabnzbdService {
+  // Default timeout for API calls (15 seconds)
+  private readonly DEFAULT_TIMEOUT = 15000
+
   private buildUrl(config: SabnzbdConfig, params: Record<string, string>): string {
     const protocol = config.useSsl ? 'https' : 'http'
     const baseUrl = `${protocol}://${config.host}:${config.port}/api`
@@ -92,7 +95,7 @@ export class SabnzbdService {
    */
   async getQueue(config: SabnzbdConfig): Promise<SabnzbdQueue> {
     const url = this.buildUrl(config, { mode: 'queue', limit: '100' })
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
 
     if (!response.ok) {
       throw new Error(`Failed to get queue: ${response.status}`)
@@ -107,7 +110,7 @@ export class SabnzbdService {
    */
   async getHistory(config: SabnzbdConfig, limit = 50): Promise<SabnzbdHistory> {
     const url = this.buildUrl(config, { mode: 'history', limit: String(limit) })
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
 
     if (!response.ok) {
       throw new Error(`Failed to get history: ${response.status}`)
@@ -145,7 +148,7 @@ export class SabnzbdService {
     }
 
     const url = this.buildUrl(config, params)
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
 
     if (!response.ok) {
       throw new Error(`Failed to add NZB: ${response.status}`)
@@ -191,6 +194,7 @@ export class SabnzbdService {
     const response = await fetch(baseUrl, {
       method: 'POST',
       body: formData,
+      signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT),
     })
 
     if (!response.ok) {
@@ -211,7 +215,7 @@ export class SabnzbdService {
    */
   async pause(config: SabnzbdConfig): Promise<void> {
     const url = this.buildUrl(config, { mode: 'pause' })
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
 
     if (!response.ok) {
       throw new Error(`Failed to pause queue: ${response.status}`)
@@ -223,7 +227,7 @@ export class SabnzbdService {
    */
   async resume(config: SabnzbdConfig): Promise<void> {
     const url = this.buildUrl(config, { mode: 'resume' })
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
 
     if (!response.ok) {
       throw new Error(`Failed to resume queue: ${response.status}`)
@@ -240,7 +244,7 @@ export class SabnzbdService {
       value: nzoId,
       del_files: deleteFiles ? '1' : '0',
     })
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
 
     if (!response.ok) {
       throw new Error(`Failed to delete item: ${response.status}`)
@@ -257,7 +261,7 @@ export class SabnzbdService {
       value: nzoId,
       del_files: deleteFiles ? '1' : '0',
     })
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
 
     if (!response.ok) {
       throw new Error(`Failed to delete history item: ${response.status}`)
@@ -269,7 +273,7 @@ export class SabnzbdService {
    */
   async getCategories(config: SabnzbdConfig): Promise<string[]> {
     const url = this.buildUrl(config, { mode: 'get_cats' })
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
 
     if (!response.ok) {
       throw new Error(`Failed to get categories: ${response.status}`)
@@ -284,7 +288,7 @@ export class SabnzbdService {
    */
   async getConfig(config: SabnzbdConfig): Promise<{ completeDir?: string; incompleteDir?: string }> {
     const url = this.buildUrl(config, { mode: 'get_config' })
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
 
     if (!response.ok) {
       throw new Error(`Failed to get config: ${response.status}`)

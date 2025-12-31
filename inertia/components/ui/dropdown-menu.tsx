@@ -5,18 +5,39 @@ import { Menu as BaseMenu } from "@base-ui/react/menu"
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const DropdownMenu = BaseMenu.Root
+// Context to share stable ID with child components for SSR hydration
+const DropdownMenuIdContext = React.createContext<string | undefined>(undefined)
+
+function DropdownMenu({
+  children,
+  ...props
+}: React.ComponentProps<typeof BaseMenu.Root>) {
+  const reactId = React.useId()
+
+  return (
+    <DropdownMenuIdContext.Provider value={reactId}>
+      <BaseMenu.Root {...props}>
+        {children}
+      </BaseMenu.Root>
+    </DropdownMenuIdContext.Provider>
+  )
+}
 
 function DropdownMenuTrigger({
   asChild,
   children,
+  id,
   ...props
 }: React.ComponentProps<typeof BaseMenu.Trigger> & {
   asChild?: boolean
 }) {
+  const menuId = React.useContext(DropdownMenuIdContext)
+  const triggerId = id || (menuId ? `${menuId}-trigger` : undefined)
+
   if (asChild && React.isValidElement(children)) {
     return (
       <BaseMenu.Trigger
+        id={triggerId}
         {...props}
         render={(triggerProps) =>
           React.cloneElement(children, {
@@ -29,7 +50,7 @@ function DropdownMenuTrigger({
   }
 
   return (
-    <BaseMenu.Trigger data-slot="dropdown-menu-trigger" {...props}>
+    <BaseMenu.Trigger id={triggerId} data-slot="dropdown-menu-trigger" {...props}>
       {children}
     </BaseMenu.Trigger>
   )
@@ -55,14 +76,19 @@ function DropdownMenuPositioner({
 function DropdownMenuPopup({
   className,
   sideOffset = 4,
+  id,
   ...props
 }: React.ComponentProps<typeof BaseMenu.Popup> & {
   sideOffset?: number
 }) {
+  const menuId = React.useContext(DropdownMenuIdContext)
+  const popupId = id || (menuId ? `${menuId}-popup` : undefined)
+
   return (
     <DropdownMenuPortal>
       <DropdownMenuPositioner sideOffset={sideOffset}>
         <BaseMenu.Popup
+          id={popupId}
           data-slot="dropdown-menu-popup"
           className={cn(
             "bg-popover text-popover-foreground z-50 max-h-[var(--available-height)] min-w-[8rem] overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md",

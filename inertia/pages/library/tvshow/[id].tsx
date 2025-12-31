@@ -147,6 +147,10 @@ export default function TvShowDetail() {
   const [activeDownloads, setActiveDownloads] = useState<Map<string, { progress: number; status: string }>>(new Map())
   const [togglingSeasons, setTogglingSeasons] = useState<Set<number>>(new Set())
   const [togglingEpisodes, setTogglingEpisodes] = useState<Set<number>>(new Set())
+  const [deleteFileDialogOpen, setDeleteFileDialogOpen] = useState(false)
+  const [deletingFile, setDeletingFile] = useState(false)
+  const [selectedEpisodeForDelete, setSelectedEpisodeForDelete] = useState<{ id: number; title: string; seasonNumber: number } | null>(null)
+  const [requestingAllSeasons, setRequestingAllSeasons] = useState(false)
 
   useEffect(() => {
     fetchShow()
@@ -412,6 +416,94 @@ export default function TvShowDetail() {
     }
   }
 
+  const deleteEpisodeFile = async () => {
+    if (!selectedEpisodeForDelete) return
+
+    setDeletingFile(true)
+    try {
+      const response = await fetch(
+        `/api/v1/tvshows/${showId}/episodes/${selectedEpisodeForDelete.id}/file`,
+        { method: 'DELETE' }
+      )
+      if (response.ok) {
+        toast.success('Episode file deleted successfully')
+        // Update local state
+        setSeasonDetails((prev) => ({
+          ...prev,
+          [selectedEpisodeForDelete.seasonNumber]: {
+            ...prev[selectedEpisodeForDelete.seasonNumber],
+            episodes: prev[selectedEpisodeForDelete.seasonNumber].episodes.map((ep) =>
+              ep.id === selectedEpisodeForDelete.id
+                ? { ...ep, hasFile: false, episodeFile: null }
+                : ep
+            ),
+          },
+        }))
+        // Refresh show to update season counts
+        fetchShow()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete file')
+      }
+    } catch (error) {
+      console.error('Failed to delete episode file:', error)
+      toast.error('Failed to delete file')
+    } finally {
+      setDeletingFile(false)
+      setDeleteFileDialogOpen(false)
+      setSelectedEpisodeForDelete(null)
+    }
+  }
+
+  const requestAllSeasons = async () => {
+    if (!show) return
+
+    const seasonsToRequest = show.seasons.filter((s) => !s.requested)
+    if (seasonsToRequest.length === 0) {
+      toast.info('All seasons are already requested')
+      return
+    }
+
+    // Optimistically update UI
+    setShow({
+      ...show,
+      seasons: show.seasons.map((s) => ({ ...s, requested: true })),
+    })
+
+    setRequestingAllSeasons(true)
+
+    try {
+      // Request all seasons in parallel
+      const results = await Promise.all(
+        seasonsToRequest.map((season) =>
+          fetch(`/api/v1/tvshows/${showId}/season/${season.seasonNumber}/request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requested: true }),
+          })
+        )
+      )
+
+      const failedCount = results.filter((r) => !r.ok).length
+      if (failedCount === 0) {
+        toast.success(`Requested ${seasonsToRequest.length} seasons`)
+        fetchShow() // Refresh to get updated counts
+      } else if (failedCount < seasonsToRequest.length) {
+        toast.warning(`Requested ${seasonsToRequest.length - failedCount} seasons, ${failedCount} failed`)
+        fetchShow()
+      } else {
+        toast.error('Failed to request seasons')
+        fetchShow() // Revert
+      }
+    } catch (error) {
+      console.error('Failed to request all seasons:', error)
+      toast.error('Failed to request seasons')
+      fetchShow()
+    } finally {
+      setRequestingAllSeasons(false)
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout title="Loading...">
@@ -530,12 +622,6 @@ export default function TvShowDetail() {
 
             {/* Status */}
             <div className="flex items-center gap-2 flex-wrap">
-              {show.requested && (
-                <Badge variant="secondary" className="gap-1">
-                  <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3" />
-                  Requested
-                </Badge>
-              )}
               {show.status && (
                 <Badge variant="outline">{show.status}</Badge>
               )}
@@ -613,7 +699,29 @@ export default function TvShowDetail() {
         {/* Seasons */}
         <Card>
           <CardContent className="pt-6">
-            <h2 className="font-semibold mb-4">Seasons</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold">Seasons</h2>
+              {show.seasons.some((s) => !s.requested) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={requestAllSeasons}
+                  disabled={requestingAllSeasons}
+                >
+                  {requestingAllSeasons ? (
+                    <>
+                      <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                      Requesting...
+                    </>
+                  ) : (
+                    <>
+                      <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                      Request All
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
             {show.seasons.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">No seasons found</p>
             ) : (
@@ -744,6 +852,21 @@ export default function TvShowDetail() {
                                               </a>
                                             </Button>
                                           )}
+                                          <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-7 w-7 text-destructive hover:text-destructive"
+                                            onClick={() => {
+                                              setSelectedEpisodeForDelete({
+                                                id: episode.id,
+                                                title: episode.title,
+                                                seasonNumber: season.seasonNumber,
+                                              })
+                                              setDeleteFileDialogOpen(true)
+                                            }}
+                                          >
+                                            <HugeiconsIcon icon={Delete01Icon} className="h-3.5 w-3.5" />
+                                          </Button>
                                         </>
                                       )
                                     }
@@ -872,6 +995,37 @@ export default function TvShowDetail() {
                 </>
               ) : (
                 'Delete'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete episode file confirmation dialog */}
+      <Dialog open={deleteFileDialogOpen} onOpenChange={(open) => {
+        setDeleteFileDialogOpen(open)
+        if (!open) setSelectedEpisodeForDelete(null)
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete episode file?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the file for "{selectedEpisodeForDelete?.title}" from disk.
+              The episode will remain in your library but will need to be downloaded again.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteFileDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={deleteEpisodeFile} disabled={deletingFile}>
+              {deletingFile ? (
+                <>
+                  <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete File'
               )}
             </Button>
           </DialogFooter>

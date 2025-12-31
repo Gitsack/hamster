@@ -156,7 +156,7 @@ export class MovieImportService {
   ): Promise<{ success: boolean; error?: string; destinationPath?: string }> {
     // Generate destination path
     const extension = path.extname(sourcePath)
-    const relativePath = fileNamingService.getMoviePath(
+    const relativePath = await fileNamingService.getMoviePath(
       { movie, quality },
       extension
     )

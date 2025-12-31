@@ -23,8 +23,10 @@ export function AppLayout({ children, title, actions }: AppLayoutProps) {
           {title && <h1 className="text-lg font-semibold">{title}</h1>}
           {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
         </header>
-        <main className={`flex-1 overflow-auto p-4 ${hasPlayer ? 'pb-24' : ''}`}>
-          {children}
+        <main className={`flex-1 overflow-auto p-4 min-w-0 ${hasPlayer ? 'pb-24' : ''}`}>
+          <div className="min-w-0">
+            {children}
+          </div>
         </main>
       </SidebarInset>
     </SidebarProvider>

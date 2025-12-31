@@ -287,6 +287,52 @@ export default class ArtistsController {
   }
 
   /**
+   * Get albums for an artist by MusicBrainz ID (for search exploration)
+   */
+  async albumsByMbid({ params, response }: HttpContext) {
+    const mbid = params.mbid
+
+    try {
+      // Fetch albums from MusicBrainz
+      const mbAlbums = await musicBrainzService.getArtistAlbums(mbid)
+
+      // Check which albums are already in the library
+      const existingMbIds = await Album.query()
+        .whereIn(
+          'musicbrainzReleaseGroupId',
+          mbAlbums.map((a) => a.id)
+        )
+        .select('musicbrainzReleaseGroupId')
+
+      const existingSet = new Set(existingMbIds.map((a) => a.musicbrainzReleaseGroupId))
+
+      // Sort by release date (newest first) and filter to main releases
+      const sortedAlbums = mbAlbums
+        .filter((a) => a.primaryType === 'Album' || a.primaryType === 'EP')
+        .sort((a, b) => {
+          if (!a.releaseDate) return 1
+          if (!b.releaseDate) return -1
+          return b.releaseDate.localeCompare(a.releaseDate)
+        })
+
+      return response.json(
+        sortedAlbums.map((album) => ({
+          musicbrainzId: album.id,
+          title: album.title,
+          artistName: album.artistName,
+          artistMusicbrainzId: album.artistId,
+          releaseDate: album.releaseDate,
+          type: album.primaryType,
+          inLibrary: existingSet.has(album.id),
+        }))
+      )
+    } catch (error) {
+      console.error(`Failed to get albums for artist ${mbid}:`, error)
+      return response.json([])
+    }
+  }
+
+  /**
    * Search MusicBrainz for artists (for adding new artists)
    */
   async search({ request, response }: HttpContext) {

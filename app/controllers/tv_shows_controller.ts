@@ -2,12 +2,15 @@ import type { HttpContext } from '@adonisjs/core/http'
 import TvShow from '#models/tv_show'
 import Season from '#models/season'
 import Episode from '#models/episode'
+import EpisodeFile from '#models/episode_file'
 import Download from '#models/download'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
 import { downloadManager } from '#services/download_clients/download_manager'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
 
 const tvShowValidator = vine.compile(
   vine.object({
@@ -295,10 +298,18 @@ export default class TvShowsController {
       episodeCount: show.episodeCount,
       qualityProfile: show.qualityProfile,
       rootFolder: show.rootFolder,
-      seasons: show.seasons.map((s) => {
+      seasons: await Promise.all(show.seasons.map(async (s) => {
         const downloadedCount = s.episodes.filter((e) => e.hasFile).length
         const downloadingCount = s.episodes.filter((e) => downloadingEpisodeIds.has(e.id)).length
         const requestedCount = s.episodes.filter((e) => e.requested && !e.hasFile && !downloadingEpisodeIds.has(e.id)).length
+
+        // Auto-sync season requested status if out of sync with episodes
+        // If season is marked requested but no episodes are actually requested, reset it
+        if (s.requested && requestedCount === 0 && downloadingCount === 0) {
+          s.requested = false
+          await s.save()
+          console.log(`[TvShowsController] Auto-synced season ${s.seasonNumber} requested=false (no requested episodes)`)
+        }
 
         return {
           id: s.id,
@@ -311,7 +322,7 @@ export default class TvShowsController {
           downloadingCount,
           requestedCount,
         }
-      }),
+      })),
       addedAt: show.addedAt?.toISO(),
     })
   }
@@ -655,5 +666,89 @@ export default class TvShowsController {
         error: error instanceof Error ? error.message : 'Search failed',
       })
     }
+  }
+
+  /**
+   * Delete an episode file from disk and database
+   */
+  async deleteEpisodeFile({ params, response }: HttpContext) {
+    const episode = await Episode.query()
+      .where('id', params.episodeId)
+      .preload('tvShow', (query) => query.preload('rootFolder'))
+      .preload('episodeFile')
+      .first()
+
+    if (!episode) {
+      return response.notFound({ error: 'Episode not found' })
+    }
+
+    // Handle case where hasFile is true but episodeFile record is missing (data inconsistency)
+    if (!episode.episodeFile) {
+      // Just reset the hasFile flag
+      episode.hasFile = false
+      episode.episodeFileId = null
+      await episode.save()
+      console.log(`[TvShowsController] Reset hasFile flag for episode without file record: ${episode.id}`)
+      return response.json({
+        message: 'Episode status reset (no file record found)',
+        episodeId: episode.id,
+      })
+    }
+
+    if (!episode.tvShow?.rootFolder) {
+      // Still allow deletion of the file record even without root folder
+      await EpisodeFile.query().where('id', episode.episodeFile.id).delete()
+      episode.hasFile = false
+      episode.episodeFileId = null
+      await episode.save()
+      return response.json({
+        message: 'File record deleted (no root folder configured)',
+        episodeId: episode.id,
+      })
+    }
+
+    const absolutePath = path.join(episode.tvShow.rootFolder.path, episode.episodeFile.relativePath)
+    const folderPath = path.dirname(absolutePath)
+
+    try {
+      // Delete the file from disk
+      await fs.unlink(absolutePath)
+      console.log(`[TvShowsController] Deleted episode file: ${absolutePath}`)
+
+      // Try to remove the season folder if empty
+      try {
+        const remainingFiles = await fs.readdir(folderPath)
+        if (remainingFiles.length === 0) {
+          await fs.rmdir(folderPath)
+          console.log(`[TvShowsController] Removed empty folder: ${folderPath}`)
+
+          // Try to remove the show folder if also empty
+          const showFolder = path.dirname(folderPath)
+          const remainingSeasons = await fs.readdir(showFolder)
+          if (remainingSeasons.length === 0) {
+            await fs.rmdir(showFolder)
+            console.log(`[TvShowsController] Removed empty show folder: ${showFolder}`)
+          }
+        }
+      } catch {
+        // Folder might not be empty or other error, ignore
+      }
+    } catch (error) {
+      console.error(`[TvShowsController] Failed to delete file: ${absolutePath}`, error)
+      // Continue with database cleanup even if file deletion fails
+    }
+
+    // Delete the EpisodeFile record
+    await EpisodeFile.query().where('id', episode.episodeFile.id).delete()
+
+    // Update episode hasFile flag
+    episode.hasFile = false
+    episode.episodeFileId = null
+    await episode.save()
+
+    return response.json({
+      message: 'File deleted successfully',
+      episodeId: episode.id,
+    })
   }
 }

@@ -5,22 +5,43 @@ import { Select as BaseSelect } from "@base-ui/react/select"
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const Select = BaseSelect.Root
+// Context to share stable ID with child components for SSR hydration
+const SelectIdContext = React.createContext<string | undefined>(undefined)
+
+function Select({
+  children,
+  ...props
+}: React.ComponentProps<typeof BaseSelect.Root>) {
+  const reactId = React.useId()
+
+  return (
+    <SelectIdContext.Provider value={reactId}>
+      <BaseSelect.Root {...props}>
+        {children}
+      </BaseSelect.Root>
+    </SelectIdContext.Provider>
+  )
+}
 
 function SelectTrigger({
   className,
   size = "default",
   children,
+  id,
   ...props
 }: React.ComponentProps<typeof BaseSelect.Trigger> & {
   size?: "sm" | "default"
 }) {
+  const selectId = React.useContext(SelectIdContext)
+  const triggerId = id || (selectId ? `${selectId}-trigger` : undefined)
+
   return (
     <BaseSelect.Trigger
+      id={triggerId}
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -68,15 +89,20 @@ function SelectPositioner({
 function SelectPopup({
   className,
   children,
+  id,
   ...props
 }: React.ComponentProps<typeof BaseSelect.Popup>) {
+  const selectId = React.useContext(SelectIdContext)
+  const popupId = id || (selectId ? `${selectId}-popup` : undefined)
+
   return (
     <SelectPortal>
       <SelectPositioner>
         <BaseSelect.Popup
+          id={popupId}
           data-slot="select-popup"
           className={cn(
-            "bg-popover text-popover-foreground relative z-50 max-h-[min(var(--available-height),20rem)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border p-1 shadow-md",
+            "bg-popover text-popover-foreground relative z-[100] max-h-[min(var(--available-height),20rem)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border p-1 shadow-md",
             className
           )}
           {...props}

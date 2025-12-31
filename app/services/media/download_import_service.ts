@@ -332,7 +332,7 @@ export class DownloadImportService {
 
     // Generate destination path
     const extension = path.extname(sourcePath)
-    const relativePath = fileNamingService.getTrackPath(
+    const relativePath = await fileNamingService.getTrackPath(
       { track, album, artist },
       extension
     )

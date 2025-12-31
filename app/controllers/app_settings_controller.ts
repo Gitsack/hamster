@@ -1,5 +1,12 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import AppSetting, { type MediaType } from '#models/app_setting'
+import {
+  defaultNamingPatterns,
+  templateVariables,
+  namingTemplateService,
+  type NamingPatterns,
+} from '#services/media/naming_template_service'
+import { fileNamingService } from '#services/media/file_naming_service'
 
 function ensureArray<T>(value: T[] | string | undefined, defaultValue: T[]): T[] {
   if (Array.isArray(value)) {
@@ -74,5 +81,109 @@ export default class AppSettingsController {
 
     await AppSetting.set('enabledMediaTypes', enabledTypes)
     return response.json({ enabledMediaTypes: enabledTypes })
+  }
+
+  /**
+   * Get naming patterns for all media types
+   */
+  async getNamingPatterns({ response }: HttpContext) {
+    const stored = await AppSetting.get<Partial<NamingPatterns>>('namingPatterns')
+    const patterns: NamingPatterns = {
+      music: { ...defaultNamingPatterns.music, ...stored?.music },
+      movies: { ...defaultNamingPatterns.movies, ...stored?.movies },
+      tv: { ...defaultNamingPatterns.tv, ...stored?.tv },
+      books: { ...defaultNamingPatterns.books, ...stored?.books },
+    }
+
+    // Generate examples for each pattern
+    const examples: Record<string, Record<string, string>> = {}
+    for (const mediaType of Object.keys(patterns) as MediaType[]) {
+      examples[mediaType] = {}
+      const mediaPatterns = patterns[mediaType] as Record<string, string>
+      for (const field of Object.keys(mediaPatterns)) {
+        examples[mediaType][field] = namingTemplateService.generateExample(
+          mediaType,
+          field,
+          mediaPatterns[field]
+        )
+      }
+    }
+
+    return response.json({
+      patterns,
+      variables: templateVariables,
+      examples,
+    })
+  }
+
+  /**
+   * Update naming patterns for a specific media type
+   */
+  async updateNamingPatterns({ request, response }: HttpContext) {
+    const { mediaType, patterns } = request.only(['mediaType', 'patterns'])
+
+    if (!mediaType || !['music', 'movies', 'tv', 'books'].includes(mediaType)) {
+      return response.badRequest({ error: 'Invalid media type' })
+    }
+
+    if (!patterns || typeof patterns !== 'object') {
+      return response.badRequest({ error: 'Invalid patterns' })
+    }
+
+    // Validate patterns
+    const validFields = Object.keys(templateVariables[mediaType as MediaType])
+    const errors: Record<string, string[]> = {}
+
+    for (const [field, pattern] of Object.entries(patterns)) {
+      if (!validFields.includes(field)) {
+        errors[field] = [`Invalid field: ${field}`]
+        continue
+      }
+
+      const validation = namingTemplateService.validatePattern(
+        mediaType as MediaType,
+        field,
+        pattern as string
+      )
+
+      if (!validation.valid) {
+        errors[field] = validation.invalidVars.map((v) => `Unknown variable: {${v}}`)
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return response.badRequest({ error: 'Invalid patterns', details: errors })
+    }
+
+    // Get current patterns and merge
+    const stored = await AppSetting.get<Partial<NamingPatterns>>('namingPatterns', {})
+    const updated = {
+      ...stored,
+      [mediaType]: {
+        ...(stored?.[mediaType as MediaType] || {}),
+        ...patterns,
+      },
+    }
+
+    await AppSetting.set('namingPatterns', updated)
+
+    // Clear the file naming service cache
+    fileNamingService.clearCache()
+
+    // Return updated patterns with examples
+    const mediaPatterns = updated[mediaType as MediaType] as Record<string, string>
+    const examples: Record<string, string> = {}
+    for (const field of Object.keys(mediaPatterns)) {
+      examples[field] = namingTemplateService.generateExample(
+        mediaType as MediaType,
+        field,
+        mediaPatterns[field]
+      )
+    }
+
+    return response.json({
+      patterns: updated[mediaType as MediaType],
+      examples,
+    })
   }
 }

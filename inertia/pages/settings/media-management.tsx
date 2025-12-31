@@ -14,6 +14,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import {
+  CollapsibleRoot,
+  CollapsibleTrigger,
+  CollapsiblePanel,
+} from '@/components/ui/accordion'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Folder01Icon,
@@ -74,6 +79,32 @@ const mediaTypeInfo: Record<MediaType, { label: string; icon: any; description: 
   },
 }
 
+interface TemplateVariable {
+  name: string
+  description: string
+  example: string
+}
+
+interface NamingPatternsData {
+  patterns: Record<MediaType, Record<string, string>>
+  variables: Record<MediaType, Record<string, TemplateVariable[]>>
+  examples: Record<MediaType, Record<string, string>>
+}
+
+// Field labels for display
+const fieldLabels: Record<string, string> = {
+  artistFolder: 'Artist Folder Format',
+  albumFolder: 'Album Folder Format',
+  trackFile: 'Track File Format',
+  movieFolder: 'Movie Folder Format',
+  movieFile: 'Movie File Format',
+  showFolder: 'Show Folder Format',
+  seasonFolder: 'Season Folder Format',
+  episodeFile: 'Episode File Format',
+  authorFolder: 'Author Folder Format',
+  bookFile: 'Book File Format',
+}
+
 export default function MediaManagement() {
   const [settings, setSettings] = useState<AppSettings>({
     enabledMediaTypes: ['music'],
@@ -81,6 +112,11 @@ export default function MediaManagement() {
   })
   const [rootFolders, setRootFolders] = useState<RootFolder[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Naming patterns state
+  const [namingData, setNamingData] = useState<NamingPatternsData | null>(null)
+  const [editedPatterns, setEditedPatterns] = useState<Record<MediaType, Record<string, string>>>({} as any)
+  const [savingPatterns, setSavingPatterns] = useState<Record<MediaType, boolean>>({} as any)
 
   // Folder dialog state
   const [folderDialogOpen, setFolderDialogOpen] = useState(false)
@@ -99,9 +135,10 @@ export default function MediaManagement() {
 
   const fetchData = async () => {
     try {
-      const [settingsRes, foldersRes] = await Promise.all([
+      const [settingsRes, foldersRes, namingRes] = await Promise.all([
         fetch('/api/v1/settings'),
         fetch('/api/v1/rootfolders'),
+        fetch('/api/v1/settings/naming-patterns'),
       ])
 
       if (settingsRes.ok) {
@@ -111,6 +148,12 @@ export default function MediaManagement() {
       if (foldersRes.ok) {
         const data = await foldersRes.json()
         setRootFolders(data)
+      }
+      if (namingRes.ok) {
+        const data = await namingRes.json()
+        setNamingData(data)
+        // Initialize edited patterns with current values
+        setEditedPatterns(JSON.parse(JSON.stringify(data.patterns)))
       }
     } catch (error) {
       toast.error('Failed to load settings')
@@ -251,6 +294,78 @@ export default function MediaManagement() {
     }
   }
 
+  const handlePatternChange = (mediaType: MediaType, field: string, value: string) => {
+    setEditedPatterns((prev) => ({
+      ...prev,
+      [mediaType]: {
+        ...prev[mediaType],
+        [field]: value,
+      },
+    }))
+  }
+
+  const hasPatternChanges = (mediaType: MediaType): boolean => {
+    if (!namingData || !editedPatterns[mediaType]) return false
+    const original = namingData.patterns[mediaType]
+    const edited = editedPatterns[mediaType]
+    return Object.keys(original).some((key) => original[key] !== edited[key])
+  }
+
+  const handleSavePatterns = async (mediaType: MediaType) => {
+    if (!editedPatterns[mediaType]) return
+
+    setSavingPatterns((prev) => ({ ...prev, [mediaType]: true }))
+    try {
+      const response = await fetch('/api/v1/settings/naming-patterns', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mediaType,
+          patterns: editedPatterns[mediaType],
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Update namingData with new patterns and examples
+        setNamingData((prev) => prev ? {
+          ...prev,
+          patterns: {
+            ...prev.patterns,
+            [mediaType]: data.patterns,
+          },
+          examples: {
+            ...prev.examples,
+            [mediaType]: data.examples,
+          },
+        } : null)
+        toast.success(`${mediaTypeInfo[mediaType].label} naming patterns saved`)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to save patterns')
+      }
+    } catch (error) {
+      toast.error('Failed to save patterns')
+    } finally {
+      setSavingPatterns((prev) => ({ ...prev, [mediaType]: false }))
+    }
+  }
+
+  const getExampleForPattern = (mediaType: MediaType, field: string, pattern: string): string => {
+    // Generate a simple client-side example based on the pattern
+    if (!namingData) return ''
+    const vars = namingData.variables[mediaType]?.[field] || []
+    let result = pattern
+    for (const v of vars) {
+      result = result.replace(new RegExp(`\\{${v.name}\\}`, 'g'), v.example)
+    }
+    return result
+      .replace(/\s*\(\s*\)/g, '')
+      .replace(/\s*\[\s*\]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
   return (
     <AppLayout title="Media Management">
       <Head title="Media Management" />
@@ -349,10 +464,11 @@ export default function MediaManagement() {
                     />
                   </div>
 
-                  {/* Folder configuration (shown when enabled) */}
+                  {/* Folder configuration and file naming (shown when enabled) */}
                   {isEnabled && (
-                    <div className="border-t p-4 bg-muted/30">
-                      <div className="flex items-center justify-between">
+                    <div className="border-t bg-muted/30">
+                      {/* Library Folder */}
+                      <div className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-2">
                           <HugeiconsIcon icon={Folder01Icon} className="size-4 text-muted-foreground" />
                           <span className="text-sm font-medium">Library Folder</span>
@@ -376,38 +492,67 @@ export default function MediaManagement() {
                           </Button>
                         )}
                       </div>
+
+                      {/* File Naming (collapsible) */}
+                      <CollapsibleRoot className="border-t">
+                        <div className="p-4">
+                          <CollapsibleTrigger className="text-muted-foreground hover:text-foreground">
+                            File Organization
+                          </CollapsibleTrigger>
+                        </div>
+                        <CollapsiblePanel>
+                          <div className="space-y-4 px-4 pb-4">
+                            {namingData && editedPatterns[mediaType] && Object.entries(editedPatterns[mediaType]).map(([field, pattern]) => {
+                              const variables = namingData.variables[mediaType]?.[field] || []
+                              const example = getExampleForPattern(mediaType, field, pattern)
+                              return (
+                                <div key={field} className="space-y-1.5">
+                                  <Label className="text-xs text-muted-foreground">
+                                    {fieldLabels[field] || field}
+                                  </Label>
+                                  <Input
+                                    value={pattern}
+                                    onChange={(e) => handlePatternChange(mediaType, field, e.target.value)}
+                                    className="h-8 text-sm font-mono"
+                                  />
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {variables.map((v) => (
+                                      <button
+                                        key={v.name}
+                                        type="button"
+                                        onClick={() => handlePatternChange(mediaType, field, pattern + `{${v.name}}`)}
+                                        className="text-xs px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-muted-foreground font-mono"
+                                        title={v.description}
+                                      >
+                                        {`{${v.name}}`}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  {example && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Example: {example}
+                                    </p>
+                                  )}
+                                </div>
+                              )
+                            })}
+                            {hasPatternChanges(mediaType) && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleSavePatterns(mediaType)}
+                                disabled={savingPatterns[mediaType]}
+                              >
+                                {savingPatterns[mediaType] ? 'Saving...' : 'Save Changes'}
+                              </Button>
+                            )}
+                          </div>
+                        </CollapsiblePanel>
+                      </CollapsibleRoot>
                     </div>
                   )}
                 </div>
               )
             })}
-          </CardContent>
-        </Card>
-
-        {/* File Naming */}
-        <Card>
-          <CardHeader>
-            <CardTitle>File Naming</CardTitle>
-            <CardDescription>Configure how files are named and organized</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Standard Track Format</Label>
-                <Input
-                  value="{Album Title} ({Release Year})/{track:00} - {Track Title}"
-                  disabled
-                />
-                <p className="text-xs text-muted-foreground">
-                  Example: Thriller (1982)/01 - Wanna Be Startin&apos; Somethin&apos;.flac
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>Artist Folder Format</Label>
-                <Input value="{Artist Name}" disabled />
-                <p className="text-xs text-muted-foreground">Example: Michael Jackson/</p>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

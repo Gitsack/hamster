@@ -20,21 +20,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
   MoreVerticalIcon,
-  RefreshIcon,
   Delete01Icon,
   Book01Icon,
   Loading01Icon,
   ViewIcon,
   ViewOffIcon,
-  CheckmarkCircle02Icon,
+  Add01Icon,
   Clock01Icon,
+  Cancel01Icon,
+  Download01Icon,
+  PackageMovingIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
+import { StatusBadge, type ItemStatus } from '@/components/library/status-badge'
 
 interface Book {
   id: number
@@ -68,10 +77,37 @@ export default function AuthorDetail() {
   const [loading, setLoading] = useState(true)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [activeDownloads, setActiveDownloads] = useState<Map<number, { progress: number; status: string }>>(new Map())
+  const [togglingBooks, setTogglingBooks] = useState<Set<number>>(new Set())
+  const [requestingAll, setRequestingAll] = useState(false)
 
   useEffect(() => {
     fetchAuthor()
+    fetchActiveDownloads()
+    const interval = setInterval(fetchActiveDownloads, 5000)
+    return () => clearInterval(interval)
   }, [authorId])
+
+  const fetchActiveDownloads = async () => {
+    try {
+      const response = await fetch('/api/v1/queue')
+      if (response.ok) {
+        const data = await response.json()
+        const downloads = new Map<number, { progress: number; status: string }>()
+        for (const item of data) {
+          if (item.bookId) {
+            downloads.set(item.bookId, {
+              progress: item.progress || 0,
+              status: item.status || 'downloading',
+            })
+          }
+        }
+        setActiveDownloads(downloads)
+      }
+    } catch (error) {
+      // Silently ignore - polling will retry
+    }
+  }
 
   const fetchAuthor = async () => {
     try {
@@ -129,6 +165,107 @@ export default function AuthorDetail() {
     } finally {
       setDeleting(false)
       setDeleteDialogOpen(false)
+    }
+  }
+
+  const toggleBookRequested = async (bookId: number, currentlyRequested: boolean) => {
+    if (!author) return
+
+    // Optimistically update UI immediately
+    setAuthor({
+      ...author,
+      books: author.books.map((b) =>
+        b.id === bookId ? { ...b, requested: !currentlyRequested } : b
+      ),
+    })
+
+    setTogglingBooks((prev) => new Set(prev).add(bookId))
+
+    try {
+      const response = await fetch(`/api/v1/books/${bookId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requested: !currentlyRequested }),
+      })
+      if (response.ok) {
+        toast.success(currentlyRequested ? 'Book unrequested' : 'Book requested')
+      } else {
+        // Revert on error
+        setAuthor({
+          ...author,
+          books: author.books.map((b) =>
+            b.id === bookId ? { ...b, requested: currentlyRequested } : b
+          ),
+        })
+        toast.error('Failed to update book')
+      }
+    } catch (error) {
+      console.error('Failed to update book:', error)
+      // Revert on error
+      setAuthor({
+        ...author,
+        books: author.books.map((b) =>
+          b.id === bookId ? { ...b, requested: currentlyRequested } : b
+        ),
+      })
+      toast.error('Failed to update book')
+    } finally {
+      setTogglingBooks((prev) => {
+        const next = new Set(prev)
+        next.delete(bookId)
+        return next
+      })
+    }
+  }
+
+  const requestAllBooks = async () => {
+    if (!author) return
+
+    const booksToRequest = author.books.filter((b) => !b.requested && !b.hasFile)
+    if (booksToRequest.length === 0) {
+      toast.info('All books are already requested or downloaded')
+      return
+    }
+
+    // Optimistically update UI
+    setAuthor({
+      ...author,
+      books: author.books.map((b) => ({
+        ...b,
+        requested: b.hasFile ? b.requested : true,
+      })),
+    })
+
+    setRequestingAll(true)
+
+    try {
+      // Request all books in parallel
+      const results = await Promise.all(
+        booksToRequest.map((book) =>
+          fetch(`/api/v1/books/${book.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requested: true }),
+          })
+        )
+      )
+
+      const failedCount = results.filter((r) => !r.ok).length
+      if (failedCount === 0) {
+        toast.success(`Requested ${booksToRequest.length} books`)
+      } else if (failedCount < booksToRequest.length) {
+        toast.warning(`Requested ${booksToRequest.length - failedCount} books, ${failedCount} failed`)
+      } else {
+        toast.error('Failed to request books')
+        // Revert on complete failure
+        fetchAuthor()
+      }
+    } catch (error) {
+      console.error('Failed to request all books:', error)
+      toast.error('Failed to request books')
+      fetchAuthor()
+    } finally {
+      setRequestingAll(false)
     }
   }
 
@@ -271,6 +408,31 @@ export default function AuthorDetail() {
         </div>
 
         {/* Books */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold">Books</h2>
+              {author.books.some((b) => !b.requested && !b.hasFile) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={requestAllBooks}
+                  disabled={requestingAll}
+                >
+                  {requestingAll ? (
+                    <>
+                      <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                      Requesting...
+                    </>
+                  ) : (
+                    <>
+                      <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                      Request All
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
         <Tabs defaultValue="all" className="space-y-4">
           <TabsList>
             <TabsTrigger value="all">All ({totalBooks})</TabsTrigger>
@@ -294,7 +456,13 @@ export default function AuthorDetail() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {author.books.map((book) => (
-                  <BookCard key={book.id} book={book} />
+                  <BookCard
+                    key={book.id}
+                    book={book}
+                    downloadInfo={activeDownloads.get(book.id)}
+                    isToggling={togglingBooks.has(book.id)}
+                    onToggleRequest={toggleBookRequested}
+                  />
                 ))}
               </div>
             )}
@@ -302,20 +470,24 @@ export default function AuthorDetail() {
 
           <TabsContent value="requested" className="space-y-4">
             {requestedBooks === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <h3 className="text-lg font-medium mb-2">No requested books</h3>
-                  <p className="text-muted-foreground">
-                    All books are either downloaded or not requested.
-                  </p>
-                </CardContent>
-              </Card>
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <h3 className="text-lg font-medium mb-2">No requested books</h3>
+                <p className="text-muted-foreground">
+                  All books are either downloaded or not requested.
+                </p>
+              </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {author.books
                   .filter((b) => b.requested && !b.hasFile)
                   .map((book) => (
-                    <BookCard key={book.id} book={book} />
+                    <BookCard
+                      key={book.id}
+                      book={book}
+                      downloadInfo={activeDownloads.get(book.id)}
+                      isToggling={togglingBooks.has(book.id)}
+                      onToggleRequest={toggleBookRequested}
+                    />
                   ))}
               </div>
             )}
@@ -323,25 +495,31 @@ export default function AuthorDetail() {
 
           <TabsContent value="downloaded" className="space-y-4">
             {downloadedBooks === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <h3 className="text-lg font-medium mb-2">No downloaded books</h3>
-                  <p className="text-muted-foreground">
-                    Downloaded books will appear here.
-                  </p>
-                </CardContent>
-              </Card>
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <h3 className="text-lg font-medium mb-2">No downloaded books</h3>
+                <p className="text-muted-foreground">
+                  Downloaded books will appear here.
+                </p>
+              </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {author.books
                   .filter((b) => b.hasFile)
                   .map((book) => (
-                    <BookCard key={book.id} book={book} />
+                    <BookCard
+                      key={book.id}
+                      book={book}
+                      downloadInfo={activeDownloads.get(book.id)}
+                      isToggling={togglingBooks.has(book.id)}
+                      onToggleRequest={toggleBookRequested}
+                    />
                   ))}
               </div>
             )}
           </TabsContent>
         </Tabs>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Delete confirmation dialog */}
@@ -375,39 +553,151 @@ export default function AuthorDetail() {
   )
 }
 
-function BookCard({ book }: { book: Book }) {
+interface BookCardProps {
+  book: Book
+  downloadInfo?: { progress: number; status: string }
+  isToggling?: boolean
+  onToggleRequest?: (bookId: number, currentlyRequested: boolean) => void
+}
+
+function BookCard({ book, downloadInfo, isToggling, onToggleRequest }: BookCardProps) {
+  const getBookStatus = (): ItemStatus | 'importing' => {
+    if (book.hasFile) return 'downloaded'
+    if (downloadInfo) {
+      if (downloadInfo.status === 'importing') return 'importing'
+      return 'downloading'
+    }
+    if (book.requested) return 'requested'
+    return 'none'
+  }
+
+  const status = getBookStatus()
+  const isNotRequested = status === 'none'
+
+  const handleToggleRequest = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onToggleRequest?.(book.id, book.requested)
+  }
+
   return (
-    <Link href={`/book/${book.id}`}>
+    <Link href={`/library/book/${book.id}`}>
       <Card className="overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group">
         <div className="aspect-[2/3] bg-muted relative">
           {book.coverUrl ? (
             <img
               src={book.coverUrl}
               alt={book.title}
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover transition-all duration-300 ${
+                isNotRequested ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100' : ''
+              }`}
               loading="lazy"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
+            <div className={`w-full h-full flex items-center justify-center transition-all duration-300 ${
+              isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
+            }`}>
               <HugeiconsIcon icon={Book01Icon} className="h-16 w-16 text-muted-foreground/50" />
             </div>
           )}
-          {/* Status badge */}
-          <div className="absolute top-2 right-2">
-            {book.hasFile ? (
-              <Badge variant="default" className="bg-green-500/90 gap-1">
-                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-3 w-3" />
-                Downloaded
-              </Badge>
-            ) : book.requested ? (
-              <Badge variant="secondary" className="gap-1">
-                <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3" />
-                Requested
-              </Badge>
-            ) : null}
+          {/* Status badge / Request button */}
+          <div className="absolute top-2 left-2 right-2 flex justify-between items-start">
+            {(() => {
+              if (status === 'downloaded') {
+                return <StatusBadge status="downloaded" />
+              }
+
+              if (status === 'downloading') {
+                return (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="default"
+                          className="gap-1 cursor-pointer bg-blue-600 hover:bg-destructive text-white transition-colors group/badge"
+                          onClick={handleToggleRequest}
+                        >
+                          <HugeiconsIcon icon={Download01Icon} className="h-3 w-3 group-hover/badge:hidden" />
+                          <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover/badge:block" />
+                          <span className="group-hover/badge:hidden">{Math.round(downloadInfo?.progress || 0)}%</span>
+                          <span className="hidden group-hover/badge:inline">Cancel</span>
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>Click to cancel download</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )
+              }
+
+              if (status === 'importing') {
+                return (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="default"
+                          className="gap-1 cursor-pointer bg-purple-600 hover:bg-destructive text-white transition-colors group/badge"
+                          onClick={handleToggleRequest}
+                        >
+                          <HugeiconsIcon icon={PackageMovingIcon} className="h-3 w-3 group-hover/badge:hidden animate-pulse" />
+                          <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover/badge:block" />
+                          <span className="group-hover/badge:hidden">Importing</span>
+                          <span className="hidden group-hover/badge:inline">Cancel</span>
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>Processing download, click to cancel</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )
+              }
+
+              if (isToggling) {
+                return (
+                  <Badge variant="secondary" className="bg-muted text-muted-foreground gap-1">
+                    <HugeiconsIcon icon={Loading01Icon} className="h-3 w-3 animate-spin" />
+                    {book.requested ? 'Unrequesting...' : 'Requesting...'}
+                  </Badge>
+                )
+              }
+
+              if (status === 'requested') {
+                return (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="secondary"
+                          className="gap-1 cursor-pointer bg-yellow-600 hover:bg-destructive text-white transition-colors group/badge"
+                          onClick={handleToggleRequest}
+                        >
+                          <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3 group-hover/badge:hidden" />
+                          <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover/badge:block" />
+                          <span className="group-hover/badge:hidden">Requested</span>
+                          <span className="hidden group-hover/badge:inline">Unrequest</span>
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>Click to unrequest</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )
+              }
+
+              // Not requested - show request button on hover
+              return (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={handleToggleRequest}
+                >
+                  <HugeiconsIcon icon={Add01Icon} className="h-3 w-3 mr-1" />
+                  Request
+                </Button>
+              )
+            })()}
           </div>
         </div>
-        <CardContent className="p-3">
+        <CardContent className={`p-3 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}>
           <h3 className="font-medium truncate group-hover:text-primary transition-colors">
             {book.title}
           </h3>

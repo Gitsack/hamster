@@ -1,9 +1,12 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Movie from '#models/movie'
+import MovieFile from '#models/movie_file'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
 
 const movieValidator = vine.compile(
   vine.object({
@@ -359,5 +362,63 @@ export default class MoviesController {
         error: error instanceof Error ? error.message : 'Search failed',
       })
     }
+  }
+
+  /**
+   * Delete the movie file from disk and database
+   */
+  async deleteFile({ params, response }: HttpContext) {
+    const movie = await Movie.query()
+      .where('id', params.id)
+      .preload('rootFolder')
+      .preload('movieFile')
+      .first()
+
+    if (!movie) {
+      return response.notFound({ error: 'Movie not found' })
+    }
+
+    if (!movie.movieFile) {
+      return response.notFound({ error: 'Movie has no file' })
+    }
+
+    if (!movie.rootFolder) {
+      return response.badRequest({ error: 'Movie has no root folder configured' })
+    }
+
+    const absolutePath = path.join(movie.rootFolder.path, movie.movieFile.relativePath)
+    const folderPath = path.dirname(absolutePath)
+
+    try {
+      // Delete the file from disk
+      await fs.unlink(absolutePath)
+      console.log(`[MoviesController] Deleted movie file: ${absolutePath}`)
+
+      // Try to remove the folder if empty
+      try {
+        const remainingFiles = await fs.readdir(folderPath)
+        if (remainingFiles.length === 0) {
+          await fs.rmdir(folderPath)
+          console.log(`[MoviesController] Removed empty folder: ${folderPath}`)
+        }
+      } catch {
+        // Folder might not be empty or other error, ignore
+      }
+    } catch (error) {
+      console.error(`[MoviesController] Failed to delete file: ${absolutePath}`, error)
+      // Continue with database cleanup even if file deletion fails
+    }
+
+    // Delete the MovieFile record
+    await MovieFile.query().where('id', movie.movieFile.id).delete()
+
+    // Update movie hasFile flag
+    movie.hasFile = false
+    await movie.save()
+
+    return response.json({
+      message: 'File deleted successfully',
+      movieId: movie.id,
+    })
   }
 }

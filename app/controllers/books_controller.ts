@@ -1,10 +1,13 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Book from '#models/book'
+import BookFile from '#models/book_file'
 import Author from '#models/author'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { openLibraryService } from '#services/metadata/openlibrary_service'
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
 
 const bookValidator = vine.compile(
   vine.object({
@@ -417,5 +420,63 @@ export default class BooksController {
         error: error instanceof Error ? error.message : 'Search failed',
       })
     }
+  }
+
+  /**
+   * Delete the book file from disk and database
+   */
+  async deleteFile({ params, response }: HttpContext) {
+    const book = await Book.query()
+      .where('id', params.id)
+      .preload('author', (query) => query.preload('rootFolder'))
+      .preload('bookFile')
+      .first()
+
+    if (!book) {
+      return response.notFound({ error: 'Book not found' })
+    }
+
+    if (!book.bookFile) {
+      return response.notFound({ error: 'Book has no file' })
+    }
+
+    if (!book.author?.rootFolder) {
+      return response.badRequest({ error: 'Author has no root folder configured' })
+    }
+
+    const absolutePath = path.join(book.author.rootFolder.path, book.bookFile.relativePath)
+    const folderPath = path.dirname(absolutePath)
+
+    try {
+      // Delete the file from disk
+      await fs.unlink(absolutePath)
+      console.log(`[BooksController] Deleted book file: ${absolutePath}`)
+
+      // Try to remove the author folder if empty
+      try {
+        const remainingFiles = await fs.readdir(folderPath)
+        if (remainingFiles.length === 0) {
+          await fs.rmdir(folderPath)
+          console.log(`[BooksController] Removed empty folder: ${folderPath}`)
+        }
+      } catch {
+        // Folder might not be empty or other error, ignore
+      }
+    } catch (error) {
+      console.error(`[BooksController] Failed to delete file: ${absolutePath}`, error)
+      // Continue with database cleanup even if file deletion fails
+    }
+
+    // Delete the BookFile record
+    await BookFile.query().where('id', book.bookFile.id).delete()
+
+    // Update book hasFile flag
+    book.hasFile = false
+    await book.save()
+
+    return response.json({
+      message: 'File deleted successfully',
+      bookId: book.id,
+    })
   }
 }

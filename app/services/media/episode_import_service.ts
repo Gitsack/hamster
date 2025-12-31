@@ -189,7 +189,7 @@ export class EpisodeImportService {
 
     // Generate destination path
     const extension = path.extname(sourcePath)
-    const relativePath = fileNamingService.getEpisodePath(
+    const relativePath = await fileNamingService.getEpisodePath(
       { episode, tvShow, quality },
       extension
     )

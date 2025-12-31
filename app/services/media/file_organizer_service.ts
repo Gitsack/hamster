@@ -72,7 +72,7 @@ export class FileOrganizerService {
 
       // Generate destination path
       const extension = path.extname(sourcePath)
-      const relativePath = fileNamingService.getTrackPath(
+      const relativePath = await fileNamingService.getTrackPath(
         { track, album, artist },
         extension
       )
@@ -232,7 +232,7 @@ export class FileOrganizerService {
     for (const track of tracks) {
       if (!track.file) continue
 
-      const expectedPath = fileNamingService.getTrackPath(
+      const expectedPath = await fileNamingService.getTrackPath(
         { track, album, artist },
         path.extname(track.file.relativePath)
       )

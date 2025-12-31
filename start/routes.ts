@@ -133,6 +133,7 @@ router
     router.post('/artists', [ArtistsController, 'store'])
     router.get('/artists/search', [ArtistsController, 'search'])
     router.get('/artists/:id', [ArtistsController, 'show'])
+    router.get('/artists/:mbid/albums', [ArtistsController, 'albumsByMbid'])
     router.put('/artists/:id', [ArtistsController, 'update'])
     router.delete('/artists/:id', [ArtistsController, 'destroy'])
     router.post('/artists/:id/refresh', [ArtistsController, 'refresh'])
@@ -144,6 +145,7 @@ router
     router.get('/albums/requested', [AlbumsController, 'requested'])
     router.get('/albums/wanted', [AlbumsController, 'requested']) // Alias for backwards compatibility
     router.get('/albums/:id', [AlbumsController, 'show'])
+    router.get('/albums/:mbid/tracks', [AlbumsController, 'tracksByMbid'])
     router.put('/albums/:id', [AlbumsController, 'update'])
     router.get('/albums/:id/releases', [AlbumsController, 'searchReleases'])
     router.post('/albums/:id/download', [AlbumsController, 'searchAndDownload'])
@@ -161,6 +163,7 @@ router
     router.get('/movies/:id', [MoviesController, 'show'])
     router.put('/movies/:id', [MoviesController, 'update'])
     router.delete('/movies/:id', [MoviesController, 'destroy'])
+    router.delete('/movies/:id/file', [MoviesController, 'deleteFile'])
     router.post('/movies/:id/request', [MoviesController, 'setWanted'])
     router.post('/movies/:id/download', [MoviesController, 'download'])
     router.post('/movies/:id/search', [MoviesController, 'searchNow'])
@@ -178,6 +181,7 @@ router
     router.get('/tvshows/:id/season/:seasonNumber', [TvShowsController, 'showSeason'])
     router.post('/tvshows/:id/season/:seasonNumber/request', [TvShowsController, 'setSeasonWanted'])
     router.post('/tvshows/:id/episodes/:episodeId/request', [TvShowsController, 'setEpisodeWanted'])
+    router.delete('/tvshows/:id/episodes/:episodeId/file', [TvShowsController, 'deleteEpisodeFile'])
     router.post('/tvshows/:id/search', [TvShowsController, 'searchNow'])
     router.post('/tvshows/:id/episodes/:episodeId/search', [TvShowsController, 'searchEpisodeNow'])
 
@@ -197,6 +201,7 @@ router
     router.get('/books/:id', [BooksController, 'show'])
     router.put('/books/:id', [BooksController, 'update'])
     router.delete('/books/:id', [BooksController, 'destroy'])
+    router.delete('/books/:id/file', [BooksController, 'deleteFile'])
     router.post('/books/:id/request', [BooksController, 'setWanted'])
     router.post('/books/:id/download', [BooksController, 'download'])
     router.post('/books/:id/search', [BooksController, 'searchNow'])
@@ -234,6 +239,8 @@ router
     router.get('/settings', [AppSettingsController, 'index'])
     router.put('/settings', [AppSettingsController, 'update'])
     router.post('/settings/media-type', [AppSettingsController, 'toggleMediaType'])
+    router.get('/settings/naming-patterns', [AppSettingsController, 'getNamingPatterns'])
+    router.put('/settings/naming-patterns', [AppSettingsController, 'updateNamingPatterns'])
 
     // Filesystem browser
     router.get('/filesystem/browse', [FilesystemController, 'browse'])

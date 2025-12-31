@@ -283,6 +283,7 @@ export default function Queue() {
                 </p>
               </div>
             ) : (
+              <div className="overflow-x-auto -mx-6 px-6">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -333,6 +334,7 @@ export default function Queue() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

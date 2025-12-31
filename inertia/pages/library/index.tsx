@@ -44,6 +44,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
+import { StatusBadge as SharedStatusBadge, type ItemStatus } from '@/components/library/status-badge'
 
 interface Artist {
   id: number
@@ -374,32 +375,11 @@ export default function Library() {
     }
   }
 
-  // Status badge component for items
-  const StatusBadge = ({ requested, hasFile, downloading }: { requested: boolean; hasFile?: boolean; downloading?: boolean }) => {
-    if (downloading) {
-      return (
-        <Badge variant="secondary" className="gap-1">
-          <HugeiconsIcon icon={Download01Icon} className="h-3 w-3 animate-pulse" />
-          Downloading
-        </Badge>
-      )
-    }
-    if (hasFile) {
-      return (
-        <Badge variant="default" className="gap-1 bg-green-600">
-          <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-3 w-3" />
-          Downloaded
-        </Badge>
-      )
-    }
-    if (requested) {
-      return (
-        <Badge variant="secondary" className="gap-1">
-          <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3" />
-          Requested
-        </Badge>
-      )
-    }
+  // Get status for items
+  const getItemStatus = (item: { requested?: boolean; hasFile?: boolean }, isDownloading: boolean): ItemStatus | null => {
+    if (isDownloading) return 'downloading'
+    if (item.hasFile) return 'downloaded'
+    if (item.requested) return 'requested'
     return null
   }
 
@@ -551,11 +531,14 @@ export default function Library() {
               </div>
             )}
             {/* Status indicator */}
-            {(item.requested || item.hasFile || isDownloading) && (
-              <div className="absolute top-2 left-2">
-                <StatusBadge requested={item.requested || false} hasFile={item.hasFile} downloading={isDownloading} />
-              </div>
-            )}
+            {(() => {
+              const status = getItemStatus(item, isDownloading)
+              return status ? (
+                <div className="absolute top-2 left-2">
+                  <SharedStatusBadge status={status} />
+                </div>
+              ) : null
+            })()}
           </div>
           <CardContent className={`p-3 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}>
             <h3 className="font-medium truncate group-hover:text-primary transition-colors">
@@ -657,7 +640,10 @@ export default function Library() {
             </div>
           </Link>
           <div className="flex items-center gap-2">
-            <StatusBadge requested={item.requested || false} hasFile={item.hasFile} downloading={isDownloading} />
+            {(() => {
+              const status = getItemStatus(item, isDownloading)
+              return status ? <SharedStatusBadge status={status} /> : null
+            })()}
             {item.badges?.map((badge, i) => (
               <Badge key={i} variant="outline">{badge}</Badge>
             ))}
@@ -772,13 +758,13 @@ export default function Library() {
     const items = getFilteredTvShows()
     if (items.length === 0) return renderEmptyState()
 
+    // TV shows don't show requested status at show level (it's managed at episode level)
     const gridItems = items.map(show => ({
       id: show.id,
       name: show.title,
       imageUrl: show.posterUrl,
       subtitle: `${show.seasonCount} season${show.seasonCount !== 1 ? 's' : ''} • ${show.episodeCount} episodes`,
       detailUrl: `/tvshow/${show.id}`,
-      requested: show.requested,
       mediaType: 'tv' as MediaType,
     }))
 
@@ -798,7 +784,6 @@ export default function Library() {
           imageUrl: show.posterUrl,
           subtitle: `${show.seasonCount} season${show.seasonCount !== 1 ? 's' : ''} • ${show.episodeCount} episodes`,
           detailUrl: `/tvshow/${show.id}`,
-          requested: show.requested,
           mediaType: 'tv',
           badges: [show.network, show.status].filter(Boolean) as string[],
         }))}
@@ -985,6 +970,10 @@ export default function Library() {
         return [...base, { value: 'year', label: 'Year' }, { value: 'count', label: 'Episode Count' }]
       case 'books':
         return [...base, { value: 'count', label: 'Book Count' }]
+      case 'missing':
+        return base
+      default:
+        return base
     }
   }
 

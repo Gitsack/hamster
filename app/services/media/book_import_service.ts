@@ -167,7 +167,7 @@ export class BookImportService {
     const format = fileNamingService.getBookFormat(sourcePath)
 
     // Generate destination path
-    const relativePath = fileNamingService.getBookPath(
+    const relativePath = await fileNamingService.getBookPath(
       { book, author, format },
       extension
     )

@@ -132,7 +132,7 @@ export class FileScannerService {
       }
     }
 
-    const artistPath = path.join(rootFolder.path, fileNamingService.getArtistFolderName({ artist }))
+    const artistPath = path.join(rootFolder.path, await fileNamingService.getArtistFolderName({ artist }))
     return this.scanDirectory(artistPath, rootFolder, onProgress)
   }
 

@@ -19,6 +19,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
@@ -28,15 +34,19 @@ import {
   Loading01Icon,
   ViewIcon,
   ViewOffIcon,
-  CheckmarkCircle02Icon,
   Clock01Icon,
   Calendar01Icon,
   Search01Icon,
   Time01Icon,
   StarIcon,
+  FileDownloadIcon,
+  Cancel01Icon,
+  Download01Icon,
+  PackageMovingIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
+import { StatusBadge, type ItemStatus } from '@/components/library/status-badge'
 
 interface QualityProfile {
   id: number
@@ -86,11 +96,18 @@ export default function MovieDetail() {
   const [movie, setMovie] = useState<Movie | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteFileDialogOpen, setDeleteFileDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deletingFile, setDeletingFile] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [toggling, setToggling] = useState(false)
+  const [activeDownload, setActiveDownload] = useState<{ progress: number; status: string } | null>(null)
 
   useEffect(() => {
     fetchMovie()
+    fetchActiveDownloads()
+    const interval = setInterval(fetchActiveDownloads, 5000)
+    return () => clearInterval(interval)
   }, [movieId])
 
   const fetchMovie = async () => {
@@ -111,22 +128,70 @@ export default function MovieDetail() {
     }
   }
 
+  const fetchActiveDownloads = async () => {
+    try {
+      const response = await fetch('/api/v1/queue')
+      if (response.ok) {
+        const data = await response.json()
+        const download = data.find((item: any) => item.movieId === movieId)
+        if (download) {
+          setActiveDownload({
+            progress: download.progress || 0,
+            status: download.status || 'downloading',
+          })
+        } else {
+          setActiveDownload(null)
+        }
+      }
+    } catch (error) {
+      // Silently ignore - polling will retry
+    }
+  }
+
+  const getMovieStatus = (): { status: ItemStatus | 'importing'; progress: number } => {
+    if (movie?.hasFile) {
+      return { status: 'downloaded', progress: 100 }
+    }
+    if (activeDownload) {
+      if (activeDownload.status === 'importing') {
+        return { status: 'importing', progress: 100 }
+      }
+      return { status: 'downloading', progress: activeDownload.progress }
+    }
+    if (movie?.requested) {
+      return { status: 'requested', progress: 0 }
+    }
+    return { status: 'none', progress: 0 }
+  }
+
   const toggleWanted = async () => {
     if (!movie) return
+
+    const wasRequested = movie.requested
+    // Optimistic update
+    setMovie({ ...movie, requested: !wasRequested })
+    setToggling(true)
 
     try {
       const response = await fetch(`/api/v1/movies/${movieId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requested: !movie.requested }),
+        body: JSON.stringify({ requested: !wasRequested }),
       })
       if (response.ok) {
-        setMovie({ ...movie, requested: !movie.requested })
-        toast.success(movie.requested ? 'Movie unrequested' : 'Movie requested')
+        toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
+      } else {
+        // Revert on error
+        setMovie({ ...movie, requested: wasRequested })
+        toast.error('Failed to update movie')
       }
     } catch (error) {
       console.error('Failed to update movie:', error)
+      // Revert on error
+      setMovie({ ...movie, requested: wasRequested })
       toast.error('Failed to update movie')
+    } finally {
+      setToggling(false)
     }
   }
 
@@ -172,6 +237,30 @@ export default function MovieDetail() {
       toast.error('Failed to download movie')
     } finally {
       setDownloading(false)
+    }
+  }
+
+  const deleteFile = async () => {
+    if (!movie) return
+
+    setDeletingFile(true)
+    try {
+      const response = await fetch(`/api/v1/movies/${movieId}/file`, {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        toast.success('File deleted successfully')
+        setMovie({ ...movie, hasFile: false, movieFile: null })
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete file')
+      }
+    } catch (error) {
+      console.error('Failed to delete file:', error)
+      toast.error('Failed to delete file')
+    } finally {
+      setDeletingFile(false)
+      setDeleteFileDialogOpen(false)
     }
   }
 
@@ -315,18 +404,91 @@ export default function MovieDetail() {
             </div>
 
             {/* Status */}
-            <div className="flex items-center gap-2">
-              {movie.hasFile ? (
-                <Badge variant="default" className="bg-green-600 gap-1">
-                  <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-3 w-3" />
-                  Downloaded
-                </Badge>
-              ) : movie.requested ? (
-                <Badge variant="secondary" className="gap-1">
-                  <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3" />
-                  Requested
-                </Badge>
-              ) : null}
+            <div className="flex items-center gap-2 flex-wrap">
+              {(() => {
+                const { status, progress } = getMovieStatus()
+
+                if (status === 'downloaded') {
+                  return <StatusBadge status="downloaded" />
+                }
+
+                if (status === 'downloading') {
+                  return (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="default"
+                            className="gap-1 cursor-pointer bg-blue-600 hover:bg-destructive text-white transition-colors group"
+                            onClick={toggleWanted}
+                          >
+                            <HugeiconsIcon icon={Download01Icon} className="h-3 w-3 group-hover:hidden" />
+                            <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover:block" />
+                            <span className="group-hover:hidden">{Math.round(progress)}%</span>
+                            <span className="hidden group-hover:inline">Cancel</span>
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>Click to cancel download</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )
+                }
+
+                if (status === 'importing') {
+                  return (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="default"
+                            className="gap-1 cursor-pointer bg-purple-600 hover:bg-destructive text-white transition-colors group"
+                            onClick={toggleWanted}
+                          >
+                            <HugeiconsIcon icon={PackageMovingIcon} className="h-3 w-3 group-hover:hidden animate-pulse" />
+                            <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover:block" />
+                            <span className="group-hover:hidden">Importing</span>
+                            <span className="hidden group-hover:inline">Cancel</span>
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>Processing download, click to cancel</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )
+                }
+
+                if (toggling) {
+                  return (
+                    <Badge variant="secondary" className="bg-muted text-muted-foreground gap-1">
+                      <HugeiconsIcon icon={Loading01Icon} className="h-3 w-3 animate-spin" />
+                      {movie.requested ? 'Unrequesting...' : 'Requesting...'}
+                    </Badge>
+                  )
+                }
+
+                if (status === 'requested') {
+                  return (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant="secondary"
+                            className="gap-1 cursor-pointer bg-yellow-600 hover:bg-destructive text-white transition-colors group"
+                            onClick={toggleWanted}
+                          >
+                            <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3 group-hover:hidden" />
+                            <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 hidden group-hover:block" />
+                            <span className="group-hover:hidden">Requested</span>
+                            <span className="hidden group-hover:inline">Unrequest</span>
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>Click to unrequest</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )
+                }
+
+                return null
+              })()}
               {movie.status && (
                 <Badge variant="outline">{movie.status}</Badge>
               )}
@@ -432,12 +594,23 @@ export default function MovieDetail() {
                     </p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" asChild>
-                  <a href={movie.movieFile.downloadUrl} download>
-                    <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 mr-2" />
-                    Download
-                  </a>
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={movie.movieFile.downloadUrl} download>
+                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 mr-2" />
+                      Download
+                    </a>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setDeleteFileDialogOpen(true)}
+                  >
+                    <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -465,6 +638,34 @@ export default function MovieDetail() {
                 </>
               ) : (
                 'Delete'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete file confirmation dialog */}
+      <Dialog open={deleteFileDialogOpen} onOpenChange={setDeleteFileDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete movie file?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the movie file from disk. The movie will remain in your
+              library but will need to be downloaded again.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteFileDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={deleteFile} disabled={deletingFile}>
+              {deletingFile ? (
+                <>
+                  <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete File'
               )}
             </Button>
           </DialogFooter>
