@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
+import { accessWithTimeout, statWithTimeout } from '../utils/fs_utils.js'
 
 interface DirectoryEntry {
   name: string
@@ -41,8 +42,8 @@ export default class FilesystemController {
     browsePath = path.normalize(browsePath)
 
     try {
-      // Check if path exists and is accessible
-      const stats = await fs.stat(browsePath)
+      // Check if path exists and is accessible (with timeout for network paths)
+      const stats = await statWithTimeout(browsePath)
       if (!stats.isDirectory()) {
         return response.badRequest({ error: 'Path is not a directory' })
       }
@@ -105,14 +106,14 @@ export default class FilesystemController {
     for (const dir of commonDirs) {
       const fullPath = path.join(homeDir, dir.subpath)
       try {
-        await fs.access(fullPath)
+        await accessWithTimeout(fullPath, 1000) // 1s timeout for quick paths
         paths.push({
           name: dir.name,
           path: fullPath,
           isDirectory: true,
         })
       } catch {
-        // Directory doesn't exist, skip it
+        // Directory doesn't exist or timed out, skip it
       }
     }
 
@@ -136,7 +137,7 @@ export default class FilesystemController {
     }
 
     try {
-      const stats = await fs.stat(requestedPath)
+      const stats = await statWithTimeout(requestedPath)
       return response.json({
         exists: true,
         isDirectory: stats.isDirectory(),
@@ -159,7 +160,7 @@ export default class FilesystemController {
     for (const letter of letters) {
       const drivePath = `${letter}:\\`
       try {
-        await fs.access(drivePath)
+        await accessWithTimeout(drivePath, 500) // 500ms timeout per drive
         drives.push(drivePath)
       } catch {
         // Drive doesn't exist or isn't accessible

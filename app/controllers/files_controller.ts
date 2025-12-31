@@ -1,6 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import path from 'node:path'
-import fs from 'node:fs/promises'
+import { accessWithTimeout } from '../utils/fs_utils.js'
 import MovieFile from '#models/movie_file'
 import EpisodeFile from '#models/episode_file'
 import BookFile from '#models/book_file'
@@ -38,7 +38,7 @@ export default class FilesController {
     const absolutePath = path.join(rootFolder.path, movieFile.relativePath)
 
     try {
-      await fs.access(absolutePath)
+      await accessWithTimeout(absolutePath)
     } catch {
       return response.notFound({ error: 'File not found on disk' })
     }
@@ -74,7 +74,7 @@ export default class FilesController {
     const absolutePath = path.join(rootFolder.path, episodeFile.relativePath)
 
     try {
-      await fs.access(absolutePath)
+      await accessWithTimeout(absolutePath)
     } catch {
       return response.notFound({ error: 'File not found on disk' })
     }
@@ -115,7 +115,7 @@ export default class FilesController {
     const absolutePath = path.join(rootFolder.path, bookFile.relativePath)
 
     try {
-      await fs.access(absolutePath)
+      await accessWithTimeout(absolutePath)
     } catch {
       return response.notFound({ error: 'File not found on disk' })
     }
@@ -156,7 +156,7 @@ export default class FilesController {
     const absolutePath = path.join(rootFolder.path, trackFile.relativePath)
 
     try {
-      await fs.access(absolutePath)
+      await accessWithTimeout(absolutePath)
     } catch {
       return response.notFound({ error: 'File not found on disk' })
     }

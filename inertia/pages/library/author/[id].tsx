@@ -29,13 +29,18 @@ import {
   ViewIcon,
   ViewOffIcon,
   Add01Icon,
+  RefreshIcon,
+  CheckmarkCircle01Icon,
+  Clock01Icon,
+  Search01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 
-interface Book {
+// Book from library (database)
+interface LibraryBook {
   id: number
   title: string
   releaseDate: string | null
@@ -44,6 +49,19 @@ interface Book {
   hasFile: boolean
   seriesName: string | null
   seriesPosition: number | null
+}
+
+// Book from OpenLibrary bibliography
+interface BibliographyBook {
+  openlibraryId: string
+  title: string
+  description: string | null
+  coverUrl: string | null
+  subjects: string[] | null
+  inLibrary: boolean
+  bookId: number | null
+  requested: boolean
+  hasFile: boolean
 }
 
 interface Author {
@@ -55,7 +73,7 @@ interface Author {
   requested: boolean
   qualityProfile: { id: number; name: string } | null
   rootFolder: { id: number; path: string } | null
-  books: Book[]
+  books: LibraryBook[]
   addedAt: string | null
 }
 
@@ -64,11 +82,15 @@ export default function AuthorDetail() {
   const authorId = url.split('/').pop()
 
   const [author, setAuthor] = useState<Author | null>(null)
+  const [bibliography, setBibliography] = useState<BibliographyBook[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingBibliography, setLoadingBibliography] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [activeDownloads, setActiveDownloads] = useState<Map<number, { progress: number; status: string }>>(new Map())
   const [togglingBooks, setTogglingBooks] = useState<Set<number>>(new Set())
+  const [addingBooks, setAddingBooks] = useState<Set<string>>(new Set())
   const [requestingAll, setRequestingAll] = useState(false)
 
   useEffect(() => {
@@ -77,6 +99,13 @@ export default function AuthorDetail() {
     const interval = setInterval(fetchActiveDownloads, 5000)
     return () => clearInterval(interval)
   }, [authorId])
+
+  // Fetch bibliography when author loads and has OpenLibrary ID
+  useEffect(() => {
+    if (author?.openlibraryId) {
+      fetchBibliography(author.openlibraryId)
+    }
+  }, [author?.openlibraryId])
 
   const fetchActiveDownloads = async () => {
     try {
@@ -114,6 +143,46 @@ export default function AuthorDetail() {
       toast.error('Failed to load author')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchBibliography = async (openlibraryId: string) => {
+    setLoadingBibliography(true)
+    try {
+      const response = await fetch(`/api/v1/authors/${encodeURIComponent(openlibraryId)}/works`)
+      if (response.ok) {
+        const data = await response.json()
+        setBibliography(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch bibliography:', error)
+    } finally {
+      setLoadingBibliography(false)
+    }
+  }
+
+  const refreshAuthor = async () => {
+    setRefreshing(true)
+    try {
+      const response = await fetch(`/api/v1/authors/${authorId}/refresh`, {
+        method: 'POST',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        toast.success(`Author refreshed${data.booksAdded > 0 ? `, ${data.booksAdded} books added` : ''}`)
+        fetchAuthor()
+        if (author?.openlibraryId) {
+          fetchBibliography(author.openlibraryId)
+        }
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to refresh')
+      }
+    } catch (error) {
+      console.error('Failed to refresh author:', error)
+      toast.error('Failed to refresh author')
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -208,6 +277,49 @@ export default function AuthorDetail() {
     }
   }
 
+  // Add book from bibliography to library
+  const addBook = async (book: BibliographyBook) => {
+    if (!author) return
+
+    setAddingBooks((prev) => new Set(prev).add(book.openlibraryId))
+
+    try {
+      const response = await fetch('/api/v1/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          openlibraryId: book.openlibraryId,
+          authorId: String(author.id),
+          title: book.title,
+          rootFolderId: String(author.rootFolder?.id),
+          qualityProfileId: author.qualityProfile?.id ? String(author.qualityProfile.id) : undefined,
+          requested: true,
+        }),
+      })
+
+      if (response.ok) {
+        toast.success(`Added "${book.title}" to library`)
+        // Refresh both author and bibliography
+        fetchAuthor()
+        if (author.openlibraryId) {
+          fetchBibliography(author.openlibraryId)
+        }
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to add book')
+      }
+    } catch (error) {
+      console.error('Failed to add book:', error)
+      toast.error('Failed to add book')
+    } finally {
+      setAddingBooks((prev) => {
+        const next = new Set(prev)
+        next.delete(book.openlibraryId)
+        return next
+      })
+    }
+  }
+
   const requestAllBooks = async () => {
     if (!author) return
 
@@ -258,6 +370,57 @@ export default function AuthorDetail() {
       setRequestingAll(false)
     }
   }
+
+  // Merge library books with bibliography for complete view
+  const mergedBooks = useMemo(() => {
+    const libraryMap = new Map(
+      author?.books.map((b) => [b.id, b]) || []
+    )
+
+    // Map bibliography books, enriching with library data if available
+    const merged = bibliography.map((b) => {
+      const libraryBook = b.bookId ? libraryMap.get(b.bookId) : undefined
+      return {
+        openlibraryId: b.openlibraryId,
+        title: b.title,
+        description: b.description,
+        coverUrl: b.coverUrl || libraryBook?.coverUrl,
+        inLibrary: b.inLibrary,
+        libraryId: b.bookId,
+        requested: b.requested || libraryBook?.requested || false,
+        hasFile: b.hasFile || libraryBook?.hasFile || false,
+        seriesName: libraryBook?.seriesName,
+        seriesPosition: libraryBook?.seriesPosition,
+      }
+    })
+
+    // Add any library books not in bibliography (edge case)
+    for (const book of author?.books || []) {
+      if (!bibliography.find((b) => b.bookId === book.id)) {
+        merged.push({
+          openlibraryId: '',
+          title: book.title,
+          description: null,
+          coverUrl: book.coverUrl,
+          inLibrary: true,
+          libraryId: book.id,
+          requested: book.requested,
+          hasFile: book.hasFile,
+          seriesName: book.seriesName,
+          seriesPosition: book.seriesPosition,
+        })
+      }
+    }
+
+    // Sort alphabetically by title
+    return merged.sort((a, b) => a.title.localeCompare(b.title))
+  }, [author?.books, bibliography])
+
+  // Filter books by category
+  const inLibraryBooks = mergedBooks.filter((b) => b.inLibrary)
+  const downloadedBooksFiltered = mergedBooks.filter((b) => b.inLibrary && b.hasFile)
+  const requestedBooksFiltered = mergedBooks.filter((b) => b.inLibrary && b.requested && !b.hasFile)
+  const notInLibraryBooks = mergedBooks.filter((b) => !b.inLibrary)
 
   // Calculate statistics
   const totalBooks = author?.books.length || 0
@@ -317,6 +480,13 @@ export default function AuthorDetail() {
                   className="h-4 w-4 mr-2"
                 />
                 {author.requested ? 'Unrequest' : 'Request'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={refreshAuthor} disabled={refreshing}>
+                <HugeiconsIcon
+                  icon={RefreshIcon}
+                  className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
+                />
+                Refresh
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -397,61 +567,115 @@ export default function AuthorDetail() {
           </div>
         </div>
 
-        {/* Books */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold">Books</h2>
-              {author.books.some((b) => !b.requested && !b.hasFile) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={requestAllBooks}
-                  disabled={requestingAll}
-                >
-                  {requestingAll ? (
-                    <>
-                      <Spinner className="mr-2" />
-                      Requesting...
-                    </>
-                  ) : (
-                    <>
-                      <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-                      Request All
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
+        {/* Books / Bibliography */}
         <Tabs defaultValue="all" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="all">All ({totalBooks})</TabsTrigger>
-            <TabsTrigger value="requested">Requested ({requestedBooks})</TabsTrigger>
-            <TabsTrigger value="downloaded">Downloaded ({downloadedBooks})</TabsTrigger>
-          </TabsList>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <TabsList className="flex-wrap h-auto">
+              <TabsTrigger value="all">
+                Bibliography ({mergedBooks.length})
+                {loadingBibliography && <Spinner className="ml-2 h-3 w-3" />}
+              </TabsTrigger>
+              <TabsTrigger value="library">
+                In Library ({inLibraryBooks.length})
+              </TabsTrigger>
+              <TabsTrigger value="downloaded">
+                Downloaded ({downloadedBooksFiltered.length})
+              </TabsTrigger>
+              <TabsTrigger value="requested">
+                Requested ({requestedBooksFiltered.length})
+              </TabsTrigger>
+              {notInLibraryBooks.length > 0 && (
+                <TabsTrigger value="available">
+                  Available ({notInLibraryBooks.length})
+                </TabsTrigger>
+              )}
+            </TabsList>
+            {author.books.some((b) => !b.requested && !b.hasFile) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={requestAllBooks}
+                disabled={requestingAll}
+              >
+                {requestingAll ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Requesting...
+                  </>
+                ) : (
+                  <>
+                    <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                    Request All in Library
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
 
           <TabsContent value="all" className="space-y-4">
-            {author.books.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="rounded-full bg-muted p-6 mb-4">
-                    <HugeiconsIcon icon={Book01Icon} className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">No books yet</h3>
-                  <p className="text-muted-foreground">
-                    Books will appear here once added.
-                  </p>
-                </CardContent>
-              </Card>
+            {mergedBooks.length === 0 ? (
+              <EmptyState message={loadingBibliography ? 'Loading bibliography...' : 'No books found. Try refreshing to fetch from OpenLibrary.'} />
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {author.books.map((book) => (
-                  <BookCard
-                    key={book.id}
+                {mergedBooks.map((book) => (
+                  <MergedBookCard
+                    key={book.openlibraryId || book.libraryId}
                     book={book}
-                    downloadInfo={activeDownloads.get(book.id)}
-                    isToggling={togglingBooks.has(book.id)}
+                    downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                    isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
+                    isAdding={addingBooks.has(book.openlibraryId)}
                     onToggleRequest={toggleBookRequested}
+                    onAdd={() => addBook({
+                      openlibraryId: book.openlibraryId,
+                      title: book.title,
+                      description: book.description,
+                      coverUrl: book.coverUrl,
+                      subjects: null,
+                      inLibrary: book.inLibrary,
+                      bookId: book.libraryId || null,
+                      requested: book.requested,
+                      hasFile: book.hasFile,
+                    })}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="library" className="space-y-4">
+            {inLibraryBooks.length === 0 ? (
+              <EmptyState message="No books in library yet" />
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {inLibraryBooks.map((book) => (
+                  <MergedBookCard
+                    key={book.openlibraryId || book.libraryId}
+                    book={book}
+                    downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                    isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
+                    isAdding={false}
+                    onToggleRequest={toggleBookRequested}
+                    onAdd={() => {}}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="downloaded" className="space-y-4">
+            {downloadedBooksFiltered.length === 0 ? (
+              <EmptyState message="No downloaded books yet" />
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {downloadedBooksFiltered.map((book) => (
+                  <MergedBookCard
+                    key={book.openlibraryId || book.libraryId}
+                    book={book}
+                    downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                    isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
+                    isAdding={false}
+                    onToggleRequest={toggleBookRequested}
+                    onAdd={() => {}}
                   />
                 ))}
               </div>
@@ -459,57 +683,55 @@ export default function AuthorDetail() {
           </TabsContent>
 
           <TabsContent value="requested" className="space-y-4">
-            {requestedBooks === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <h3 className="text-lg font-medium mb-2">No requested books</h3>
-                <p className="text-muted-foreground">
-                  All books are either downloaded or not requested.
-                </p>
-              </div>
+            {requestedBooksFiltered.length === 0 ? (
+              <EmptyState message="No requested books" />
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {author.books
-                  .filter((b) => b.requested && !b.hasFile)
-                  .map((book) => (
-                    <BookCard
-                      key={book.id}
-                      book={book}
-                      downloadInfo={activeDownloads.get(book.id)}
-                      isToggling={togglingBooks.has(book.id)}
-                      onToggleRequest={toggleBookRequested}
-                    />
-                  ))}
+                {requestedBooksFiltered.map((book) => (
+                  <MergedBookCard
+                    key={book.openlibraryId || book.libraryId}
+                    book={book}
+                    downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                    isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
+                    isAdding={false}
+                    onToggleRequest={toggleBookRequested}
+                    onAdd={() => {}}
+                  />
+                ))}
               </div>
             )}
           </TabsContent>
 
-          <TabsContent value="downloaded" className="space-y-4">
-            {downloadedBooks === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <h3 className="text-lg font-medium mb-2">No downloaded books</h3>
-                <p className="text-muted-foreground">
-                  Downloaded books will appear here.
-                </p>
-              </div>
+          <TabsContent value="available" className="space-y-4">
+            {notInLibraryBooks.length === 0 ? (
+              <EmptyState message="All books are in library" />
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {author.books
-                  .filter((b) => b.hasFile)
-                  .map((book) => (
-                    <BookCard
-                      key={book.id}
-                      book={book}
-                      downloadInfo={activeDownloads.get(book.id)}
-                      isToggling={togglingBooks.has(book.id)}
-                      onToggleRequest={toggleBookRequested}
-                    />
-                  ))}
+                {notInLibraryBooks.map((book) => (
+                  <MergedBookCard
+                    key={book.openlibraryId || book.libraryId}
+                    book={book}
+                    downloadInfo={undefined}
+                    isToggling={false}
+                    isAdding={addingBooks.has(book.openlibraryId)}
+                    onToggleRequest={toggleBookRequested}
+                    onAdd={() => addBook({
+                      openlibraryId: book.openlibraryId,
+                      title: book.title,
+                      description: book.description,
+                      coverUrl: book.coverUrl,
+                      subjects: null,
+                      inLibrary: book.inLibrary,
+                      bookId: book.libraryId || null,
+                      requested: book.requested,
+                      hasFile: book.hasFile,
+                    })}
+                  />
+                ))}
               </div>
             )}
           </TabsContent>
         </Tabs>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Delete confirmation dialog */}
@@ -543,14 +765,44 @@ export default function AuthorDetail() {
   )
 }
 
-interface BookCardProps {
-  book: Book
-  downloadInfo?: { progress: number; status: string }
-  isToggling?: boolean
-  onToggleRequest?: (bookId: number, currentlyRequested: boolean) => void
+// Empty state component
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="rounded-full bg-muted p-6 mb-4">
+        <HugeiconsIcon icon={Book01Icon} className="h-12 w-12 text-muted-foreground" />
+      </div>
+      <p className="text-muted-foreground">{message}</p>
+    </div>
+  )
 }
 
-function BookCard({ book, downloadInfo, isToggling, onToggleRequest }: BookCardProps) {
+// Merged book type for unified display
+interface MergedBook {
+  openlibraryId: string
+  title: string
+  description: string | null
+  coverUrl: string | null
+  inLibrary: boolean
+  libraryId?: number | null
+  requested: boolean
+  hasFile: boolean
+  seriesName?: string | null
+  seriesPosition?: number | null
+}
+
+interface MergedBookCardProps {
+  book: MergedBook
+  downloadInfo?: { progress: number; status: string }
+  isToggling: boolean
+  isAdding: boolean
+  onToggleRequest: (bookId: number, currentlyRequested: boolean) => void
+  onAdd: () => void
+}
+
+function MergedBookCard({ book, downloadInfo, isToggling, isAdding, onToggleRequest, onAdd }: MergedBookCardProps) {
+  const [downloading, setDownloading] = useState(false)
+
   const getBookStatus = (): MediaItemStatus => {
     if (book.hasFile) return 'downloaded'
     if (downloadInfo) {
@@ -562,59 +814,145 @@ function BookCard({ book, downloadInfo, isToggling, onToggleRequest }: BookCardP
   }
 
   const status = getBookStatus()
-  const isNotRequested = status === 'none'
+  const isNotInLibrary = !book.inLibrary
+  const isComplete = book.hasFile
 
   const handleToggleRequest = (e?: React.MouseEvent) => {
     e?.preventDefault()
     e?.stopPropagation()
-    onToggleRequest?.(book.id, book.requested)
+    if (book.libraryId) {
+      onToggleRequest(book.libraryId, book.requested)
+    }
   }
 
+  const handleAdd = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onAdd()
+  }
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!book.libraryId) return
+
+    setDownloading(true)
+    try {
+      const response = await fetch(`/api/v1/books/${book.libraryId}/download`, {
+        method: 'POST',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        toast.success(`Download started: ${data.release?.title || data.title}`)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'No releases found')
+      }
+    } catch (error) {
+      console.error('Failed to download:', error)
+      toast.error('Failed to download book')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const CardWrapper = book.libraryId
+    ? ({ children }: { children: React.ReactNode }) => (
+        <Link href={`/book/${book.libraryId}`}>{children}</Link>
+      )
+    : ({ children }: { children: React.ReactNode }) => <>{children}</>
+
   return (
-    <Link href={`/library/book/${book.id}`}>
-      <Card className="overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group">
-        <div className="aspect-[2/3] bg-muted relative">
+    <CardWrapper>
+      <Card
+        className={`py-0 overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group ${
+          isComplete ? 'ring-1 ring-green-500/50' : ''
+        } ${isNotInLibrary ? 'opacity-70' : ''}`}
+      >
+        <div className="aspect-2/3 bg-muted relative">
           {book.coverUrl ? (
             <img
               src={book.coverUrl}
               alt={book.title}
               className={`w-full h-full object-cover transition-all duration-300 ${
-                isNotRequested ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100' : ''
+                isNotInLibrary ? 'grayscale' : ''
               }`}
               loading="lazy"
             />
           ) : (
-            <div className={`w-full h-full flex items-center justify-center transition-all duration-300 ${
-              isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
-            }`}>
+            <div className="w-full h-full flex items-center justify-center">
               <HugeiconsIcon icon={Book01Icon} className="h-16 w-16 text-muted-foreground/50" />
             </div>
           )}
-          {/* Status badge / Request button */}
-          <div className="absolute top-2 left-2 right-2 flex justify-between items-start">
-            <CardStatusBadge
-              status={status}
-              progress={downloadInfo?.progress || 0}
-              isToggling={isToggling}
-              onToggleRequest={handleToggleRequest}
-              showOnHover={status === 'none'}
-            />
+
+          {/* Status badge */}
+          <div className="absolute top-2 right-2">
+            {isComplete && (
+              <Badge variant="default" className="bg-green-600 text-white">
+                <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3 mr-1" />
+                Downloaded
+              </Badge>
+            )}
+            {!isComplete && book.inLibrary && book.requested && (
+              <Badge variant="secondary" className="bg-yellow-600 text-white">
+                <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3 mr-1" />
+                Requested
+              </Badge>
+            )}
           </div>
+
+          {/* Action button overlay */}
+          {!isComplete && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+              {isNotInLibrary ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="gap-1"
+                  onClick={handleAdd}
+                  disabled={isAdding}
+                >
+                  {isAdding ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <HugeiconsIcon icon={Add01Icon} className="h-4 w-4" />
+                  )}
+                  Add to Library
+                </Button>
+              ) : book.libraryId ? (
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="h-12 w-12 rounded-full"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                >
+                  {downloading ? (
+                    <Spinner className="h-6 w-6" />
+                  ) : (
+                    <HugeiconsIcon icon={Search01Icon} className="h-6 w-6" />
+                  )}
+                </Button>
+              ) : null}
+            </div>
+          )}
         </div>
-        <CardContent className={`p-3 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}>
+        <CardContent className={`p-3 ${isNotInLibrary ? 'opacity-70' : ''}`}>
           <h3 className="font-medium truncate group-hover:text-primary transition-colors">
             {book.title}
           </h3>
           <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>{book.releaseDate?.split('-')[0] || 'Unknown'}</span>
-            {book.seriesName && (
-              <span className="truncate ml-2">
+            {book.seriesName ? (
+              <span className="truncate">
                 {book.seriesName} #{book.seriesPosition}
               </span>
+            ) : (
+              <span>&nbsp;</span>
             )}
           </div>
         </CardContent>
       </Card>
-    </Link>
+    </CardWrapper>
   )
 }

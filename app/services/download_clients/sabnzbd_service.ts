@@ -52,8 +52,8 @@ export interface SabnzbdHistory {
 }
 
 export class SabnzbdService {
-  // Default timeout for API calls (15 seconds)
-  private readonly DEFAULT_TIMEOUT = 15000
+  // Default timeout for API calls (10 seconds)
+  private readonly DEFAULT_TIMEOUT = 10000
 
   private buildUrl(config: SabnzbdConfig, params: Record<string, string>): string {
     const protocol = config.useSsl ? 'https' : 'http'
@@ -95,14 +95,24 @@ export class SabnzbdService {
    */
   async getQueue(config: SabnzbdConfig): Promise<SabnzbdQueue> {
     const url = this.buildUrl(config, { mode: 'queue', limit: '100' })
-    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
+    const startTime = Date.now()
 
-    if (!response.ok) {
-      throw new Error(`Failed to get queue: ${response.status}`)
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
+      const elapsed = Date.now() - startTime
+
+      if (!response.ok) {
+        throw new Error(`Failed to get queue: HTTP ${response.status} (${elapsed}ms)`)
+      }
+
+      const data = (await response.json()) as { queue: SabnzbdQueue }
+      return data.queue
+    } catch (error) {
+      const elapsed = Date.now() - startTime
+      const host = `${config.useSsl ? 'https' : 'http'}://${config.host}:${config.port}`
+      console.error(`[SABnzbd] getQueue failed after ${elapsed}ms to ${host}:`, error instanceof Error ? error.message : error)
+      throw error
     }
-
-    const data = (await response.json()) as { queue: SabnzbdQueue }
-    return data.queue
   }
 
   /**
@@ -110,14 +120,24 @@ export class SabnzbdService {
    */
   async getHistory(config: SabnzbdConfig, limit = 50): Promise<SabnzbdHistory> {
     const url = this.buildUrl(config, { mode: 'history', limit: String(limit) })
-    const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
+    const startTime = Date.now()
 
-    if (!response.ok) {
-      throw new Error(`Failed to get history: ${response.status}`)
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
+      const elapsed = Date.now() - startTime
+
+      if (!response.ok) {
+        throw new Error(`Failed to get history: HTTP ${response.status} (${elapsed}ms)`)
+      }
+
+      const data = (await response.json()) as { history: SabnzbdHistory }
+      return data.history
+    } catch (error) {
+      const elapsed = Date.now() - startTime
+      const host = `${config.useSsl ? 'https' : 'http'}://${config.host}:${config.port}`
+      console.error(`[SABnzbd] getHistory failed after ${elapsed}ms to ${host}:`, error instanceof Error ? error.message : error)
+      throw error
     }
-
-    const data = (await response.json()) as { history: SabnzbdHistory }
-    return data.history
   }
 
   /**

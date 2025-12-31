@@ -3,32 +3,43 @@ import Download from '#models/download'
 import DownloadClient from '#models/download_client'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { downloadImportService } from '#services/media/download_import_service'
+import { bookImportService } from '#services/media/book_import_service'
+import { movieImportService } from '#services/media/movie_import_service'
+import { episodeImportService } from '#services/media/episode_import_service'
 import { sabnzbdService, type SabnzbdConfig } from '#services/download_clients/sabnzbd_service'
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
 
 export default class QueueController {
   private static lastRefresh: Date | null = null
-  private static REFRESH_INTERVAL_MS = 3000 // Refresh from SABnzbd at most every 3 seconds
+  private static isRefreshing = false
+  private static REFRESH_INTERVAL_MS = 5000 // Refresh from SABnzbd at most every 5 seconds
 
   /**
-   * Get active download queue - auto-refreshes from SABnzbd if stale
+   * Get active download queue - triggers background refresh if stale, returns cached data immediately
    */
   async index({ response }: HttpContext) {
-    // Auto-refresh from SABnzbd if it's been more than 3 seconds since last refresh
+    // Trigger a background refresh from SABnzbd if it's been more than 5 seconds
+    // This is non-blocking to prevent UI freezes when SABnzbd is slow/unresponsive
     const now = new Date()
     if (
-      !QueueController.lastRefresh ||
-      now.getTime() - QueueController.lastRefresh.getTime() > QueueController.REFRESH_INTERVAL_MS
+      !QueueController.isRefreshing &&
+      (!QueueController.lastRefresh ||
+        now.getTime() - QueueController.lastRefresh.getTime() > QueueController.REFRESH_INTERVAL_MS)
     ) {
-      try {
-        await downloadManager.refreshQueue()
-        QueueController.lastRefresh = now
-      } catch (error) {
-        console.error('[QueueController] Failed to refresh queue from download client:', error)
-        // Continue to return cached queue data even if refresh fails
-      }
+      QueueController.isRefreshing = true
+      QueueController.lastRefresh = now
+
+      // Fire and forget - don't await
+      downloadManager.refreshQueue()
+        .catch((error) => {
+          console.error('[QueueController] Background refresh failed:', error)
+        })
+        .finally(() => {
+          QueueController.isRefreshing = false
+        })
     }
 
+    // Always return cached queue data immediately (from database)
     const queue = await downloadManager.getQueue()
     return response.json(queue)
   }
@@ -187,22 +198,30 @@ export default class QueueController {
         }
       }
 
-      // Now find all downloads that can be imported
+      // Now find all downloads that can be imported (any media type)
       const completedDownloads = await Download.query()
         .whereNotNull('outputPath')
         .whereIn('status', ['completed', 'importing'])
-        .whereNotNull('albumId')
+        .where((query) => {
+          query.whereNotNull('albumId')
+            .orWhereNotNull('bookId')
+            .orWhereNotNull('movieId')
+            .orWhereNotNull('episodeId')
+        })
         .preload('album')
 
-      // Also check for downloads without albumId that might need manual matching
+      // Also check for downloads without any media association that might need manual matching
       const orphanedDownloads = await Download.query()
         .whereNotNull('outputPath')
         .whereIn('status', ['completed', 'importing'])
         .whereNull('albumId')
+        .whereNull('bookId')
+        .whereNull('movieId')
+        .whereNull('episodeId')
 
       if (orphanedDownloads.length > 0) {
         results.errors.push(
-          `Found ${orphanedDownloads.length} completed downloads without album association: ${orphanedDownloads.map((d) => d.title).join(', ')}`
+          `Found ${orphanedDownloads.length} completed downloads without media association: ${orphanedDownloads.map((d) => d.title).join(', ')}`
         )
       }
 
@@ -211,10 +230,23 @@ export default class QueueController {
 
         console.log(`Attempting to import: ${download.title}`)
         console.log(`  Output path: ${download.outputPath}`)
-        console.log(`  Album ID: ${download.albumId}`)
+        console.log(`  Album ID: ${download.albumId}, Book ID: ${download.bookId}, Movie ID: ${download.movieId}, Episode ID: ${download.episodeId}`)
 
         try {
-          const importResult = await downloadImportService.importDownload(download)
+          let importResult: { success: boolean; filesImported: number; errors: string[] }
+
+          // Use appropriate import service based on media type
+          if (download.albumId) {
+            importResult = await downloadImportService.importDownload(download)
+          } else if (download.bookId) {
+            importResult = await bookImportService.importDownload(download)
+          } else if (download.movieId) {
+            importResult = await movieImportService.importDownload(download)
+          } else if (download.episodeId) {
+            importResult = await episodeImportService.importDownload(download)
+          } else {
+            continue // Should not happen due to query filter
+          }
 
           console.log(`  Import result: ${importResult.filesImported} files, errors: ${importResult.errors.join(', ')}`)
 
@@ -308,7 +340,20 @@ export default class QueueController {
         return response.notFound({ error: 'Download not found or has no output path' })
       }
 
-      const result = await downloadImportService.importDownload(download)
+      let result: { success: boolean; filesImported: number; errors: string[] }
+
+      // Use appropriate import service based on media type
+      if (download.albumId) {
+        result = await downloadImportService.importDownload(download)
+      } else if (download.bookId) {
+        result = await bookImportService.importDownload(download)
+      } else if (download.movieId) {
+        result = await movieImportService.importDownload(download)
+      } else if (download.episodeId) {
+        result = await episodeImportService.importDownload(download)
+      } else {
+        return response.badRequest({ error: 'Download has no associated media' })
+      }
 
       if (result.success) {
         download.status = 'completed'
@@ -328,6 +373,106 @@ export default class QueueController {
         error: error instanceof Error ? error.message : 'Failed to import download',
       })
     }
+  }
+
+  /**
+   * Retry a failed download import
+   */
+  async retryImport({ params, response }: HttpContext) {
+    try {
+      const download = await Download.query()
+        .where('id', params.id)
+        .whereNotNull('outputPath')
+        .first()
+
+      if (!download) {
+        return response.notFound({ error: 'Download not found or has no output path' })
+      }
+
+      if (download.status !== 'failed') {
+        return response.badRequest({ error: 'Only failed downloads can be retried' })
+      }
+
+      // Reset status to importing
+      download.status = 'importing'
+      download.errorMessage = null
+      await download.save()
+
+      let result: { success: boolean; filesImported: number; errors: string[] }
+
+      // Use appropriate import service based on media type
+      if (download.albumId) {
+        result = await downloadImportService.importDownload(download)
+      } else if (download.bookId) {
+        result = await bookImportService.importDownload(download)
+      } else if (download.movieId) {
+        result = await movieImportService.importDownload(download)
+      } else if (download.episodeId) {
+        result = await episodeImportService.importDownload(download)
+      } else {
+        return response.badRequest({ error: 'Download has no associated media' })
+      }
+
+      if (result.success) {
+        download.status = 'completed'
+        await download.save()
+        return response.json({
+          message: `Imported ${result.filesImported} files`,
+          ...result,
+        })
+      } else {
+        download.status = 'failed'
+        download.errorMessage = result.errors.join('; ') || 'Import failed'
+        await download.save()
+        return response.badRequest({
+          error: result.errors.join('; ') || 'Import failed',
+          ...result,
+        })
+      }
+    } catch (error) {
+      return response.badRequest({
+        error: error instanceof Error ? error.message : 'Failed to retry import',
+      })
+    }
+  }
+
+  /**
+   * Get all failed downloads with their error messages
+   */
+  async failed({ response }: HttpContext) {
+    const downloads = await Download.query()
+      .where('status', 'failed')
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+
+    return response.json(
+      downloads.map((d) => ({
+        id: d.id,
+        title: d.title,
+        status: d.status,
+        errorMessage: d.errorMessage,
+        outputPath: d.outputPath,
+        albumId: d.albumId,
+        bookId: d.bookId,
+        movieId: d.movieId,
+        episodeId: d.episodeId,
+        createdAt: d.createdAt?.toISO(),
+      }))
+    )
+  }
+
+  /**
+   * Clear all failed downloads (removes from database, doesn't touch files)
+   */
+  async clearFailed({ response }: HttpContext) {
+    const deleted = await Download.query()
+      .where('status', 'failed')
+      .delete()
+
+    return response.json({
+      message: `Cleared ${deleted} failed downloads`,
+      count: deleted,
+    })
   }
 
   /**

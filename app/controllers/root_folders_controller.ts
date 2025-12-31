@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import RootFolder from '#models/root_folder'
 import vine from '@vinejs/vine'
 import fs from 'node:fs/promises'
+import { accessWithTimeout, statWithTimeout } from '../utils/fs_utils.js'
 
 const rootFolderValidator = vine.compile(
   vine.object({
@@ -24,7 +25,7 @@ export default class RootFoldersController {
         let accessible = false
 
         try {
-          await fs.access(folder.path)
+          await accessWithTimeout(folder.path, 2000) // 2s timeout for root folder check
           accessible = true
           // Note: Getting disk space requires platform-specific code
           // For now, we'll just check accessibility
@@ -47,9 +48,9 @@ export default class RootFoldersController {
   async store({ request, response }: HttpContext) {
     const data = await request.validateUsing(rootFolderValidator)
 
-    // Check if path exists
+    // Check if path exists (with timeout for network paths)
     try {
-      const stats = await fs.stat(data.path)
+      const stats = await statWithTimeout(data.path)
       if (!stats.isDirectory()) {
         return response.badRequest({ error: 'Path is not a directory' })
       }

@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises'
 import DownloadClient from '#models/download_client'
 import Download from '#models/download'
 import Movie from '#models/movie'
@@ -192,17 +193,24 @@ class CompletedDownloadsScanner {
       .first()
 
     if (existingDownload) {
-      // If already completed or failed, skip
-      if (existingDownload.status === 'completed' || existingDownload.status === 'failed') {
+      // If already completed, skip
+      if (existingDownload.status === 'completed') {
         return { imported: false }
       }
 
-      // If importing, check if it's stuck (been importing for more than 2 minutes)
+      // If failed, skip - DownloadManager handles retries and the user can manually retry
+      // Don't keep retrying failed imports as they usually fail for a reason (unmounted storage, etc.)
+      if (existingDownload.status === 'failed') {
+        return { imported: false }
+      }
+
+      // If importing, check if it's stuck (been importing for more than 5 minutes)
+      // Use 5 minutes instead of 2 to avoid interfering with DownloadManager
       if (existingDownload.status === 'importing') {
         const completedAt = existingDownload.completedAt
-        const twoMinutesAgo = DateTime.now().minus({ minutes: 2 })
+        const fiveMinutesAgo = DateTime.now().minus({ minutes: 5 })
 
-        if (completedAt && completedAt < twoMinutesAgo) {
+        if (completedAt && completedAt < fiveMinutesAgo) {
           console.log(`[CompletedScanner] Found stuck import: ${existingDownload.title} (importing since ${completedAt.toISO()})`)
           // Re-trigger import for stuck downloads
           existingDownload.outputPath = slot.storage
@@ -210,11 +218,11 @@ class CompletedDownloadsScanner {
           return await this.importDownload(existingDownload, client)
         }
 
-        // Otherwise, skip (recently started importing)
+        // Otherwise, skip (recently started importing or being handled by DownloadManager)
         return { imported: false }
       }
 
-      // Otherwise, try to import it
+      // For queued/downloading/paused, trigger import
       console.log(`[CompletedScanner] Triggering import for: ${existingDownload.title}`)
       existingDownload.status = 'importing'
       existingDownload.progress = 100
@@ -263,6 +271,33 @@ class CompletedDownloadsScanner {
   }
 
   /**
+   * Check if a path is accessible with a timeout to avoid blocking on unmounted network paths
+   */
+  private async isPathAccessible(path: string, timeoutMs = 3000): Promise<{ accessible: boolean; error?: string }> {
+    try {
+      await Promise.race([
+        fs.access(path),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Path check timeout')), timeoutMs)
+        ),
+      ])
+      return { accessible: true }
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.message === 'Path check timeout'
+      if (isTimeout) {
+        return {
+          accessible: false,
+          error: `Download path not responding: "${path}". The network storage may not be mounted or is unresponsive.`,
+        }
+      }
+      return {
+        accessible: false,
+        error: `Download path not accessible: "${path}". ${error instanceof Error ? error.message : 'Unknown error'}`,
+      }
+    }
+  }
+
+  /**
    * Import a download using the appropriate service
    */
   private async importDownload(
@@ -270,60 +305,55 @@ class CompletedDownloadsScanner {
     client: DownloadClient
   ): Promise<{ imported: boolean; error?: string }> {
     console.log(`[CompletedScanner] Starting import for: ${download.title}`)
-    console.log(`[CompletedScanner]   Output path: ${download.outputPath}`)
-    console.log(`[CompletedScanner]   Movie ID: ${download.movieId || 'none'}`)
-    console.log(`[CompletedScanner]   TV Show ID: ${download.tvShowId || 'none'}`)
-    console.log(`[CompletedScanner]   Episode ID: ${download.episodeId || 'none'}`)
-    console.log(`[CompletedScanner]   Album ID: ${download.albumId || 'none'}`)
-    console.log(`[CompletedScanner]   Book ID: ${download.bookId || 'none'}`)
 
     try {
       // Apply remote path mapping if not already applied
       let outputPath = download.outputPath || ''
       if (client.settings?.remotePath && client.settings?.localPath) {
         if (outputPath.startsWith(client.settings.remotePath)) {
-          const oldPath = outputPath
           outputPath = outputPath.replace(client.settings.remotePath, client.settings.localPath)
-          console.log(`[CompletedScanner]   Mapped path: ${oldPath} -> ${outputPath}`)
           download.outputPath = outputPath
           await download.save()
         }
       }
 
+      // Check if path is accessible before attempting import (with timeout to avoid blocking)
+      const pathCheck = await this.isPathAccessible(outputPath)
+      if (!pathCheck.accessible) {
+        console.log(`[CompletedScanner] Path not accessible for ${download.title}: ${pathCheck.error}`)
+        download.status = 'failed'
+        download.errorMessage = pathCheck.error || 'Path not accessible'
+        await download.save()
+        return { imported: false, error: pathCheck.error }
+      }
+
       let result: { success: boolean; filesImported: number; errors: string[] }
 
       if (download.movieId) {
-        console.log(`[CompletedScanner]   Using movieImportService`)
         result = await movieImportService.importDownload(download)
       } else if (download.tvShowId || download.episodeId) {
-        console.log(`[CompletedScanner]   Using episodeImportService`)
         result = await episodeImportService.importDownload(download)
       } else if (download.albumId) {
-        console.log(`[CompletedScanner]   Using downloadImportService (music)`)
         result = await downloadImportService.importDownload(download)
       } else if (download.bookId) {
-        console.log(`[CompletedScanner]   Using bookImportService`)
         result = await bookImportService.importDownload(download)
       } else {
-        console.log(`[CompletedScanner]   ERROR: Unknown media type`)
         download.status = 'failed'
         download.errorMessage = 'Unknown media type'
         await download.save()
         return { imported: false, error: 'Unknown media type' }
       }
 
-      console.log(`[CompletedScanner]   Import result: success=${result.success}, filesImported=${result.filesImported}, errors=${result.errors.join('; ') || 'none'}`)
-
       if (result.success) {
         download.status = 'completed'
         await download.save()
-        console.log(`[CompletedScanner] Successfully imported: ${download.title}`)
+        console.log(`[CompletedScanner] Imported: ${download.title} (${result.filesImported} files)`)
         return { imported: true }
       } else {
         download.status = 'failed'
         download.errorMessage = result.errors.join('; ')
         await download.save()
-        console.log(`[CompletedScanner] Import failed for: ${download.title} - ${result.errors.join('; ')}`)
+        console.log(`[CompletedScanner] Import failed: ${download.title} - ${result.errors.join('; ')}`)
         return { imported: false, error: result.errors.join('; ') }
       }
     } catch (error) {

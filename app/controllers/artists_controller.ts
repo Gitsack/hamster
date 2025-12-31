@@ -94,7 +94,7 @@ export default class ArtistsController {
         return {
           id: album.id,
           title: album.title,
-          musicbrainzId: album.musicbrainzId,
+          musicbrainzId: album.musicbrainzReleaseGroupId, // Use release group ID for matching with discography
           releaseDate: album.releaseDate?.toISODate(),
           albumType: album.albumType,
           imageUrl: album.imageUrl,

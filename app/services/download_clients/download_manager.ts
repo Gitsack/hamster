@@ -454,6 +454,48 @@ export class DownloadManager {
               const shouldTriggerImport = !download.outputPath || isStuck
               console.log(`[DownloadManager] shouldTriggerImport: ${shouldTriggerImport}, isStuck: ${isStuck}, storage path: ${slot.storage}`)
 
+              // Apply remote path mapping to get the local path
+              let localPath = slot.storage
+              if (client.settings?.remotePath && client.settings?.localPath) {
+                if (localPath.startsWith(client.settings.remotePath)) {
+                  localPath = localPath.replace(client.settings.remotePath, client.settings.localPath)
+                }
+              }
+
+              // Check if the path is accessible BEFORE triggering import
+              // Use a short timeout to avoid blocking on unmounted network paths
+              let pathAccessible = false
+              let pathError = ''
+              try {
+                await Promise.race([
+                  fs.access(localPath),
+                  new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Path check timeout')), 3000)
+                  ),
+                ])
+                pathAccessible = true
+              } catch (error) {
+                const isTimeout = error instanceof Error && error.message === 'Path check timeout'
+                if (isTimeout) {
+                  pathError = `Download path not responding: "${localPath}". The network storage may not be mounted or is unresponsive.`
+                } else {
+                  // Check if parent directory exists (also with timeout)
+                  const parentDir = path.dirname(localPath)
+                  try {
+                    await Promise.race([
+                      fs.access(parentDir),
+                      new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('timeout')), 2000)
+                      ),
+                    ])
+                    pathError = `File not found: "${path.basename(localPath)}". The download folder exists but the file is missing.`
+                  } catch {
+                    // Parent directory doesn't exist either - likely a mount/path mapping issue
+                    pathError = `Download path not accessible: "${localPath}". This usually means the network storage is not mounted or the Remote Path Mapping in Download Client settings is incorrect.`
+                  }
+                }
+              }
+
               // Mark as importing and save the output path
               download.status = 'importing'
               download.progress = 100
@@ -462,6 +504,15 @@ export class DownloadManager {
               }
               download.outputPath = slot.storage
               await download.save()
+
+              // If path is not accessible, fail immediately with a clear error
+              if (!pathAccessible) {
+                console.error(`[DownloadManager] Path not accessible for ${download.title}: ${pathError}`)
+                download.status = 'failed'
+                download.errorMessage = pathError
+                await download.save()
+                continue
+              }
 
               // Trigger import in background
               if (shouldTriggerImport) {

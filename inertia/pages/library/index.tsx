@@ -510,7 +510,7 @@ export default function Library() {
     const isNotRequested = !item.requested && !item.hasFile && !isDownloading
 
     return (
-      <Card key={imageKey} className="overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group relative">
+      <Card key={imageKey} className="py-0 overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group relative">
         <Link href={item.detailUrl}>
           <div className="aspect-[2/3] bg-muted relative">
             {showImage ? (

@@ -184,9 +184,17 @@ export default class DownloadClientsController {
     }
 
     try {
-      await fs.access(normalizedRequested)
-    } catch {
-      return response.badRequest({ error: `Path not accessible: ${normalizedRequested}` })
+      await Promise.race([
+        fs.access(normalizedRequested),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+      ])
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.message === 'timeout'
+      return response.badRequest({
+        error: isTimeout
+          ? `Path not responding: ${normalizedRequested}. Network storage may be unmounted.`
+          : `Path not accessible: ${normalizedRequested}`,
+      })
     }
 
     try {
@@ -268,9 +276,17 @@ export default class DownloadClientsController {
     }
 
     try {
-      await fs.access(normalizedImport)
-    } catch {
-      return response.badRequest({ error: `Path not accessible: ${normalizedImport}` })
+      await Promise.race([
+        fs.access(normalizedImport),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+      ])
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.message === 'timeout'
+      return response.badRequest({
+        error: isTimeout
+          ? `Path not responding: ${normalizedImport}. Network storage may be unmounted.`
+          : `Path not accessible: ${normalizedImport}`,
+      })
     }
 
     try {

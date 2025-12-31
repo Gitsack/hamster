@@ -190,8 +190,10 @@ router
     router.post('/authors', [AuthorsController, 'store'])
     router.get('/authors/search', [AuthorsController, 'search'])
     router.get('/authors/:id', [AuthorsController, 'show'])
+    router.get('/authors/:openlibraryId/works', [AuthorsController, 'worksByOpenlibraryId'])
     router.put('/authors/:id', [AuthorsController, 'update'])
     router.delete('/authors/:id', [AuthorsController, 'destroy'])
+    router.post('/authors/:id/refresh', [AuthorsController, 'refresh'])
 
     // Books
     router.get('/books', [BooksController, 'index'])
@@ -220,9 +222,12 @@ router
     // Queue
     router.get('/queue', [QueueController, 'index'])
     router.get('/queue/debug', [QueueController, 'debug'])
+    router.get('/queue/failed', [QueueController, 'failed'])
     router.post('/queue/refresh', [QueueController, 'refresh'])
     router.post('/queue/scan-completed', [QueueController, 'scanCompleted'])
+    router.post('/queue/clear-failed', [QueueController, 'clearFailed'])
     router.post('/queue/:id/import', [QueueController, 'import'])
+    router.post('/queue/:id/retry', [QueueController, 'retryImport'])
     router.delete('/queue/:id', [QueueController, 'destroy'])
     router.get('/queue/history', [QueueController, 'history'])
     router.post('/queue/grab', [QueueController, 'grab'])

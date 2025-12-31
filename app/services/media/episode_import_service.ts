@@ -65,11 +65,21 @@ export class EpisodeImportService {
         }
       }
 
-      // Check if path exists
+      // Check if path exists (with timeout to prevent blocking on unmounted network storage)
       try {
-        await fs.access(outputPath)
-      } catch {
-        result.errors.push(`Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`)
+        await Promise.race([
+          fs.access(outputPath),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Path check timeout')), 3000)
+          ),
+        ])
+      } catch (error) {
+        const isTimeout = error instanceof Error && error.message === 'Path check timeout'
+        if (isTimeout) {
+          result.errors.push(`Path not responding: ${outputPath}. Network storage may not be mounted or is unresponsive.`)
+        } else {
+          result.errors.push(`Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`)
+        }
         return result
       }
 

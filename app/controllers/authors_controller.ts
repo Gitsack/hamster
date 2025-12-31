@@ -205,4 +205,107 @@ export default class AuthorsController {
     await author.delete()
     return response.noContent()
   }
+
+  /**
+   * Get all works for an author by OpenLibrary ID (for exploration)
+   */
+  async worksByOpenlibraryId({ params, response }: HttpContext) {
+    const openlibraryId = params.openlibraryId
+
+    try {
+      // Fetch works from OpenLibrary
+      const works = await openLibraryService.getAuthorWorks(openlibraryId, 100)
+
+      // Find the author in library if exists
+      const author = await Author.query().where('openlibraryId', openlibraryId).first()
+
+      // Get existing books in library for this author
+      const existingBooks = author
+        ? await Book.query().where('authorId', author.id).select('openlibraryId', 'id', 'requested', 'hasFile')
+        : []
+
+      const existingMap = new Map(existingBooks.map((b) => [b.openlibraryId, b]))
+
+      return response.json(
+        works.map((work) => {
+          const existing = existingMap.get(work.key)
+          return {
+            openlibraryId: work.key,
+            title: work.title,
+            description: work.description,
+            coverUrl: openLibraryService.getCoverUrl(work.coverId, 'M'),
+            subjects: work.subjects,
+            inLibrary: !!existing,
+            bookId: existing?.id || null,
+            requested: existing?.requested || false,
+            hasFile: existing?.hasFile || false,
+          }
+        })
+      )
+    } catch (error) {
+      console.error(`Failed to get works for author ${openlibraryId}:`, error)
+      return response.json([])
+    }
+  }
+
+  /**
+   * Refresh author metadata and fetch works from OpenLibrary
+   */
+  async refresh({ params, response }: HttpContext) {
+    const author = await Author.find(params.id)
+    if (!author) {
+      return response.notFound({ error: 'Author not found' })
+    }
+
+    if (!author.openlibraryId) {
+      return response.badRequest({ error: 'Author has no OpenLibrary ID' })
+    }
+
+    try {
+      // Fetch updated author data
+      const olData = await openLibraryService.getAuthor(author.openlibraryId)
+      if (olData) {
+        author.merge({
+          name: olData.name,
+          sortName: olData.name.split(' ').reverse().join(', '),
+          overview: olData.bio,
+          imageUrl: openLibraryService.getAuthorPhotoUrl(olData.photoId, 'L'),
+        })
+        await author.save()
+      }
+
+      // Fetch and add new works
+      const works = await openLibraryService.getAuthorWorks(author.openlibraryId, 100)
+      const existingBooks = await Book.query().where('authorId', author.id).select('openlibraryId')
+      const existingKeys = new Set(existingBooks.map((b) => b.openlibraryId))
+
+      let addedCount = 0
+      for (const work of works) {
+        if (!existingKeys.has(work.key)) {
+          await Book.create({
+            authorId: author.id,
+            openlibraryId: work.key,
+            title: work.title,
+            sortTitle: work.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
+            overview: work.description,
+            coverUrl: openLibraryService.getCoverUrl(work.coverId, 'L'),
+            genres: work.subjects || [],
+            requested: false, // New books are not requested by default
+            hasFile: false,
+          })
+          addedCount++
+        }
+      }
+
+      return response.json({
+        id: author.id,
+        name: author.name,
+        refreshed: true,
+        booksAdded: addedCount,
+      })
+    } catch (error) {
+      console.error(`Failed to refresh author ${author.id}:`, error)
+      return response.internalServerError({ error: 'Failed to refresh author' })
+    }
+  }
 }
