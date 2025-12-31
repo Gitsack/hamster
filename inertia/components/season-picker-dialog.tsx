@@ -12,7 +12,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Label } from '@/components/ui/label'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Loading01Icon, ArrowDown01Icon, ArrowUp01Icon } from '@hugeicons/core-free-icons'
+import { ArrowDown01Icon, ArrowUp01Icon } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 
 interface Season {
@@ -432,7 +433,7 @@ export function SeasonPickerDialog({
           <Button onClick={handleConfirm} disabled={loading || totalSelected === 0}>
             {loading ? (
               <>
-                <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                <Spinner className="mr-2" />
                 Loading...
               </>
             ) : (

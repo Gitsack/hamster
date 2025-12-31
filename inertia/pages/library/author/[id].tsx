@@ -26,11 +26,11 @@ import {
   MoreVerticalIcon,
   Delete01Icon,
   Book01Icon,
-  Loading01Icon,
   ViewIcon,
   ViewOffIcon,
   Add01Icon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
@@ -411,7 +411,7 @@ export default function AuthorDetail() {
                 >
                   {requestingAll ? (
                     <>
-                      <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                      <Spinner className="mr-2" />
                       Requesting...
                     </>
                   ) : (
@@ -529,7 +529,7 @@ export default function AuthorDetail() {
             <Button variant="destructive" onClick={deleteAuthor} disabled={deleting}>
               {deleting ? (
                 <>
-                  <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                <Spinner />
                   Deleting...
                 </>
               ) : (

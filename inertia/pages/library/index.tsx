@@ -37,11 +37,11 @@ import {
   MoreVerticalIcon,
   Delete02Icon,
   EyeIcon,
-  Loading01Icon,
   CheckmarkCircle02Icon,
   Download01Icon,
   Clock01Icon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { StatusBadge as SharedStatusBadge, type ItemStatus } from '@/components/library/status-badge'
@@ -1115,7 +1115,7 @@ export default function Library() {
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
               {deleting ? (
                 <>
-                  <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                  <Spinner className="mr-2" />
                   Removing...
                 </>
               ) : (

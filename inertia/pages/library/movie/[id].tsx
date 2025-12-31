@@ -25,7 +25,6 @@ import {
   MoreVerticalIcon,
   Delete01Icon,
   Film01Icon,
-  Loading01Icon,
   ViewIcon,
   ViewOffIcon,
   Calendar01Icon,
@@ -34,6 +33,7 @@ import {
   StarIcon,
   FileDownloadIcon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
@@ -299,7 +299,7 @@ export default function MovieDetail() {
           {!movie.hasFile && (
             <Button onClick={downloadMovie} disabled={downloading}>
               {downloading ? (
-                <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                <Spinner className="mr-2" />
               ) : (
                 <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
               )}
@@ -539,7 +539,7 @@ export default function MovieDetail() {
             <Button variant="destructive" onClick={deleteMovie} disabled={deleting}>
               {deleting ? (
                 <>
-                  <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                  <Spinner className="mr-2" />
                   Deleting...
                 </>
               ) : (
@@ -567,7 +567,7 @@ export default function MovieDetail() {
             <Button variant="destructive" onClick={deleteFile} disabled={deletingFile}>
               {deletingFile ? (
                 <>
-                  <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                  <Spinner className="mr-2" />
                   Deleting...
                 </>
               ) : (

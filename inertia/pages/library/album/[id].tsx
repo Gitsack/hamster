@@ -36,8 +36,8 @@ import {
   FileDownloadIcon,
   PlayIcon,
   PauseIcon,
-  Loading01Icon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
@@ -298,7 +298,7 @@ export default function AlbumDetail() {
           )}
           <Button onClick={searchAndDownload} disabled={downloading || percentComplete === 100}>
             {downloading ? (
-              <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 mr-2 animate-spin" />
+              <Spinner className="mr-2" />
             ) : (
               <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
             )}
@@ -497,10 +497,7 @@ export default function AlbumDetail() {
                                 title="Search for this track (single/EP)"
                               >
                                 {downloading ? (
-                                  <HugeiconsIcon
-                                    icon={Loading01Icon}
-                                    className="h-4 w-4 animate-spin"
-                                  />
+                                  <Spinner />
                                 ) : (
                                   <HugeiconsIcon
                                     icon={Search01Icon}
@@ -612,10 +609,7 @@ export default function AlbumDetail() {
                             disabled={grabbing === result.id}
                           >
                             {grabbing === result.id ? (
-                              <HugeiconsIcon
-                                icon={Loading01Icon}
-                                className="h-4 w-4 animate-spin"
-                              />
+                              <Spinner />
                             ) : (
                               <HugeiconsIcon
                                 icon={FileDownloadIcon}

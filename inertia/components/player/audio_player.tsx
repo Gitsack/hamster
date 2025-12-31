@@ -12,10 +12,10 @@ import {
   ShuffleIcon,
   RepeatIcon,
   RepeatOne01Icon,
-  Loading01Icon,
   MusicNote01Icon,
   Cancel01Icon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 
 function formatTime(seconds: number): string {
@@ -104,7 +104,7 @@ export function AudioPlayer() {
               disabled={isLoading}
             >
               {isLoading ? (
-                <HugeiconsIcon icon={Loading01Icon} className="h-5 w-5 animate-spin" />
+                <Spinner className="size-5" />
               ) : isPlaying ? (
                 <HugeiconsIcon icon={PauseIcon} className="h-5 w-5" />
               ) : (

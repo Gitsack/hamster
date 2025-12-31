@@ -43,7 +43,6 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Search01Icon,
   Download01Icon,
-  Loading01Icon,
   Link01Icon,
   SortingIcon,
   Settings02Icon,
@@ -62,6 +61,7 @@ import {
   ArrowRight01Icon,
   ViewIcon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useMemo, useCallback, Component, ErrorInfo, ReactNode } from 'react'
 import { toast } from 'sonner'
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
@@ -1184,7 +1184,7 @@ export default function SearchPage() {
                       <h4 className="text-sm font-medium mb-3">Albums</h4>
                       {isLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
+                          <Spinner />
                           Loading albums...
                         </div>
                       ) : albums.length === 0 ? (
@@ -1254,7 +1254,7 @@ export default function SearchPage() {
                                   <div className="border-t bg-muted/30 p-3">
                                     {isTracksLoading ? (
                                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                        <HugeiconsIcon icon={Loading01Icon} className="h-3 w-3 animate-spin" />
+                                        <Spinner className="size-3" />
                                         Loading tracks...
                                       </div>
                                     ) : tracks.length === 0 ? (
@@ -1368,7 +1368,7 @@ export default function SearchPage() {
                       <h4 className="text-sm font-medium mb-3">Tracks</h4>
                       {isLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
+                          <Spinner />
                           Loading tracks...
                         </div>
                       ) : tracks.length === 0 ? (
@@ -1813,7 +1813,7 @@ export default function SearchPage() {
                     </div>
                     <Button onClick={search} disabled={searching || searchQuery.length < 2}>
                       {searching ? (
-                        <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
+                        <Spinner />
                       ) : (
                         <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
                       )}
@@ -1919,7 +1919,7 @@ export default function SearchPage() {
                     </Button>
                     <Button size="sm" onClick={grabSelected} disabled={bulkDownloading}>
                       {bulkDownloading ? (
-                        <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                        <Spinner className="mr-2" />
                       ) : (
                         <HugeiconsIcon icon={Download01Icon} className="h-4 w-4 mr-2" />
                       )}
@@ -1968,7 +1968,7 @@ export default function SearchPage() {
               <Button variant="outline" onClick={() => setDownloadDialogOpen(false)}>Cancel</Button>
               <Button onClick={() => grabRelease()} disabled={downloading}>
                 {downloading ? (
-                  <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                  <Spinner className="mr-2" />
                 ) : (
                   <HugeiconsIcon icon={Download01Icon} className="h-4 w-4 mr-2" />
                 )}
@@ -2042,7 +2042,7 @@ export default function SearchPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>Cancel</Button>
               <Button onClick={addArtist} disabled={addingArtist || !selectedRootFolder || !selectedQualityProfile}>
-                {addingArtist && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                {addingArtist && <Spinner className="mr-2" />}
                 Add Artist
               </Button>
             </DialogFooter>
@@ -2112,7 +2112,7 @@ export default function SearchPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddAlbumDialogOpen(false)}>Cancel</Button>
               <Button onClick={addAlbum} disabled={addingAlbum || !selectedRootFolder || !selectedQualityProfile}>
-                {addingAlbum && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                {addingAlbum && <Spinner className="mr-2" />}
                 Add Album
               </Button>
             </DialogFooter>
@@ -2177,7 +2177,7 @@ export default function SearchPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddMovieDialogOpen(false)}>Cancel</Button>
               <Button onClick={addMovie} disabled={addingMovie || !selectedRootFolder || !selectedQualityProfile || filteredRootFolders.length === 0}>
-                {addingMovie && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                {addingMovie && <Spinner className="mr-2" />}
                 Add Movie
               </Button>
             </DialogFooter>
@@ -2278,7 +2278,7 @@ export default function SearchPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddTvShowDialogOpen(false)}>Cancel</Button>
               <Button onClick={addTvShow} disabled={addingTvShow || !selectedRootFolder || !selectedQualityProfile || filteredRootFolders.length === 0}>
-                {addingTvShow && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                {addingTvShow && <Spinner className="mr-2" />}
                 Add TV Show
               </Button>
             </DialogFooter>
@@ -2338,7 +2338,7 @@ export default function SearchPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddAuthorDialogOpen(false)}>Cancel</Button>
               <Button onClick={addAuthor} disabled={addingAuthor || !selectedRootFolder || !selectedQualityProfile}>
-                {addingAuthor && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                {addingAuthor && <Spinner className="mr-2" />}
                 Add Author
               </Button>
             </DialogFooter>
@@ -2396,7 +2396,7 @@ export default function SearchPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddBookDialogOpen(false)}>Cancel</Button>
               <Button onClick={addBook} disabled={addingBook || !selectedRootFolder || !selectedQualityProfile}>
-                {addingBook && <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />}
+                {addingBook && <Spinner className="mr-2" />}
                 Add Book
               </Button>
             </DialogFooter>

@@ -35,7 +35,6 @@ import {
   Edit01Icon,
   Delete01Icon,
   FlashIcon,
-  Loading01Icon,
   CheckmarkCircle01Icon,
   Cancel01Icon,
   Folder01Icon,
@@ -45,6 +44,7 @@ import {
   FileImportIcon,
   ComputerIcon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { FolderBrowser } from '@/components/folder-browser'
@@ -407,7 +407,7 @@ export default function DownloadClients() {
           <CardContent>
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <HugeiconsIcon icon={Loading01Icon} className="h-6 w-6 animate-spin text-muted-foreground" />
+                <Spinner className="size-6 text-muted-foreground" />
               </div>
             ) : clients.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -686,7 +686,7 @@ export default function DownloadClients() {
             )}
             <Button variant="outline" onClick={testConnection} disabled={testing || !formData.host || !formData.apiKey}>
               {testing ? (
-                <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 mr-2 animate-spin" />
+                <Spinner className="mr-2" />
               ) : (
                 <HugeiconsIcon icon={FlashIcon} className="h-4 w-4 mr-2" />
               )}
@@ -694,7 +694,7 @@ export default function DownloadClients() {
             </Button>
             <Button onClick={saveClient} disabled={saving}>
               {saving ? (
-                <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 mr-2 animate-spin" />
+                <Spinner className="mr-2" />
               ) : null}
               {editingClient ? 'Save' : 'Add'}
             </Button>
@@ -717,7 +717,7 @@ export default function DownloadClients() {
             </Button>
             <Button variant="destructive" onClick={deleteClient} disabled={deleting}>
               {deleting ? (
-                <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 mr-2 animate-spin" />
+                <Spinner className="mr-2" />
               ) : null}
               Delete
             </Button>
@@ -750,7 +750,7 @@ export default function DownloadClients() {
           <div className="flex-1 overflow-auto min-h-[300px]">
             {browsingLoading ? (
               <div className="flex items-center justify-center py-12">
-                <HugeiconsIcon icon={Loading01Icon} className="h-6 w-6 animate-spin text-muted-foreground" />
+                <Spinner className="size-6 text-muted-foreground" />
               </div>
             ) : browseError ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -812,7 +812,7 @@ export default function DownloadClients() {
                             title="Download to PC"
                           >
                             {downloadingPath === item.path ? (
-                              <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
+                              <Spinner />
                             ) : (
                               <HugeiconsIcon icon={ComputerIcon} className="h-4 w-4" />
                             )}
@@ -825,7 +825,7 @@ export default function DownloadClients() {
                             title="Import to library"
                           >
                             {importingPath === item.path ? (
-                              <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin" />
+                              <Spinner />
                             ) : (
                               <HugeiconsIcon icon={Download01Icon} className="h-4 w-4" />
                             )}

@@ -28,12 +28,12 @@ import {
   RefreshIcon,
   Delete01Icon,
   CheckmarkCircle01Icon,
-  Loading01Icon,
   ArrowDown01Icon,
   PauseIcon,
   FolderSearchIcon,
   Search01Icon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 
@@ -209,7 +209,7 @@ export default function Queue() {
       case 'paused':
         return <HugeiconsIcon icon={PauseIcon} className="h-4 w-4 text-muted-foreground" />
       default:
-        return <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 text-muted-foreground" />
+        return <Spinner className="text-muted-foreground" />
     }
   }
 

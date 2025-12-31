@@ -28,8 +28,8 @@ import {
   ArrowLeft01Icon,
   CheckmarkCircle01Icon,
   MusicNote01Icon,
-  Loading01Icon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 
@@ -227,14 +227,7 @@ export default function AddArtist() {
                 />
               </div>
               <Button onClick={search} disabled={searching || searchQuery.length < 2}>
-                {searching ? (
-                  <HugeiconsIcon
-                    icon={Loading01Icon}
-                    className="h-4 w-4 animate-spin"
-                  />
-                ) : (
-                  'Search'
-                )}
+                {searching ? <Spinner /> : 'Search'}
               </Button>
             </div>
             <p className="text-sm text-muted-foreground mt-2">
@@ -448,10 +441,7 @@ export default function AddArtist() {
             >
               {adding ? (
                 <>
-                  <HugeiconsIcon
-                    icon={Loading01Icon}
-                    className="h-4 w-4 animate-spin mr-2"
-                  />
+                  <Spinner className="mr-2" />
                   Adding...
                 </>
               ) : (

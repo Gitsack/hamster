@@ -25,8 +25,8 @@ import {
   Cancel01Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
-  Loading01Icon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
 
 interface HistoryItem {
@@ -158,10 +158,7 @@ export default function History() {
             ) : history.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <div className="rounded-full bg-muted p-6 mb-4">
-                  <HugeiconsIcon
-                    icon={Loading01Icon}
-                    className="h-12 w-12 text-muted-foreground"
-                  />
+                  <Spinner className="size-12 text-muted-foreground" />
                 </div>
                 <h3 className="text-lg font-medium mb-2">No history yet</h3>
                 <p className="text-muted-foreground">

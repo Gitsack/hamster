@@ -19,8 +19,8 @@ import {
   CdIcon,
   FileDownloadIcon,
   RefreshIcon,
-  Loading01Icon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 
@@ -153,10 +153,7 @@ export default function ManualSearch() {
           <Button onClick={searchReleases} disabled={searching}>
             {searching ? (
               <>
-                <HugeiconsIcon
-                  icon={Loading01Icon}
-                  className="h-4 w-4 animate-spin mr-2"
-                />
+                <Spinner className="mr-2" />
                 Searching...
               </>
             ) : (
@@ -218,10 +215,7 @@ export default function ManualSearch() {
           <Card>
             <CardContent className="py-12">
               <div className="flex flex-col items-center gap-4">
-                <HugeiconsIcon
-                  icon={Loading01Icon}
-                  className="h-8 w-8 animate-spin text-muted-foreground"
-                />
+                <Spinner className="size-8 text-muted-foreground" />
                 <p className="text-muted-foreground">Searching indexers...</p>
               </div>
             </CardContent>
@@ -301,10 +295,7 @@ export default function ManualSearch() {
                         disabled={downloading === result.id}
                       >
                         {downloading === result.id ? (
-                          <HugeiconsIcon
-                            icon={Loading01Icon}
-                            className="h-4 w-4 animate-spin"
-                          />
+                          <Spinner />
                         ) : (
                           <HugeiconsIcon
                             icon={FileDownloadIcon}

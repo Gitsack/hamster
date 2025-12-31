@@ -31,12 +31,12 @@ import {
   CdIcon,
   Calendar01Icon,
   Location01Icon,
-  Loading01Icon,
   Edit01Icon,
   ViewIcon,
   ViewOffIcon,
   Search01Icon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 
@@ -415,10 +415,7 @@ export default function ArtistDetail() {
             >
               {deleting ? (
                 <>
-                  <HugeiconsIcon
-                    icon={Loading01Icon}
-                    className="h-4 w-4 animate-spin mr-2"
-                  />
+                  <Spinner className="mr-2" />
                   Deleting...
                 </>
               ) : (
@@ -522,7 +519,7 @@ function AlbumCard({ album }: { album: Album }) {
                 disabled={downloading}
               >
                 {downloading ? (
-                  <HugeiconsIcon icon={Loading01Icon} className="h-6 w-6 animate-spin" />
+                  <Spinner className="size-6" />
                 ) : (
                   <HugeiconsIcon icon={Search01Icon} className="h-6 w-6" />
                 )}

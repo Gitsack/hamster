@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Tooltip,
   TooltipContent,
@@ -13,7 +14,6 @@ import {
   Download01Icon,
   Cancel01Icon,
   Add01Icon,
-  Loading01Icon,
   PackageMovingIcon,
 } from '@hugeicons/core-free-icons'
 import { cn } from '@/lib/utils'
@@ -65,7 +65,7 @@ export function MediaStatusBadge({
         variant="secondary"
         className={cn('bg-muted text-muted-foreground gap-1', sizeClasses, className)}
       >
-        <HugeiconsIcon icon={Loading01Icon} className={cn(iconSize, 'animate-spin')} />
+        <Spinner className={iconSize} />
         <span>{status === 'none' ? 'Requesting...' : 'Unrequesting...'}</span>
       </Badge>
     )
@@ -247,7 +247,7 @@ export function CardStatusBadge({
         variant="secondary"
         className={cn('bg-muted text-muted-foreground gap-1 h-6 text-xs', className)}
       >
-        <HugeiconsIcon icon={Loading01Icon} className="h-3 w-3 animate-spin" />
+        <Spinner className="h-3 w-3" />
         <span>Requesting...</span>
       </Badge>
     )

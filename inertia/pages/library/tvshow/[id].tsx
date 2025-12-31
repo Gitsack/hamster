@@ -31,7 +31,6 @@ import {
   MoreVerticalIcon,
   Delete01Icon,
   Tv01Icon,
-  Loading01Icon,
   ViewIcon,
   ViewOffIcon,
   Calendar01Icon,
@@ -41,6 +40,7 @@ import {
   FileDownloadIcon,
   Add01Icon,
 } from '@hugeicons/core-free-icons'
+import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -707,7 +707,7 @@ export default function TvShowDetail() {
                 >
                   {requestingAllSeasons ? (
                     <>
-                      <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                      <Spinner className="mr-2" />
                       Requesting...
                     </>
                   ) : (
@@ -760,7 +760,7 @@ export default function TvShowDetail() {
                       </div>
                       {togglingSeasons.has(season.seasonNumber) ? (
                         <Badge variant="secondary" className="bg-muted text-muted-foreground">
-                          <HugeiconsIcon icon={Loading01Icon} className="h-3 w-3 animate-spin mr-1" />
+                          <Spinner className="size-3 mr-1" />
                           {season.requested ? 'Requesting...' : 'Unrequesting...'}
                         </Badge>
                       ) : season.requested ? (
@@ -911,7 +911,7 @@ export default function TvShowDetail() {
             <Button variant="destructive" onClick={deleteShow} disabled={deleting}>
               {deleting ? (
                 <>
-                  <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                  <Spinner className="mr-2" />
                   Deleting...
                 </>
               ) : (
@@ -942,7 +942,7 @@ export default function TvShowDetail() {
             <Button variant="destructive" onClick={deleteEpisodeFile} disabled={deletingFile}>
               {deletingFile ? (
                 <>
-                  <HugeiconsIcon icon={Loading01Icon} className="h-4 w-4 animate-spin mr-2" />
+                  <Spinner className="mr-2" />
                   Deleting...
                 </>
               ) : (
