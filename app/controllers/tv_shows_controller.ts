@@ -93,6 +93,56 @@ export default class TvShowsController {
     }
   }
 
+  /**
+   * Get discover/popular TV shows (for browsing when no search query)
+   */
+  async discover({ request, response }: HttpContext) {
+    const category = request.input('category', 'popular') as 'popular' | 'on_the_air' | 'top_rated' | 'trending'
+
+    try {
+      let results
+      switch (category) {
+        case 'on_the_air':
+          results = await tmdbService.getOnTheAirTvShows()
+          break
+        case 'top_rated':
+          results = await tmdbService.getTopRatedTvShows()
+          break
+        case 'trending':
+          results = await tmdbService.getTrendingTvShows('week')
+          break
+        case 'popular':
+        default:
+          results = await tmdbService.getPopularTvShows()
+      }
+
+      // Check which shows are already in library
+      const tmdbIds = results.map((r) => String(r.id))
+      const existing = await TvShow.query().whereIn('tmdbId', tmdbIds)
+      const existingIds = new Set(existing.map((s) => s.tmdbId))
+
+      return response.json({
+        category,
+        results: results.map((show) => ({
+          tmdbId: String(show.id),
+          title: show.name,
+          year: show.year,
+          overview: show.overview,
+          posterUrl: show.posterPath,
+          firstAirDate: show.firstAirDate,
+          status: show.status,
+          rating: show.voteAverage,
+          seasonCount: show.numberOfSeasons,
+          episodeCount: show.numberOfEpisodes,
+          inLibrary: existingIds.has(String(show.id)),
+        })),
+      })
+    } catch (error) {
+      console.error('TMDB discover error:', error)
+      return response.badRequest({ error: 'Failed to fetch TV shows' })
+    }
+  }
+
   async store({ request, response }: HttpContext) {
     const data = await request.validateUsing(tvShowValidator)
 

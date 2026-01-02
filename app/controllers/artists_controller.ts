@@ -10,9 +10,8 @@ import { DateTime } from 'luxon'
 const addArtistValidator = vine.compile(
   vine.object({
     musicbrainzId: vine.string(),
-    rootFolderId: vine.string(),
+    rootFolderId: vine.string().optional(),
     qualityProfileId: vine.string(),
-    metadataProfileId: vine.string(),
     requested: vine.boolean().optional(),
   })
 )
@@ -21,7 +20,6 @@ const updateArtistValidator = vine.compile(
   vine.object({
     requested: vine.boolean().optional(),
     qualityProfileId: vine.string().optional(),
-    metadataProfileId: vine.string().optional(),
     rootFolderId: vine.string().optional(),
   })
 )
@@ -33,7 +31,6 @@ export default class ArtistsController {
   async index({ response }: HttpContext) {
     const artists = await Artist.query()
       .preload('qualityProfile')
-      .preload('metadataProfile')
       .preload('rootFolder')
       .preload('albums', (query) => {
         query.whereNotNull('imageUrl').orderBy('releaseDate', 'desc').limit(1)
@@ -57,9 +54,6 @@ export default class ArtistsController {
         qualityProfile: artist.qualityProfile
           ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
           : null,
-        metadataProfile: artist.metadataProfile
-          ? { id: artist.metadataProfile.id, name: artist.metadataProfile.name }
-          : null,
         rootFolder: artist.rootFolder
           ? { id: artist.rootFolder.id, path: artist.rootFolder.path }
           : null,
@@ -74,7 +68,6 @@ export default class ArtistsController {
     const artist = await Artist.query()
       .where('id', params.id)
       .preload('qualityProfile')
-      .preload('metadataProfile')
       .preload('rootFolder')
       .preload('albums', (albumQuery) => {
         albumQuery.orderBy('releaseDate', 'desc')
@@ -122,9 +115,6 @@ export default class ArtistsController {
       qualityProfile: artist.qualityProfile
         ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
         : null,
-      metadataProfile: artist.metadataProfile
-        ? { id: artist.metadataProfile.id, name: artist.metadataProfile.name }
-        : null,
       rootFolder: artist.rootFolder
         ? { id: artist.rootFolder.id, path: artist.rootFolder.path }
         : null,
@@ -163,7 +153,6 @@ export default class ArtistsController {
       endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
       requested: data.requested ?? true,
       qualityProfileId: data.qualityProfileId,
-      metadataProfileId: data.metadataProfileId,
       rootFolderId: data.rootFolderId,
       addedAt: DateTime.now(),
     })
@@ -194,7 +183,6 @@ export default class ArtistsController {
     artist.merge({
       requested: data.requested ?? artist.requested,
       qualityProfileId: data.qualityProfileId ?? artist.qualityProfileId,
-      metadataProfileId: data.metadataProfileId ?? artist.metadataProfileId,
       rootFolderId: data.rootFolderId ?? artist.rootFolderId,
     })
     await artist.save()

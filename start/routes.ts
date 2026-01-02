@@ -13,7 +13,6 @@ import { middleware } from './kernel.js'
 const AuthController = () => import('#controllers/auth_controller')
 const RootFoldersController = () => import('#controllers/root_folders_controller')
 const QualityProfilesController = () => import('#controllers/quality_profiles_controller')
-const MetadataProfilesController = () => import('#controllers/metadata_profiles_controller')
 const IndexersController = () => import('#controllers/indexers_controller')
 const ProwlarrController = () => import('#controllers/prowlarr_controller')
 const ArtistsController = () => import('#controllers/artists_controller')
@@ -29,6 +28,11 @@ const PlaybackController = () => import('#controllers/playback_controller')
 const AppSettingsController = () => import('#controllers/app_settings_controller')
 const FilesystemController = () => import('#controllers/filesystem_controller')
 const FilesController = () => import('#controllers/files_controller')
+
+// Health check endpoint (for Docker/load balancers)
+router.get('/health', async ({ response }) => {
+  return response.ok({ status: 'ok', timestamp: new Date().toISOString() })
+})
 
 // Public routes
 router.on('/').renderInertia('home')
@@ -83,7 +87,6 @@ router
     router.on('/settings/media-management').renderInertia('settings/media-management').as('settings.media-management')
     router.on('/settings/indexers').renderInertia('settings/indexers').as('settings.indexers')
     router.on('/settings/download-clients').renderInertia('settings/download-clients').as('settings.download-clients')
-    router.on('/settings/general').renderInertia('settings/general').as('settings.general')
     router.on('/settings/ui').renderInertia('settings/ui').as('settings.ui')
   })
   .use(middleware.auth())
@@ -104,13 +107,6 @@ router
     router.get('/qualityprofiles/:id', [QualityProfilesController, 'show'])
     router.put('/qualityprofiles/:id', [QualityProfilesController, 'update'])
     router.delete('/qualityprofiles/:id', [QualityProfilesController, 'destroy'])
-
-    // Metadata profiles
-    router.get('/metadataprofiles', [MetadataProfilesController, 'index'])
-    router.post('/metadataprofiles', [MetadataProfilesController, 'store'])
-    router.get('/metadataprofiles/:id', [MetadataProfilesController, 'show'])
-    router.put('/metadataprofiles/:id', [MetadataProfilesController, 'update'])
-    router.delete('/metadataprofiles/:id', [MetadataProfilesController, 'destroy'])
 
     // Indexers
     router.get('/indexers', [IndexersController, 'index'])
@@ -159,6 +155,7 @@ router
     router.get('/movies', [MoviesController, 'index'])
     router.post('/movies', [MoviesController, 'store'])
     router.get('/movies/search', [MoviesController, 'search'])
+    router.get('/movies/discover', [MoviesController, 'discover'])
     router.get('/movies/requested', [MoviesController, 'requested'])
     router.get('/movies/:id', [MoviesController, 'show'])
     router.put('/movies/:id', [MoviesController, 'update'])
@@ -172,6 +169,7 @@ router
     router.get('/tvshows', [TvShowsController, 'index'])
     router.post('/tvshows', [TvShowsController, 'store'])
     router.get('/tvshows/search', [TvShowsController, 'search'])
+    router.get('/tvshows/discover', [TvShowsController, 'discover'])
     router.get('/tvshows/requested', [TvShowsController, 'requested'])
     router.get('/tvshows/preview-seasons', [TvShowsController, 'previewSeasons'])
     router.get('/tvshows/preview-episodes', [TvShowsController, 'previewEpisodes'])

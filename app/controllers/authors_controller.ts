@@ -9,8 +9,8 @@ const authorValidator = vine.compile(
   vine.object({
     openlibraryId: vine.string().optional(),
     name: vine.string().minLength(1),
-    qualityProfileId: vine.number().optional(),
-    rootFolderId: vine.number(),
+    qualityProfileId: vine.string().optional(),
+    rootFolderId: vine.string(),
     requested: vine.boolean().optional(),
     addBooks: vine.boolean().optional(),
   })

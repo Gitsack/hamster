@@ -59,10 +59,11 @@ import {
   Tv01Icon,
   Book01Icon,
   ArrowRight01Icon,
+  ArrowLeft01Icon,
   ViewIcon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
-import { useState, useEffect, useMemo, useCallback, Component, ErrorInfo, ReactNode } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Component, ErrorInfo, ReactNode } from 'react'
 import { toast } from 'sonner'
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
 
@@ -209,20 +210,10 @@ interface DownloadClient {
   enabled: boolean
 }
 
-interface RootFolder {
-  id: string
-  path: string
-  mediaType?: string
-}
-
 interface QualityProfile {
   id: string
   name: string
-}
-
-interface MetadataProfile {
-  id: string
-  name: string
+  mediaType?: string
 }
 
 type SortField = 'age' | 'title' | 'size' | 'indexer' | 'grabs' | 'category'
@@ -311,8 +302,16 @@ export default function SearchPage() {
   // Movies search results
   const [movieResults, setMovieResults] = useState<MovieSearchResult[]>([])
 
+  // Movies discover results (all categories as lanes)
+  const [movieDiscoverLanes, setMovieDiscoverLanes] = useState<Record<string, MovieSearchResult[]>>({})
+  const [loadingMovieDiscover, setLoadingMovieDiscover] = useState(false)
+
   // TV search results
   const [tvShowResults, setTvShowResults] = useState<TvShowSearchResult[]>([])
+
+  // TV discover results (all categories as lanes)
+  const [tvDiscoverLanes, setTvDiscoverLanes] = useState<Record<string, TvShowSearchResult[]>>({})
+  const [loadingTvDiscover, setLoadingTvDiscover] = useState(false)
 
   // Books search results
   const [authorResults, setAuthorResults] = useState<AuthorSearchResult[]>([])
@@ -341,9 +340,8 @@ export default function SearchPage() {
   const [bulkDownloading, setBulkDownloading] = useState(false)
 
   // Add dialogs state
-  const [rootFolders, setRootFolders] = useState<RootFolder[]>([])
   const [qualityProfiles, setQualityProfiles] = useState<QualityProfile[]>([])
-  const [metadataProfiles, setMetadataProfiles] = useState<MetadataProfile[]>([])
+  const [rootFolders, setRootFolders] = useState<{ id: string; path: string; mediaType: string }[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
 
   // Music add state
@@ -374,13 +372,42 @@ export default function SearchPage() {
   const [addBooks, setAddBooks] = useState(true)
 
   // Common add state
-  const [selectedRootFolder, setSelectedRootFolder] = useState<string>('')
   const [selectedQualityProfile, setSelectedQualityProfile] = useState<string>('')
-  const [selectedMetadataProfile, setSelectedMetadataProfile] = useState<string>('')
   const [requested, setWanted] = useState(true)
   const [searchOnAdd, setSearchOnAdd] = useState(true)
   const [addingArtist, setAddingArtist] = useState(false)
   const [addingAlbum, setAddingAlbum] = useState(false)
+
+  // Filtered quality profiles by media type
+  const movieProfiles = useMemo(() => qualityProfiles.filter((p) => p.mediaType === 'movies'), [qualityProfiles])
+  const tvProfiles = useMemo(() => qualityProfiles.filter((p) => p.mediaType === 'tv'), [qualityProfiles])
+  const musicProfiles = useMemo(() => qualityProfiles.filter((p) => p.mediaType === 'music'), [qualityProfiles])
+  const bookProfiles = useMemo(() => qualityProfiles.filter((p) => p.mediaType === 'books'), [qualityProfiles])
+
+  // Set default profile when dialogs open
+  useEffect(() => {
+    if (addMovieDialogOpen && movieProfiles.length > 0) {
+      setSelectedQualityProfile(movieProfiles[0].id)
+    }
+  }, [addMovieDialogOpen, movieProfiles])
+
+  useEffect(() => {
+    if (addTvShowDialogOpen && tvProfiles.length > 0) {
+      setSelectedQualityProfile(tvProfiles[0].id)
+    }
+  }, [addTvShowDialogOpen, tvProfiles])
+
+  useEffect(() => {
+    if ((addArtistDialogOpen || addAlbumDialogOpen) && musicProfiles.length > 0) {
+      setSelectedQualityProfile(musicProfiles[0].id)
+    }
+  }, [addArtistDialogOpen, addAlbumDialogOpen, musicProfiles])
+
+  useEffect(() => {
+    if ((addAuthorDialogOpen || addBookDialogOpen) && bookProfiles.length > 0) {
+      setSelectedQualityProfile(bookProfiles[0].id)
+    }
+  }, [addAuthorDialogOpen, addBookDialogOpen, bookProfiles])
 
   // Music exploration state
   const [expandedArtistId, setExpandedArtistId] = useState<string | null>(null)
@@ -423,40 +450,16 @@ export default function SearchPage() {
 
     // Load add options
     Promise.all([
-      fetch('/api/v1/rootfolders').then((r) => r.json()),
       fetch('/api/v1/qualityprofiles').then((r) => r.json()),
-      fetch('/api/v1/metadataprofiles').then((r) => r.json()),
+      fetch('/api/v1/rootfolders').then((r) => r.json()),
     ])
-      .then(([rf, qp, mp]) => {
-        setRootFolders(rf)
+      .then(([qp, rf]) => {
         setQualityProfiles(qp)
-        setMetadataProfiles(mp)
-        if (rf.length > 0) setSelectedRootFolder(rf[0].id)
-        if (qp.length > 0) setSelectedQualityProfile(qp[0].id)
-        if (mp.length > 0) setSelectedMetadataProfile(mp[0].id)
+        setRootFolders(rf)
       })
       .catch(console.error)
       .finally(() => setLoadingOptions(false))
   }, [])
-
-  // Get filtered root folders for current media type
-  const filteredRootFolders = useMemo(() => {
-    if (searchMode === 'direct') return rootFolders
-    const filtered = rootFolders.filter((rf) => !rf.mediaType || rf.mediaType === searchMode)
-    console.log('[Search] Root folders:', rootFolders.map(rf => ({ id: rf.id, path: rf.path, mediaType: rf.mediaType })))
-    console.log('[Search] Search mode:', searchMode, '-> Filtered:', filtered.length)
-    return filtered
-  }, [rootFolders, searchMode])
-
-  // Update selected root folder when filtered list changes
-  useEffect(() => {
-    if (filteredRootFolders.length > 0) {
-      const currentIsValid = filteredRootFolders.some((rf) => rf.id === selectedRootFolder)
-      if (!currentIsValid) {
-        setSelectedRootFolder(filteredRootFolders[0].id)
-      }
-    }
-  }, [filteredRootFolders, selectedRootFolder])
 
   // Filtered and sorted results for direct search
   const filteredIndexerResults = useMemo(() => {
@@ -568,6 +571,75 @@ export default function SearchPage() {
       search()
     }
   }
+
+  // Movie discover categories config
+  const movieDiscoverCategories = useMemo(() => [
+    { key: 'popular', label: 'Popular Movies' },
+    { key: 'now_playing', label: 'Now in Cinemas' },
+    { key: 'upcoming', label: 'Upcoming Movies' },
+    { key: 'trending', label: 'Trending This Week' },
+  ] as const, [])
+
+  // TV discover categories config
+  const tvDiscoverCategories = useMemo(() => [
+    { key: 'popular', label: 'Popular Shows' },
+    { key: 'on_the_air', label: 'Currently Airing' },
+    { key: 'top_rated', label: 'Top Rated' },
+    { key: 'trending', label: 'Trending This Week' },
+  ] as const, [])
+
+  // Fetch all movie discover lanes
+  const fetchAllMovieDiscoverLanes = useCallback(async () => {
+    setLoadingMovieDiscover(true)
+    try {
+      const results: Record<string, MovieSearchResult[]> = {}
+      await Promise.all(
+        movieDiscoverCategories.map(async (cat) => {
+          const response = await fetch(`/api/v1/movies/discover?category=${cat.key}`)
+          if (response.ok) {
+            const data = await response.json()
+            results[cat.key] = data.results
+          }
+        })
+      )
+      setMovieDiscoverLanes(results)
+    } catch (error) {
+      console.error('Failed to fetch movie discover:', error)
+    } finally {
+      setLoadingMovieDiscover(false)
+    }
+  }, [movieDiscoverCategories])
+
+  // Fetch all TV discover lanes
+  const fetchAllTvDiscoverLanes = useCallback(async () => {
+    setLoadingTvDiscover(true)
+    try {
+      const results: Record<string, TvShowSearchResult[]> = {}
+      await Promise.all(
+        tvDiscoverCategories.map(async (cat) => {
+          const response = await fetch(`/api/v1/tvshows/discover?category=${cat.key}`)
+          if (response.ok) {
+            const data = await response.json()
+            results[cat.key] = data.results
+          }
+        })
+      )
+      setTvDiscoverLanes(results)
+    } catch (error) {
+      console.error('Failed to fetch TV discover:', error)
+    } finally {
+      setLoadingTvDiscover(false)
+    }
+  }, [tvDiscoverCategories])
+
+  // Load discover content when switching to movies/tv tab with no search query
+  useEffect(() => {
+    if (searchMode === 'movies' && !searchQuery && Object.keys(movieDiscoverLanes).length === 0 && !loadingMovieDiscover) {
+      fetchAllMovieDiscoverLanes()
+    } else if (searchMode === 'tv' && !searchQuery && Object.keys(tvDiscoverLanes).length === 0 && !loadingTvDiscover) {
+      fetchAllTvDiscoverLanes()
+    }
+  }, [searchMode, searchQuery, movieDiscoverLanes, tvDiscoverLanes, loadingMovieDiscover, loadingTvDiscover, fetchAllMovieDiscoverLanes, fetchAllTvDiscoverLanes])
 
   // Direct search functions
   const toggleSort = (field: SortField) => {
@@ -699,7 +771,7 @@ export default function SearchPage() {
 
   // Add functions
   const addArtist = async () => {
-    if (!selectedArtist || !selectedRootFolder || !selectedQualityProfile || !selectedMetadataProfile) return
+    if (!selectedArtist || !selectedQualityProfile) return
 
     setAddingArtist(true)
     try {
@@ -708,9 +780,7 @@ export default function SearchPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           musicbrainzId: selectedArtist.musicbrainzId,
-          rootFolderId: selectedRootFolder,
           qualityProfileId: selectedQualityProfile,
-          metadataProfileId: selectedMetadataProfile,
           requested,
         }),
       })
@@ -736,7 +806,7 @@ export default function SearchPage() {
   }
 
   const addAlbum = async () => {
-    if (!selectedAlbum || !selectedRootFolder || !selectedQualityProfile || !selectedMetadataProfile) return
+    if (!selectedAlbum || !selectedQualityProfile) return
 
     setAddingAlbum(true)
     try {
@@ -746,9 +816,7 @@ export default function SearchPage() {
         body: JSON.stringify({
           musicbrainzId: selectedAlbum.musicbrainzId,
           artistMusicbrainzId: selectedAlbum.artistMusicbrainzId,
-          rootFolderId: selectedRootFolder,
           qualityProfileId: selectedQualityProfile,
-          metadataProfileId: selectedMetadataProfile,
           requested,
           searchOnAdd,
         }),
@@ -775,7 +843,13 @@ export default function SearchPage() {
   }
 
   const addMovie = async () => {
-    if (!selectedMovie || !selectedRootFolder || !selectedQualityProfile) return
+    if (!selectedMovie || !selectedQualityProfile) return
+
+    const movieRootFolder = rootFolders.find((rf) => rf.mediaType === 'movies')
+    if (!movieRootFolder) {
+      toast.error('No root folder configured for movies. Please add one in Settings.')
+      return
+    }
 
     setAddingMovie(true)
     try {
@@ -786,8 +860,8 @@ export default function SearchPage() {
           tmdbId: selectedMovie.tmdbId,
           title: selectedMovie.title,
           year: selectedMovie.year,
-          rootFolderId: selectedRootFolder,
           qualityProfileId: selectedQualityProfile,
+          rootFolderId: movieRootFolder.id,
           requested,
           searchOnAdd,
         }),
@@ -814,7 +888,13 @@ export default function SearchPage() {
   }
 
   const addTvShow = async () => {
-    if (!selectedTvShow || !selectedRootFolder || !selectedQualityProfile) return
+    if (!selectedTvShow || !selectedQualityProfile) return
+
+    const tvRootFolder = rootFolders.find((rf) => rf.mediaType === 'tv')
+    if (!tvRootFolder) {
+      toast.error('No root folder configured for TV shows. Please add one in Settings.')
+      return
+    }
 
     setAddingTvShow(true)
     try {
@@ -825,8 +905,8 @@ export default function SearchPage() {
           tmdbId: selectedTvShow.tmdbId,
           title: selectedTvShow.title,
           year: selectedTvShow.year,
-          rootFolderId: selectedRootFolder,
           qualityProfileId: selectedQualityProfile,
+          rootFolderId: tvRootFolder.id,
           requested: true, // Always request when adding
           searchOnAdd,
           // Pass episode selection
@@ -857,7 +937,13 @@ export default function SearchPage() {
   }
 
   const addAuthor = async () => {
-    if (!selectedAuthor || !selectedRootFolder || !selectedQualityProfile) return
+    if (!selectedAuthor || !selectedQualityProfile) return
+
+    const booksRootFolder = rootFolders.find((rf) => rf.mediaType === 'books')
+    if (!booksRootFolder) {
+      toast.error('No root folder configured for books. Please add one in Settings.')
+      return
+    }
 
     setAddingAuthor(true)
     try {
@@ -867,8 +953,8 @@ export default function SearchPage() {
         body: JSON.stringify({
           openlibraryId: selectedAuthor.openlibraryId,
           name: selectedAuthor.name,
-          rootFolderId: selectedRootFolder,
           qualityProfileId: selectedQualityProfile,
+          rootFolderId: booksRootFolder.id,
           requested,
           addBooks,
         }),
@@ -895,7 +981,13 @@ export default function SearchPage() {
   }
 
   const addBook = async () => {
-    if (!selectedBook || !selectedRootFolder || !selectedQualityProfile) return
+    if (!selectedBook || !selectedQualityProfile) return
+
+    const booksRootFolder = rootFolders.find((rf) => rf.mediaType === 'books')
+    if (!booksRootFolder) {
+      toast.error('No root folder configured for books. Please add one in Settings.')
+      return
+    }
 
     setAddingBook(true)
     try {
@@ -907,8 +999,8 @@ export default function SearchPage() {
           title: selectedBook.title,
           authorKey: selectedBook.authorKey,
           authorName: selectedBook.authorName,
-          rootFolderId: selectedRootFolder,
           qualityProfileId: selectedQualityProfile,
+          rootFolderId: booksRootFolder.id,
           requested,
         }),
       })
@@ -1479,10 +1571,133 @@ export default function SearchPage() {
     return null
   }
 
+  // Horizontal scroll lane component for discover content
+  const DiscoverLane = ({
+    title,
+    items,
+    type,
+    onItemClick
+  }: {
+    title: string
+    items: (MovieSearchResult | TvShowSearchResult)[]
+    type: 'movie' | 'tv'
+    onItemClick: (item: MovieSearchResult | TvShowSearchResult) => void
+  }) => {
+    const scrollRef = useRef<HTMLDivElement>(null)
+
+    const scroll = (direction: 'left' | 'right') => {
+      if (scrollRef.current) {
+        const scrollAmount = 400
+        scrollRef.current.scrollBy({
+          left: direction === 'left' ? -scrollAmount : scrollAmount,
+          behavior: 'smooth'
+        })
+      }
+    }
+
+    if (items.length === 0) return null
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => scroll('left')}
+            >
+              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => scroll('right')}
+            >
+              <HugeiconsIcon icon={ArrowRight01Icon} className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <div
+          ref={scrollRef}
+          className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+          style={{ scrollbarWidth: 'thin' }}
+        >
+          {items.map((item) => {
+            const imageKey = `discover-${type}-${item.tmdbId}`
+            const hasImage = item.posterUrl && !failedImages.has(imageKey)
+
+            return (
+              <div
+                key={item.tmdbId}
+                className="flex-shrink-0 w-[150px] group cursor-pointer"
+                onClick={() => onItemClick(item)}
+              >
+                <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-muted">
+                  {hasImage ? (
+                    <img
+                      src={item.posterUrl!}
+                      alt={item.title}
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                      onError={() => handleImageError(imageKey)}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <HugeiconsIcon
+                        icon={type === 'movie' ? Film01Icon : Tv01Icon}
+                        className="h-12 w-12 text-muted-foreground/30"
+                      />
+                    </div>
+                  )}
+                  <Badge
+                    className="absolute top-2 left-2 text-xs"
+                    variant="secondary"
+                  >
+                    {type === 'movie' ? 'MOVIE' : 'TV'}
+                  </Badge>
+                  {item.inLibrary && (
+                    <Badge
+                      className="absolute top-2 right-2 text-xs gap-1"
+                      variant="default"
+                    >
+                      <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                    </Badge>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <p className="text-white text-sm font-medium line-clamp-2">{item.title}</p>
+                    {item.year && (
+                      <p className="text-white/70 text-xs">{item.year}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // Skeleton for discover lanes
+  const DiscoverLaneSkeleton = () => (
+    <div className="space-y-3">
+      <Skeleton className="h-6 w-48" />
+      <div className="flex gap-3 overflow-hidden">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="flex-shrink-0 w-[150px] aspect-[2/3] rounded-lg" />
+        ))}
+      </div>
+    </div>
+  )
+
   // Render movie results
   const renderMovieResults = () => {
     if (searching) return <SearchingSkeleton />
 
+    // Show search results if there are any
     if (movieResults.length > 0) {
       return (
         <div className="space-y-2">
@@ -1506,13 +1721,43 @@ export default function SearchPage() {
     }
 
     if (hasSearched) return <NoResults />
-    return null
+
+    // Show discover lanes when no search has been performed
+    return (
+      <div className="space-y-8">
+        {loadingMovieDiscover ? (
+          <>
+            <DiscoverLaneSkeleton />
+            <DiscoverLaneSkeleton />
+            <DiscoverLaneSkeleton />
+          </>
+        ) : Object.keys(movieDiscoverLanes).length > 0 ? (
+          movieDiscoverCategories.map((cat) => (
+            <DiscoverLane
+              key={cat.key}
+              title={cat.label}
+              items={movieDiscoverLanes[cat.key] || []}
+              type="movie"
+              onItemClick={(item) => {
+                setSelectedMovie(item as MovieSearchResult)
+                setAddMovieDialogOpen(true)
+              }}
+            />
+          ))
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>Enter a search term to find movies</p>
+          </div>
+        )}
+      </div>
+    )
   }
 
   // Render TV results
   const renderTvResults = () => {
     if (searching) return <SearchingSkeleton />
 
+    // Show search results if there are any
     if (tvShowResults.length > 0) {
       return (
         <div className="space-y-2">
@@ -1536,7 +1781,36 @@ export default function SearchPage() {
     }
 
     if (hasSearched) return <NoResults />
-    return null
+
+    // Show discover lanes when no search has been performed
+    return (
+      <div className="space-y-8">
+        {loadingTvDiscover ? (
+          <>
+            <DiscoverLaneSkeleton />
+            <DiscoverLaneSkeleton />
+            <DiscoverLaneSkeleton />
+          </>
+        ) : Object.keys(tvDiscoverLanes).length > 0 ? (
+          tvDiscoverCategories.map((cat) => (
+            <DiscoverLane
+              key={cat.key}
+              title={cat.label}
+              items={tvDiscoverLanes[cat.key] || []}
+              type="tv"
+              onItemClick={(item) => {
+                setSelectedTvShow(item as TvShowSearchResult)
+                setSeasonPickerOpen(true)
+              }}
+            />
+          ))
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>Enter a search term to find TV shows</p>
+          </div>
+        )}
+      </div>
+    )
   }
 
   // Render books results
@@ -1747,26 +2021,29 @@ export default function SearchPage() {
         <div className="space-y-4">
           {/* Search mode tabs */}
           <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as MediaType | 'direct')}>
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              <TabsList>
-                {enabledMediaTypes.map((type) => {
-                  const config = MEDIA_TYPE_CONFIG[type]
-                  return (
-                    <TabsTrigger key={type} value={type} className="gap-2">
-                      <HugeiconsIcon icon={config.icon} className="h-4 w-4" />
-                      {config.label}
-                    </TabsTrigger>
-                  )
-                })}
-                <TabsTrigger value="direct" className="gap-2">
-                  <HugeiconsIcon icon={Globe02Icon} className="h-4 w-4" />
-                  Direct
-                </TabsTrigger>
-              </TabsList>
+            <div className="flex flex-col gap-3">
+              {/* Main media type tabs - scrollable on small screens */}
+              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none">
+                <TabsList className="min-w-max">
+                  {enabledMediaTypes.map((type) => {
+                    const config = MEDIA_TYPE_CONFIG[type]
+                    return (
+                      <TabsTrigger key={type} value={type} className="gap-2">
+                        <HugeiconsIcon icon={config.icon} className="h-4 w-4" />
+                        {config.label}
+                      </TabsTrigger>
+                    )
+                  })}
+                  <TabsTrigger value="direct" className="gap-2">
+                    <HugeiconsIcon icon={Globe02Icon} className="h-4 w-4" />
+                    Direct
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               {/* Subtype selector for music */}
               {searchMode === 'music' && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-muted-foreground">Search for:</span>
                   <Tabs value={musicSearchType} onValueChange={(v) => setMusicSearchType(v as MusicSearchType)}>
                     <TabsList className="h-8">
@@ -1780,7 +2057,7 @@ export default function SearchPage() {
 
               {/* Subtype selector for books */}
               {searchMode === 'books' && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-muted-foreground">Search for:</span>
                   <Tabs value={booksSearchType} onValueChange={(v) => setBooksSearchType(v as 'author' | 'book')}>
                     <TabsList className="h-8">
@@ -1993,45 +2270,15 @@ export default function SearchPage() {
             ) : (
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Root Folder</Label>
-                  <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-                <div className="space-y-2">
                   <Label>Quality Profile</Label>
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
+                        {(value: string) => musicProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {qualityProfiles.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Metadata Profile</Label>
-                  <Select value={selectedMetadataProfile} onValueChange={setSelectedMetadataProfile}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select profile">
-                        {(value: string) => metadataProfiles.find((p) => p.id === value)?.name || 'Select profile'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {metadataProfiles.map((p) => (
+                      {musicProfiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
@@ -2041,7 +2288,7 @@ export default function SearchPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addArtist} disabled={addingArtist || !selectedRootFolder || !selectedQualityProfile}>
+              <Button onClick={addArtist} disabled={addingArtist || !selectedQualityProfile}>
                 {addingArtist && <Spinner className="mr-2" />}
                 Add Artist
               </Button>
@@ -2069,35 +2316,19 @@ export default function SearchPage() {
             {loadingOptions ? (
               <div className="space-y-4 py-4">
                 <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
               </div>
             ) : (
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Root Folder</Label>
-                  <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
                 <div className="space-y-2">
                   <Label>Quality Profile</Label>
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
+                        {(value: string) => musicProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {qualityProfiles.map((p) => (
+                      {musicProfiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
@@ -2111,7 +2342,7 @@ export default function SearchPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddAlbumDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addAlbum} disabled={addingAlbum || !selectedRootFolder || !selectedQualityProfile}>
+              <Button onClick={addAlbum} disabled={addingAlbum || !selectedQualityProfile}>
                 {addingAlbum && <Spinner className="mr-2" />}
                 Add Album
               </Button>
@@ -2129,40 +2360,19 @@ export default function SearchPage() {
             {loadingOptions ? (
               <div className="space-y-4 py-4">
                 <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : filteredRootFolders.length === 0 ? (
-              <div className="py-4 text-sm text-muted-foreground">
-                <p className="mb-2">No root folder configured for movies.</p>
-                <p>Go to <strong>Settings → Media Management</strong> and add a root folder with media type set to <strong>Movies</strong>.</p>
               </div>
             ) : (
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Root Folder</Label>
-                  <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
                 <div className="space-y-2">
                   <Label>Quality Profile</Label>
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
+                        {(value: string) => movieProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {qualityProfiles.map((p) => (
+                      {movieProfiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
@@ -2176,7 +2386,7 @@ export default function SearchPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddMovieDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addMovie} disabled={addingMovie || !selectedRootFolder || !selectedQualityProfile || filteredRootFolders.length === 0}>
+              <Button onClick={addMovie} disabled={addingMovie || !selectedQualityProfile}>
                 {addingMovie && <Spinner className="mr-2" />}
                 Add Movie
               </Button>
@@ -2209,40 +2419,19 @@ export default function SearchPage() {
             {loadingOptions ? (
               <div className="space-y-4 py-4">
                 <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : filteredRootFolders.length === 0 ? (
-              <div className="py-4 text-sm text-muted-foreground">
-                <p className="mb-2">No root folder configured for TV shows.</p>
-                <p>Go to <strong>Settings → Media Management</strong> and add a root folder with media type set to <strong>TV</strong>.</p>
               </div>
             ) : (
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Root Folder</Label>
-                  <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
                 <div className="space-y-2">
                   <Label>Quality Profile</Label>
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
+                        {(value: string) => tvProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {qualityProfiles.map((p) => (
+                      {tvProfiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
@@ -2277,7 +2466,7 @@ export default function SearchPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddTvShowDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addTvShow} disabled={addingTvShow || !selectedRootFolder || !selectedQualityProfile || filteredRootFolders.length === 0}>
+              <Button onClick={addTvShow} disabled={addingTvShow || !selectedQualityProfile}>
                 {addingTvShow && <Spinner className="mr-2" />}
                 Add TV Show
               </Button>
@@ -2295,35 +2484,19 @@ export default function SearchPage() {
             {loadingOptions ? (
               <div className="space-y-4 py-4">
                 <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
               </div>
             ) : (
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Root Folder</Label>
-                  <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
                 <div className="space-y-2">
                   <Label>Quality Profile</Label>
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
+                        {(value: string) => bookProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {qualityProfiles.map((p) => (
+                      {bookProfiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
@@ -2337,7 +2510,7 @@ export default function SearchPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddAuthorDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addAuthor} disabled={addingAuthor || !selectedRootFolder || !selectedQualityProfile}>
+              <Button onClick={addAuthor} disabled={addingAuthor || !selectedQualityProfile}>
                 {addingAuthor && <Spinner className="mr-2" />}
                 Add Author
               </Button>
@@ -2357,35 +2530,19 @@ export default function SearchPage() {
             {loadingOptions ? (
               <div className="space-y-4 py-4">
                 <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
               </div>
             ) : (
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Root Folder</Label>
-                  <Select value={selectedRootFolder} onValueChange={setSelectedRootFolder}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select folder">
-                        {(value: string) => filteredRootFolders.find((f) => f.id === value)?.path || 'Select folder'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {filteredRootFolders.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>{f.path}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
                 <div className="space-y-2">
                   <Label>Quality Profile</Label>
                   <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select profile">
-                        {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
+                        {(value: string) => bookProfiles.find((p) => p.id === value)?.name || 'Select profile'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectPopup>
-                      {qualityProfiles.map((p) => (
+                      {bookProfiles.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectPopup>
@@ -2395,7 +2552,7 @@ export default function SearchPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddBookDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addBook} disabled={addingBook || !selectedRootFolder || !selectedQualityProfile}>
+              <Button onClick={addBook} disabled={addingBook || !selectedQualityProfile}>
                 {addingBook && <Spinner className="mr-2" />}
                 Add Book
               </Button>

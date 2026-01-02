@@ -80,6 +80,53 @@ export default class MoviesController {
     }
   }
 
+  /**
+   * Get discover/popular movies (for browsing when no search query)
+   */
+  async discover({ request, response }: HttpContext) {
+    const category = request.input('category', 'popular') as 'popular' | 'now_playing' | 'upcoming' | 'trending'
+
+    try {
+      let results
+      switch (category) {
+        case 'now_playing':
+          results = await tmdbService.getNowPlayingMovies()
+          break
+        case 'upcoming':
+          results = await tmdbService.getUpcomingMovies()
+          break
+        case 'trending':
+          results = await tmdbService.getTrendingMovies('week')
+          break
+        case 'popular':
+        default:
+          results = await tmdbService.getPopularMovies()
+      }
+
+      // Check which movies are already in library
+      const tmdbIds = results.map((r) => String(r.id))
+      const existing = await Movie.query().whereIn('tmdbId', tmdbIds)
+      const existingIds = new Set(existing.map((m) => m.tmdbId))
+
+      return response.json({
+        category,
+        results: results.map((movie) => ({
+          tmdbId: String(movie.id),
+          title: movie.title,
+          year: movie.year,
+          overview: movie.overview,
+          posterUrl: movie.posterPath,
+          releaseDate: movie.releaseDate,
+          rating: movie.voteAverage,
+          inLibrary: existingIds.has(String(movie.id)),
+        })),
+      })
+    } catch (error) {
+      console.error('TMDB discover error:', error)
+      return response.badRequest({ error: 'Failed to fetch movies' })
+    }
+  }
+
   async store({ request, response }: HttpContext) {
     const data = await request.validateUsing(movieValidator)
 

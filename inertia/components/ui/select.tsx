@@ -80,7 +80,7 @@ function SelectPositioner({
   return (
     <BaseSelect.Positioner
       data-slot="select-positioner"
-      className={cn("outline-none", className)}
+      className={cn("outline-none z-[9999]", className)}
       {...props}
     />
   )
@@ -102,7 +102,7 @@ function SelectPopup({
           id={popupId}
           data-slot="select-popup"
           className={cn(
-            "bg-popover text-popover-foreground relative z-[100] max-h-[min(var(--available-height),20rem)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border p-1 shadow-md",
+            "bg-popover text-popover-foreground relative z-[9999] max-h-[min(var(--available-height),20rem)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border p-1 shadow-md",
             className
           )}
           {...props}

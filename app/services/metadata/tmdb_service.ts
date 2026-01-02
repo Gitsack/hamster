@@ -214,6 +214,48 @@ export class TmdbService {
     if (!path) return null
     return `${TMDB_IMAGE_BASE}/${size}${path}`
   }
+
+  // Discovery / Popular / Trending
+
+  async getPopularMovies(): Promise<TmdbMovie[]> {
+    const data = await this.fetch('/movie/popular')
+    return data.results.map((m: any) => this.mapMovie(m))
+  }
+
+  async getNowPlayingMovies(): Promise<TmdbMovie[]> {
+    const data = await this.fetch('/movie/now_playing')
+    return data.results.map((m: any) => this.mapMovie(m))
+  }
+
+  async getUpcomingMovies(): Promise<TmdbMovie[]> {
+    const data = await this.fetch('/movie/upcoming')
+    return data.results.map((m: any) => this.mapMovie(m))
+  }
+
+  async getTrendingMovies(timeWindow: 'day' | 'week' = 'week'): Promise<TmdbMovie[]> {
+    const data = await this.fetch(`/trending/movie/${timeWindow}`)
+    return data.results.map((m: any) => this.mapMovie(m))
+  }
+
+  async getPopularTvShows(): Promise<TmdbTvShow[]> {
+    const data = await this.fetch('/tv/popular')
+    return data.results.map((s: any) => this.mapTvShow(s))
+  }
+
+  async getTopRatedTvShows(): Promise<TmdbTvShow[]> {
+    const data = await this.fetch('/tv/top_rated')
+    return data.results.map((s: any) => this.mapTvShow(s))
+  }
+
+  async getOnTheAirTvShows(): Promise<TmdbTvShow[]> {
+    const data = await this.fetch('/tv/on_the_air')
+    return data.results.map((s: any) => this.mapTvShow(s))
+  }
+
+  async getTrendingTvShows(timeWindow: 'day' | 'week' = 'week'): Promise<TmdbTvShow[]> {
+    const data = await this.fetch(`/trending/tv/${timeWindow}`)
+    return data.results.map((s: any) => this.mapTvShow(s))
+  }
 }
 
 export const tmdbService = new TmdbService()

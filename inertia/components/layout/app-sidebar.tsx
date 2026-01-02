@@ -5,10 +5,8 @@ import {
   MusicNote01Icon,
   Download04Icon,
   Clock01Icon,
-  Settings02Icon,
   Search01Icon,
   Folder01Icon,
-  HeartCheckIcon,
   LogoutSquare01Icon,
   UserIcon,
   Globe02Icon,
@@ -81,11 +79,6 @@ const settingsNavItems: NavItem[] = [
     title: 'Download Clients',
     url: '/settings/download-clients',
     icon: Download04Icon,
-  },
-  {
-    title: 'General',
-    url: '/settings/general',
-    icon: Settings02Icon,
   },
 ]
 

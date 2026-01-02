@@ -13,9 +13,8 @@ const addAlbumValidator = vine.compile(
   vine.object({
     musicbrainzId: vine.string(), // Release group ID
     artistMusicbrainzId: vine.string(),
-    rootFolderId: vine.string(),
+    rootFolderId: vine.string().optional(),
     qualityProfileId: vine.string(),
-    metadataProfileId: vine.string(),
     requested: vine.boolean().optional(),
     searchForAlbum: vine.boolean().optional(),
   })
@@ -107,7 +106,6 @@ export default class AlbumsController {
         endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
         requested: false, // Artist not requested - only specific albums
         qualityProfileId: data.qualityProfileId,
-        metadataProfileId: data.metadataProfileId,
         rootFolderId: data.rootFolderId,
         addedAt: DateTime.now(),
       })
@@ -140,6 +138,9 @@ export default class AlbumsController {
       anyReleaseOk: true,
     })
 
+    // Fetch tracks from MusicBrainz
+    await this.fetchAlbumTracks(album)
+
     // Optionally search for the album and trigger download
     if (data.searchForAlbum) {
       this.searchAndGrabAlbum(album).catch((error) => {
@@ -154,6 +155,49 @@ export default class AlbumsController {
       artistName: artist.name,
       requested: album.requested,
     })
+  }
+
+  /**
+   * Fetch and create tracks for an album from MusicBrainz
+   */
+  private async fetchAlbumTracks(album: Album): Promise<void> {
+    if (!album.musicbrainzReleaseGroupId) return
+
+    try {
+      const releases = await musicBrainzService.getAlbumReleases(album.musicbrainzReleaseGroupId)
+
+      if (releases.length === 0) return
+
+      // Use the release with the most tracks (usually the most complete one)
+      const release = releases.reduce((best, current) =>
+        current.trackCount > best.trackCount ? current : best
+      )
+
+      // Store the release ID for future reference
+      if (!album.musicbrainzId) {
+        album.musicbrainzId = release.id
+        await album.save()
+      }
+
+      // Extract tracks from all media (discs)
+      let discNumber = 1
+      for (const medium of release.media) {
+        for (const mbTrack of medium.tracks) {
+          await Track.create({
+            albumId: album.id,
+            musicbrainzId: mbTrack.id,
+            title: mbTrack.title,
+            trackNumber: mbTrack.position,
+            discNumber: discNumber,
+            durationMs: mbTrack.length || null,
+            hasFile: false,
+          })
+        }
+        discNumber++
+      }
+    } catch (error) {
+      console.error(`Failed to fetch tracks for album ${album.id}:`, error)
+    }
   }
 
   /**
@@ -222,7 +266,7 @@ export default class AlbumsController {
    * Get album details with tracks
    */
   async show({ params, response }: HttpContext) {
-    const album = await Album.query()
+    let album = await Album.query()
       .where('id', params.id)
       .preload('artist')
       .preload('tracks', (trackQuery) => {
@@ -233,6 +277,20 @@ export default class AlbumsController {
 
     if (!album) {
       return response.notFound({ error: 'Album not found' })
+    }
+
+    // Lazy-load tracks from MusicBrainz if album has none
+    if (album.tracks.length === 0 && album.musicbrainzReleaseGroupId) {
+      await this.fetchAlbumTracks(album)
+      // Reload tracks after fetching
+      album = await Album.query()
+        .where('id', params.id)
+        .preload('artist')
+        .preload('tracks', (trackQuery) => {
+          trackQuery.orderBy('discNumber', 'asc').orderBy('trackNumber', 'asc')
+        })
+        .preload('trackFiles')
+        .firstOrFail()
     }
 
     return response.json({

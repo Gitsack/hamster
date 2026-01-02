@@ -1,0 +1,84 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: mediabox-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-mediabox}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: ${DB_DATABASE:-mediabox}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mediabox} -d ${DB_DATABASE:-mediabox}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediabox-network
+
+  # Mediabox Application
+  mediabox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mediabox:latest
+    container_name: mediabox
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${PORT:-3333}:3333"
+    environment:
+      # Application
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3333
+      TZ: ${TZ:-UTC}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+      # Security - MUST be set in .env file
+      APP_KEY: ${APP_KEY}
+
+      # Session
+      SESSION_DRIVER: cookie
+
+      # Database connection to postgres service
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-mediabox}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      DB_DATABASE: ${DB_DATABASE:-mediabox}
+    volumes:
+      # Media library volumes - map your local paths
+      - ${MUSIC_PATH:-./media/music}:/media/music
+      - ${MOVIES_PATH:-./media/movies}:/media/movies
+      - ${TV_PATH:-./media/tv}:/media/tv
+      - ${BOOKS_PATH:-./media/books}:/media/books
+
+      # Downloads folder for import
+      - ${DOWNLOADS_PATH:-./downloads}:/downloads
+
+      # Persistent app data (logs, cache, etc.)
+      - app_data:/app/tmp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3333/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    networks:
+      - mediabox-network
+
+volumes:
+  postgres_data:
+    name: mediabox-postgres-data
+  app_data:
+    name: mediabox-app-data
+
+networks:
+  mediabox-network:
+    name: mediabox-network
+    driver: bridge

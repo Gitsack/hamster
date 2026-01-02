@@ -2,7 +2,6 @@ import { DateTime } from 'luxon'
 import { BaseModel, belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import QualityProfile from './quality_profile.js'
-import MetadataProfile from './metadata_profile.js'
 import RootFolder from './root_folder.js'
 import Album from './album.js'
 
@@ -55,9 +54,6 @@ export default class Artist extends BaseModel {
   declare qualityProfileId: string | null
 
   @column()
-  declare metadataProfileId: string | null
-
-  @column()
   declare rootFolderId: string | null
 
   @column.dateTime()
@@ -71,9 +67,6 @@ export default class Artist extends BaseModel {
 
   @belongsTo(() => QualityProfile)
   declare qualityProfile: BelongsTo<typeof QualityProfile>
-
-  @belongsTo(() => MetadataProfile)
-  declare metadataProfile: BelongsTo<typeof MetadataProfile>
 
   @belongsTo(() => RootFolder)
   declare rootFolder: BelongsTo<typeof RootFolder>

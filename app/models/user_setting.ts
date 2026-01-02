@@ -3,7 +3,6 @@ import { BaseModel, belongsTo, column } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from './user.js'
 import QualityProfile from './quality_profile.js'
-import MetadataProfile from './metadata_profile.js'
 
 export type UiTheme = 'light' | 'dark' | 'system'
 
@@ -28,9 +27,6 @@ export default class UserSetting extends BaseModel {
   declare defaultQualityProfileId: string | null
 
   @column()
-  declare defaultMetadataProfileId: string | null
-
-  @column()
   declare notificationSettings: NotificationSettings
 
   @column.dateTime({ autoCreate: true })
@@ -46,9 +42,4 @@ export default class UserSetting extends BaseModel {
     foreignKey: 'defaultQualityProfileId',
   })
   declare defaultQualityProfile: BelongsTo<typeof QualityProfile>
-
-  @belongsTo(() => MetadataProfile, {
-    foreignKey: 'defaultMetadataProfileId',
-  })
-  declare defaultMetadataProfile: BelongsTo<typeof MetadataProfile>
 }

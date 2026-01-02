@@ -14,6 +14,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
 import {
   CollapsibleRoot,
   CollapsibleTrigger,
@@ -33,6 +35,8 @@ import {
   Key01Icon,
   EyeIcon,
   ViewOffIcon,
+  Delete02Icon,
+  Settings01Icon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 import { FolderBrowser } from '@/components/folder-browser'
@@ -105,6 +109,69 @@ const fieldLabels: Record<string, string> = {
   bookFile: 'Book File Format',
 }
 
+// Quality profile interfaces and constants
+interface QualityItem {
+  id: number
+  name: string
+  allowed: boolean
+}
+
+interface QualityProfile {
+  id: number
+  name: string
+  mediaType: MediaType
+  cutoff: number
+  upgradeAllowed: boolean
+  items: QualityItem[]
+}
+
+
+// Quality options per media type
+const QUALITY_OPTIONS: Record<MediaType, { id: number; name: string }[]> = {
+  music: [
+    { id: 1, name: 'FLAC' },
+    { id: 2, name: 'ALAC' },
+    { id: 3, name: 'WAV' },
+    { id: 4, name: 'MP3 320' },
+    { id: 5, name: 'MP3 V0' },
+    { id: 6, name: 'MP3 256' },
+    { id: 7, name: 'MP3 192' },
+    { id: 8, name: 'AAC 256' },
+    { id: 9, name: 'OGG Vorbis' },
+  ],
+  movies: [
+    { id: 1, name: 'Bluray 2160p' },
+    { id: 2, name: 'Bluray 1080p' },
+    { id: 3, name: 'Bluray 720p' },
+    { id: 4, name: 'Web 2160p' },
+    { id: 5, name: 'Web 1080p' },
+    { id: 6, name: 'Web 720p' },
+    { id: 7, name: 'HDTV 1080p' },
+    { id: 8, name: 'HDTV 720p' },
+    { id: 9, name: 'DVD' },
+  ],
+  tv: [
+    { id: 1, name: 'Bluray 2160p' },
+    { id: 2, name: 'Bluray 1080p' },
+    { id: 3, name: 'Bluray 720p' },
+    { id: 4, name: 'Web 2160p' },
+    { id: 5, name: 'Web 1080p' },
+    { id: 6, name: 'Web 720p' },
+    { id: 7, name: 'HDTV 1080p' },
+    { id: 8, name: 'HDTV 720p' },
+    { id: 9, name: 'DVD' },
+  ],
+  books: [
+    { id: 1, name: 'EPUB' },
+    { id: 2, name: 'PDF' },
+    { id: 3, name: 'MOBI' },
+    { id: 4, name: 'AZW3' },
+    { id: 5, name: 'CBZ' },
+    { id: 6, name: 'CBR' },
+  ],
+}
+
+
 export default function MediaManagement() {
   const [settings, setSettings] = useState<AppSettings>({
     enabledMediaTypes: ['music'],
@@ -133,12 +200,28 @@ export default function MediaManagement() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [savingApiKey, setSavingApiKey] = useState(false)
 
+  // Quality profile state
+  const [qualityProfiles, setQualityProfiles] = useState<QualityProfile[]>([])
+  const [qualityDialogOpen, setQualityDialogOpen] = useState(false)
+  const [editingQuality, setEditingQuality] = useState<QualityProfile | null>(null)
+  const [qualityMediaType, setQualityMediaType] = useState<MediaType>('music')
+  const [qualityName, setQualityName] = useState('')
+  const [qualityItems, setQualityItems] = useState<QualityItem[]>([])
+  const [qualityUpgradeAllowed, setQualityUpgradeAllowed] = useState(true)
+  const [savingQuality, setSavingQuality] = useState(false)
+
+  // Delete confirmation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deletingProfile, setDeletingProfile] = useState<QualityProfile | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
   const fetchData = async () => {
     try {
-      const [settingsRes, foldersRes, namingRes] = await Promise.all([
+      const [settingsRes, foldersRes, namingRes, qualityRes] = await Promise.all([
         fetch('/api/v1/settings'),
         fetch('/api/v1/rootfolders'),
         fetch('/api/v1/settings/naming-patterns'),
+        fetch('/api/v1/qualityprofiles'),
       ])
 
       if (settingsRes.ok) {
@@ -154,6 +237,10 @@ export default function MediaManagement() {
         setNamingData(data)
         // Initialize edited patterns with current values
         setEditedPatterns(JSON.parse(JSON.stringify(data.patterns)))
+      }
+      if (qualityRes.ok) {
+        const data = await qualityRes.json()
+        setQualityProfiles(data)
       }
     } catch (error) {
       toast.error('Failed to load settings')
@@ -366,6 +453,109 @@ export default function MediaManagement() {
       .trim()
   }
 
+  // Quality profile functions
+  const openQualityDialog = (mediaType: MediaType, profile?: QualityProfile) => {
+    setQualityMediaType(mediaType)
+    if (profile) {
+      setEditingQuality(profile)
+      setQualityName(profile.name)
+      setQualityItems(profile.items)
+      setQualityUpgradeAllowed(profile.upgradeAllowed)
+    } else {
+      setEditingQuality(null)
+      setQualityName('')
+      // Initialize with all items enabled
+      setQualityItems(QUALITY_OPTIONS[mediaType].map((q) => ({ ...q, allowed: true })))
+      setQualityUpgradeAllowed(true)
+    }
+    setQualityDialogOpen(true)
+  }
+
+  const handleSaveQuality = async () => {
+    if (!qualityName.trim()) {
+      toast.error('Profile name is required')
+      return
+    }
+
+    setSavingQuality(true)
+    try {
+      const url = editingQuality
+        ? `/api/v1/qualityprofiles/${editingQuality.id}`
+        : '/api/v1/qualityprofiles'
+
+      const response = await fetch(url, {
+        method: editingQuality ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: qualityName,
+          mediaType: qualityMediaType,
+          items: qualityItems,
+          upgradeAllowed: qualityUpgradeAllowed,
+          cutoff: qualityItems.find((i) => i.allowed)?.id || 1,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (editingQuality) {
+          setQualityProfiles((prev) => prev.map((p) => p.id === data.id ? data : p))
+        } else {
+          setQualityProfiles((prev) => [...prev, data])
+        }
+        toast.success(`Quality profile ${editingQuality ? 'updated' : 'created'}`)
+        setQualityDialogOpen(false)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to save profile')
+      }
+    } catch (error) {
+      toast.error('Failed to save profile')
+    } finally {
+      setSavingQuality(false)
+    }
+  }
+
+  const openDeleteDialog = (profile: QualityProfile) => {
+    setDeletingProfile(profile)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deletingProfile) return
+
+    setDeleting(true)
+    try {
+      const response = await fetch(`/api/v1/qualityprofiles/${deletingProfile.id}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setQualityProfiles((prev) => prev.filter((p) => p.id !== deletingProfile.id))
+        toast.success('Quality profile deleted')
+        setDeleteDialogOpen(false)
+        setDeletingProfile(null)
+      } else {
+        toast.error('Failed to delete profile')
+      }
+    } catch (error) {
+      toast.error('Failed to delete profile')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const toggleQualityItem = (itemId: number) => {
+    setQualityItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId ? { ...item, allowed: !item.allowed } : item
+      )
+    )
+  }
+
+  const getProfilesForMediaType = (mediaType: MediaType) => {
+    return qualityProfiles.filter((p) => p.mediaType === mediaType)
+  }
+
   return (
     <AppLayout title="Media Management">
       <Head title="Media Management" />
@@ -548,6 +738,70 @@ export default function MediaManagement() {
                           </div>
                         </CollapsiblePanel>
                       </CollapsibleRoot>
+
+                      {/* Quality Profiles (collapsible) */}
+                      <CollapsibleRoot className="border-t">
+                        <div className="p-4">
+                          <CollapsibleTrigger className="text-muted-foreground hover:text-foreground">
+                            Quality Profiles
+                          </CollapsibleTrigger>
+                        </div>
+                        <CollapsiblePanel>
+                          <div className="space-y-3 px-4 pb-4">
+                            <p className="text-sm text-muted-foreground">
+                              Define which quality levels are acceptable for downloads.
+                            </p>
+                            {getProfilesForMediaType(mediaType).length > 0 ? (
+                              <div className="space-y-2">
+                                {getProfilesForMediaType(mediaType).map((profile) => (
+                                  <div
+                                    key={profile.id}
+                                    className="flex items-center justify-between rounded-md border p-3"
+                                  >
+                                    <div>
+                                      <span className="font-medium">{profile.name}</span>
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {profile.items.filter((i) => i.allowed).map((item) => (
+                                          <Badge key={item.id} variant="secondary" className="text-xs">
+                                            {item.name}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => openQualityDialog(mediaType, profile)}
+                                      >
+                                        <HugeiconsIcon icon={Edit01Icon} className="size-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => openDeleteDialog(profile)}
+                                      >
+                                        <HugeiconsIcon icon={Delete02Icon} className="size-4 text-destructive" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground italic">No quality profiles configured.</p>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openQualityDialog(mediaType)}
+                            >
+                              <HugeiconsIcon icon={Add01Icon} className="size-4 mr-1" />
+                              Add Profile
+                            </Button>
+                          </div>
+                        </CollapsiblePanel>
+                      </CollapsibleRoot>
+
                     </div>
                   )}
                 </div>
@@ -644,6 +898,105 @@ export default function MediaManagement() {
             </Button>
             <Button onClick={handleSaveApiKey} disabled={savingApiKey || !tmdbApiKey.trim()}>
               {savingApiKey ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quality Profile Dialog */}
+      <Dialog open={qualityDialogOpen} onOpenChange={setQualityDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingQuality ? 'Edit' : 'Add'} Quality Profile
+            </DialogTitle>
+            <DialogDescription>
+              Define which quality levels are acceptable for {mediaTypeInfo[qualityMediaType].label.toLowerCase()} downloads.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="qualityName">Profile Name</Label>
+              <Input
+                id="qualityName"
+                placeholder="e.g., High Quality"
+                value={qualityName}
+                onChange={(e) => setQualityName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Allowed Qualities</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {QUALITY_OPTIONS[qualityMediaType].map((option) => {
+                  const item = qualityItems.find((i) => i.id === option.id)
+                  return (
+                    <div key={option.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`quality-${option.id}`}
+                        checked={item?.allowed ?? false}
+                        onCheckedChange={() => toggleQualityItem(option.id)}
+                      />
+                      <Label
+                        htmlFor={`quality-${option.id}`}
+                        className="font-normal cursor-pointer text-sm"
+                      >
+                        {option.name}
+                      </Label>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="upgradeAllowed"
+                checked={qualityUpgradeAllowed}
+                onCheckedChange={setQualityUpgradeAllowed}
+              />
+              <Label htmlFor="upgradeAllowed" className="font-normal cursor-pointer">
+                Upgrade existing files when better quality is available
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQualityDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveQuality}
+              disabled={savingQuality || !qualityName.trim() || !qualityItems.some((i) => i.allowed)}
+            >
+              {savingQuality ? 'Saving...' : editingQuality ? 'Save' : 'Add'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Profile</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the quality profile "{deletingProfile?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                setDeletingProfile(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

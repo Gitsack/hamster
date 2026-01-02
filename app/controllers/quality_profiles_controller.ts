@@ -5,6 +5,7 @@ import vine from '@vinejs/vine'
 const qualityProfileValidator = vine.compile(
   vine.object({
     name: vine.string().minLength(1).maxLength(255),
+    mediaType: vine.string().optional(),
     cutoff: vine.number(),
     upgradeAllowed: vine.boolean().optional(),
     items: vine.array(
@@ -28,6 +29,7 @@ export default class QualityProfilesController {
 
     const profile = await QualityProfile.create({
       name: data.name,
+      mediaType: data.mediaType ?? null,
       cutoff: data.cutoff,
       upgradeAllowed: data.upgradeAllowed ?? true,
       items: data.items,
@@ -54,6 +56,7 @@ export default class QualityProfilesController {
 
     profile.merge({
       name: data.name,
+      mediaType: data.mediaType ?? profile.mediaType,
       cutoff: data.cutoff,
       upgradeAllowed: data.upgradeAllowed ?? profile.upgradeAllowed,
       items: data.items,

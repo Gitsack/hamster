@@ -17,6 +17,9 @@ export default class QualityProfile extends BaseModel {
   declare name: string
 
   @column()
+  declare mediaType: string | null
+
+  @column()
   declare cutoff: number
 
   @column({

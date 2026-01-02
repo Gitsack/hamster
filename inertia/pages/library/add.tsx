@@ -45,17 +45,7 @@ interface SearchResult {
   inLibrary: boolean
 }
 
-interface RootFolder {
-  id: string
-  path: string
-}
-
 interface QualityProfile {
-  id: string
-  name: string
-}
-
-interface MetadataProfile {
   id: string
   name: string
 }
@@ -66,37 +56,25 @@ export default function AddArtist() {
   const [searching, setSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
 
-  const [rootFolders, setRootFolders] = useState<RootFolder[]>([])
   const [qualityProfiles, setQualityProfiles] = useState<QualityProfile[]>([])
-  const [metadataProfiles, setMetadataProfiles] = useState<MetadataProfile[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
 
   const [selectedArtist, setSelectedArtist] = useState<SearchResult | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   // Add form state
-  const [selectedRootFolder, setSelectedRootFolder] = useState<string>('')
   const [selectedQualityProfile, setSelectedQualityProfile] = useState<string>('')
-  const [selectedMetadataProfile, setSelectedMetadataProfile] = useState<string>('')
   const [monitored, setMonitored] = useState(true)
   const [adding, setAdding] = useState(false)
 
   // Load options on mount
   useEffect(() => {
-    Promise.all([
-      fetch('/api/v1/rootfolders').then((r) => r.json()),
-      fetch('/api/v1/qualityprofiles').then((r) => r.json()),
-      fetch('/api/v1/metadataprofiles').then((r) => r.json()),
-    ])
-      .then(([rf, qp, mp]) => {
-        setRootFolders(rf)
+    fetch('/api/v1/qualityprofiles')
+      .then((r) => r.json())
+      .then((qp) => {
         setQualityProfiles(qp)
-        setMetadataProfiles(mp)
-
-        // Set defaults
-        if (rf.length > 0) setSelectedRootFolder(rf[0].id)
+        // Set default
         if (qp.length > 0) setSelectedQualityProfile(qp[0].id)
-        if (mp.length > 0) setSelectedMetadataProfile(mp[0].id)
       })
       .catch((error) => {
         console.error('Failed to load options:', error)
@@ -140,8 +118,8 @@ export default function AddArtist() {
 
   const addArtist = async () => {
     if (!selectedArtist) return
-    if (!selectedRootFolder || !selectedQualityProfile || !selectedMetadataProfile) {
-      toast.error('Please select all required options')
+    if (!selectedQualityProfile) {
+      toast.error('Please select a quality profile')
       return
     }
 
@@ -155,9 +133,7 @@ export default function AddArtist() {
         },
         body: JSON.stringify({
           musicbrainzId: selectedArtist.musicbrainzId,
-          rootFolderId: selectedRootFolder,
           qualityProfileId: selectedQualityProfile,
-          metadataProfileId: selectedMetadataProfile,
           monitored,
         }),
       })
@@ -345,31 +321,9 @@ export default function AddArtist() {
             <div className="space-y-4 py-4">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
             </div>
           ) : (
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="rootFolder">Root Folder</Label>
-                <Select
-                  value={selectedRootFolder}
-                  onValueChange={setSelectedRootFolder}
-                >
-                  <SelectTrigger id="rootFolder">
-                    {selectedRootFolder
-                      ? rootFolders.find((f) => f.id === selectedRootFolder)?.path
-                      : <span className="text-muted-foreground">Select root folder</span>}
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {rootFolders.map((folder) => (
-                      <SelectItem key={folder.id} value={String(folder.id)}>
-                        {folder.path}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="qualityProfile">Quality Profile</Label>
                 <Select
@@ -383,27 +337,6 @@ export default function AddArtist() {
                   </SelectTrigger>
                   <SelectPopup>
                     {qualityProfiles.map((profile) => (
-                      <SelectItem key={profile.id} value={String(profile.id)}>
-                        {profile.name}
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="metadataProfile">Metadata Profile</Label>
-                <Select
-                  value={selectedMetadataProfile}
-                  onValueChange={setSelectedMetadataProfile}
-                >
-                  <SelectTrigger id="metadataProfile">
-                    {selectedMetadataProfile
-                      ? metadataProfiles.find((p) => p.id === selectedMetadataProfile)?.name
-                      : <span className="text-muted-foreground">Select metadata profile</span>}
-                  </SelectTrigger>
-                  <SelectPopup>
-                    {metadataProfiles.map((profile) => (
                       <SelectItem key={profile.id} value={String(profile.id)}>
                         {profile.name}
                       </SelectItem>
@@ -434,9 +367,7 @@ export default function AddArtist() {
               disabled={
                 adding ||
                 loadingOptions ||
-                !selectedRootFolder ||
-                !selectedQualityProfile ||
-                !selectedMetadataProfile
+                !selectedQualityProfile
               }
             >
               {adding ? (

@@ -1,0 +1,60 @@
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Build output
+build
+dist
+
+# Environment files (sensitive data)
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+tests
+*.test.ts
+*.spec.ts
+coverage
+
+# Documentation
+*.md
+!README.md
+docs
+
+# Docker files (not needed in context)
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Temporary files
+tmp
+temp
+*.tmp
+*.log
+
+# Media and downloads (these are mounted as volumes)
+media
+downloads
+
+# Development files
+.editorconfig
+.eslintrc*
+.prettierrc*
+tsconfig.json
+adonisrc.ts
+ace.js

@@ -1,6 +1,5 @@
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
 import QualityProfile from '#models/quality_profile'
-import MetadataProfile from '#models/metadata_profile'
 
 export default class extends BaseSeeder {
   async run() {
@@ -53,28 +52,6 @@ export default class extends BaseSeeder {
           { id: 8, name: 'FLAC 24bit', allowed: true },
           { id: 9, name: 'WAV', allowed: false },
         ],
-      },
-    ])
-
-    // Create default metadata profiles
-    await MetadataProfile.createMany([
-      {
-        name: 'Standard',
-        primaryAlbumTypes: ['album', 'ep'],
-        secondaryAlbumTypes: [],
-        releaseStatuses: ['official'],
-      },
-      {
-        name: 'Standard + Singles',
-        primaryAlbumTypes: ['album', 'ep', 'single'],
-        secondaryAlbumTypes: [],
-        releaseStatuses: ['official'],
-      },
-      {
-        name: 'Everything',
-        primaryAlbumTypes: ['album', 'ep', 'single', 'compilation', 'live', 'remix', 'other'],
-        secondaryAlbumTypes: ['compilation', 'soundtrack'],
-        releaseStatuses: ['official', 'promotional', 'bootleg'],
       },
     ])
   }
