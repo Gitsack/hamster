@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/Gitsack/mediabox/compare/mediabox-v1.1.0...mediabox-v1.1.1) (2026-01-03)
+
+
+### Bug Fixes
+
+* use amd64 platform ([b97286d](https://github.com/Gitsack/mediabox/commit/b97286d7dad64a7e64180785c77bc44141bef3dc))
+
 ## [1.1.0](https://github.com/Gitsack/mediabox/compare/mediabox-v1.0.1...mediabox-v1.1.0) (2026-01-03)
 
 
