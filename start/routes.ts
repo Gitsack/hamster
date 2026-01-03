@@ -36,6 +36,7 @@ router.get('/health', async ({ response }) => {
 
 // Public routes
 router.on('/').renderInertia('home')
+router.on('/getting-started').renderInertia('getting-started')
 
 // Guest routes (only accessible when not logged in)
 router

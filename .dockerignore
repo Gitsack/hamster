@@ -25,8 +25,9 @@ dist
 .DS_Store
 Thumbs.db
 
-# Test files
-tests
+# Test files (keep tests/bootstrap.ts for TypeScript compilation)
+tests/**/*.test.ts
+tests/**/*.spec.ts
 *.test.ts
 *.spec.ts
 coverage
@@ -55,6 +56,3 @@ downloads
 .editorconfig
 .eslintrc*
 .prettierrc*
-tsconfig.json
-adonisrc.ts
-ace.js
