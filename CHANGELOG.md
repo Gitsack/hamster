@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/Gitsack/mediabox/compare/mediabox-v1.1.2...mediabox-v1.1.3) (2026-01-03)
+
+
+### Bug Fixes
+
+* lowercase github repo name ([79e7548](https://github.com/Gitsack/mediabox/commit/79e7548ee6106997d29c8fabf3b460a09b40a4bb))
+
 ## [1.1.2](https://github.com/Gitsack/mediabox/compare/mediabox-v1.1.1...mediabox-v1.1.2) (2026-01-03)
 
 
