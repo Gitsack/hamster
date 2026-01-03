@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/Gitsack/mediabox/compare/mediabox-v1.0.1...mediabox-v1.1.0) (2026-01-03)
+
+
+### Features
+
+* only one workflow file ([28aeeeb](https://github.com/Gitsack/mediabox/commit/28aeeeba413691daccfa1ed4bd051cfa066c0f69))
+
 ## [1.0.1](https://github.com/Gitsack/mediabox/compare/mediabox-v1.0.0...mediabox-v1.0.1) (2026-01-03)
 
 
