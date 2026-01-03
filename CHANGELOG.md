@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/Gitsack/mediabox/compare/mediabox-v1.1.1...mediabox-v1.1.2) (2026-01-03)
+
+
+### Bug Fixes
+
+* provenance for docker build and push ([ba9bd66](https://github.com/Gitsack/mediabox/commit/ba9bd66f7e864c7d7156037d453f2363815a1b70))
+
 ## [1.1.1](https://github.com/Gitsack/mediabox/compare/mediabox-v1.1.0...mediabox-v1.1.1) (2026-01-03)
 
 
