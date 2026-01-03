@@ -53,6 +53,42 @@ A self-hosted media management application for organizing and streaming your per
 docker pull ghcr.io/gitsack/mediabox:latest
 ```
 
+### Volume Mounts
+
+The container expects media to be mounted at these paths:
+
+| Container Path | Description | Environment Variable |
+|----------------|-------------|---------------------|
+| `/media/music` | Music library | `MUSIC_PATH` |
+| `/media/movies` | Movies library | `MOVIES_PATH` |
+| `/media/tv` | TV Shows library | `TV_PATH` |
+| `/media/books` | Books library | `BOOKS_PATH` |
+| `/downloads` | Download client output | `DOWNLOADS_PATH` |
+
+After starting, configure your root folders in the Mediabox UI using the container paths (e.g., `/media/music`).
+
+### Docker Commands
+
+```bash
+# Start services
+docker compose up -d
+
+# View logs
+docker compose logs -f mediabox
+
+# Stop services
+docker compose down
+
+# Rebuild after code changes
+docker compose up -d --build
+
+# Run database migrations manually
+docker compose exec mediabox node ace migration:run
+
+# Access container shell
+docker compose exec mediabox sh
+```
+
 ## Development
 
 ### Prerequisites
@@ -101,6 +137,28 @@ npm run dev
 | `DB_DATABASE` | Database name | `mediabox` |
 | `LOG_LEVEL` | Logging level | `info` |
 | `TZ` | Timezone | `UTC` |
+
+## Troubleshooting
+
+**Container won't start:**
+- Check logs: `docker compose logs mediabox`
+- Ensure `APP_KEY` is set in `.env`
+- Verify PostgreSQL is healthy: `docker compose ps`
+
+**Media not accessible:**
+- Verify volume paths exist on host
+- Check file permissions (container runs as UID 1001)
+- Ensure paths are correctly set in `.env`
+
+**Permission issues:**
+```bash
+# Option 1: Make files world-readable
+chmod -R o+r /path/to/media
+
+# Option 2: Add user to the mediabox group
+sudo groupadd -g 1001 mediabox
+sudo chown -R :mediabox /path/to/media
+```
 
 ## License
 
