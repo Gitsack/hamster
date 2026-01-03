@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/Gitsack/mediabox/compare/mediabox-v1.0.0...mediabox-v1.0.1) (2026-01-03)
+
+
+### Bug Fixes
+
+* consolidatet readme files ([524d199](https://github.com/Gitsack/mediabox/commit/524d19981a3097699937a894445f31d8b94011c7))
+
 ## 1.0.0 (2026-01-03)
 
 
