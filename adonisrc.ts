@@ -64,8 +64,8 @@ export default defineConfig({
   |
   */
   preloads: [
-    () => import('#start/routes'),
     () => import('#start/kernel'),
+    () => import('#start/routes'),
     {
       file: () => import('#start/tasks'),
       environment: ['web'],
