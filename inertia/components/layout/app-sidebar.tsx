@@ -11,6 +11,7 @@ import {
   UserIcon,
   Globe02Icon,
 } from '@hugeicons/core-free-icons'
+import { HamsterIcon } from '@/components/icons/hamster-icon'
 import {
   Sidebar,
   SidebarContent,
@@ -103,11 +104,11 @@ export function AppSidebar() {
             <SidebarMenuButton size="lg" asChild>
               <Link href="/">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <HugeiconsIcon icon={MusicNote01Icon} className="size-4" />
+                  <HamsterIcon className="size-5" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">MediaBox</span>
-                  <span className="truncate text-xs text-muted-foreground">Music Library</span>
+                  <span className="truncate font-semibold">Hamster</span>
+                  <span className="truncate text-xs text-muted-foreground">Media Library</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -173,9 +174,9 @@ export function AppSidebar() {
             {mounted ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton
-                    size="lg"
-                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
                       <AvatarFallback className="rounded-lg">
@@ -186,10 +187,13 @@ export function AppSidebar() {
                       <span className="truncate font-semibold">{user?.fullName || 'User'}</span>
                       <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
                     </div>
-                  </SidebarMenuButton>
+                  </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   className="min-w-56 rounded-lg"
+                  side="top"
+                  align="start"
+                  sideOffset={4}
                 >
                   <DropdownMenuItem asChild>
                     <Link href="/settings/ui">
@@ -207,7 +211,10 @@ export function AppSidebar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <SidebarMenuButton size="lg">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm"
+              >
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarFallback className="rounded-lg">
                     {user?.fullName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
@@ -217,7 +224,7 @@ export function AppSidebar() {
                   <span className="truncate font-semibold">{user?.fullName || 'User'}</span>
                   <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
                 </div>
-              </SidebarMenuButton>
+              </button>
             )}
           </SidebarMenuItem>
         </SidebarMenu>

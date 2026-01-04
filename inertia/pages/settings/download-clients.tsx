@@ -568,7 +568,7 @@ export default function DownloadClients() {
               <div>
                 <Label className="text-base font-medium">Remote Path Mapping</Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Required if SABnzbd runs in Docker with different paths than MediaBox.
+                  Required if SABnzbd runs in Docker with different paths than Hamster.
                 </p>
               </div>
               <div className="space-y-2">
@@ -610,7 +610,7 @@ export default function DownloadClients() {
                       onChange={(e) => setFormData({ ...formData, localPath: e.target.value })}
                       placeholder="/mnt/downloads"
                     />
-                    <p className="text-xs text-muted-foreground">Path as MediaBox sees it</p>
+                    <p className="text-xs text-muted-foreground">Path as Hamster sees it</p>
                   </>
                 )}
               </div>

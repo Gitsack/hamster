@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react'
+import { Head, Link, usePage } from '@inertiajs/react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -16,29 +16,37 @@ import {
   ArrowRight01Icon,
   CheckmarkCircle01Icon,
 } from '@hugeicons/core-free-icons'
+import { HamsterLogo } from '@/components/icons/hamster-logo'
 
 export default function GettingStarted() {
+  const { props } = usePage<{ user?: { email: string } }>()
+  const isLoggedIn = !!props.user
   return (
     <>
-      <Head title="Getting Started - MediaBox" />
+      <Head title="Getting Started - Hamster" />
 
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
         {/* Header */}
         <header className="container mx-auto px-4 py-6 border-b">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-xl">M</span>
-              </div>
-              <span className="text-xl font-semibold">MediaBox</span>
+            <Link href="/" className="hover:opacity-80 transition-opacity">
+              <HamsterLogo size="md" />
             </Link>
             <div className="flex items-center gap-3">
-              <Button variant="ghost" asChild>
-                <Link href="/login">Sign In</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/register">Create Account</Link>
-              </Button>
+              {isLoggedIn ? (
+                <Button asChild>
+                  <Link href="/library">Library</Link>
+                </Button>
+              ) : (
+                <>
+                  <Button variant="ghost" asChild>
+                    <Link href="/login">Sign In</Link>
+                  </Button>
+                  <Button asChild>
+                    <Link href="/register">Create Account</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -49,7 +57,7 @@ export default function GettingStarted() {
           <div className="text-center mb-16">
             <h1 className="text-4xl font-bold tracking-tight mb-4">Getting Started</h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Learn how to set up MediaBox and start organizing your media collection in minutes.
+              Learn how to set up Hamster and start organizing your media collection in minutes.
             </p>
           </div>
 
@@ -61,13 +69,13 @@ export default function GettingStarted() {
                 number={1}
                 icon={UserIcon}
                 title="Create an Account"
-                description="Sign up for a MediaBox account to get started. Your data stays private and secure on your own server."
+                description="Sign up for a Hamster account to get started. Your data stays private and secure on your own server."
               />
               <StepCard
                 number={2}
                 icon={Folder01Icon}
                 title="Configure Root Folders"
-                description="Set up root folders for each media type. These are the directories where MediaBox will organize your files."
+                description="Set up root folders for each media type. These are the directories where Hamster will organize your files."
               />
               <StepCard
                 number={3}
@@ -79,7 +87,7 @@ export default function GettingStarted() {
                 number={4}
                 icon={Search01Icon}
                 title="Add Your Media"
-                description="Search for movies, TV shows, artists, or books and add them to your library. MediaBox fetches all the metadata automatically."
+                description="Search for movies, TV shows, artists, or books and add them to your library. Hamster fetches all the metadata automatically."
               />
             </div>
           </section>
@@ -138,7 +146,7 @@ export default function GettingStarted() {
               <FeatureCard
                 icon={Download01Icon}
                 title="Download Integration"
-                description="Connect to indexers like Prowlarr and download clients like SABnzbd or qBittorrent. MediaBox can automatically search and download missing media."
+                description="Connect to indexers like Prowlarr and download clients like SABnzbd or qBittorrent. Hamster can automatically search and download missing media."
               />
               <FeatureCard
                 icon={Settings02Icon}
@@ -153,7 +161,7 @@ export default function GettingStarted() {
               <FeatureCard
                 icon={Folder01Icon}
                 title="Automatic Organization"
-                description="MediaBox keeps your files organized with consistent naming and folder structures based on your preferences."
+                description="Hamster keeps your files organized with consistent naming and folder structures based on your preferences."
               />
             </div>
           </section>
@@ -193,18 +201,31 @@ export default function GettingStarted() {
           <section className="text-center py-12 border-t">
             <h2 className="text-2xl font-semibold mb-4">Ready to get started?</h2>
             <p className="text-muted-foreground mb-6">
-              Create your account and start building your media library today.
+              {isLoggedIn
+                ? 'Head to your library and start organizing your media.'
+                : 'Create your account and start building your media library today.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" asChild>
-                <Link href="/register">
-                  Create Account
-                  <HugeiconsIcon icon={ArrowRight01Icon} className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link href="/login">Sign In</Link>
-              </Button>
+              {isLoggedIn ? (
+                <Button size="lg" asChild>
+                  <Link href="/library">
+                    Go to Library
+                    <HugeiconsIcon icon={ArrowRight01Icon} className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <Button size="lg" asChild>
+                    <Link href="/register">
+                      Create Account
+                      <HugeiconsIcon icon={ArrowRight01Icon} className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button size="lg" variant="outline" asChild>
+                    <Link href="/login">Sign In</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </section>
         </main>
@@ -212,11 +233,8 @@ export default function GettingStarted() {
         {/* Footer */}
         <footer className="container mx-auto px-4 py-8 border-t">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <div className="h-6 w-6 rounded bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-xs">M</span>
-              </div>
-              <span>MediaBox</span>
+            <Link href="/" className="hover:opacity-80 transition-opacity">
+              <HamsterLogo size="sm" />
             </Link>
             <p>Your personal media management solution</p>
           </div>

@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react'
+import { Head, Link, usePage } from '@inertiajs/react'
 import { Button } from '@/components/ui/button'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -10,29 +10,35 @@ import {
   Search01Icon,
   Settings02Icon,
 } from '@hugeicons/core-free-icons'
+import { HamsterLogo } from '@/components/icons/hamster-logo'
 
 export default function Home() {
+  const { props } = usePage<{ user?: { email: string } }>()
+  const isLoggedIn = !!props.user
   return (
     <>
-      <Head title="MediaBox - Your Personal Media Library" />
+      <Head title="Hamster - Your Personal Media Library" />
 
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
         {/* Header */}
         <header className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-xl">M</span>
-              </div>
-              <span className="text-xl font-semibold">MediaBox</span>
-            </div>
+            <HamsterLogo size="md" />
             <div className="flex items-center gap-3">
-              <Button variant="ghost" asChild>
-                <Link href="/login">Sign In</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/getting-started">Get Started</Link>
-              </Button>
+              {isLoggedIn ? (
+                <Button asChild>
+                  <Link href="/library">Library</Link>
+                </Button>
+              ) : (
+                <>
+                  <Button variant="ghost" asChild>
+                    <Link href="/login">Sign In</Link>
+                  </Button>
+                  <Button asChild>
+                    <Link href="/getting-started">Get Started</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </header>
@@ -46,19 +52,23 @@ export default function Home() {
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
               Organize, discover, and manage your movies, TV shows, music, and books all in one place.
-              MediaBox automatically fetches metadata and keeps your collection organized.
+              Hamster automatically fetches metadata and keeps your collection organized.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" asChild>
-                <Link href="/register">
-                  Create Account
-                </Link>
-              </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link href="/getting-started">
-                  Learn More
-                </Link>
-              </Button>
+              {isLoggedIn ? (
+                <Button size="lg" asChild>
+                  <Link href="/library">Go to Library</Link>
+                </Button>
+              ) : (
+                <>
+                  <Button size="lg" asChild>
+                    <Link href="/register">Create Account</Link>
+                  </Button>
+                  <Button size="lg" variant="outline" asChild>
+                    <Link href="/getting-started">Learn More</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
@@ -109,12 +119,7 @@ export default function Home() {
         {/* Footer */}
         <footer className="container mx-auto px-4 py-8 mt-16 border-t">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-xs">M</span>
-              </div>
-              <span>MediaBox</span>
-            </div>
+            <HamsterLogo size="sm" />
             <p>Your personal media management solution</p>
           </div>
         </footer>

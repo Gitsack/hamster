@@ -34,9 +34,13 @@ router.get('/health', async ({ response }) => {
   return response.ok({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-// Public routes
-router.on('/').renderInertia('home')
-router.on('/getting-started').renderInertia('getting-started')
+// Public routes (with silent auth to check if user is logged in)
+router
+  .group(() => {
+    router.on('/').renderInertia('home')
+    router.on('/getting-started').renderInertia('getting-started')
+  })
+  .use(middleware.silentAuth())
 
 // Guest routes (only accessible when not logged in)
 router

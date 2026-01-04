@@ -2,7 +2,7 @@
 set -e
 
 echo "=========================================="
-echo "  Mediabox - Starting Application"
+echo "  Hamster - Starting Application"
 echo "=========================================="
 
 # Handle APP_KEY: use env var if set, otherwise load/generate persisted key
@@ -12,7 +12,7 @@ elif [ -f /app/tmp/.app_key ]; then
   export APP_KEY=$(cat /app/tmp/.app_key)
   echo "Using persisted APP_KEY"
 else
-  export APP_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+  export APP_KEY=$(bun -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
   mkdir -p /app/tmp
   echo "$APP_KEY" > /app/tmp/.app_key
   echo "Generated and persisted new APP_KEY"
@@ -20,7 +20,7 @@ fi
 
 # Wait for database to be ready (backup check)
 echo "Checking database connection..."
-until node -e "
+until bun -e "
   const { Client } = require('pg');
   const client = new Client({
     host: process.env.DB_HOST,
@@ -40,7 +40,7 @@ echo "Database is ready!"
 
 # Run database migrations
 echo "Running database migrations..."
-node ace migration:run --force
+bun ace migration:run --force
 
 echo "Migrations completed successfully!"
 

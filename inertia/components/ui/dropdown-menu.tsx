@@ -67,7 +67,7 @@ function DropdownMenuPositioner({
   return (
     <BaseMenu.Positioner
       data-slot="dropdown-menu-positioner"
-      className={cn("outline-none", className)}
+      className={cn("outline-none z-50", className)}
       {...props}
     />
   )
@@ -76,17 +76,21 @@ function DropdownMenuPositioner({
 function DropdownMenuPopup({
   className,
   sideOffset = 4,
+  side,
+  align,
   id,
   ...props
 }: React.ComponentProps<typeof BaseMenu.Popup> & {
   sideOffset?: number
+  side?: 'top' | 'bottom' | 'left' | 'right'
+  align?: 'start' | 'center' | 'end'
 }) {
   const menuId = React.useContext(DropdownMenuIdContext)
   const popupId = id || (menuId ? `${menuId}-popup` : undefined)
 
   return (
     <DropdownMenuPortal>
-      <DropdownMenuPositioner sideOffset={sideOffset}>
+      <DropdownMenuPositioner sideOffset={sideOffset} side={side} align={align}>
         <BaseMenu.Popup
           id={popupId}
           data-slot="dropdown-menu-popup"

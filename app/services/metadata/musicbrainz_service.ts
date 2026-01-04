@@ -1,7 +1,7 @@
 import PQueue from 'p-queue'
 
 const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2'
-const USER_AGENT = 'MediaBox/1.0.0 (https://github.com/mediabox)'
+const USER_AGENT = 'Hamster/1.0.0 (https://github.com/hamster)'
 
 // MusicBrainz rate limit: 1 request per second for unauthenticated users
 const queue = new PQueue({ interval: 1100, intervalCap: 1 })

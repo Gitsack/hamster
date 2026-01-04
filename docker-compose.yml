@@ -2,29 +2,29 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: mediabox-db
+    container_name: hamster-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER:-mediabox}
+      POSTGRES_USER: ${DB_USER:-hamster}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
-      POSTGRES_DB: ${DB_DATABASE:-mediabox}
+      POSTGRES_DB: ${DB_DATABASE:-hamster}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mediabox} -d ${DB_DATABASE:-mediabox}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-hamster} -d ${DB_DATABASE:-hamster}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - mediabox-network
+      - hamster-network
 
-  # Mediabox Application
-  mediabox:
+  # Hamster Application
+  hamster:
     build:
       context: .
       dockerfile: Dockerfile
-    image: mediabox:latest
-    container_name: mediabox
+    image: hamster:latest
+    container_name: hamster
     restart: unless-stopped
     depends_on:
       postgres:
@@ -48,9 +48,9 @@ services:
       # Database connection to postgres service
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USER: ${DB_USER:-mediabox}
+      DB_USER: ${DB_USER:-hamster}
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
-      DB_DATABASE: ${DB_DATABASE:-mediabox}
+      DB_DATABASE: ${DB_DATABASE:-hamster}
     volumes:
       # Media library volumes - map your local paths
       - ${MUSIC_PATH:-./media/music}:/media/music
@@ -70,15 +70,15 @@ services:
       start_period: 60s
       retries: 3
     networks:
-      - mediabox-network
+      - hamster-network
 
 volumes:
   postgres_data:
-    name: mediabox-postgres-data
+    name: hamster-postgres-data
   app_data:
-    name: mediabox-app-data
+    name: hamster-app-data
 
 networks:
-  mediabox-network:
-    name: mediabox-network
+  hamster-network:
+    name: hamster-network
     driver: bridge

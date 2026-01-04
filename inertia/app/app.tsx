@@ -10,7 +10,7 @@ import { AudioPlayer } from '@/components/player/audio_player'
 import { Toaster } from 'sonner'
 import { useState, useEffect } from 'react'
 
-const appName = import.meta.env.VITE_APP_NAME || 'MediaBox'
+const appName = import.meta.env.VITE_APP_NAME || 'Hamster'
 
 function ClientOnlyToaster() {
   const [mounted, setMounted] = useState(false)

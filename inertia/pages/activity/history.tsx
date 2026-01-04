@@ -55,6 +55,19 @@ export default function History() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
+  const [expandedErrors, setExpandedErrors] = useState<Set<number>>(new Set())
+
+  const toggleError = (id: number) => {
+    setExpandedErrors((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
 
   const fetchHistory = useCallback(async () => {
     setLoading(true)
@@ -181,16 +194,27 @@ export default function History() {
                   <TableBody>
                     {history.map((item) => (
                       <TableRow key={item.id}>
-                        <TableCell>
-                          <div className="font-medium truncate max-w-md">{item.title}</div>
+                        <TableCell className="max-w-md">
+                          <div className="font-medium truncate">{item.title}</div>
                           {item.albumTitle && (
                             <div className="text-xs text-muted-foreground">
                               {item.albumTitle}
                             </div>
                           )}
                           {item.errorMessage && (
-                            <div className="text-xs text-destructive mt-1">
-                              {item.errorMessage}
+                            <div
+                              className="text-xs text-destructive mt-1 cursor-pointer hover:text-destructive/80"
+                              onClick={() => toggleError(item.id)}
+                            >
+                              {expandedErrors.has(item.id) ? (
+                                <span className="break-words whitespace-pre-wrap">
+                                  {item.errorMessage}
+                                </span>
+                              ) : (
+                                <span className="line-clamp-1">
+                                  {item.errorMessage}
+                                </span>
+                              )}
                             </div>
                           )}
                         </TableCell>

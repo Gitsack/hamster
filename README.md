@@ -1,4 +1,4 @@
-# Mediabox
+# Hamster
 
 A self-hosted media management application for organizing and streaming your personal media library.
 
@@ -15,8 +15,8 @@ A self-hosted media management application for organizing and streaming your per
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Gitsack/mediabox.git
-   cd mediabox
+   git clone https://github.com/Gitsack/hamster.git
+   cd hamster
    ```
 
 2. Create a `.env` file:
@@ -25,9 +25,9 @@ A self-hosted media management application for organizing and streaming your per
    APP_KEY=your-32-character-secret-key
 
    # Database (optional, defaults shown)
-   DB_USER=mediabox
+   DB_USER=hamster
    DB_PASSWORD=changeme
-   DB_DATABASE=mediabox
+   DB_DATABASE=hamster
 
    # Media paths (optional, defaults to ./media/*)
    MUSIC_PATH=/path/to/your/music
@@ -45,12 +45,12 @@ A self-hosted media management application for organizing and streaming your per
    docker compose up -d
    ```
 
-4. Access Mediabox at `http://localhost:3333`
+4. Access Hamster at `http://localhost:3333`
 
 ### Using Pre-built Image
 
 ```bash
-docker pull ghcr.io/gitsack/mediabox:latest
+docker pull ghcr.io/gitsack/hamster:latest
 ```
 
 ### Volume Mounts
@@ -65,7 +65,7 @@ The container expects media to be mounted at these paths:
 | `/media/books` | Books library | `BOOKS_PATH` |
 | `/downloads` | Download client output | `DOWNLOADS_PATH` |
 
-After starting, configure your root folders in the Mediabox UI using the container paths (e.g., `/media/music`).
+After starting, configure your root folders in the Hamster UI using the container paths (e.g., `/media/music`).
 
 ### Docker Commands
 
@@ -74,7 +74,7 @@ After starting, configure your root folders in the Mediabox UI using the contain
 docker compose up -d
 
 # View logs
-docker compose logs -f mediabox
+docker compose logs -f hamster
 
 # Stop services
 docker compose down
@@ -83,10 +83,10 @@ docker compose down
 docker compose up -d --build
 
 # Run database migrations manually
-docker compose exec mediabox node ace migration:run
+docker compose exec hamster node ace migration:run
 
 # Access container shell
-docker compose exec mediabox sh
+docker compose exec hamster sh
 ```
 
 ## Development
@@ -132,16 +132,16 @@ npm run dev
 | `NODE_ENV` | Environment mode | `development` |
 | `DB_HOST` | Database host | `localhost` |
 | `DB_PORT` | Database port | `5432` |
-| `DB_USER` | Database user | `mediabox` |
+| `DB_USER` | Database user | `hamster` |
 | `DB_PASSWORD` | Database password | `changeme` |
-| `DB_DATABASE` | Database name | `mediabox` |
+| `DB_DATABASE` | Database name | `hamster` |
 | `LOG_LEVEL` | Logging level | `info` |
 | `TZ` | Timezone | `UTC` |
 
 ## Troubleshooting
 
 **Container won't start:**
-- Check logs: `docker compose logs mediabox`
+- Check logs: `docker compose logs hamster`
 - Ensure `APP_KEY` is set in `.env`
 - Verify PostgreSQL is healthy: `docker compose ps`
 
@@ -155,9 +155,9 @@ npm run dev
 # Option 1: Make files world-readable
 chmod -R o+r /path/to/media
 
-# Option 2: Add user to the mediabox group
-sudo groupadd -g 1001 mediabox
-sudo chown -R :mediabox /path/to/media
+# Option 2: Add user to the hamster group
+sudo groupadd -g 1001 hamster
+sudo chown -R :hamster /path/to/media
 ```
 
 ## License
