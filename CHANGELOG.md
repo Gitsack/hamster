@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/Gitsack/hamster/compare/hamster-v1.4.0...hamster-v1.4.1) (2026-01-04)
+
+
+### Bug Fixes
+
+* docker folders ([2f9bfa0](https://github.com/Gitsack/hamster/commit/2f9bfa0ce66ff1c4b95acfd6f4dd578567ce99cb))
+
 ## [1.4.0](https://github.com/Gitsack/hamster/compare/hamster-v1.3.1...hamster-v1.4.0) (2026-01-04)
 
 
