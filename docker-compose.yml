@@ -32,6 +32,10 @@ services:
     ports:
       - "${PORT:-3333}:3333"
     environment:
+      # User/Group IDs - set to match your host user (run `id` to check)
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+
       # Application
       NODE_ENV: production
       HOST: 0.0.0.0

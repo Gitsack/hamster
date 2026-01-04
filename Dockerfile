@@ -46,11 +46,13 @@ FROM oven/bun:1-alpine AS production
 RUN apk add --no-cache \
     curl \
     bash \
-    tini
+    tini \
+    shadow \
+    su-exec
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S hamster && \
-    adduser -S -D -H -u 1001 -h /app -s /sbin/nologin -G hamster hamster
+# Create hamster user (UID/GID will be modified at runtime via PUID/PGID)
+RUN addgroup -g 1000 -S hamster && \
+    adduser -S -D -H -u 1000 -h /app -s /sbin/nologin -G hamster hamster
 
 WORKDIR /app
 
@@ -70,8 +72,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 RUN mkdir -p /media/music /media/movies /media/tv /media/books /downloads /app/tmp && \
     chown -R hamster:hamster /app /media /downloads
 
-# Switch to non-root user
-USER hamster
+# Note: Container starts as root, entrypoint drops to hamster user after PUID/PGID setup
 
 # Expose the application port
 EXPOSE 3333

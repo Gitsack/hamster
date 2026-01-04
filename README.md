@@ -24,6 +24,10 @@ A self-hosted media management application for organizing and streaming your per
    # Required - generate with: openssl rand -hex 32
    APP_KEY=your-32-character-secret-key
 
+   # User/Group IDs - run `id` to find yours (avoids permission issues)
+   PUID=1000
+   PGID=1000
+
    # Database (optional, defaults shown)
    DB_USER=hamster
    DB_PASSWORD=changeme
@@ -127,6 +131,8 @@ npm run dev
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `APP_KEY` | Application secret key (required) | - |
+| `PUID` | User ID for file permissions (Docker) | `1000` |
+| `PGID` | Group ID for file permissions (Docker) | `1000` |
 | `PORT` | Application port | `3333` |
 | `HOST` | Application host | `0.0.0.0` |
 | `NODE_ENV` | Environment mode | `development` |
@@ -148,17 +154,18 @@ npm run dev
 
 **Media not accessible:**
 - Verify volume paths exist on host
-- Check file permissions (container runs as UID 1001)
+- Ensure `PUID` and `PGID` in `.env` match your host user (run `id` to check)
 - Ensure paths are correctly set in `.env`
 
 **Permission issues:**
 ```bash
-# Option 1: Make files world-readable
-chmod -R o+r /path/to/media
+# Check your user/group IDs
+id
+# Output: uid=1000(user) gid=1000(user) ...
 
-# Option 2: Add user to the hamster group
-sudo groupadd -g 1001 hamster
-sudo chown -R :hamster /path/to/media
+# Set matching values in .env
+PUID=1000
+PGID=1000
 ```
 
 ## License
