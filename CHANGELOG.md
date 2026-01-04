@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/Gitsack/hamster/compare/hamster-v1.6.1...hamster-v1.6.2) (2026-01-04)
+
+
+### Bug Fixes
+
+* docker image size ([4efa872](https://github.com/Gitsack/hamster/commit/4efa872edd24c90f2fe00e1ec97ac2acd04849c0))
+
 ## [1.6.1](https://github.com/Gitsack/hamster/compare/hamster-v1.6.0...hamster-v1.6.1) (2026-01-04)
 
 
