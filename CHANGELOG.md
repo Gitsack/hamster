@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3](https://github.com/Gitsack/hamster/compare/hamster-v1.6.2...hamster-v1.6.3) (2026-01-04)
+
+
+### Bug Fixes
+
+* order of preloads in adonisrc ([d6e642a](https://github.com/Gitsack/hamster/commit/d6e642a5fe4c2f21af34e1b5ac325bac7523e96f))
+
 ## [1.6.2](https://github.com/Gitsack/hamster/compare/hamster-v1.6.1...hamster-v1.6.2) (2026-01-04)
 
 
