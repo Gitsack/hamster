@@ -40,6 +40,7 @@ import {
   CheckmarkCircle02Icon,
   Download01Icon,
   Clock01Icon,
+  FolderSearchIcon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
@@ -183,6 +184,9 @@ export default function Library() {
   const [itemToDelete, setItemToDelete] = useState<{ type: MediaType; id: number; name: string } | null>(null)
   const [deleteFiles, setDeleteFiles] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  // Library scan state
+  const [scanning, setScanning] = useState(false)
 
   // Fetch enabled media types from settings
   useEffect(() => {
@@ -372,6 +376,103 @@ export default function Library() {
       toast.error('Failed to remove item')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  // Scan library for the current media type
+  const handleScanLibrary = async () => {
+    if (scanning || activeTab === 'missing') return
+
+    setScanning(true)
+
+    // Map activeTab to root folder media type
+    const mediaTypeMap: Record<MediaType, string> = {
+      music: 'music',
+      movies: 'movies',
+      tv: 'tv',
+      books: 'books',
+      missing: '',
+    }
+
+    const mediaType = mediaTypeMap[activeTab]
+    if (!mediaType) {
+      setScanning(false)
+      return
+    }
+
+    try {
+      // First get root folders for this media type
+      const rootFoldersRes = await fetch('/api/v1/rootfolders')
+      if (!rootFoldersRes.ok) {
+        toast.error('Failed to fetch root folders')
+        return
+      }
+
+      const allRootFolders = await rootFoldersRes.json()
+      const foldersToScan = allRootFolders.filter((rf: { mediaType: string }) => rf.mediaType === mediaType)
+
+      if (foldersToScan.length === 0) {
+        toast.error(`No root folders configured for ${MEDIA_TYPE_CONFIG[activeTab].label}`)
+        return
+      }
+
+      // Scan each root folder
+      let scannedCount = 0
+      let totalCreated = 0
+      let errors: string[] = []
+
+      for (const folder of foldersToScan) {
+        try {
+          const scanRes = await fetch(`/api/v1/rootfolders/${folder.id}/scan`, {
+            method: 'POST',
+          })
+
+          if (scanRes.ok) {
+            const result = await scanRes.json()
+            scannedCount++
+
+            // Aggregate results based on media type
+            if (mediaType === 'music') {
+              totalCreated += result.artistsCreated || 0
+            } else if (mediaType === 'movies') {
+              totalCreated += result.moviesCreated || 0
+            } else if (mediaType === 'tv') {
+              totalCreated += result.showsCreated || 0
+            } else if (mediaType === 'books') {
+              totalCreated += (result.authorsCreated || 0) + (result.booksCreated || 0)
+            }
+
+            if (result.errors?.length > 0) {
+              errors.push(...result.errors)
+            }
+          } else {
+            const error = await scanRes.json()
+            errors.push(error.error || `Failed to scan folder: ${folder.path}`)
+          }
+        } catch (err) {
+          errors.push(`Error scanning ${folder.path}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+        }
+      }
+
+      // Show results
+      if (totalCreated > 0) {
+        toast.success(`Scan complete! Added ${totalCreated} new items`)
+      } else if (scannedCount > 0) {
+        toast.info('Scan complete. No new items found.')
+      }
+
+      if (errors.length > 0) {
+        console.error('Scan errors:', errors)
+        toast.warning(`Scan completed with ${errors.length} error(s)`)
+      }
+
+      // Refresh the library data
+      await fetchData()
+    } catch (error) {
+      console.error('Scan failed:', error)
+      toast.error('Library scan failed')
+    } finally {
+      setScanning(false)
     }
   }
 
@@ -1047,6 +1148,23 @@ export default function Library() {
                   <HugeiconsIcon icon={Menu01Icon} className="h-4 w-4" />
                 </Button>
               </div>
+
+              {/* Scan Library button - hidden on missing tab */}
+              {activeTab !== 'missing' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleScanLibrary}
+                  disabled={scanning}
+                >
+                  {scanning ? (
+                    <Spinner className="h-4 w-4 mr-2" />
+                  ) : (
+                    <HugeiconsIcon icon={FolderSearchIcon} className="h-4 w-4 mr-2" />
+                  )}
+                  {scanning ? 'Scanning...' : 'Scan Library'}
+                </Button>
+              )}
             </div>
           </div>
 

@@ -34,6 +34,9 @@ export default class Author extends BaseModel {
   @column()
   declare requested: boolean
 
+  @column()
+  declare needsReview: boolean
+
   // Configuration
   @column()
   declare qualityProfileId: string | null

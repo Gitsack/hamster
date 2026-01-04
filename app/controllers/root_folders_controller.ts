@@ -3,6 +3,7 @@ import RootFolder from '#models/root_folder'
 import vine from '@vinejs/vine'
 import fs from 'node:fs/promises'
 import { accessWithTimeout, statWithTimeout } from '../utils/fs_utils.js'
+import { libraryScannerService } from '#services/media/library_scanner_service'
 
 const rootFolderValidator = vine.compile(
   vine.object({
@@ -10,6 +11,7 @@ const rootFolderValidator = vine.compile(
     name: vine.string().minLength(1).maxLength(255).optional(),
     mediaType: vine.enum(['music', 'movies', 'tv', 'books']).optional(),
     createIfMissing: vine.boolean().optional(),
+    scanOnAdd: vine.boolean().optional(),
   })
 )
 
@@ -80,7 +82,16 @@ export default class RootFoldersController {
       path: data.path,
       name: data.name || data.path.split('/').pop() || data.path,
       mediaType: data.mediaType || 'music',
+      scanStatus: 'idle',
     })
+
+    // Trigger scan if requested
+    if (data.scanOnAdd) {
+      // Start scan in background (don't await)
+      libraryScannerService.scanRootFolder(rootFolder.id).catch(() => {
+        // Scan errors are logged internally
+      })
+    }
 
     return response.created(rootFolder)
   }
@@ -129,5 +140,76 @@ export default class RootFoldersController {
 
     await rootFolder.delete()
     return response.noContent()
+  }
+
+  /**
+   * Trigger a scan for a root folder
+   */
+  async scan({ params, response }: HttpContext) {
+    const rootFolder = await RootFolder.find(params.id)
+    if (!rootFolder) {
+      return response.notFound({ error: 'Root folder not found' })
+    }
+
+    // Check if scan is already in progress
+    const status = await libraryScannerService.getScanStatus(rootFolder.id)
+    if (status?.isScanning) {
+      return response.conflict({ error: 'Scan already in progress' })
+    }
+
+    // Start scan in background
+    const scanPromise = libraryScannerService.scanRootFolder(rootFolder.id)
+
+    // Return immediately with accepted status
+    response.accepted({
+      message: 'Scan started',
+      rootFolderId: rootFolder.id,
+      mediaType: rootFolder.mediaType,
+    })
+
+    // Wait for scan to complete (background)
+    scanPromise.catch(() => {
+      // Errors are handled internally
+    })
+  }
+
+  /**
+   * Get scan status for a root folder
+   */
+  async scanStatus({ params, response }: HttpContext) {
+    const rootFolder = await RootFolder.find(params.id)
+    if (!rootFolder) {
+      return response.notFound({ error: 'Root folder not found' })
+    }
+
+    const status = await libraryScannerService.getScanStatus(rootFolder.id)
+
+    return response.json({
+      rootFolderId: rootFolder.id,
+      status: status?.status || 'idle',
+      lastScannedAt: status?.lastScannedAt?.toISO() || null,
+      isScanning: status?.isScanning || false,
+    })
+  }
+
+  /**
+   * Scan all root folders
+   */
+  async scanAll({ response }: HttpContext) {
+    // Check if any scan is in progress
+    if (libraryScannerService.isAnyScanInProgress()) {
+      return response.conflict({ error: 'A scan is already in progress' })
+    }
+
+    // Start scan in background
+    const scanPromise = libraryScannerService.scanAllRootFolders()
+
+    response.accepted({
+      message: 'Scan started for all root folders',
+    })
+
+    scanPromise.catch(() => {
+      // Errors are handled internally
+    })
   }
 }

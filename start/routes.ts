@@ -28,6 +28,7 @@ const PlaybackController = () => import('#controllers/playback_controller')
 const AppSettingsController = () => import('#controllers/app_settings_controller')
 const FilesystemController = () => import('#controllers/filesystem_controller')
 const FilesController = () => import('#controllers/files_controller')
+const UnmatchedFilesController = () => import('#controllers/unmatched_files_controller')
 
 // Health check endpoint (for Docker/load balancers)
 router.get('/health', async ({ response }) => {
@@ -102,9 +103,12 @@ router
     // Root folders
     router.get('/rootfolders', [RootFoldersController, 'index'])
     router.post('/rootfolders', [RootFoldersController, 'store'])
+    router.post('/rootfolders/scan-all', [RootFoldersController, 'scanAll'])
     router.get('/rootfolders/:id', [RootFoldersController, 'show'])
     router.put('/rootfolders/:id', [RootFoldersController, 'update'])
     router.delete('/rootfolders/:id', [RootFoldersController, 'destroy'])
+    router.post('/rootfolders/:id/scan', [RootFoldersController, 'scan'])
+    router.get('/rootfolders/:id/scan-status', [RootFoldersController, 'scanStatus'])
 
     // Quality profiles
     router.get('/qualityprofiles', [QualityProfilesController, 'index'])
@@ -264,6 +268,16 @@ router
     router.post('/files/scan-completed', [FilesController, 'scanCompletedDownloads'])
     router.post('/files/scan-folders', [FilesController, 'scanFolders'])
     router.post('/files/scan-all', [FilesController, 'scanAll'])
+
+    // Unmatched files (library scanner results)
+    router.get('/unmatched', [UnmatchedFilesController, 'index'])
+    router.get('/unmatched/stats', [UnmatchedFilesController, 'stats'])
+    router.get('/unmatched/:id', [UnmatchedFilesController, 'show'])
+    router.put('/unmatched/:id', [UnmatchedFilesController, 'update'])
+    router.post('/unmatched/:id/ignore', [UnmatchedFilesController, 'ignore'])
+    router.delete('/unmatched/:id', [UnmatchedFilesController, 'destroy'])
+    router.post('/unmatched/bulk-update', [UnmatchedFilesController, 'bulkUpdate'])
+    router.post('/unmatched/bulk-delete', [UnmatchedFilesController, 'bulkDestroy'])
   })
   .prefix('/api/v1')
   .use(middleware.auth())

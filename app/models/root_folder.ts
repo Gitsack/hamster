@@ -4,6 +4,8 @@ import type { HasMany } from '@adonisjs/lucid/types/relations'
 import Artist from './artist.js'
 import type { MediaType } from './app_setting.js'
 
+export type ScanStatus = 'idle' | 'scanning' | 'completed' | 'failed'
+
 export default class RootFolder extends BaseModel {
   @column({ isPrimary: true })
   declare id: string
@@ -25,6 +27,12 @@ export default class RootFolder extends BaseModel {
 
   @column()
   declare totalSpaceBytes: number | null
+
+  @column.dateTime()
+  declare lastScannedAt: DateTime | null
+
+  @column()
+  declare scanStatus: ScanStatus
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

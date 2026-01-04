@@ -79,6 +79,9 @@ export default class Movie extends BaseModel {
   @column()
   declare hasFile: boolean
 
+  @column()
+  declare needsReview: boolean
+
   // Configuration
   @column()
   declare qualityProfileId: string | null

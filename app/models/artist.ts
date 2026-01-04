@@ -51,6 +51,9 @@ export default class Artist extends BaseModel {
   declare requested: boolean
 
   @column()
+  declare needsReview: boolean
+
+  @column()
   declare qualityProfileId: string | null
 
   @column()
