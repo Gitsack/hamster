@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/Gitsack/hamster/compare/hamster-v1.6.0...hamster-v1.6.1) (2026-01-04)
+
+
+### Bug Fixes
+
+* docker gh build guid ([5288c0c](https://github.com/Gitsack/hamster/commit/5288c0c94fd986b15b558880739b041d733fb2e4))
+
 ## [1.6.0](https://github.com/Gitsack/hamster/compare/hamster-v1.5.0...hamster-v1.6.0) (2026-01-04)
 
 
