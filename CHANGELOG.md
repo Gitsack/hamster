@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/Gitsack/hamster/compare/hamster-v1.6.3...hamster-v1.7.0) (2026-01-04)
+
+
+### Features
+
+* library scan for files ([89b86ca](https://github.com/Gitsack/hamster/commit/89b86caa1253f073a12ecbd2c5403e6302de40e1))
+
 ## [1.6.3](https://github.com/Gitsack/hamster/compare/hamster-v1.6.2...hamster-v1.6.3) (2026-01-04)
 
 
