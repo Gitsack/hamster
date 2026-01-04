@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/Gitsack/hamster/compare/hamster-v1.3.1...hamster-v1.4.0) (2026-01-04)
+
+
+### Features
+
+* add license and contributing ([f04255b](https://github.com/Gitsack/hamster/commit/f04255b5aea900affd9a48d13c0c4f37076899b6))
+
 ## [1.3.1](https://github.com/Gitsack/hamster/compare/hamster-v1.3.0...hamster-v1.3.1) (2026-01-04)
 
 
