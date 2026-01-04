@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/Gitsack/hamster/compare/hamster-v1.3.0...hamster-v1.3.1) (2026-01-04)
+
+
+### Bug Fixes
+
+* updated lockfiles ([82616fc](https://github.com/Gitsack/hamster/commit/82616fc5268adb5b5cbb73d0685e50d62090c76e))
+
 ## [1.3.0](https://github.com/Gitsack/mediabox/compare/hamster-v1.2.0...hamster-v1.3.0) (2026-01-04)
 
 
