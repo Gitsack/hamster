@@ -8,6 +8,12 @@ tmp
 .env.local
 .env.production.local
 .env.development.local
+*.pem
+*.key
+
+# Database
+*.sqlite
+*.sqlite3
 
 # Frontend assets compiled code
 public/assets
@@ -24,3 +30,8 @@ yarn-error.log
 
 # Platform specific
 .DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+.nyc_output/
