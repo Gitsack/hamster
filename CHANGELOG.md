@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/Gitsack/hamster/compare/hamster-v1.5.0...hamster-v1.6.0) (2026-01-04)
+
+
+### Features
+
+* added pgid puid ([d8dc7c1](https://github.com/Gitsack/hamster/commit/d8dc7c194071301a8a9f3ea7ceb4f3e41811537b))
+
 ## [1.5.0](https://github.com/Gitsack/hamster/compare/hamster-v1.4.1...hamster-v1.5.0) (2026-01-04)
 
 
