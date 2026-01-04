@@ -50,9 +50,9 @@ RUN apk add --no-cache \
     shadow \
     su-exec
 
-# Create hamster user (UID/GID will be modified at runtime via PUID/PGID)
-RUN addgroup -g 1000 -S hamster && \
-    adduser -S -D -H -u 1000 -h /app -s /sbin/nologin -G hamster hamster
+# Create hamster user with placeholder UID/GID (will be modified at runtime via PUID/PGID)
+RUN addgroup -g 911 -S hamster && \
+    adduser -S -D -H -u 911 -h /app -s /sbin/nologin -G hamster hamster
 
 WORKDIR /app
 
