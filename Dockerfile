@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ============================================
-# Stage 1: Base image with dependencies
+# Stage 1: Base image with build dependencies
 # ============================================
 FROM oven/bun:1-alpine AS base
 
@@ -16,14 +16,11 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # ============================================
-# Stage 2: Install dependencies
+# Stage 2: Install ALL dependencies (for build)
 # ============================================
 FROM base AS deps
 
-# Copy package files
 COPY package.json bun.lock* package-lock.json* ./
-
-# Install all dependencies (including devDependencies for build)
 RUN bun install --frozen-lockfile
 
 # ============================================
@@ -31,21 +28,26 @@ RUN bun install --frozen-lockfile
 # ============================================
 FROM deps AS builder
 
-# Copy source code
 COPY . .
-
-# Build the application (compiles TypeScript + Vite frontend)
 RUN bun run build
 
 # ============================================
-# Stage 4: Production image
+# Stage 4: Production dependencies only
+# ============================================
+FROM base AS prod-deps
+
+COPY package.json bun.lock* package-lock.json* ./
+RUN bun install --production --omit=optional --omit=peer --frozen-lockfile && \
+    rm -rf ~/.bun/install/cache
+
+# ============================================
+# Stage 5: Production image (minimal)
 # ============================================
 FROM oven/bun:1-alpine AS production
 
-# Install runtime dependencies
+# Install only essential runtime dependencies (removed bash)
 RUN apk add --no-cache \
     curl \
-    bash \
     tini \
     shadow \
     su-exec
@@ -58,11 +60,9 @@ WORKDIR /app
 
 # Copy built application from builder stage
 COPY --from=builder /app/build ./
-COPY --from=builder /app/package.json ./
 
-# Install only production dependencies
-RUN bun install --production && \
-    rm -rf ~/.bun/install/cache
+# Copy pre-built production node_modules (no reinstall needed)
+COPY --from=prod-deps /app/node_modules ./node_modules
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
