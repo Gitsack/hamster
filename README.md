@@ -137,6 +137,7 @@ npm run dev
 | `DB_DATABASE` | Database name | `hamster` |
 | `LOG_LEVEL` | Logging level | `info` |
 | `TZ` | Timezone | `UTC` |
+| `SECURE_COOKIES` | Enable secure cookies (set `true` for HTTPS) | `false` |
 
 ## Troubleshooting
 
