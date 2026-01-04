@@ -66,8 +66,8 @@ RUN bun install --production && \
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Create directories for media and downloads with correct permissions
-RUN mkdir -p /media/music /media/movies /media/tv /media/books /downloads && \
+# Create directories for media, downloads, and tmp with correct permissions
+RUN mkdir -p /media/music /media/movies /media/tv /media/books /downloads /app/tmp && \
     chown -R hamster:hamster /app /media /downloads
 
 # Switch to non-root user
