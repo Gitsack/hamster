@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/Gitsack/hamster/compare/hamster-v1.4.1...hamster-v1.5.0) (2026-01-04)
+
+
+### Features
+
+* added secure_cookies env ([6cf76d1](https://github.com/Gitsack/hamster/commit/6cf76d1c6d1ad2016135df5f9f1f8a60eda61588))
+
 ## [1.4.1](https://github.com/Gitsack/hamster/compare/hamster-v1.4.0...hamster-v1.4.1) (2026-01-04)
 
 
