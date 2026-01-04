@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/Gitsack/mediabox/compare/mediabox-v1.1.3...mediabox-v1.2.0) (2026-01-04)
+
+
+### Features
+
+* make APP_KEY optional as docker variable ([263bd2e](https://github.com/Gitsack/mediabox/commit/263bd2ea7dbdbb3413c60b49e78db729f161f03d))
+
 ## [1.1.3](https://github.com/Gitsack/mediabox/compare/mediabox-v1.1.2...mediabox-v1.1.3) (2026-01-03)
 
 
