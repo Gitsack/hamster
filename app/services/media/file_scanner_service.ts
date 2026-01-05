@@ -156,18 +156,40 @@ export class FileScannerService {
           })
         })
       })
+      .preload('track', (q) => q.preload('album'))
       .first()
 
     if (existingFile) {
       // Check if file has changed (by size)
       const stats = await fs.stat(filePath)
-      if (existingFile.sizeBytes === stats.size) {
-        return { imported: false, updated: false } // Skip unchanged
+      const sizeChanged = existingFile.sizeBytes !== stats.size
+
+      // Get media info to check if file needs re-matching to a better album
+      const mediaInfo = await mediaInfoService.getMediaInfo(filePath)
+
+      // Check if this file is in a "Singles" album but should be in a proper album
+      if (mediaInfo?.album && existingFile.track?.album?.title === 'Singles') {
+        const artist = await Artist.query()
+          .whereHas('albums', (q) => q.where('id', existingFile.albumId))
+          .first()
+
+        if (artist) {
+          // Don't pass year - we want to match by title regardless of year (remasters have different years)
+          const betterAlbum = await this.findExistingAlbum(mediaInfo.album, artist.id)
+          if (betterAlbum && betterAlbum.title !== 'Singles') {
+            // Re-link file to the better album
+            const track = existingFile.track
+            track.albumId = betterAlbum.id
+            track.hasFile = true
+            await track.save()
+            existingFile.albumId = betterAlbum.id
+            await existingFile.save()
+            return { imported: false, updated: true }
+          }
+        }
       }
 
-      // Update existing file
-      const mediaInfo = await mediaInfoService.getMediaInfo(filePath)
-      if (mediaInfo) {
+      if (sizeChanged && mediaInfo) {
         existingFile.merge({
           sizeBytes: stats.size,
           mediaInfo: {
@@ -317,6 +339,10 @@ export class FileScannerService {
       },
     })
 
+    // Mark track as having a file
+    track.hasFile = true
+    await track.save()
+
     return { imported: true, updated: false }
   }
 
@@ -428,27 +454,66 @@ export class FileScannerService {
 
   /**
    * Find existing album by title and artist
+   * Uses fuzzy matching to handle variations like "(Deluxe Edition)" etc.
    */
   private async findExistingAlbum(
     title: string,
     artistId: string,
     year?: number
   ): Promise<Album | null> {
-    // Try exact match by title within artist
-    const query = Album.query()
-      .where('artistId', artistId)
-      .whereILike('title', title)
+    const normalizedTitle = this.normalizeAlbumTitle(title)
 
-    // If year provided, prefer matching year
+    // Get all albums for this artist
+    const albums = await Album.query()
+      .where('artistId', artistId)
+      .where('title', '!=', 'Singles')
+
+    // Try exact match first
+    const exactMatch = albums.find(
+      (a) => a.title.toLowerCase() === title.toLowerCase()
+    )
+    if (exactMatch) return exactMatch
+
+    // Try normalized match
+    const normalizedMatch = albums.find(
+      (a) => this.normalizeAlbumTitle(a.title) === normalizedTitle
+    )
+    if (normalizedMatch) return normalizedMatch
+
+    // Try partial match (title starts with or contains)
+    const partialMatch = albums.find(
+      (a) =>
+        this.normalizeAlbumTitle(a.title).startsWith(normalizedTitle) ||
+        normalizedTitle.startsWith(this.normalizeAlbumTitle(a.title))
+    )
+    if (partialMatch) return partialMatch
+
+    // If year provided, try to find by year as a fallback for common album names
     if (year) {
-      const withYear = await query
-        .clone()
-        .whereRaw('EXTRACT(YEAR FROM release_date) = ?', [year])
-        .first()
-      if (withYear) return withYear
+      const byYear = albums.find((a) => {
+        if (!a.releaseDate) return false
+        const albumYear = a.releaseDate.year
+        return albumYear === year && this.normalizeAlbumTitle(a.title).includes(normalizedTitle.substring(0, 5))
+      })
+      if (byYear) return byYear
     }
 
-    return query.first()
+    return null
+  }
+
+  /**
+   * Normalize album title for fuzzy matching
+   * Removes common suffixes like "(Deluxe Edition)", "(Remastered)", etc.
+   */
+  private normalizeAlbumTitle(title: string): string {
+    return title
+      .toLowerCase()
+      .replace(/\s*[\(\[].*?[\)\]]\s*/g, '') // Remove content in parentheses/brackets
+      .replace(/\s*-\s*(deluxe|remaster|expanded|anniversary|special|bonus).*$/i, '')
+      .replace(/[''`]/g, "'") // Normalize quotes
+      .replace(/[^\w\s']/g, '') // Remove special characters except apostrophes
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim()
   }
 
   /**

@@ -401,7 +401,6 @@ export default function ArtistDetail() {
   }, [artist?.albums, discography])
 
   // Filter albums by category
-  const inLibraryAlbums = mergedAlbums.filter((a) => a.inLibrary)
   const downloadedAlbums = mergedAlbums.filter((a) => a.inLibrary && a.fileCount > 0)
   const requestedAlbums = mergedAlbums.filter((a) => a.inLibrary && a.requested && a.fileCount === 0)
   const notInLibraryAlbums = mergedAlbums.filter((a) => !a.inLibrary)
@@ -583,9 +582,6 @@ export default function ArtistDetail() {
               Discography ({mergedAlbums.length})
               {loadingDiscography && <Spinner className="ml-2 h-3 w-3" />}
             </TabsTrigger>
-            <TabsTrigger value="library">
-              In Library ({inLibraryAlbums.length})
-            </TabsTrigger>
             <TabsTrigger value="downloaded">
               Downloaded ({downloadedAlbums.length})
             </TabsTrigger>
@@ -618,24 +614,6 @@ export default function ArtistDetail() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {mergedAlbums.map((album) => (
-                  <MergedAlbumCard
-                    key={album.musicbrainzId}
-                    album={album}
-                    isAdding={addingAlbums.has(album.musicbrainzId)}
-                    onAdd={() => addAlbum({ ...album, artistName: artist.name, artistMusicbrainzId: artist.musicbrainzId! })}
-                    onShowTracks={() => openAlbumDialog(album)}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="library" className="space-y-4">
-            {inLibraryAlbums.length === 0 ? (
-              <EmptyState message="No albums in library yet" />
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {inLibraryAlbums.map((album) => (
                   <MergedAlbumCard
                     key={album.musicbrainzId}
                     album={album}
