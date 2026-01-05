@@ -719,6 +719,119 @@ export default class TvShowsController {
   }
 
   /**
+   * Enrich a TV show that doesn't have a TMDB ID by searching and linking
+   */
+  async enrich({ params, response }: HttpContext) {
+    const show = await TvShow.query()
+      .where('id', params.id)
+      .preload('seasons', (query) => query.preload('episodes'))
+      .first()
+
+    if (!show) {
+      return response.notFound({ error: 'TV show not found' })
+    }
+
+    if (show.tmdbId) {
+      return response.badRequest({
+        error: 'TV show already has a TMDB ID. Use refresh instead.',
+      })
+    }
+
+    // Search TMDB for this show
+    const results = await tmdbService.searchTvShows(show.title, show.year ?? undefined)
+    if (results.length === 0) {
+      return response.json({
+        id: show.id,
+        title: show.title,
+        enriched: false,
+        message: 'No matching TV show found on TMDB',
+      })
+    }
+
+    // Find best match (exact title match preferred, then year match)
+    const exactMatch = results.find(
+      (r) => r.name.toLowerCase() === show.title.toLowerCase() &&
+             (!show.year || r.year === show.year)
+    )
+    const best = exactMatch || results[0]
+
+    // Fetch full details from TMDB
+    try {
+      const tmdbData = await tmdbService.getTvShow(best.id)
+
+      show.merge({
+        tmdbId: String(tmdbData.id),
+        originalTitle: tmdbData.originalName || null,
+        sortTitle: tmdbData.name.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
+        overview: tmdbData.overview || null,
+        firstAired: tmdbData.firstAirDate ? DateTime.fromISO(tmdbData.firstAirDate) : null,
+        year: tmdbData.year || show.year,
+        status: tmdbData.status || null,
+        network: tmdbData.networks[0] || null,
+        posterUrl: tmdbData.posterPath || null,
+        backdropUrl: tmdbData.backdropPath || null,
+        rating: tmdbData.voteAverage || null,
+        votes: tmdbData.voteCount || null,
+        genres: tmdbData.genres || null,
+        seasonCount: tmdbData.numberOfSeasons || show.seasonCount,
+        episodeCount: tmdbData.numberOfEpisodes || show.episodeCount,
+      })
+      await show.save()
+
+      // Enrich existing seasons with TMDB data
+      const tmdbSeasons = await tmdbService.getTvShowSeasons(best.id)
+
+      for (const season of show.seasons) {
+        const tmdbSeason = tmdbSeasons.find((s) => s.seasonNumber === season.seasonNumber)
+        if (tmdbSeason) {
+          season.merge({
+            tmdbId: String(tmdbSeason.id),
+            title: tmdbSeason.name || season.title,
+            overview: tmdbSeason.overview || null,
+            airDate: tmdbSeason.airDate ? DateTime.fromISO(tmdbSeason.airDate) : null,
+            posterUrl: tmdbSeason.posterPath || null,
+            episodeCount: tmdbSeason.episodeCount || season.episodeCount,
+          })
+          await season.save()
+
+          // Enrich episodes
+          const { episodes: tmdbEpisodes } = await tmdbService.getTvShowSeason(best.id, season.seasonNumber)
+
+          for (const episode of season.episodes) {
+            const tmdbEpisode = tmdbEpisodes.find((e) => e.episodeNumber === episode.episodeNumber)
+            if (tmdbEpisode) {
+              episode.merge({
+                tmdbId: String(tmdbEpisode.id),
+                title: tmdbEpisode.name || episode.title,
+                overview: tmdbEpisode.overview || null,
+                airDate: tmdbEpisode.airDate ? DateTime.fromISO(tmdbEpisode.airDate) : null,
+                runtime: tmdbEpisode.runtime || null,
+                stillUrl: tmdbEpisode.stillPath || null,
+                rating: tmdbEpisode.voteAverage || null,
+                votes: tmdbEpisode.voteCount || null,
+              })
+              await episode.save()
+            }
+          }
+        }
+      }
+
+      return response.json({
+        id: show.id,
+        title: show.title,
+        tmdbId: show.tmdbId,
+        enriched: true,
+        seasonsEnriched: show.seasons.length,
+      })
+    } catch (error) {
+      console.error(`Failed to enrich TV show ${show.id}:`, error)
+      return response.internalServerError({
+        error: 'Failed to fetch TV show details from TMDB',
+      })
+    }
+  }
+
+  /**
    * Delete an episode file from disk and database
    */
   async deleteEpisodeFile({ params, response }: HttpContext) {

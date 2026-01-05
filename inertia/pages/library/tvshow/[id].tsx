@@ -148,6 +148,7 @@ export default function TvShowDetail() {
   const [deletingFile, setDeletingFile] = useState(false)
   const [selectedEpisodeForDelete, setSelectedEpisodeForDelete] = useState<{ id: number; title: string; seasonNumber: number } | null>(null)
   const [requestingAllSeasons, setRequestingAllSeasons] = useState(false)
+  const [enriching, setEnriching] = useState(false)
 
   useEffect(() => {
     fetchShow()
@@ -452,6 +453,34 @@ export default function TvShowDetail() {
     }
   }
 
+  const enrichTvShow = async () => {
+    if (!show) return
+
+    setEnriching(true)
+    try {
+      const response = await fetch(`/api/v1/tvshows/${showId}/enrich`, {
+        method: 'POST',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.enriched) {
+          toast.success(`TV show enriched with TMDB data (${data.seasonsEnriched} seasons updated)`)
+          fetchShow()
+        } else {
+          toast.warning(data.message || 'No matching TV show found')
+        }
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to enrich')
+      }
+    } catch (error) {
+      console.error('Failed to enrich TV show:', error)
+      toast.error('Failed to enrich TV show')
+    } finally {
+      setEnriching(false)
+    }
+  }
+
   const requestAllSeasons = async () => {
     if (!show) return
 
@@ -555,6 +584,15 @@ export default function TvShowDetail() {
                 />
                 {show.requested ? 'Unrequest' : 'Request'}
               </DropdownMenuItem>
+              {!show.tmdbId && (
+                <DropdownMenuItem onClick={enrichTvShow} disabled={enriching}>
+                  <HugeiconsIcon
+                    icon={Add01Icon}
+                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                  />
+                  {enriching ? 'Enriching...' : 'Enrich from TMDB'}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"

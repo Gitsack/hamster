@@ -63,6 +63,7 @@ interface Artist {
 
 interface Movie {
   id: number
+  tmdbId: string | null
   title: string
   year: number | null
   overview: string | null
@@ -76,6 +77,7 @@ interface Movie {
 
 interface TvShow {
   id: number
+  tmdbId: string | null
   title: string
   year: number | null
   overview: string | null
@@ -187,6 +189,9 @@ export default function Library() {
 
   // Library scan state
   const [scanning, setScanning] = useState(false)
+
+  // Enriching state
+  const [enrichingItems, setEnrichingItems] = useState<Set<string>>(new Set())
 
   // Fetch enabled media types from settings
   useEffect(() => {
@@ -479,6 +484,52 @@ export default function Library() {
     }
   }
 
+  // Handle enriching items
+  const handleEnrich = async (mediaType: MediaType, id: number, name: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const itemKey = `${mediaType}-${id}`
+    setEnrichingItems((prev) => new Set(prev).add(itemKey))
+
+    const endpoints: Record<MediaType, string> = {
+      music: 'artists',
+      movies: 'movies',
+      tv: 'tvshows',
+      books: 'authors',
+      missing: '',
+    }
+
+    try {
+      const response = await fetch(`/api/v1/${endpoints[mediaType]}/${id}/enrich`, {
+        method: 'POST',
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.enriched) {
+          toast.success(`${name} enriched successfully`)
+          // Refresh the data
+          fetchData()
+        } else {
+          toast.warning(data.message || 'No matching entry found')
+        }
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to enrich')
+      }
+    } catch (error) {
+      console.error('Failed to enrich:', error)
+      toast.error('Failed to enrich')
+    } finally {
+      setEnrichingItems((prev) => {
+        const next = new Set(prev)
+        next.delete(itemKey)
+        return next
+      })
+    }
+  }
+
   // Get status for items
   const getItemStatus = (item: { requested?: boolean; hasFile?: boolean }, isDownloading: boolean): ItemStatus | null => {
     if (isDownloading) return 'downloading'
@@ -599,6 +650,7 @@ export default function Library() {
     requested?: boolean
     hasFile?: boolean
     mediaType: MediaType
+    externalId?: string | null
   }) => {
     const config = MEDIA_TYPE_CONFIG[item.mediaType]
     const imageKey = `${item.mediaType}-${item.id}`
@@ -673,6 +725,23 @@ export default function Library() {
                   View Details
                 </Link>
               </DropdownMenuItem>
+              {!item.externalId && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={(e) => handleEnrich(item.mediaType, item.id, item.name, e)}
+                    disabled={enrichingItems.has(`${item.mediaType}-${item.id}`)}
+                  >
+                    <HugeiconsIcon
+                      icon={Search01Icon}
+                      className={`h-4 w-4 mr-2 ${enrichingItems.has(`${item.mediaType}-${item.id}`) ? 'animate-spin' : ''}`}
+                    />
+                    {enrichingItems.has(`${item.mediaType}-${item.id}`)
+                      ? 'Enriching...'
+                      : item.mediaType === 'music' ? 'Enrich from MusicBrainz' : 'Enrich from TMDB'}
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
@@ -699,6 +768,7 @@ export default function Library() {
     hasFile?: boolean
     mediaType: MediaType
     badges?: string[]
+    externalId?: string | null
   }) => {
     const config = MEDIA_TYPE_CONFIG[item.mediaType]
     const imageKey = `${item.mediaType}-${item.id}`
@@ -764,6 +834,23 @@ export default function Library() {
                     View Details
                   </Link>
                 </DropdownMenuItem>
+                {!item.externalId && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={(e) => handleEnrich(item.mediaType, item.id, item.name, e)}
+                      disabled={enrichingItems.has(`${item.mediaType}-${item.id}`)}
+                    >
+                      <HugeiconsIcon
+                        icon={Search01Icon}
+                        className={`h-4 w-4 mr-2 ${enrichingItems.has(`${item.mediaType}-${item.id}`) ? 'animate-spin' : ''}`}
+                      />
+                      {enrichingItems.has(`${item.mediaType}-${item.id}`)
+                        ? 'Enriching...'
+                        : item.mediaType === 'music' ? 'Enrich from MusicBrainz' : 'Enrich from TMDB'}
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
@@ -792,6 +879,7 @@ export default function Library() {
       detailUrl: `/artist/${artist.id}`,
       requested: artist.requested,
       mediaType: 'music' as MediaType,
+      externalId: artist.musicbrainzId,
     }))
 
     if (viewMode === 'grid') {
@@ -813,6 +901,7 @@ export default function Library() {
           requested: artist.requested,
           mediaType: 'music',
           badges: artist.qualityProfile ? [artist.qualityProfile.name] : [],
+          externalId: artist.musicbrainzId,
         }))}
       </div>
     )
@@ -831,6 +920,7 @@ export default function Library() {
       requested: movie.requested,
       hasFile: movie.hasFile,
       mediaType: 'movies' as MediaType,
+      externalId: movie.tmdbId,
     }))
 
     if (viewMode === 'grid') {
@@ -853,6 +943,7 @@ export default function Library() {
           hasFile: movie.hasFile,
           mediaType: 'movies',
           badges: movie.status ? [movie.status] : [],
+          externalId: movie.tmdbId,
         }))}
       </div>
     )
@@ -870,6 +961,7 @@ export default function Library() {
       subtitle: `${show.seasonCount} season${show.seasonCount !== 1 ? 's' : ''} • ${show.episodeCount} episodes`,
       detailUrl: `/tvshow/${show.id}`,
       mediaType: 'tv' as MediaType,
+      externalId: show.tmdbId,
     }))
 
     if (viewMode === 'grid') {
@@ -890,6 +982,7 @@ export default function Library() {
           detailUrl: `/tvshow/${show.id}`,
           mediaType: 'tv',
           badges: [show.network, show.status].filter(Boolean) as string[],
+          externalId: show.tmdbId,
         }))}
       </div>
     )

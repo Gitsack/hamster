@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileNamingService } from './file_naming_service.js'
 import { mediaInfoService, type MediaInfo } from './media_info_service.js'
+import { musicBrainzService } from '../metadata/musicbrainz_service.js'
 import RootFolder from '#models/root_folder'
 import Artist from '#models/artist'
 import Album from '#models/album'
@@ -183,6 +184,12 @@ export class FileScannerService {
       return { imported: false, updated: false }
     }
 
+    // Get media info first - we'll use it for matching
+    const mediaInfo = await mediaInfoService.getMediaInfo(filePath)
+    if (!mediaInfo) {
+      return { imported: false, updated: false }
+    }
+
     // Try to match file to existing track/album/artist structure
     const pathParts = relativePath.split(path.sep)
     if (pathParts.length < 2) {
@@ -192,42 +199,51 @@ export class FileScannerService {
     const artistFolderName = pathParts[0]
     const albumFolderName = pathParts.length >= 3 ? pathParts[1] : null
 
-    // Find or create artist
-    let artist = await Artist.query()
-      .where('rootFolderId', rootFolder.id)
-      .where((q) => {
-        // Try to match by folder name pattern
-        q.whereILike('name', artistFolderName)
-      })
-      .first()
+    // Determine artist name: prefer file metadata over folder name
+    const artistName = mediaInfo.artist || artistFolderName
+
+    // Find existing artist (across all root folders for better matching)
+    let artist = await this.findExistingArtist(artistName, rootFolder.id)
+    let artistCreated = false
 
     if (!artist) {
-      // Create new artist from folder
+      // Try folder name if metadata didn't match
+      if (mediaInfo.artist && mediaInfo.artist !== artistFolderName) {
+        artist = await this.findExistingArtist(artistFolderName, rootFolder.id)
+      }
+    }
+
+    if (!artist) {
+      // Create new artist
       artist = await Artist.create({
         rootFolderId: rootFolder.id,
-        name: artistFolderName,
+        name: artistName,
         status: 'continuing',
         monitored: true,
       })
+      artistCreated = true
     }
 
-    // Find or create album if we have album folder
-    let album: Album | null = null
-    if (albumFolderName) {
-      const albumName = this.parseAlbumName(albumFolderName)
+    // Determine album name: prefer file metadata over folder name
+    const albumFolderParsed = albumFolderName ? this.parseAlbumName(albumFolderName) : null
+    const albumTitle = mediaInfo.album || albumFolderParsed?.title || 'Singles'
+    const albumYear = mediaInfo.year || albumFolderParsed?.year
 
-      album = await Album.query()
-        .where('artistId', artist.id)
-        .whereILike('title', albumName.title)
-        .first()
+    // Find or create album
+    let album: Album | null = null
+    let albumCreated = false
+
+    if (albumTitle !== 'Singles') {
+      album = await this.findExistingAlbum(albumTitle, artist.id, albumYear)
 
       if (!album) {
         album = await Album.create({
           artistId: artist.id,
-          title: albumName.title,
-          releaseDate: albumName.year ? DateTime.fromObject({ year: albumName.year }) : null,
+          title: albumTitle,
+          releaseDate: albumYear ? DateTime.fromObject({ year: albumYear }) : null,
           monitored: true,
         })
+        albumCreated = true
       }
     } else {
       // Use or create a default "Singles" album
@@ -242,13 +258,16 @@ export class FileScannerService {
           title: 'Singles',
           monitored: true,
         })
+        albumCreated = true
       }
     }
 
-    // Get media info
-    const mediaInfo = await mediaInfoService.getMediaInfo(filePath)
-    if (!mediaInfo) {
-      return { imported: false, updated: false }
+    // Enrich new records with MusicBrainz data (rate-limited)
+    if (artistCreated) {
+      await this.enrichArtistFromMusicBrainz(artist)
+    }
+    if (albumCreated && album.title !== 'Singles') {
+      await this.enrichAlbumFromMusicBrainz(album, artist.name)
     }
 
     // Find or create track
@@ -379,21 +398,117 @@ export class FileScannerService {
    */
   private async updateRootFolderStats(_rootFolder: RootFolder): Promise<void> {
     // TODO: Implement root folder statistics if needed
-    // Count artists in this root folder
-    // const artistCount = await Artist.query()
-    //   .where('rootFolderId', rootFolder.id)
-    //   .count('* as total')
-    //
-    // Get total size of all track files
-    // const sizeResult = await TrackFile.query()
-    //   .whereHas('track', (q) => {
-    //     q.whereHas('album', (q2) => {
-    //       q2.whereHas('artist', (q3) => {
-    //         q3.where('rootFolderId', rootFolder.id)
-    //       })
-    //     })
-    //   })
-    //   .sum('sizeBytes as total')
+  }
+
+  /**
+   * Find existing artist by name or MusicBrainz ID (across all root folders)
+   */
+  private async findExistingArtist(
+    name: string,
+    rootFolderId: string
+  ): Promise<Artist | null> {
+    // 1. Try exact match by name in the same root folder first
+    const exactMatch = await Artist.query()
+      .where('rootFolderId', rootFolderId)
+      .whereILike('name', name)
+      .first()
+    if (exactMatch) return exactMatch
+
+    // 2. Try to find by name across all root folders (case-insensitive)
+    const candidates = await Artist.query()
+      .whereRaw('LOWER(name) = ?', [name.toLowerCase()])
+      .exec()
+
+    if (candidates.length === 0) return null
+
+    // Prefer one with MusicBrainz ID (more authoritative)
+    const enriched = candidates.find((a) => a.musicbrainzId)
+    return enriched || candidates[0]
+  }
+
+  /**
+   * Find existing album by title and artist
+   */
+  private async findExistingAlbum(
+    title: string,
+    artistId: string,
+    year?: number
+  ): Promise<Album | null> {
+    // Try exact match by title within artist
+    const query = Album.query()
+      .where('artistId', artistId)
+      .whereILike('title', title)
+
+    // If year provided, prefer matching year
+    if (year) {
+      const withYear = await query
+        .clone()
+        .whereRaw('EXTRACT(YEAR FROM release_date) = ?', [year])
+        .first()
+      if (withYear) return withYear
+    }
+
+    return query.first()
+  }
+
+  /**
+   * Enrich artist with MusicBrainz metadata
+   */
+  private async enrichArtistFromMusicBrainz(artist: Artist): Promise<void> {
+    if (artist.musicbrainzId) return // Already enriched
+
+    try {
+      const results = await musicBrainzService.searchArtists(artist.name, 5)
+      if (results.length > 0) {
+        // Find best match (exact name match preferred)
+        const exactMatch = results.find(
+          (r) => r.name.toLowerCase() === artist.name.toLowerCase()
+        )
+        const best = exactMatch || results[0]
+
+        artist.musicbrainzId = best.id
+        artist.sortName = best.sortName || artist.name
+        artist.disambiguation = best.disambiguation || null
+        artist.artistType = best.type || null
+        artist.country = best.country || null
+        await artist.save()
+      }
+    } catch (error) {
+      // Don't fail the scan if enrichment fails
+      console.error(`Failed to enrich artist ${artist.name}:`, error)
+    }
+  }
+
+  /**
+   * Enrich album with MusicBrainz metadata
+   */
+  private async enrichAlbumFromMusicBrainz(
+    album: Album,
+    artistName: string
+  ): Promise<void> {
+    if (album.musicbrainzId) return // Already enriched
+
+    try {
+      const results = await musicBrainzService.searchAlbums(album.title, artistName, 5)
+      if (results.length > 0) {
+        // Find best match (exact title match preferred)
+        const exactMatch = results.find(
+          (r) => r.title.toLowerCase() === album.title.toLowerCase()
+        )
+        const best = exactMatch || results[0]
+
+        album.musicbrainzId = best.id
+        album.musicbrainzReleaseGroupId = best.id
+        album.albumType = (best.primaryType?.toLowerCase() as any) || 'album'
+        if (best.releaseDate && !album.releaseDate) {
+          album.releaseDate = DateTime.fromISO(best.releaseDate)
+        }
+        await album.save()
+      }
+    } catch (error) {
+      // Don't fail the scan if enrichment fails
+      console.error(`Failed to enrich album ${album.title}:`, error)
+    }
   }
 }
 

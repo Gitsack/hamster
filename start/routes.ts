@@ -142,6 +142,7 @@ router
     router.put('/artists/:id', [ArtistsController, 'update'])
     router.delete('/artists/:id', [ArtistsController, 'destroy'])
     router.post('/artists/:id/refresh', [ArtistsController, 'refresh'])
+    router.post('/artists/:id/enrich', [ArtistsController, 'enrich'])
 
     // Albums
     router.get('/albums', [AlbumsController, 'index'])
@@ -155,6 +156,7 @@ router
     router.get('/albums/:id/releases', [AlbumsController, 'searchReleases'])
     router.post('/albums/:id/download', [AlbumsController, 'searchAndDownload'])
     router.post('/albums/:id/search', [AlbumsController, 'searchNow'])
+    router.post('/albums/:id/enrich', [AlbumsController, 'enrich'])
     router.get('/albums/:id/files', [AlbumsController, 'files'])
 
     // Tracks
@@ -173,6 +175,7 @@ router
     router.post('/movies/:id/request', [MoviesController, 'setWanted'])
     router.post('/movies/:id/download', [MoviesController, 'download'])
     router.post('/movies/:id/search', [MoviesController, 'searchNow'])
+    router.post('/movies/:id/enrich', [MoviesController, 'enrich'])
 
     // TV Shows
     router.get('/tvshows', [TvShowsController, 'index'])
@@ -191,6 +194,7 @@ router
     router.delete('/tvshows/:id/episodes/:episodeId/file', [TvShowsController, 'deleteEpisodeFile'])
     router.post('/tvshows/:id/search', [TvShowsController, 'searchNow'])
     router.post('/tvshows/:id/episodes/:episodeId/search', [TvShowsController, 'searchEpisodeNow'])
+    router.post('/tvshows/:id/enrich', [TvShowsController, 'enrich'])
 
     // Authors
     router.get('/authors', [AuthorsController, 'index'])

@@ -105,6 +105,7 @@ export default function AlbumDetail() {
   const [searching, setSearching] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
+  const [enriching, setEnriching] = useState(false)
 
   useEffect(() => {
     fetchAlbum()
@@ -219,6 +220,34 @@ export default function AlbumDetail() {
     }
   }
 
+  const enrichAlbum = async () => {
+    if (!album) return
+
+    setEnriching(true)
+    try {
+      const response = await fetch(`/api/v1/albums/${albumId}/enrich`, {
+        method: 'POST',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.enriched) {
+          toast.success('Album enriched with MusicBrainz data')
+          fetchAlbum()
+        } else {
+          toast.warning(data.message || 'No matching album found')
+        }
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to enrich')
+      }
+    } catch (error) {
+      console.error('Failed to enrich album:', error)
+      toast.error('Failed to enrich album')
+    } finally {
+      setEnriching(false)
+    }
+  }
+
   const playTrack = (track: Track, index: number) => {
     if (!album || !track.hasFile) return
     player.playAlbum(album.id)
@@ -318,6 +347,17 @@ export default function AlbumDetail() {
                 />
                 {album.monitored ? 'Unrequest' : 'Request'}
               </DropdownMenuItem>
+              {!album.musicbrainzId && (
+                <>
+                  <DropdownMenuItem onClick={enrichAlbum} disabled={enriching}>
+                    <HugeiconsIcon
+                      icon={Search01Icon}
+                      className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                    />
+                    {enriching ? 'Enriching...' : 'Enrich from MusicBrainz'}
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={searchReleases} disabled={searching}>
                 <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />

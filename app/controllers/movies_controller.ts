@@ -412,6 +412,75 @@ export default class MoviesController {
   }
 
   /**
+   * Enrich a movie that doesn't have a TMDB ID by searching and linking
+   */
+  async enrich({ params, response }: HttpContext) {
+    const movie = await Movie.find(params.id)
+    if (!movie) {
+      return response.notFound({ error: 'Movie not found' })
+    }
+
+    if (movie.tmdbId) {
+      return response.badRequest({
+        error: 'Movie already has a TMDB ID. Use refresh instead.',
+      })
+    }
+
+    // Search TMDB for this movie
+    const results = await tmdbService.searchMovies(movie.title, movie.year ?? undefined)
+    if (results.length === 0) {
+      return response.json({
+        id: movie.id,
+        title: movie.title,
+        enriched: false,
+        message: 'No matching movie found on TMDB',
+      })
+    }
+
+    // Find best match (exact title match preferred, then year match)
+    const exactMatch = results.find(
+      (r) => r.title.toLowerCase() === movie.title.toLowerCase() &&
+             (!movie.year || r.year === movie.year)
+    )
+    const best = exactMatch || results[0]
+
+    // Fetch full details from TMDB
+    try {
+      const tmdbData = await tmdbService.getMovie(best.id)
+
+      movie.merge({
+        tmdbId: String(tmdbData.id),
+        imdbId: tmdbData.imdbId || null,
+        originalTitle: tmdbData.originalTitle || null,
+        sortTitle: tmdbData.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
+        overview: tmdbData.overview || null,
+        releaseDate: tmdbData.releaseDate ? DateTime.fromISO(tmdbData.releaseDate) : null,
+        year: tmdbData.year || movie.year,
+        runtime: tmdbData.runtime || null,
+        status: tmdbData.status || null,
+        posterUrl: tmdbData.posterPath || null,
+        backdropUrl: tmdbData.backdropPath || null,
+        rating: tmdbData.voteAverage || null,
+        votes: tmdbData.voteCount || null,
+        genres: tmdbData.genres || null,
+      })
+      await movie.save()
+
+      return response.json({
+        id: movie.id,
+        title: movie.title,
+        tmdbId: movie.tmdbId,
+        enriched: true,
+      })
+    } catch (error) {
+      console.error(`Failed to enrich movie ${movie.id}:`, error)
+      return response.internalServerError({
+        error: 'Failed to fetch movie details from TMDB',
+      })
+    }
+  }
+
+  /**
    * Delete the movie file from disk and database
    */
   async deleteFile({ params, response }: HttpContext) {

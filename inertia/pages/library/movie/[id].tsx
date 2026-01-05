@@ -92,6 +92,7 @@ export default function MovieDetail() {
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [activeDownload, setActiveDownload] = useState<{ progress: number; status: string } | null>(null)
+  const [enriching, setEnriching] = useState(false)
 
   useEffect(() => {
     fetchMovie()
@@ -219,6 +220,34 @@ export default function MovieDetail() {
     }
   }
 
+  const enrichMovie = async () => {
+    if (!movie) return
+
+    setEnriching(true)
+    try {
+      const response = await fetch(`/api/v1/movies/${movieId}/enrich`, {
+        method: 'POST',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.enriched) {
+          toast.success('Movie enriched with TMDB data')
+          fetchMovie()
+        } else {
+          toast.warning(data.message || 'No matching movie found')
+        }
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to enrich')
+      }
+    } catch (error) {
+      console.error('Failed to enrich movie:', error)
+      toast.error('Failed to enrich movie')
+    } finally {
+      setEnriching(false)
+    }
+  }
+
   const deleteFile = async () => {
     if (!movie) return
 
@@ -320,6 +349,15 @@ export default function MovieDetail() {
                 />
                 {movie.requested ? 'Unrequest' : 'Request'}
               </DropdownMenuItem>
+              {!movie.tmdbId && (
+                <DropdownMenuItem onClick={enrichMovie} disabled={enriching}>
+                  <HugeiconsIcon
+                    icon={Search01Icon}
+                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                  />
+                  {enriching ? 'Enriching...' : 'Enrich from TMDB'}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"

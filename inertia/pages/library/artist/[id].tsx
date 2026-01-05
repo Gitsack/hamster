@@ -116,6 +116,7 @@ export default function ArtistDetail() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [addingAlbums, setAddingAlbums] = useState<Set<string>>(new Set())
+  const [enriching, setEnriching] = useState(false)
 
   // Album detail dialog state
   const [selectedAlbum, setSelectedAlbum] = useState<{
@@ -196,6 +197,34 @@ export default function ArtistDetail() {
       toast.error('Failed to refresh artist')
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  const enrichArtist = async () => {
+    if (!artist) return
+
+    setEnriching(true)
+    try {
+      const response = await fetch(`/api/v1/artists/${artistId}/enrich`, {
+        method: 'POST',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.enriched) {
+          toast.success('Artist enriched with MusicBrainz data')
+          fetchArtist()
+        } else {
+          toast.warning(data.message || 'No matching artist found')
+        }
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to enrich')
+      }
+    } catch (error) {
+      console.error('Failed to enrich artist:', error)
+      toast.error('Failed to enrich artist')
+    } finally {
+      setEnriching(false)
     }
   }
 
@@ -443,6 +472,15 @@ export default function ArtistDetail() {
                 />
                 Refresh
               </DropdownMenuItem>
+              {!artist.musicbrainzId && (
+                <DropdownMenuItem onClick={enrichArtist} disabled={enriching}>
+                  <HugeiconsIcon
+                    icon={Search01Icon}
+                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                  />
+                  {enriching ? 'Enriching...' : 'Enrich from MusicBrainz'}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"

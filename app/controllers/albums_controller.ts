@@ -179,19 +179,49 @@ export default class AlbumsController {
         await album.save()
       }
 
+      // Get existing tracks for this album
+      const existingTracks = await Track.query().where('albumId', album.id)
+
       // Extract tracks from all media (discs)
       let discNumber = 1
       for (const medium of release.media) {
         for (const mbTrack of medium.tracks) {
-          await Track.create({
-            albumId: album.id,
-            musicbrainzId: mbTrack.id,
-            title: mbTrack.title,
-            trackNumber: mbTrack.position,
-            discNumber: discNumber,
-            durationMs: mbTrack.length || null,
-            hasFile: false,
-          })
+          // Try to find existing track by disc number + track number
+          const existingByNumber = existingTracks.find(
+            (t) => t.discNumber === discNumber && t.trackNumber === mbTrack.position
+          )
+
+          // Or by title if no exact position match (case-insensitive)
+          const existingByTitle = existingByNumber || existingTracks.find(
+            (t) =>
+              !t.musicbrainzId &&
+              t.title.toLowerCase() === mbTrack.title.toLowerCase()
+          )
+
+          const existing = existingByNumber || existingByTitle
+
+          if (existing) {
+            // Update existing track with MusicBrainz data
+            existing.merge({
+              musicbrainzId: mbTrack.id,
+              title: mbTrack.title, // Use MusicBrainz title (usually more accurate)
+              trackNumber: mbTrack.position,
+              discNumber: discNumber,
+              durationMs: mbTrack.length || existing.durationMs,
+            })
+            await existing.save()
+          } else {
+            // Create new track only if no match found
+            await Track.create({
+              albumId: album.id,
+              musicbrainzId: mbTrack.id,
+              title: mbTrack.title,
+              trackNumber: mbTrack.position,
+              discNumber: discNumber,
+              durationMs: mbTrack.length || null,
+              hasFile: false,
+            })
+          }
         }
         discNumber++
       }
@@ -655,5 +685,71 @@ export default class AlbumsController {
         error: error instanceof Error ? error.message : 'Search failed',
       })
     }
+  }
+
+  /**
+   * Enrich an album that doesn't have a MusicBrainz ID by searching and linking
+   */
+  async enrich({ params, response }: HttpContext) {
+    const album = await Album.query().where('id', params.id).preload('artist').first()
+    if (!album) {
+      return response.notFound({ error: 'Album not found' })
+    }
+
+    if (album.musicbrainzId) {
+      return response.badRequest({
+        error: 'Album already has a MusicBrainz ID',
+      })
+    }
+
+    // Search MusicBrainz for this album
+    const artistName = album.artist?.name || ''
+    const results = await musicBrainzService.searchAlbums(album.title, artistName, 10)
+
+    if (results.length === 0) {
+      return response.json({
+        id: album.id,
+        title: album.title,
+        enriched: false,
+        message: 'No matching album found on MusicBrainz',
+      })
+    }
+
+    // Find best match (exact title match preferred)
+    const exactMatch = results.find(
+      (r) => r.title.toLowerCase() === album.title.toLowerCase()
+    )
+    const best = exactMatch || results[0]
+
+    // Update album with MusicBrainz data
+    album.merge({
+      musicbrainzId: best.id,
+      musicbrainzReleaseGroupId: best.id,
+      albumType: (best.primaryType?.toLowerCase() as any) || album.albumType || 'album',
+    })
+
+    if (best.releaseDate && !album.releaseDate) {
+      album.releaseDate = DateTime.fromISO(best.releaseDate)
+    }
+
+    // Try to get cover art
+    if (!album.imageUrl && best.id) {
+      const imageUrl = await coverArtService.getVerifiedCoverUrl(best.id, '500')
+      if (imageUrl) {
+        album.imageUrl = imageUrl
+      }
+    }
+
+    await album.save()
+
+    // Fetch track listing from MusicBrainz
+    await this.fetchAlbumTracks(album)
+
+    return response.json({
+      id: album.id,
+      title: album.title,
+      musicbrainzId: album.musicbrainzId,
+      enriched: true,
+    })
   }
 }
