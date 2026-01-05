@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/Gitsack/hamster/compare/hamster-v1.7.0...hamster-v1.7.1) (2026-01-05)
+
+
+### Bug Fixes
+
+* tv show scanning for episodes ([65125bf](https://github.com/Gitsack/hamster/commit/65125bf4872dc4afbbfbe9a6a02c9969f9a7153f))
+
 ## [1.7.0](https://github.com/Gitsack/hamster/compare/hamster-v1.6.3...hamster-v1.7.0) (2026-01-04)
 
 
