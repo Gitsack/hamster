@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0](https://github.com/Gitsack/hamster/compare/hamster-v1.7.1...hamster-v1.8.0) (2026-01-05)
+
+
+### Features
+
+* further improved matching previously downloaded items ([ca146f6](https://github.com/Gitsack/hamster/commit/ca146f6c3f5e92b2028c56bea8115660485bcfdb))
+* improved album and artist matching ([f8d5eec](https://github.com/Gitsack/hamster/commit/f8d5eec1e5383f94f0d39cd689793d24de93abe2))
+
 ## [1.7.1](https://github.com/Gitsack/hamster/compare/hamster-v1.7.0...hamster-v1.7.1) (2026-01-05)
 
 
