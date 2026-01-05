@@ -268,6 +268,7 @@ export class TvShowParser {
   }
 
   private extractYear(name: string): { year?: number; remaining: string } {
+    // Standard patterns for year in parentheses, brackets, or dots
     const patterns = [/\((\d{4})\)/, /\[(\d{4})\]/, /\.(\d{4})\./]
 
     for (const pattern of patterns) {
@@ -278,6 +279,16 @@ export class TvShowParser {
           const remaining = name.replace(match[0], ' ')
           return { year, remaining }
         }
+      }
+    }
+
+    // Try to match space-separated year before episode pattern (e.g., "Show Name 2023 S01E01")
+    const spaceYearMatch = name.match(/\s(\d{4})\s+(?:S\d{1,2}E\d{1,3}|\d{1,2}x\d{2,3})/i)
+    if (spaceYearMatch) {
+      const year = parseInt(spaceYearMatch[1], 10)
+      if (year >= 1900 && year <= 2099) {
+        const remaining = name.replace(spaceYearMatch[1], '')
+        return { year, remaining }
       }
     }
 
@@ -319,9 +330,9 @@ export class TvShowParser {
       title = title.replace(sePattern, '').replace(xPattern, '')
     }
 
-    // Remove year
+    // Remove year (in parentheses, brackets, dots, or space-separated)
     if (year) {
-      title = title.replace(new RegExp(`\\(${year}\\)|\\[${year}\\]|\\.${year}`, 'g'), '')
+      title = title.replace(new RegExp(`\\(${year}\\)|\\[${year}\\]|\\.${year}|\\s${year}(?=\\s|$)`, 'g'), '')
     }
 
     return this.cleanShowTitle(title)

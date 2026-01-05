@@ -350,6 +350,7 @@ export class TvShowScannerService {
     // Create episode file
     await EpisodeFile.create({
       episodeId: episode.id,
+      tvShowId: tvShow.id,
       relativePath,
       sizeBytes: fileSize,
       quality: parsed.quality || 'Unknown',
@@ -505,8 +506,18 @@ export class TvShowScannerService {
    * Update show statistics
    */
   private async updateShowStats(tvShow: TvShow): Promise<void> {
-    const seasonCount = await Season.query().where('tvShowId', tvShow.id).count('* as total')
+    // Update each season's episode count
+    const seasons = await Season.query().where('tvShowId', tvShow.id)
+    for (const season of seasons) {
+      const episodeCountResult = await Episode.query()
+        .where('seasonId', season.id)
+        .count('* as total')
+      season.episodeCount = Number(episodeCountResult[0].$extras.total) || 0
+      await season.save()
+    }
 
+    // Update show's total counts
+    const seasonCount = await Season.query().where('tvShowId', tvShow.id).count('* as total')
     const episodeCount = await Episode.query().where('tvShowId', tvShow.id).count('* as total')
 
     tvShow.seasonCount = Number(seasonCount[0].$extras.total) || 0

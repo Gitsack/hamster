@@ -416,54 +416,57 @@ export default function Library() {
         return
       }
 
-      // Scan each root folder
-      let scannedCount = 0
-      let totalCreated = 0
+      toast.info(`Scanning ${foldersToScan.length} folder(s)...`)
+
+      // Start scan for each root folder
+      const scanPromises: Promise<void>[] = []
       let errors: string[] = []
 
       for (const folder of foldersToScan) {
-        try {
-          const scanRes = await fetch(`/api/v1/rootfolders/${folder.id}/scan`, {
-            method: 'POST',
-          })
+        const scanPromise = (async () => {
+          try {
+            // Start the scan
+            const scanRes = await fetch(`/api/v1/rootfolders/${folder.id}/scan`, {
+              method: 'POST',
+            })
 
-          if (scanRes.ok) {
-            const result = await scanRes.json()
-            scannedCount++
-
-            // Aggregate results based on media type
-            if (mediaType === 'music') {
-              totalCreated += result.artistsCreated || 0
-            } else if (mediaType === 'movies') {
-              totalCreated += result.moviesCreated || 0
-            } else if (mediaType === 'tv') {
-              totalCreated += result.showsCreated || 0
-            } else if (mediaType === 'books') {
-              totalCreated += (result.authorsCreated || 0) + (result.booksCreated || 0)
+            if (!scanRes.ok) {
+              const error = await scanRes.json()
+              errors.push(error.error || `Failed to start scan for: ${folder.path}`)
+              return
             }
 
-            if (result.errors?.length > 0) {
-              errors.push(...result.errors)
+            // Poll for completion
+            let isScanning = true
+            while (isScanning) {
+              await new Promise((resolve) => setTimeout(resolve, 1000)) // Wait 1 second
+
+              const statusRes = await fetch(`/api/v1/rootfolders/${folder.id}/scan-status`)
+              if (statusRes.ok) {
+                const status = await statusRes.json()
+                isScanning = status.isScanning
+              } else {
+                // If we can't get status, assume it's done
+                isScanning = false
+              }
             }
-          } else {
-            const error = await scanRes.json()
-            errors.push(error.error || `Failed to scan folder: ${folder.path}`)
+          } catch (err) {
+            errors.push(`Error scanning ${folder.path}: ${err instanceof Error ? err.message : 'Unknown error'}`)
           }
-        } catch (err) {
-          errors.push(`Error scanning ${folder.path}: ${err instanceof Error ? err.message : 'Unknown error'}`)
-        }
+        })()
+
+        scanPromises.push(scanPromise)
       }
+
+      // Wait for all scans to complete
+      await Promise.all(scanPromises)
 
       // Show results
-      if (totalCreated > 0) {
-        toast.success(`Scan complete! Added ${totalCreated} new items`)
-      } else if (scannedCount > 0) {
-        toast.info('Scan complete. No new items found.')
-      }
-
       if (errors.length > 0) {
         console.error('Scan errors:', errors)
         toast.warning(`Scan completed with ${errors.length} error(s)`)
+      } else {
+        toast.success('Library scan complete!')
       }
 
       // Refresh the library data
