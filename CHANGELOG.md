@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.0](https://github.com/Gitsack/hamster/compare/hamster-v1.8.0...hamster-v1.9.0) (2026-01-06)
+
+
+### Features
+
+* general playback of items ([14add3a](https://github.com/Gitsack/hamster/commit/14add3ab473a2bdf75a52c2585b8855266284801))
+* hw acceleration ([f6f8fc7](https://github.com/Gitsack/hamster/commit/f6f8fc7703706df27a2703c53d6561201dd2e285))
+
 ## [1.8.0](https://github.com/Gitsack/hamster/compare/hamster-v1.7.1...hamster-v1.8.0) (2026-01-05)
 
 
