@@ -39,6 +39,7 @@ import {
   ArrowUp01Icon,
   FileDownloadIcon,
   Add01Icon,
+  PlayIcon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
@@ -46,6 +47,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { StatusBadge } from '@/components/library/status-badge'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
+import { useAudioPlayer } from '@/contexts/audio_player_context'
 
 interface QualityProfile {
   id: number
@@ -149,6 +151,9 @@ export default function TvShowDetail() {
   const [selectedEpisodeForDelete, setSelectedEpisodeForDelete] = useState<{ id: number; title: string; seasonNumber: number } | null>(null)
   const [requestingAllSeasons, setRequestingAllSeasons] = useState(false)
   const [enriching, setEnriching] = useState(false)
+  const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
+  const [playingEpisode, setPlayingEpisode] = useState<{ id: number; fileId: number; title: string } | null>(null)
+  const audioPlayer = useAudioPlayer()
 
   useEffect(() => {
     fetchShow()
@@ -882,11 +887,29 @@ export default function TvShowDetail() {
                                         <>
                                           <StatusBadge status="downloaded" />
                                           {episode.episodeFile && (
-                                            <Button variant="outline" size="icon" className="h-7 w-7" asChild>
-                                              <a href={episode.episodeFile.downloadUrl} download>
-                                                <HugeiconsIcon icon={FileDownloadIcon} className="h-3.5 w-3.5" />
-                                              </a>
-                                            </Button>
+                                            <>
+                                              <Button
+                                                variant="default"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                onClick={() => {
+                                                  audioPlayer.pause()
+                                                  setPlayingEpisode({
+                                                    id: episode.id,
+                                                    fileId: episode.episodeFile!.id,
+                                                    title: `S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} - ${episode.title}`,
+                                                  })
+                                                  setVideoPlayerOpen(true)
+                                                }}
+                                              >
+                                                <HugeiconsIcon icon={PlayIcon} className="h-3.5 w-3.5" />
+                                              </Button>
+                                              <Button variant="outline" size="icon" className="h-7 w-7" asChild>
+                                                <a href={episode.episodeFile.downloadUrl} download>
+                                                  <HugeiconsIcon icon={FileDownloadIcon} className="h-3.5 w-3.5" />
+                                                </a>
+                                              </Button>
+                                            </>
                                           )}
                                           <Button
                                             variant="outline"
@@ -988,6 +1011,30 @@ export default function TvShowDetail() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Video player dialog */}
+      <Dialog open={videoPlayerOpen} onOpenChange={(open) => {
+        setVideoPlayerOpen(open)
+        if (!open) setPlayingEpisode(null)
+      }}>
+        <DialogContent className="max-w-6xl p-0">
+          <DialogHeader className="p-4 pb-0">
+            <DialogTitle>{show?.title} - {playingEpisode?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
+            {playingEpisode && (
+              <video
+                src={`/api/v1/playback/episode/${playingEpisode.fileId}`}
+                controls
+                autoPlay
+                className="w-full h-full bg-black"
+              >
+                Your browser does not support the video element.
+              </video>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </AppLayout>

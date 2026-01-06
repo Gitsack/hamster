@@ -32,11 +32,13 @@ import {
   Time01Icon,
   StarIcon,
   FileDownloadIcon,
+  PlayIcon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
+import { useAudioPlayer } from '@/contexts/audio_player_context'
 
 interface QualityProfile {
   id: number
@@ -93,6 +95,8 @@ export default function MovieDetail() {
   const [toggling, setToggling] = useState(false)
   const [activeDownload, setActiveDownload] = useState<{ progress: number; status: string } | null>(null)
   const [enriching, setEnriching] = useState(false)
+  const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
+  const audioPlayer = useAudioPlayer()
 
   useEffect(() => {
     fetchMovie()
@@ -539,6 +543,17 @@ export default function MovieDetail() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => {
+                      audioPlayer.pause()
+                      setVideoPlayerOpen(true)
+                    }}
+                  >
+                    <HugeiconsIcon icon={PlayIcon} className="h-4 w-4 mr-2" />
+                    Play
+                  </Button>
                   <Button variant="outline" size="sm" asChild>
                     <a href={movie.movieFile.downloadUrl} download>
                       <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 mr-2" />
@@ -613,6 +628,24 @@ export default function MovieDetail() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Video player dialog */}
+      <Dialog open={videoPlayerOpen} onOpenChange={setVideoPlayerOpen}>
+        <DialogContent className="max-w-6xl p-0">
+          <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
+            {movie?.movieFile && (
+              <video
+                src={`/api/v1/playback/movie/${movie.movieFile.id}`}
+                controls
+                autoPlay
+                className="w-full h-full bg-black"
+              >
+                Your browser does not support the video element.
+              </video>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </AppLayout>

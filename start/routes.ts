@@ -250,6 +250,8 @@ router
     router.get('/playback/info/:id', [PlaybackController, 'info'])
     router.get('/playback/artwork/:id', [PlaybackController, 'artwork'])
     router.get('/playback/album/:id/playlist', [PlaybackController, 'albumPlaylist'])
+    router.get('/playback/movie/:id', [PlaybackController, 'streamMovie'])
+    router.get('/playback/episode/:id', [PlaybackController, 'streamEpisode'])
 
     // App Settings
     router.get('/settings', [AppSettingsController, 'index'])

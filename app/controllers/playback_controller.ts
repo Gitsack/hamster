@@ -6,8 +6,12 @@ import Track from '#models/track'
 import Album from '#models/album'
 import Artist from '#models/artist'
 import RootFolder from '#models/root_folder'
+import MovieFile from '#models/movie_file'
+import Movie from '#models/movie'
+import EpisodeFile from '#models/episode_file'
+import TvShow from '#models/tv_show'
 
-const MIME_TYPES: Record<string, string> = {
+const AUDIO_MIME_TYPES: Record<string, string> = {
   '.mp3': 'audio/mpeg',
   '.flac': 'audio/flac',
   '.m4a': 'audio/mp4',
@@ -22,13 +26,26 @@ const MIME_TYPES: Record<string, string> = {
   '.dff': 'audio/dff',
 }
 
+const VIDEO_MIME_TYPES: Record<string, string> = {
+  '.mp4': 'video/mp4',
+  '.mkv': 'video/x-matroska',
+  '.webm': 'video/webm',
+  '.avi': 'video/x-msvideo',
+  '.mov': 'video/quicktime',
+  '.wmv': 'video/x-ms-wmv',
+  '.flv': 'video/x-flv',
+  '.m4v': 'video/x-m4v',
+  '.ts': 'video/mp2t',
+  '.m2ts': 'video/mp2t',
+}
+
 export default class PlaybackController {
   /**
    * Stream an audio file with range request support
    */
   async stream({ params, request, response }: HttpContext) {
-    const trackFileId = parseInt(params.id, 10)
-    if (isNaN(trackFileId)) {
+    const trackFileId = params.id
+    if (!trackFileId) {
       return response.badRequest({ error: 'Invalid track file ID' })
     }
 
@@ -72,7 +89,7 @@ export default class PlaybackController {
 
     // Get MIME type
     const ext = path.extname(absolutePath).toLowerCase()
-    const mimeType = MIME_TYPES[ext] || 'application/octet-stream'
+    const mimeType = AUDIO_MIME_TYPES[ext] || 'application/octet-stream'
 
     // Handle range request
     const rangeHeader = request.header('range')
@@ -111,8 +128,8 @@ export default class PlaybackController {
    * Get track info for playback
    */
   async info({ params, response }: HttpContext) {
-    const trackFileId = parseInt(params.id, 10)
-    if (isNaN(trackFileId)) {
+    const trackFileId = params.id
+    if (!trackFileId) {
       return response.badRequest({ error: 'Invalid track file ID' })
     }
 
@@ -161,8 +178,8 @@ export default class PlaybackController {
    * Get album artwork
    */
   async artwork({ params, response }: HttpContext) {
-    const albumId = parseInt(params.id, 10)
-    if (isNaN(albumId)) {
+    const albumId = params.id
+    if (!albumId) {
       return response.badRequest({ error: 'Invalid album ID' })
     }
 
@@ -219,39 +236,207 @@ export default class PlaybackController {
    * Get a playlist for an album (all tracks)
    */
   async albumPlaylist({ params, response }: HttpContext) {
-    const albumId = parseInt(params.id, 10)
-    if (isNaN(albumId)) {
-      return response.badRequest({ error: 'Invalid album ID' })
+    try {
+      const albumId = params.id
+      if (!albumId) {
+        return response.badRequest({ error: 'Invalid album ID' })
+      }
+
+      // Get album with artist first
+      const album = await Album.query()
+        .where('id', albumId)
+        .preload('artist')
+        .first()
+
+      if (!album) {
+        return response.notFound({ error: 'Album not found' })
+      }
+
+      // Get track files for this album directly
+      const trackFiles = await TrackFile.query()
+        .where('albumId', albumId)
+        .whereNotNull('trackId')
+        .preload('track')
+
+      const playlist = trackFiles
+        .filter((tf) => tf.track)
+        .map((tf) => ({
+          id: tf.id,
+          trackId: tf.track.id,
+          title: tf.track.title,
+          trackNumber: tf.track.trackNumber,
+          discNumber: tf.track.discNumber,
+          duration: tf.track.durationMs ? tf.track.durationMs / 1000 : null,
+          album: {
+            id: album.id,
+            title: album.title,
+            coverUrl: album.imageUrl,
+          },
+          artist: {
+            id: album.artist?.id,
+            name: album.artist?.name || 'Unknown Artist',
+          },
+          streamUrl: `/api/v1/playback/stream/${tf.id}`,
+        }))
+        .sort((a, b) => {
+          if (a.discNumber !== b.discNumber) {
+            return a.discNumber - b.discNumber
+          }
+          return a.trackNumber - b.trackNumber
+        })
+
+      return response.json(playlist)
+    } catch (error) {
+      console.error('Album playlist error:', error)
+      return response.internalServerError({ error: 'Failed to load playlist', details: String(error) })
+    }
+  }
+
+  /**
+   * Stream a movie file with range request support
+   */
+  async streamMovie({ params, request, response }: HttpContext) {
+    const movieFileId = params.id
+    if (!movieFileId) {
+      return response.badRequest({ error: 'Invalid movie file ID' })
     }
 
-    const tracks = await Track.query()
-      .where('albumId', albumId)
-      .preload('file')
-      .preload('album', (q) => q.preload('artist'))
-      .orderBy('discNumber', 'asc')
-      .orderBy('trackNumber', 'asc')
+    // Get movie file with related data
+    const movieFile = await MovieFile.find(movieFileId)
+    if (!movieFile) {
+      return response.notFound({ error: 'Movie file not found' })
+    }
 
-    const playlist = tracks
-      .filter((t) => t.file)
-      .map((t) => ({
-        id: t.file!.id,
-        trackId: t.id,
-        title: t.title,
-        trackNumber: t.trackNumber,
-        discNumber: t.discNumber,
-        duration: t.durationMs ? t.durationMs / 1000 : null,
-        album: {
-          id: t.album.id,
-          title: t.album.title,
-          coverUrl: t.album.imageUrl,
-        },
-        artist: {
-          id: t.album.artist.id,
-          name: t.album.artist.name,
-        },
-        streamUrl: `/api/v1/playback/stream/${t.file!.id}`,
-      }))
+    // Get the movie for root folder
+    const movie = await Movie.find(movieFile.movieId)
+    if (!movie) {
+      return response.notFound({ error: 'Movie not found' })
+    }
 
-    return response.json(playlist)
+    const rootFolder = await RootFolder.find(movie.rootFolderId)
+    if (!rootFolder) {
+      return response.notFound({ error: 'Root folder not found' })
+    }
+
+    const absolutePath = path.join(rootFolder.path, movieFile.relativePath)
+
+    // Check if file exists
+    if (!fs.existsSync(absolutePath)) {
+      return response.notFound({ error: 'Video file not found on disk' })
+    }
+
+    // Get file stats
+    const stats = fs.statSync(absolutePath)
+    const fileSize = stats.size
+
+    // Get MIME type
+    const ext = path.extname(absolutePath).toLowerCase()
+    const mimeType = VIDEO_MIME_TYPES[ext] || 'video/mp4'
+
+    // Handle range request
+    const rangeHeader = request.header('range')
+
+    if (rangeHeader) {
+      // Parse range header
+      const parts = rangeHeader.replace(/bytes=/, '').split('-')
+      const start = parseInt(parts[0], 10)
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+      const chunkSize = end - start + 1
+
+      // Create read stream for the range
+      const stream = fs.createReadStream(absolutePath, { start, end })
+
+      response.header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+      response.header('Accept-Ranges', 'bytes')
+      response.header('Content-Length', chunkSize.toString())
+      response.header('Content-Type', mimeType)
+      response.header('Cache-Control', 'public, max-age=31536000')
+
+      return response.status(206).stream(stream)
+    }
+
+    // No range request - stream entire file
+    const stream = fs.createReadStream(absolutePath)
+
+    response.header('Content-Length', fileSize.toString())
+    response.header('Content-Type', mimeType)
+    response.header('Accept-Ranges', 'bytes')
+    response.header('Cache-Control', 'public, max-age=31536000')
+
+    return response.stream(stream)
+  }
+
+  /**
+   * Stream an episode file with range request support
+   */
+  async streamEpisode({ params, request, response }: HttpContext) {
+    const episodeFileId = params.id
+    if (!episodeFileId) {
+      return response.badRequest({ error: 'Invalid episode file ID' })
+    }
+
+    // Get episode file with related data
+    const episodeFile = await EpisodeFile.find(episodeFileId)
+    if (!episodeFile) {
+      return response.notFound({ error: 'Episode file not found' })
+    }
+
+    // Get the TV show for root folder
+    const tvShow = await TvShow.find(episodeFile.tvShowId)
+    if (!tvShow) {
+      return response.notFound({ error: 'TV show not found' })
+    }
+
+    const rootFolder = await RootFolder.find(tvShow.rootFolderId)
+    if (!rootFolder) {
+      return response.notFound({ error: 'Root folder not found' })
+    }
+
+    const absolutePath = path.join(rootFolder.path, episodeFile.relativePath)
+
+    // Check if file exists
+    if (!fs.existsSync(absolutePath)) {
+      return response.notFound({ error: 'Video file not found on disk' })
+    }
+
+    // Get file stats
+    const stats = fs.statSync(absolutePath)
+    const fileSize = stats.size
+
+    // Get MIME type
+    const ext = path.extname(absolutePath).toLowerCase()
+    const mimeType = VIDEO_MIME_TYPES[ext] || 'video/mp4'
+
+    // Handle range request
+    const rangeHeader = request.header('range')
+
+    if (rangeHeader) {
+      // Parse range header
+      const parts = rangeHeader.replace(/bytes=/, '').split('-')
+      const start = parseInt(parts[0], 10)
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+      const chunkSize = end - start + 1
+
+      // Create read stream for the range
+      const stream = fs.createReadStream(absolutePath, { start, end })
+
+      response.header('Content-Range', `bytes ${start}-${end}/${fileSize}`)
+      response.header('Accept-Ranges', 'bytes')
+      response.header('Content-Length', chunkSize.toString())
+      response.header('Content-Type', mimeType)
+      response.header('Cache-Control', 'public, max-age=31536000')
+
+      return response.status(206).stream(stream)
+    }
+
+    // No range request - stream entire file
+    const stream = fs.createReadStream(absolutePath)
+
+    response.header('Content-Length', fileSize.toString())
+    response.header('Content-Type', mimeType)
+    response.header('Accept-Ranges', 'bytes')
+    response.header('Cache-Control', 'public, max-age=31536000')
+
+    return response.stream(stream)
   }
 }
