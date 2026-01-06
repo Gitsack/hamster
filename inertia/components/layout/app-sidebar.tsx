@@ -10,6 +10,7 @@ import {
   LogoutSquare01Icon,
   UserIcon,
   Globe02Icon,
+  Video01Icon,
 } from '@hugeicons/core-free-icons'
 import { HamsterIcon } from '@/components/icons/hamster-icon'
 import {
@@ -80,6 +81,11 @@ const settingsNavItems: NavItem[] = [
     title: 'Download Clients',
     url: '/settings/download-clients',
     icon: Download04Icon,
+  },
+  {
+    title: 'Playback',
+    url: '/settings/playback',
+    icon: Video01Icon,
   },
 ]
 

@@ -48,6 +48,7 @@ import { cn } from '@/lib/utils'
 import { StatusBadge } from '@/components/library/status-badge'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
+import { VideoPlayer } from '@/components/player/video_player'
 
 interface QualityProfile {
   id: number
@@ -1019,22 +1020,17 @@ export default function TvShowDetail() {
         setVideoPlayerOpen(open)
         if (!open) setPlayingEpisode(null)
       }}>
-        <DialogContent className="max-w-6xl p-0">
+        <DialogContent className="max-w-6xl p-0 overflow-hidden">
           <DialogHeader className="p-4 pb-0">
             <DialogTitle>{show?.title} - {playingEpisode?.title}</DialogTitle>
           </DialogHeader>
-          <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
-            {playingEpisode && (
-              <video
-                src={`/api/v1/playback/episode/${playingEpisode.fileId}`}
-                controls
-                autoPlay
-                className="w-full h-full bg-black"
-              >
-                Your browser does not support the video element.
-              </video>
-            )}
-          </div>
+          {playingEpisode && videoPlayerOpen && (
+            <VideoPlayer
+              mediaType="episode"
+              mediaFileId={playingEpisode.fileId}
+              title={`${show?.title} - ${playingEpisode.title}`}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </AppLayout>

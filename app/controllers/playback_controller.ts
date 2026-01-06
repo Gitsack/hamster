@@ -10,6 +10,7 @@ import MovieFile from '#models/movie_file'
 import Movie from '#models/movie'
 import EpisodeFile from '#models/episode_file'
 import TvShow from '#models/tv_show'
+import { videoTranscodingService } from '#services/media/video_transcoding_service'
 
 const AUDIO_MIME_TYPES: Record<string, string> = {
   '.mp3': 'audio/mpeg',
@@ -438,5 +439,176 @@ export default class PlaybackController {
     response.header('Cache-Control', 'public, max-age=31536000')
 
     return response.stream(stream)
+  }
+
+  /**
+   * Helper to resolve movie file path
+   */
+  private async resolveMovieFilePath(movieFileId: string): Promise<string | null> {
+    const movieFile = await MovieFile.find(movieFileId)
+    if (!movieFile) return null
+
+    const movie = await Movie.find(movieFile.movieId)
+    if (!movie) return null
+
+    const rootFolder = await RootFolder.find(movie.rootFolderId)
+    if (!rootFolder) return null
+
+    return path.join(rootFolder.path, movieFile.relativePath)
+  }
+
+  /**
+   * Helper to resolve episode file path
+   */
+  private async resolveEpisodeFilePath(episodeFileId: string): Promise<string | null> {
+    const episodeFile = await EpisodeFile.find(episodeFileId)
+    if (!episodeFile) return null
+
+    const tvShow = await TvShow.find(episodeFile.tvShowId)
+    if (!tvShow) return null
+
+    const rootFolder = await RootFolder.find(tvShow.rootFolderId)
+    if (!rootFolder) return null
+
+    return path.join(rootFolder.path, episodeFile.relativePath)
+  }
+
+  /**
+   * Get playback info for a movie - determines if transcoding is needed
+   */
+  async moviePlaybackInfo({ params, response }: HttpContext) {
+    const movieFileId = params.id
+    if (!movieFileId) {
+      return response.badRequest({ error: 'Invalid movie file ID' })
+    }
+
+    const filePath = await this.resolveMovieFilePath(movieFileId)
+    if (!filePath) {
+      return response.notFound({ error: 'Movie file not found' })
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return response.notFound({ error: 'Video file not found on disk' })
+    }
+
+    try {
+      const playbackInfo = await videoTranscodingService.getPlaybackInfo(
+        filePath,
+        movieFileId,
+        'movie'
+      )
+      return response.json(playbackInfo)
+    } catch (error) {
+      console.error('Failed to get movie playback info:', error)
+      // Fall back to direct play
+      return response.json({
+        needsTranscode: false,
+        transcodeReason: null,
+        playbackUrl: `/api/v1/playback/movie/${movieFileId}`,
+        duration: 0,
+        audioCodec: null,
+      })
+    }
+  }
+
+  /**
+   * Get playback info for an episode - determines if transcoding is needed
+   */
+  async episodePlaybackInfo({ params, response }: HttpContext) {
+    const episodeFileId = params.id
+    if (!episodeFileId) {
+      return response.badRequest({ error: 'Invalid episode file ID' })
+    }
+
+    const filePath = await this.resolveEpisodeFilePath(episodeFileId)
+    if (!filePath) {
+      return response.notFound({ error: 'Episode file not found' })
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return response.notFound({ error: 'Video file not found on disk' })
+    }
+
+    try {
+      const playbackInfo = await videoTranscodingService.getPlaybackInfo(
+        filePath,
+        episodeFileId,
+        'episode'
+      )
+      return response.json(playbackInfo)
+    } catch (error) {
+      console.error('Failed to get episode playback info:', error)
+      // Fall back to direct play
+      return response.json({
+        needsTranscode: false,
+        transcodeReason: null,
+        playbackUrl: `/api/v1/playback/episode/${episodeFileId}`,
+        duration: 0,
+        audioCodec: null,
+      })
+    }
+  }
+
+  /**
+   * Get HLS manifest for a transcoding session
+   */
+  async hlsManifest({ params, response }: HttpContext) {
+    const sessionId = params.sessionId
+    if (!sessionId) {
+      return response.badRequest({ error: 'Invalid session ID' })
+    }
+
+    const manifest = videoTranscodingService.getManifest(sessionId)
+    if (!manifest) {
+      return response.notFound({ error: 'Session not found or expired' })
+    }
+
+    response.header('Content-Type', 'application/vnd.apple.mpegurl')
+    response.header('Cache-Control', 'no-cache')
+    return response.send(manifest)
+  }
+
+  /**
+   * Get HLS segment for a transcoding session
+   */
+  async hlsSegment({ params, response }: HttpContext) {
+    const sessionId = params.sessionId
+    const segmentIndex = parseInt(params.index, 10)
+
+    if (!sessionId) {
+      return response.badRequest({ error: 'Invalid session ID' })
+    }
+
+    if (isNaN(segmentIndex) || segmentIndex < 0) {
+      return response.badRequest({ error: 'Invalid segment index' })
+    }
+
+    try {
+      const segment = await videoTranscodingService.getSegment(sessionId, segmentIndex)
+      if (!segment) {
+        return response.notFound({ error: 'Segment not found or session expired' })
+      }
+
+      response.header('Content-Type', 'video/mp2t')
+      response.header('Content-Length', segment.length.toString())
+      response.header('Cache-Control', 'public, max-age=3600')
+      return response.send(segment)
+    } catch (error) {
+      console.error('Failed to get segment:', error)
+      return response.internalServerError({ error: 'Failed to get segment' })
+    }
+  }
+
+  /**
+   * Clean up an HLS transcoding session
+   */
+  async hlsCleanup({ params, response }: HttpContext) {
+    const sessionId = params.sessionId
+    if (!sessionId) {
+      return response.badRequest({ error: 'Invalid session ID' })
+    }
+
+    const destroyed = videoTranscodingService.destroySession(sessionId)
+    return response.json({ success: destroyed })
   }
 }

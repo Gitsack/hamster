@@ -78,6 +78,7 @@
     "clsx": "^2.1.1",
     "edge.js": "^6.2.1",
     "fast-xml-parser": "^5.3.3",
+    "hls.js": "^1.6.15",
     "lucide-react": "^0.562.0",
     "luxon": "^3.7.2",
     "mime-types": "^3.0.2",

@@ -25,6 +25,7 @@ const BooksController = () => import('#controllers/books_controller')
 const DownloadClientsController = () => import('#controllers/download_clients_controller')
 const QueueController = () => import('#controllers/queue_controller')
 const PlaybackController = () => import('#controllers/playback_controller')
+const PlaybackSettingsController = () => import('#controllers/playback_settings_controller')
 const AppSettingsController = () => import('#controllers/app_settings_controller')
 const FilesystemController = () => import('#controllers/filesystem_controller')
 const FilesController = () => import('#controllers/files_controller')
@@ -93,6 +94,7 @@ router
     router.on('/settings/media-management').renderInertia('settings/media-management').as('settings.media-management')
     router.on('/settings/indexers').renderInertia('settings/indexers').as('settings.indexers')
     router.on('/settings/download-clients').renderInertia('settings/download-clients').as('settings.download-clients')
+    router.on('/settings/playback').renderInertia('settings/playback').as('settings.playback')
     router.on('/settings/ui').renderInertia('settings/ui').as('settings.ui')
   })
   .use(middleware.auth())
@@ -251,7 +253,13 @@ router
     router.get('/playback/artwork/:id', [PlaybackController, 'artwork'])
     router.get('/playback/album/:id/playlist', [PlaybackController, 'albumPlaylist'])
     router.get('/playback/movie/:id', [PlaybackController, 'streamMovie'])
+    router.get('/playback/movie/:id/info', [PlaybackController, 'moviePlaybackInfo'])
     router.get('/playback/episode/:id', [PlaybackController, 'streamEpisode'])
+    router.get('/playback/episode/:id/info', [PlaybackController, 'episodePlaybackInfo'])
+    // HLS transcoding endpoints
+    router.get('/playback/hls/:sessionId/master.m3u8', [PlaybackController, 'hlsManifest'])
+    router.get('/playback/hls/:sessionId/:index.ts', [PlaybackController, 'hlsSegment'])
+    router.delete('/playback/hls/:sessionId', [PlaybackController, 'hlsCleanup'])
 
     // App Settings
     router.get('/settings', [AppSettingsController, 'index'])
@@ -259,6 +267,10 @@ router
     router.post('/settings/media-type', [AppSettingsController, 'toggleMediaType'])
     router.get('/settings/naming-patterns', [AppSettingsController, 'getNamingPatterns'])
     router.put('/settings/naming-patterns', [AppSettingsController, 'updateNamingPatterns'])
+
+    // Playback settings
+    router.get('/settings/playback', [PlaybackSettingsController, 'index'])
+    router.put('/settings/playback', [PlaybackSettingsController, 'update'])
 
     // Filesystem browser
     router.get('/filesystem/browse', [FilesystemController, 'browse'])

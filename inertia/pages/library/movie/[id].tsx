@@ -39,6 +39,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
+import { VideoPlayer } from '@/components/player/video_player'
 
 interface QualityProfile {
   id: number
@@ -633,19 +634,14 @@ export default function MovieDetail() {
 
       {/* Video player dialog */}
       <Dialog open={videoPlayerOpen} onOpenChange={setVideoPlayerOpen}>
-        <DialogContent className="max-w-6xl p-0">
-          <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
-            {movie?.movieFile && (
-              <video
-                src={`/api/v1/playback/movie/${movie.movieFile.id}`}
-                controls
-                autoPlay
-                className="w-full h-full bg-black"
-              >
-                Your browser does not support the video element.
-              </video>
-            )}
-          </div>
+        <DialogContent className="max-w-6xl p-0 overflow-hidden">
+          {movie?.movieFile && videoPlayerOpen && (
+            <VideoPlayer
+              mediaType="movie"
+              mediaFileId={movie.movieFile.id}
+              title={movie.title}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </AppLayout>
