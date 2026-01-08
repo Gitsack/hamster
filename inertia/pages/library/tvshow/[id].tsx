@@ -40,6 +40,7 @@ import {
   FileDownloadIcon,
   Add01Icon,
   PlayIcon,
+  Refresh01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
@@ -152,6 +153,7 @@ export default function TvShowDetail() {
   const [selectedEpisodeForDelete, setSelectedEpisodeForDelete] = useState<{ id: number; title: string; seasonNumber: number } | null>(null)
   const [requestingAllSeasons, setRequestingAllSeasons] = useState(false)
   const [enriching, setEnriching] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
   const [playingEpisode, setPlayingEpisode] = useState<{ id: number; fileId: number; title: string } | null>(null)
   const audioPlayer = useAudioPlayer()
@@ -487,6 +489,39 @@ export default function TvShowDetail() {
     }
   }
 
+  const refreshTvShow = async () => {
+    if (!show) return
+
+    setRefreshing(true)
+    try {
+      const response = await fetch(`/api/v1/tvshows/${showId}/refresh`, {
+        method: 'POST',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        const messages = []
+        if (data.seasonsCreated > 0) messages.push(`${data.seasonsCreated} seasons added`)
+        if (data.episodesCreated > 0) messages.push(`${data.episodesCreated} episodes added`)
+        if (messages.length > 0) {
+          toast.success(`Refreshed: ${messages.join(', ')}`)
+        } else {
+          toast.success('Metadata refreshed (no new episodes)')
+        }
+        fetchShow()
+        // Clear cached season details to force refetch
+        setSeasonDetails({})
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to refresh')
+      }
+    } catch (error) {
+      console.error('Failed to refresh TV show:', error)
+      toast.error('Failed to refresh TV show')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   const requestAllSeasons = async () => {
     if (!show) return
 
@@ -597,6 +632,15 @@ export default function TvShowDetail() {
                     className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
                   />
                   {enriching ? 'Enriching...' : 'Enrich from TMDB'}
+                </DropdownMenuItem>
+              )}
+              {show.tmdbId && (
+                <DropdownMenuItem onClick={refreshTvShow} disabled={refreshing}>
+                  <HugeiconsIcon
+                    icon={Refresh01Icon}
+                    className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
+                  />
+                  {refreshing ? 'Refreshing...' : 'Refresh from TMDB'}
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />

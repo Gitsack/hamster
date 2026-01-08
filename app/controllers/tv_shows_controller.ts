@@ -794,9 +794,13 @@ export default class TvShowsController {
           })
           await season.save()
 
-          // Enrich episodes
+          // Enrich episodes and create missing ones
           const { episodes: tmdbEpisodes } = await tmdbService.getTvShowSeason(best.id, season.seasonNumber)
 
+          // Create a set of existing episode numbers for quick lookup
+          const existingEpisodeNumbers = new Set(season.episodes.map((e) => e.episodeNumber))
+
+          // Update existing episodes
           for (const episode of season.episodes) {
             const tmdbEpisode = tmdbEpisodes.find((e) => e.episodeNumber === episode.episodeNumber)
             if (tmdbEpisode) {
@@ -813,6 +817,28 @@ export default class TvShowsController {
               await episode.save()
             }
           }
+
+          // Create missing episodes from TMDB
+          for (const tmdbEpisode of tmdbEpisodes) {
+            if (!existingEpisodeNumbers.has(tmdbEpisode.episodeNumber)) {
+              await Episode.create({
+                tvShowId: show.id,
+                seasonId: season.id,
+                tmdbId: String(tmdbEpisode.id),
+                seasonNumber: tmdbEpisode.seasonNumber,
+                episodeNumber: tmdbEpisode.episodeNumber,
+                title: tmdbEpisode.name,
+                overview: tmdbEpisode.overview || null,
+                airDate: tmdbEpisode.airDate ? DateTime.fromISO(tmdbEpisode.airDate) : null,
+                runtime: tmdbEpisode.runtime || null,
+                stillUrl: tmdbEpisode.stillPath || null,
+                rating: tmdbEpisode.voteAverage || null,
+                votes: tmdbEpisode.voteCount || null,
+                requested: false,
+                hasFile: false,
+              })
+            }
+          }
         }
       }
 
@@ -827,6 +853,148 @@ export default class TvShowsController {
       console.error(`Failed to enrich TV show ${show.id}:`, error)
       return response.internalServerError({
         error: 'Failed to fetch TV show details from TMDB',
+      })
+    }
+  }
+
+  /**
+   * Refresh TV show metadata and sync missing episodes from TMDB
+   */
+  async refresh({ params, response }: HttpContext) {
+    const show = await TvShow.query()
+      .where('id', params.id)
+      .preload('seasons', (query) => query.preload('episodes'))
+      .first()
+
+    if (!show) {
+      return response.notFound({ error: 'TV show not found' })
+    }
+
+    if (!show.tmdbId) {
+      return response.badRequest({
+        error: 'TV show has no TMDB ID. Use enrich instead.',
+      })
+    }
+
+    try {
+      const tmdbId = parseInt(show.tmdbId)
+
+      // Fetch updated show data
+      const tmdbData = await tmdbService.getTvShow(tmdbId)
+      show.merge({
+        originalTitle: tmdbData.originalName || show.originalTitle,
+        overview: tmdbData.overview || show.overview,
+        status: tmdbData.status || show.status,
+        posterUrl: tmdbData.posterPath || show.posterUrl,
+        backdropUrl: tmdbData.backdropPath || show.backdropUrl,
+        rating: tmdbData.voteAverage || show.rating,
+        votes: tmdbData.voteCount || show.votes,
+        seasonCount: tmdbData.numberOfSeasons || show.seasonCount,
+        episodeCount: tmdbData.numberOfEpisodes || show.episodeCount,
+      })
+      await show.save()
+
+      // Fetch all seasons from TMDB
+      const tmdbSeasons = await tmdbService.getTvShowSeasons(tmdbId)
+      let episodesCreated = 0
+      let seasonsCreated = 0
+
+      // Create a map of existing seasons for quick lookup
+      const existingSeasons = new Map(show.seasons.map((s) => [s.seasonNumber, s]))
+
+      for (const tmdbSeason of tmdbSeasons) {
+        if (tmdbSeason.seasonNumber === 0) continue // Skip specials
+
+        let season = existingSeasons.get(tmdbSeason.seasonNumber)
+
+        // Create season if it doesn't exist
+        if (!season) {
+          season = await Season.create({
+            tvShowId: show.id,
+            tmdbId: String(tmdbSeason.id),
+            seasonNumber: tmdbSeason.seasonNumber,
+            title: tmdbSeason.name,
+            overview: tmdbSeason.overview || null,
+            airDate: tmdbSeason.airDate ? DateTime.fromISO(tmdbSeason.airDate) : null,
+            posterUrl: tmdbSeason.posterPath || null,
+            episodeCount: tmdbSeason.episodeCount,
+            requested: false,
+          })
+          seasonsCreated++
+          existingSeasons.set(tmdbSeason.seasonNumber, season)
+        } else {
+          // Update existing season
+          season.merge({
+            tmdbId: String(tmdbSeason.id),
+            title: tmdbSeason.name || season.title,
+            overview: tmdbSeason.overview || season.overview,
+            airDate: tmdbSeason.airDate ? DateTime.fromISO(tmdbSeason.airDate) : season.airDate,
+            posterUrl: tmdbSeason.posterPath || season.posterUrl,
+            episodeCount: tmdbSeason.episodeCount || season.episodeCount,
+          })
+          await season.save()
+        }
+
+        // Fetch episodes for this season
+        const { episodes: tmdbEpisodes } = await tmdbService.getTvShowSeason(tmdbId, tmdbSeason.seasonNumber)
+
+        // Get existing episodes for this season
+        const existingEpisodes = season.episodes || []
+        const existingEpisodeNumbers = new Set(existingEpisodes.map((e) => e.episodeNumber))
+
+        // Update existing episodes
+        for (const episode of existingEpisodes) {
+          const tmdbEpisode = tmdbEpisodes.find((e) => e.episodeNumber === episode.episodeNumber)
+          if (tmdbEpisode) {
+            episode.merge({
+              tmdbId: String(tmdbEpisode.id),
+              title: tmdbEpisode.name || episode.title,
+              overview: tmdbEpisode.overview || episode.overview,
+              airDate: tmdbEpisode.airDate ? DateTime.fromISO(tmdbEpisode.airDate) : episode.airDate,
+              runtime: tmdbEpisode.runtime || episode.runtime,
+              stillUrl: tmdbEpisode.stillPath || episode.stillUrl,
+              rating: tmdbEpisode.voteAverage || episode.rating,
+              votes: tmdbEpisode.voteCount || episode.votes,
+            })
+            await episode.save()
+          }
+        }
+
+        // Create missing episodes
+        for (const tmdbEpisode of tmdbEpisodes) {
+          if (!existingEpisodeNumbers.has(tmdbEpisode.episodeNumber)) {
+            await Episode.create({
+              tvShowId: show.id,
+              seasonId: season.id,
+              tmdbId: String(tmdbEpisode.id),
+              seasonNumber: tmdbEpisode.seasonNumber,
+              episodeNumber: tmdbEpisode.episodeNumber,
+              title: tmdbEpisode.name,
+              overview: tmdbEpisode.overview || null,
+              airDate: tmdbEpisode.airDate ? DateTime.fromISO(tmdbEpisode.airDate) : null,
+              runtime: tmdbEpisode.runtime || null,
+              stillUrl: tmdbEpisode.stillPath || null,
+              rating: tmdbEpisode.voteAverage || null,
+              votes: tmdbEpisode.voteCount || null,
+              requested: false,
+              hasFile: false,
+            })
+            episodesCreated++
+          }
+        }
+      }
+
+      return response.json({
+        id: show.id,
+        title: show.title,
+        refreshed: true,
+        seasonsCreated,
+        episodesCreated,
+      })
+    } catch (error) {
+      console.error(`Failed to refresh TV show ${show.id}:`, error)
+      return response.internalServerError({
+        error: 'Failed to refresh TV show from TMDB',
       })
     }
   }

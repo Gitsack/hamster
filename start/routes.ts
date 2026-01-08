@@ -197,6 +197,7 @@ router
     router.post('/tvshows/:id/search', [TvShowsController, 'searchNow'])
     router.post('/tvshows/:id/episodes/:episodeId/search', [TvShowsController, 'searchEpisodeNow'])
     router.post('/tvshows/:id/enrich', [TvShowsController, 'enrich'])
+    router.post('/tvshows/:id/refresh', [TvShowsController, 'refresh'])
 
     // Authors
     router.get('/authors', [AuthorsController, 'index'])
