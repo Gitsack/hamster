@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/Gitsack/hamster/compare/hamster-v1.9.1...hamster-v1.10.0) (2026-01-08)
+
+
+### Features
+
+* updated tv show fetching of tmdb data ([5d30808](https://github.com/Gitsack/hamster/commit/5d30808dc0d21cebfb1d65b8688abed6b34be9fd))
+
 ## [1.9.1](https://github.com/Gitsack/hamster/compare/hamster-v1.9.0...hamster-v1.9.1) (2026-01-08)
 
 
