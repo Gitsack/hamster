@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/Gitsack/hamster/compare/hamster-v1.9.0...hamster-v1.9.1) (2026-01-08)
+
+
+### Bug Fixes
+
+* updated bun lockfile ([3d6f94d](https://github.com/Gitsack/hamster/commit/3d6f94da4c7fd64ddabfc0515003e7939c06cbc4))
+
 ## [1.9.0](https://github.com/Gitsack/hamster/compare/hamster-v1.8.0...hamster-v1.9.0) (2026-01-06)
 
 
