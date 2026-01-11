@@ -30,6 +30,7 @@ const AppSettingsController = () => import('#controllers/app_settings_controller
 const FilesystemController = () => import('#controllers/filesystem_controller')
 const FilesController = () => import('#controllers/files_controller')
 const UnmatchedFilesController = () => import('#controllers/unmatched_files_controller')
+const BlacklistController = () => import('#controllers/blacklist_controller')
 
 // Health check endpoint (for Docker/load balancers)
 router.get('/health', async ({ response }) => {
@@ -247,6 +248,12 @@ router
     router.post('/queue/grab', [QueueController, 'grab'])
     router.post('/queue/search-requested', [QueueController, 'searchRequested'])
     router.get('/queue/requested-status', [QueueController, 'requestedStatus'])
+
+    // Blacklist
+    router.get('/blacklist', [BlacklistController, 'index'])
+    router.delete('/blacklist/:id', [BlacklistController, 'destroy'])
+    router.delete('/blacklist/media/:type/:id', [BlacklistController, 'clearMedia'])
+    router.post('/blacklist/cleanup', [BlacklistController, 'cleanup'])
 
     // Playback
     router.get('/playback/stream/:id', [PlaybackController, 'stream'])

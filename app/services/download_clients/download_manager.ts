@@ -9,6 +9,7 @@ import { movieImportService } from '#services/media/movie_import_service'
 import { episodeImportService } from '#services/media/episode_import_service'
 import { bookImportService } from '#services/media/book_import_service'
 import { fileNamingService } from '#services/media/file_naming_service'
+import { blacklistService } from '#services/blacklist/blacklist_service'
 import { DateTime } from 'luxon'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
@@ -524,9 +525,48 @@ export class DownloadManager {
                 console.log(`[DownloadManager] Import recently triggered for: ${download.title}`)
               }
             } else if (slot.status === 'Failed') {
+              const errorMessage = slot.fail_message || 'Download failed'
               download.status = 'failed'
-              download.errorMessage = slot.fail_message || 'Download failed'
+              download.errorMessage = errorMessage
               await download.save()
+
+              // Blacklist the release if it's a genuine download failure (not a config issue)
+              if (blacklistService.shouldBlacklist(errorMessage)) {
+                const guid = download.nzbInfo?.guid || download.externalId || ''
+                const indexer = download.nzbInfo?.indexer || 'unknown'
+
+                console.log(`[DownloadManager] Blacklisting failed release: ${download.title} (guid: ${guid}, indexer: ${indexer})`)
+
+                await blacklistService.blacklist({
+                  guid,
+                  indexer,
+                  title: download.title,
+                  movieId: download.movieId,
+                  episodeId: download.episodeId,
+                  albumId: download.albumId,
+                  bookId: download.bookId,
+                  reason: errorMessage,
+                  failureType: blacklistService.determineFailureType(errorMessage),
+                })
+
+                // Check if we've exceeded the retry limit (3 retries max)
+                const hasExceeded = await blacklistService.hasExceededRetries({
+                  movieId: download.movieId,
+                  episodeId: download.episodeId,
+                  albumId: download.albumId,
+                  bookId: download.bookId,
+                })
+
+                if (!hasExceeded) {
+                  // Trigger search for alternative release
+                  console.log(`[DownloadManager] Searching for alternative release for: ${download.title}`)
+                  this.triggerAlternativeSearch(download).catch((error) => {
+                    console.error(`[DownloadManager] Failed to find alternative for ${download.title}:`, error)
+                  })
+                } else {
+                  console.log(`[DownloadManager] Max retries (3) exceeded for: ${download.title}, not searching for alternatives`)
+                }
+              }
             } else {
               // Post-processing statuses (Extracting, Verifying, Repairing, Moving, Running)
               console.log(`[DownloadManager] SABnzbd post-processing: ${download.title} - ${slot.status}`)
@@ -634,6 +674,57 @@ export class DownloadManager {
       download.status = 'failed'
       download.errorMessage = error instanceof Error ? error.message : 'Import failed'
       await download.save()
+    }
+  }
+
+  /**
+   * Search for and grab an alternative release after a failure
+   * Imports requestedSearchTask dynamically to avoid circular dependency
+   */
+  private async triggerAlternativeSearch(failedDownload: Download): Promise<void> {
+    // Dynamic import to avoid circular dependency
+    const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
+
+    try {
+      if (failedDownload.movieId) {
+        const result = await requestedSearchTask.searchSingleMovie(failedDownload.movieId)
+        if (result.grabbed) {
+          console.log(`[DownloadManager] Found and grabbed alternative for movie: ${failedDownload.title}`)
+        } else if (result.error) {
+          console.log(`[DownloadManager] No alternative found for movie: ${result.error}`)
+        } else {
+          console.log(`[DownloadManager] No alternative releases available for movie: ${failedDownload.title}`)
+        }
+      } else if (failedDownload.episodeId) {
+        const result = await requestedSearchTask.searchSingleEpisode(failedDownload.episodeId)
+        if (result.grabbed) {
+          console.log(`[DownloadManager] Found and grabbed alternative for episode: ${failedDownload.title}`)
+        } else if (result.error) {
+          console.log(`[DownloadManager] No alternative found for episode: ${result.error}`)
+        } else {
+          console.log(`[DownloadManager] No alternative releases available for episode: ${failedDownload.title}`)
+        }
+      } else if (failedDownload.albumId) {
+        const result = await requestedSearchTask.searchSingleAlbum(failedDownload.albumId)
+        if (result.grabbed) {
+          console.log(`[DownloadManager] Found and grabbed alternative for album: ${failedDownload.title}`)
+        } else if (result.error) {
+          console.log(`[DownloadManager] No alternative found for album: ${result.error}`)
+        } else {
+          console.log(`[DownloadManager] No alternative releases available for album: ${failedDownload.title}`)
+        }
+      } else if (failedDownload.bookId) {
+        const result = await requestedSearchTask.searchSingleBook(failedDownload.bookId)
+        if (result.grabbed) {
+          console.log(`[DownloadManager] Found and grabbed alternative for book: ${failedDownload.title}`)
+        } else if (result.error) {
+          console.log(`[DownloadManager] No alternative found for book: ${result.error}`)
+        } else {
+          console.log(`[DownloadManager] No alternative releases available for book: ${failedDownload.title}`)
+        }
+      }
+    } catch (error) {
+      console.error(`[DownloadManager] Error searching for alternative:`, error)
     }
   }
 

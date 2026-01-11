@@ -5,6 +5,7 @@ import Episode from '#models/episode'
 import Download from '#models/download'
 import { indexerManager, type UnifiedSearchResult } from '#services/indexers/indexer_manager'
 import { downloadManager } from '#services/download_clients/download_manager'
+import { blacklistService } from '#services/blacklist/blacklist_service'
 
 /**
  * Normalize a title for comparison by:
@@ -264,14 +265,17 @@ class RequestedSearchTask {
           limit: 10,
         })
 
-        if (searchResults.length === 0) {
+        // Filter out blacklisted releases
+        const availableResults = await blacklistService.filterBlacklisted(searchResults)
+
+        if (availableResults.length === 0) {
           console.log(`[RequestedSearch] No results for album: ${album.artist?.name} - ${album.title}`)
           continue
         }
 
         result.albums.found++
 
-        const sorted = searchResults.sort((a, b) => b.size - a.size)
+        const sorted = availableResults.sort((a, b) => b.size - a.size)
         const bestResult = sorted[0]
 
         // Final check before grabbing
@@ -348,15 +352,18 @@ class RequestedSearchTask {
         // Filter results to only include those that actually match the movie title
         const matchingResults = filterMovieResultsByTitle(searchResults, movie.title)
 
-        if (matchingResults.length === 0) {
-          console.log(`[RequestedSearch] No matching results for movie: ${movie.title} (${movie.year}) (${searchResults.length} results didn't match title)`)
+        // Filter out blacklisted releases
+        const availableResults = await blacklistService.filterBlacklisted(matchingResults)
+
+        if (availableResults.length === 0) {
+          console.log(`[RequestedSearch] No matching results for movie: ${movie.title} (${movie.year}) (${searchResults.length} results didn't match title or were blacklisted)`)
           continue
         }
 
         result.movies.found++
 
         // Prefer higher quality and larger size
-        const bestResult = matchingResults[0] // Already sorted by size
+        const bestResult = availableResults[0] // Already sorted by size
 
         // Final check before grabbing
         const stillRequested = await Movie.query().where('id', movie.id).where('requested', true).first()
@@ -429,7 +436,10 @@ class RequestedSearchTask {
           limit: 10,
         })
 
-        if (searchResults.length === 0) {
+        // Filter out blacklisted releases
+        const availableResults = await blacklistService.filterBlacklisted(searchResults)
+
+        if (availableResults.length === 0) {
           console.log(`[RequestedSearch] No results for book: ${book.title} by ${book.author?.name}`)
           continue
         }
@@ -437,7 +447,7 @@ class RequestedSearchTask {
         result.books.found++
 
         // Prefer larger files (more likely to be complete/better quality)
-        const sorted = searchResults.sort((a, b) => b.size - a.size)
+        const sorted = availableResults.sort((a, b) => b.size - a.size)
         const bestResult = sorted[0]
 
         // Final check before grabbing
@@ -539,9 +549,12 @@ class RequestedSearchTask {
         // Filter results to only include those that actually match the show title
         const matchingResults = filterTvResultsByTitle(searchResults, episode.tvShow.title)
 
-        if (matchingResults.length === 0) {
+        // Filter out blacklisted releases
+        const availableResults = await blacklistService.filterBlacklisted(matchingResults)
+
+        if (availableResults.length === 0) {
           console.log(
-            `[RequestedSearch] No matching results for episode: ${episode.tvShow.title} S${String(episode.seasonNumber).padStart(2, '0')}E${String(episode.episodeNumber).padStart(2, '0')} (${searchResults.length} results didn't match title)`
+            `[RequestedSearch] No matching results for episode: ${episode.tvShow.title} S${String(episode.seasonNumber).padStart(2, '0')}E${String(episode.episodeNumber).padStart(2, '0')} (${searchResults.length} results didn't match title or were blacklisted)`
           )
           continue
         }
@@ -549,7 +562,7 @@ class RequestedSearchTask {
         result.episodes.found++
 
         // Best result is already sorted by size (larger = better quality)
-        const bestResult = matchingResults[0]
+        const bestResult = availableResults[0]
 
         // Final check before grabbing - episode might have been unrequested while searching
         const stillRequested = await Episode.query()
@@ -621,11 +634,14 @@ class RequestedSearchTask {
         limit: 10,
       })
 
-      if (searchResults.length === 0) {
+      // Filter out blacklisted releases
+      const availableResults = await blacklistService.filterBlacklisted(searchResults)
+
+      if (availableResults.length === 0) {
         return { found: false, grabbed: false }
       }
 
-      const sorted = searchResults.sort((a, b) => b.size - a.size)
+      const sorted = availableResults.sort((a, b) => b.size - a.size)
       const bestResult = sorted[0]
 
       await downloadManager.grab({
@@ -681,11 +697,14 @@ class RequestedSearchTask {
       // Filter results to only include those that actually match the movie title
       const matchingResults = filterMovieResultsByTitle(searchResults, movie.title)
 
-      if (matchingResults.length === 0) {
+      // Filter out blacklisted releases
+      const availableResults = await blacklistService.filterBlacklisted(matchingResults)
+
+      if (availableResults.length === 0) {
         return { found: false, grabbed: false }
       }
 
-      const bestResult = matchingResults[0] // Already sorted by size
+      const bestResult = availableResults[0] // Already sorted by size
 
       await downloadManager.grab({
         title: bestResult.title,
@@ -742,11 +761,14 @@ class RequestedSearchTask {
       // Filter results to only include those that actually match the show title
       const matchingResults = filterTvResultsByTitle(searchResults, episode.tvShow.title)
 
-      if (matchingResults.length === 0) {
+      // Filter out blacklisted releases
+      const availableResults = await blacklistService.filterBlacklisted(matchingResults)
+
+      if (availableResults.length === 0) {
         return { found: false, grabbed: false }
       }
 
-      const bestResult = matchingResults[0] // Already sorted by size
+      const bestResult = availableResults[0] // Already sorted by size
 
       await downloadManager.grab({
         title: bestResult.title,
@@ -798,11 +820,14 @@ class RequestedSearchTask {
         limit: 10,
       })
 
-      if (searchResults.length === 0) {
+      // Filter out blacklisted releases
+      const availableResults = await blacklistService.filterBlacklisted(searchResults)
+
+      if (availableResults.length === 0) {
         return { found: false, grabbed: false }
       }
 
-      const sorted = searchResults.sort((a, b) => b.size - a.size)
+      const sorted = availableResults.sort((a, b) => b.size - a.size)
       const bestResult = sorted[0]
 
       await downloadManager.grab({

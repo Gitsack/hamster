@@ -10,6 +10,7 @@
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
 import { downloadMonitorTask } from '#services/tasks/download_monitor_task'
 import { completedDownloadsScanner } from '#services/tasks/completed_downloads_scanner'
+import { blacklistService } from '#services/blacklist/blacklist_service'
 import AppSetting from '#models/app_setting'
 import { tmdbService } from '#services/metadata/tmdb_service'
 
@@ -45,3 +46,21 @@ setTimeout(() => {
 setTimeout(() => {
   requestedSearchTask.start(60)
 }, 30000)
+
+// Run blacklist cleanup once on startup and then every 24 hours
+// Removes expired blacklist entries (30 days old)
+setTimeout(async () => {
+  try {
+    await blacklistService.cleanupExpired()
+  } catch (error) {
+    console.error('[Blacklist] Failed to cleanup expired entries:', error)
+  }
+}, 60000) // 1 minute after startup
+
+setInterval(async () => {
+  try {
+    await blacklistService.cleanupExpired()
+  } catch (error) {
+    console.error('[Blacklist] Failed to cleanup expired entries:', error)
+  }
+}, 24 * 60 * 60 * 1000) // Every 24 hours
