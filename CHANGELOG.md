@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/Gitsack/hamster/compare/hamster-v1.11.0...hamster-v1.12.0) (2026-01-11)
+
+
+### Features
+
+* added version to sidebar ([c96e2df](https://github.com/Gitsack/hamster/commit/c96e2dfff6e455ce5ad22d41d8a1274a19bbe2da))
+
 ## [1.11.0](https://github.com/Gitsack/hamster/compare/hamster-v1.10.0...hamster-v1.11.0) (2026-01-11)
 
 
