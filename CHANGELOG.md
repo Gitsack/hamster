@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/Gitsack/hamster/compare/hamster-v1.10.0...hamster-v1.11.0) (2026-01-11)
+
+
+### Features
+
+* better retries and blacklistings for failed downloads ([c4a2af1](https://github.com/Gitsack/hamster/commit/c4a2af1e2f2d6b08d246512cce773d087174b450))
+
 ## [1.10.0](https://github.com/Gitsack/hamster/compare/hamster-v1.9.1...hamster-v1.10.0) (2026-01-08)
 
 
