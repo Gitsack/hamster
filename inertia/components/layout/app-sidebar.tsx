@@ -90,8 +90,8 @@ const settingsNavItems: NavItem[] = [
 ]
 
 export function AppSidebar() {
-  const { url, props } = usePage<{ user?: { fullName?: string; email: string } }>()
-  const user = props.user
+  const { url, props } = usePage<{ user?: { fullName?: string; email: string }; version: string }>()
+  const { user, version } = props
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -175,6 +175,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        <div className="px-2 text-xs text-muted-foreground/50">v{version}</div>
         <SidebarMenu>
           <SidebarMenuItem>
             {mounted ? (

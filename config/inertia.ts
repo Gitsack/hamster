@@ -1,5 +1,8 @@
 import { defineConfig } from '@adonisjs/inertia'
 import type { InferSharedProps } from '@adonisjs/inertia/types'
+import { readFileSync } from 'node:fs'
+
+const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8'))
 
 const inertiaConfig = defineConfig({
   /**
@@ -11,6 +14,7 @@ const inertiaConfig = defineConfig({
    * Data that should be shared with all rendered pages
    */
   sharedData: {
+    version: packageJson.version,
     user: (ctx) =>
       ctx.inertia.always(() => {
         const user = ctx.auth.user
