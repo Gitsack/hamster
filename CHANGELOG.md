@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/Gitsack/hamster/compare/hamster-v1.13.0...hamster-v1.14.0) (2026-01-12)
+
+
+### Features
+
+* added different downloaders to UI ([4c89c8c](https://github.com/Gitsack/hamster/commit/4c89c8c4a9c22b27bdcd1eb53208509fd53d1566))
+
 ## [1.13.0](https://github.com/Gitsack/hamster/compare/hamster-v1.12.0...hamster-v1.13.0) (2026-01-12)
 
 
