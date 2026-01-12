@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/Gitsack/hamster/compare/hamster-v1.12.0...hamster-v1.13.0) (2026-01-12)
+
+
+### Features
+
+* added webhooks and other dl options ([9570aa6](https://github.com/Gitsack/hamster/commit/9570aa6cc9ed51f97c89d45918608d9a44dbc2e1))
+
 ## [1.12.0](https://github.com/Gitsack/hamster/compare/hamster-v1.11.0...hamster-v1.12.0) (2026-01-11)
 
 
