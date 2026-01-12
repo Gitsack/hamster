@@ -31,11 +31,13 @@ const FilesystemController = () => import('#controllers/filesystem_controller')
 const FilesController = () => import('#controllers/files_controller')
 const UnmatchedFilesController = () => import('#controllers/unmatched_files_controller')
 const BlacklistController = () => import('#controllers/blacklist_controller')
+const WebhooksController = () => import('#controllers/webhooks_controller')
+const NotificationsController = () => import('#controllers/notifications_controller')
+const SystemController = () => import('#controllers/system_controller')
+const CalendarController = () => import('#controllers/calendar_controller')
 
-// Health check endpoint (for Docker/load balancers)
-router.get('/health', async ({ response }) => {
-  return response.ok({ status: 'ok', timestamp: new Date().toISOString() })
-})
+// Health check endpoint (enhanced for Docker/load balancers)
+router.get('/health', [SystemController, 'health'])
 
 // Public routes (with silent auth to check if user is logged in)
 router
@@ -97,6 +99,8 @@ router
     router.on('/settings/download-clients').renderInertia('settings/download-clients').as('settings.download-clients')
     router.on('/settings/playback').renderInertia('settings/playback').as('settings.playback')
     router.on('/settings/ui').renderInertia('settings/ui').as('settings.ui')
+    router.on('/settings/notifications').renderInertia('settings/notifications').as('settings.notifications')
+    router.on('/settings/webhooks').renderInertia('settings/webhooks').as('settings.webhooks')
   })
   .use(middleware.auth())
 
@@ -304,6 +308,33 @@ router
     router.delete('/unmatched/:id', [UnmatchedFilesController, 'destroy'])
     router.post('/unmatched/bulk-update', [UnmatchedFilesController, 'bulkUpdate'])
     router.post('/unmatched/bulk-delete', [UnmatchedFilesController, 'bulkDestroy'])
+
+    // Webhooks
+    router.get('/webhooks', [WebhooksController, 'index'])
+    router.post('/webhooks', [WebhooksController, 'store'])
+    router.get('/webhooks/:id', [WebhooksController, 'show'])
+    router.put('/webhooks/:id', [WebhooksController, 'update'])
+    router.delete('/webhooks/:id', [WebhooksController, 'destroy'])
+    router.post('/webhooks/:id/test', [WebhooksController, 'test'])
+    router.get('/webhooks/:id/history', [WebhooksController, 'history'])
+    router.delete('/webhooks/:id/history', [WebhooksController, 'clearHistory'])
+
+    // Notifications
+    router.get('/notifications', [NotificationsController, 'index'])
+    router.post('/notifications', [NotificationsController, 'store'])
+    router.get('/notifications/types', [NotificationsController, 'types'])
+    router.get('/notifications/history', [NotificationsController, 'history'])
+    router.get('/notifications/:id', [NotificationsController, 'show'])
+    router.put('/notifications/:id', [NotificationsController, 'update'])
+    router.delete('/notifications/:id', [NotificationsController, 'destroy'])
+    router.post('/notifications/:id/test', [NotificationsController, 'test'])
+
+    // Calendar
+    router.get('/calendar', [CalendarController, 'index'])
+    router.get('/calendar.ics', [CalendarController, 'ical'])
+
+    // System
+    router.get('/system/info', [SystemController, 'info'])
   })
   .prefix('/api/v1')
   .use(middleware.auth())

@@ -261,6 +261,49 @@ export class DownloadManager {
       return existingDownload
     }
 
+    // Check for recently completed downloads (within 1 hour) to prevent duplicate downloads
+    // when a download just finished but hasFile hasn't been updated yet
+    const recentlyCompletedQuery = Download.query()
+      .where('status', 'completed')
+      .where('completedAt', '>=', DateTime.now().minus({ hours: 1 }).toSQL())
+
+    if (request.episodeId) {
+      recentlyCompletedQuery.where('episodeId', request.episodeId)
+    } else if (request.movieId) {
+      recentlyCompletedQuery.where('movieId', request.movieId)
+    } else if (request.albumId) {
+      recentlyCompletedQuery.where('albumId', request.albumId)
+    } else if (request.bookId) {
+      recentlyCompletedQuery.where('bookId', request.bookId)
+    }
+
+    const recentlyCompleted = await recentlyCompletedQuery.first()
+    if (recentlyCompleted) {
+      console.log(`[DownloadManager] Skipping duplicate download for: ${request.title} (recently completed: ${recentlyCompleted.id})`)
+      throw new Error('A download for this item completed recently')
+    }
+
+    // Check hasFile flag directly on the media item as a safety net
+    if (request.episodeId) {
+      const episode = await Episode.find(request.episodeId)
+      if (episode?.hasFile) {
+        console.log(`[DownloadManager] Skipping download for: ${request.title} (episode already has file)`)
+        throw new Error('Episode already has a file')
+      }
+    } else if (request.movieId) {
+      const movie = await Movie.find(request.movieId)
+      if (movie?.hasFile) {
+        console.log(`[DownloadManager] Skipping download for: ${request.title} (movie already has file)`)
+        throw new Error('Movie already has a file')
+      }
+    } else if (request.bookId) {
+      const book = await Book.find(request.bookId)
+      if (book?.hasFile) {
+        console.log(`[DownloadManager] Skipping download for: ${request.title} (book already has file)`)
+        throw new Error('Book already has a file')
+      }
+    }
+
     // Check if file already exists in the library (based on expected path from naming settings)
     const fileAlreadyExists = await this.checkFileExistsInLibrary(request)
     if (fileAlreadyExists) {

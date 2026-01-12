@@ -677,6 +677,11 @@ class RequestedSearchTask {
         return { found: false, grabbed: false, error: 'Movie not found' }
       }
 
+      // Check if movie already has a file
+      if (movie.hasFile) {
+        return { found: false, grabbed: false, error: 'Movie already has a file' }
+      }
+
       // Check for active downloads
       const activeDownload = await Download.query()
         .where('movieId', movieId)
@@ -737,6 +742,11 @@ class RequestedSearchTask {
 
       if (!episode || !episode.tvShow) {
         return { found: false, grabbed: false, error: 'Episode not found' }
+      }
+
+      // Check if episode already has a file
+      if (episode.hasFile) {
+        return { found: false, grabbed: false, error: 'Episode already has a file' }
       }
 
       // Check for active downloads
@@ -802,6 +812,11 @@ class RequestedSearchTask {
 
       if (!book) {
         return { found: false, grabbed: false, error: 'Book not found' }
+      }
+
+      // Check if book already has a file
+      if (book.hasFile) {
+        return { found: false, grabbed: false, error: 'Book already has a file' }
       }
 
       // Check for active downloads

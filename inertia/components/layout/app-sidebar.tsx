@@ -11,6 +11,8 @@ import {
   UserIcon,
   Globe02Icon,
   Video01Icon,
+  Notification01Icon,
+  Link01Icon,
 } from '@hugeicons/core-free-icons'
 import { HamsterIcon } from '@/components/icons/hamster-icon'
 import {
@@ -81,6 +83,16 @@ const settingsNavItems: NavItem[] = [
     title: 'Download Clients',
     url: '/settings/download-clients',
     icon: Download04Icon,
+  },
+  {
+    title: 'Notifications',
+    url: '/settings/notifications',
+    icon: Notification01Icon,
+  },
+  {
+    title: 'Webhooks',
+    url: '/settings/webhooks',
+    icon: Link01Icon,
   },
   {
     title: 'Playback',
