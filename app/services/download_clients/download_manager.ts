@@ -4,6 +4,9 @@ import Movie from '#models/movie'
 import Episode from '#models/episode'
 import Book from '#models/book'
 import { sabnzbdService, type SabnzbdConfig } from './sabnzbd_service.js'
+import { nzbgetService, type NzbgetConfig } from './nzbget_service.js'
+import { qbittorrentService, type QBittorrentConfig } from './qbittorrent_service.js'
+import { transmissionService, type TransmissionConfig } from './transmission_service.js'
 import { downloadImportService } from '#services/media/download_import_service'
 import { movieImportService } from '#services/media/movie_import_service'
 import { episodeImportService } from '#services/media/episode_import_service'
@@ -359,7 +362,7 @@ export class DownloadManager {
   }
 
   /**
-   * Send NZB to download client
+   * Send download to client (NZB or torrent)
    */
   private async sendToClient(client: DownloadClient, request: DownloadRequest): Promise<string> {
     switch (client.type) {
@@ -378,6 +381,74 @@ export class DownloadManager {
         })
 
         return result.nzo_ids[0]
+      }
+
+      case 'nzbget': {
+        const config: NzbgetConfig = {
+          host: client.settings.host || 'localhost',
+          port: client.settings.port || 6789,
+          username: client.settings.username,
+          password: client.settings.password,
+          useSsl: client.settings.useSsl || false,
+          category: client.settings.category,
+        }
+
+        const nzbId = await nzbgetService.addFromUrl(config, request.downloadUrl, {
+          nzbName: request.title,
+          category: client.settings.category,
+        })
+
+        return String(nzbId)
+      }
+
+      case 'qbittorrent': {
+        const config: QBittorrentConfig = {
+          host: client.settings.host || 'localhost',
+          port: client.settings.port || 8080,
+          username: client.settings.username,
+          password: client.settings.password,
+          useSsl: client.settings.useSsl || false,
+          category: client.settings.category,
+        }
+
+        // qBittorrent doesn't return the hash directly when adding
+        // We need to add and then find it by name
+        await qbittorrentService.addTorrent(config, request.downloadUrl, {
+          category: client.settings.category,
+          savePath: client.settings.downloadDirectory,
+          paused: client.settings.addPaused,
+          rename: request.title,
+        })
+
+        // Wait a moment for the torrent to be added, then find it
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        const torrents = await qbittorrentService.getTorrents(config)
+        const added = torrents.find((t) => t.name === request.title || t.name.includes(request.title.substring(0, 50)))
+
+        if (added) {
+          return added.hash
+        }
+
+        // Return a placeholder - we'll find it during queue refresh
+        return `qbt_${Date.now()}`
+      }
+
+      case 'transmission': {
+        const config: TransmissionConfig = {
+          host: client.settings.host || 'localhost',
+          port: client.settings.port || 9091,
+          username: client.settings.username,
+          password: client.settings.password,
+          useSsl: client.settings.useSsl || false,
+          urlBase: client.settings.urlBase,
+        }
+
+        const result = await transmissionService.addTorrent(config, request.downloadUrl, {
+          downloadDir: client.settings.downloadDirectory,
+          paused: client.settings.addPaused,
+        })
+
+        return result.hashString
       }
 
       default:
@@ -638,6 +709,211 @@ export class DownloadManager {
 
         break
       }
+
+      case 'nzbget': {
+        const config: NzbgetConfig = {
+          host: client.settings.host || 'localhost',
+          port: client.settings.port || 6789,
+          username: client.settings.username,
+          password: client.settings.password,
+          useSsl: client.settings.useSsl || false,
+        }
+
+        const allDownloads = await Download.query().where('downloadClientId', client.id)
+        const downloadsByExternalId = new Map<string, Download>()
+        for (const dl of allDownloads) {
+          if (dl.externalId) {
+            downloadsByExternalId.set(dl.externalId, dl)
+          }
+        }
+
+        const foundExternalIds = new Set<string>()
+
+        // Check queue
+        const queue = await nzbgetService.getQueue(config)
+        for (const item of queue) {
+          const externalId = String(item.NZBID)
+          foundExternalIds.add(externalId)
+
+          const download = downloadsByExternalId.get(externalId)
+          if (download) {
+            const totalSize = item.FileSizeMB * 1024 * 1024
+            const downloadedSize = item.DownloadedSizeMB * 1024 * 1024
+            download.progress = totalSize > 0 ? (downloadedSize / totalSize) * 100 : 0
+            download.status = nzbgetService.mapStatusToDownloadStatus(item.Status)
+            download.remainingBytes = item.RemainingFileSizeMB * 1024 * 1024
+            await download.save()
+          }
+        }
+
+        // Check history
+        const history = await nzbgetService.getHistory(config)
+        for (const item of history.slice(0, 50)) {
+          const externalId = String(item.NZBID)
+          foundExternalIds.add(externalId)
+
+          const download = downloadsByExternalId.get(externalId)
+          if (download && download.status !== 'completed' && download.status !== 'failed') {
+            if (item.Status === 'SUCCESS') {
+              download.status = 'importing'
+              download.progress = 100
+              download.outputPath = item.FinalDir || item.DestDir
+              if (!download.completedAt) {
+                download.completedAt = DateTime.now()
+              }
+              await download.save()
+
+              // Trigger import
+              this.triggerImport(download).catch((error) => {
+                console.error(`[DownloadManager] Failed to import download ${download.id}:`, error)
+              })
+            } else if (nzbgetService.mapStatusToDownloadStatus(item.Status) === 'failed') {
+              download.status = 'failed'
+              download.errorMessage = `NZBGet: ${item.Status}`
+              await download.save()
+            }
+          }
+        }
+
+        break
+      }
+
+      case 'qbittorrent': {
+        const config: QBittorrentConfig = {
+          host: client.settings.host || 'localhost',
+          port: client.settings.port || 8080,
+          username: client.settings.username,
+          password: client.settings.password,
+          useSsl: client.settings.useSsl || false,
+          category: client.settings.category,
+        }
+
+        const allDownloads = await Download.query().where('downloadClientId', client.id)
+        const downloadsByExternalId = new Map<string, Download>()
+        for (const dl of allDownloads) {
+          if (dl.externalId) {
+            downloadsByExternalId.set(dl.externalId, dl)
+          }
+        }
+
+        const torrents = await qbittorrentService.getTorrents(config)
+        const foundExternalIds = new Set<string>()
+
+        for (const torrent of torrents) {
+          foundExternalIds.add(torrent.hash)
+
+          const download = downloadsByExternalId.get(torrent.hash)
+          if (download) {
+            download.progress = torrent.progress * 100
+            download.status = qbittorrentService.mapStateToStatus(torrent.state)
+            download.remainingBytes = torrent.size - (torrent.size * torrent.progress)
+            download.etaSeconds = torrent.eta >= 0 ? torrent.eta : 0
+
+            // Check if completed (seeding)
+            if (download.status === 'completed' && download.outputPath !== torrent.content_path) {
+              download.outputPath = torrent.content_path
+              if (!download.completedAt) {
+                download.completedAt = DateTime.now()
+              }
+
+              // Trigger import
+              this.triggerImport(download).catch((error) => {
+                console.error(`[DownloadManager] Failed to import download ${download.id}:`, error)
+              })
+            }
+
+            await download.save()
+          }
+        }
+
+        // Remove orphaned downloads
+        const orphanedDownloads = await Download.query()
+          .where('downloadClientId', client.id)
+          .whereNotNull('externalId')
+          .whereIn('status', ['queued', 'downloading', 'paused'])
+
+        for (const orphan of orphanedDownloads) {
+          if (orphan.externalId && !foundExternalIds.has(orphan.externalId)) {
+            console.log(`[DownloadManager] Removing orphaned qBittorrent download: ${orphan.title}`)
+            await orphan.delete()
+          }
+        }
+
+        break
+      }
+
+      case 'transmission': {
+        const config: TransmissionConfig = {
+          host: client.settings.host || 'localhost',
+          port: client.settings.port || 9091,
+          username: client.settings.username,
+          password: client.settings.password,
+          useSsl: client.settings.useSsl || false,
+          urlBase: client.settings.urlBase,
+        }
+
+        const allDownloads = await Download.query().where('downloadClientId', client.id)
+        const downloadsByExternalId = new Map<string, Download>()
+        for (const dl of allDownloads) {
+          if (dl.externalId) {
+            downloadsByExternalId.set(dl.externalId, dl)
+          }
+        }
+
+        const torrents = await transmissionService.getTorrents(config)
+        const foundExternalIds = new Set<string>()
+
+        for (const torrent of torrents) {
+          foundExternalIds.add(torrent.hashString)
+
+          const download = downloadsByExternalId.get(torrent.hashString)
+          if (download) {
+            download.progress = torrent.percentDone * 100
+            download.status = transmissionService.mapStatusToDownloadStatus(torrent.status, torrent.isFinished)
+            download.remainingBytes = torrent.totalSize - torrent.downloadedEver
+            download.etaSeconds = torrent.eta >= 0 ? torrent.eta : 0
+
+            // Check if completed (seeding)
+            if (torrent.isFinished || torrent.percentDone === 1) {
+              if (download.status !== 'completed' && download.status !== 'failed') {
+                download.status = 'importing'
+                download.progress = 100
+                download.outputPath = torrent.downloadDir
+                if (!download.completedAt) {
+                  download.completedAt = DateTime.now()
+                }
+
+                // Trigger import
+                this.triggerImport(download).catch((error) => {
+                  console.error(`[DownloadManager] Failed to import download ${download.id}:`, error)
+                })
+              }
+            }
+
+            if (torrent.error > 0) {
+              download.status = 'failed'
+              download.errorMessage = torrent.errorString || 'Transmission error'
+            }
+
+            await download.save()
+          }
+        }
+
+        // Remove orphaned downloads
+        const orphanedDownloads = await Download.query()
+          .where('downloadClientId', client.id)
+          .whereNotNull('externalId')
+          .whereIn('status', ['queued', 'downloading', 'paused'])
+
+        for (const orphan of orphanedDownloads) {
+          if (orphan.externalId && !foundExternalIds.has(orphan.externalId)) {
+            console.log(`[DownloadManager] Removing orphaned Transmission download: ${orphan.title}`)
+            await orphan.delete()
+          }
+        }
+
+        break
+      }
     }
   }
 
@@ -836,6 +1112,57 @@ export class DownloadManager {
           await sabnzbdService.delete(config, download.externalId, deleteFiles)
           break
         }
+
+        case 'nzbget': {
+          const config: NzbgetConfig = {
+            host: client.settings.host || 'localhost',
+            port: client.settings.port || 6789,
+            username: client.settings.username,
+            password: client.settings.password,
+            useSsl: client.settings.useSsl || false,
+          }
+
+          const nzbId = parseInt(download.externalId, 10)
+          // Try to delete from queue first, then from history
+          try {
+            await nzbgetService.deleteFromQueue(config, nzbId)
+          } catch {
+            await nzbgetService.deleteFromHistory(config, nzbId, deleteFiles)
+          }
+          break
+        }
+
+        case 'qbittorrent': {
+          const config: QBittorrentConfig = {
+            host: client.settings.host || 'localhost',
+            port: client.settings.port || 8080,
+            username: client.settings.username,
+            password: client.settings.password,
+            useSsl: client.settings.useSsl || false,
+          }
+
+          await qbittorrentService.delete(config, download.externalId, deleteFiles)
+          break
+        }
+
+        case 'transmission': {
+          const config: TransmissionConfig = {
+            host: client.settings.host || 'localhost',
+            port: client.settings.port || 9091,
+            username: client.settings.username,
+            password: client.settings.password,
+            useSsl: client.settings.useSsl || false,
+            urlBase: client.settings.urlBase,
+          }
+
+          // Find the torrent by hash to get its numeric ID
+          const torrents = await transmissionService.getTorrents(config)
+          const torrent = torrents.find((t) => t.hashString === download.externalId)
+          if (torrent) {
+            await transmissionService.remove(config, torrent.id, deleteFiles)
+          }
+          break
+        }
       }
     }
 
@@ -847,7 +1174,15 @@ export class DownloadManager {
    */
   async testClient(
     type: string,
-    settings: { host?: string; port?: number; apiKey?: string; useSsl?: boolean }
+    settings: {
+      host?: string
+      port?: number
+      apiKey?: string
+      username?: string
+      password?: string
+      useSsl?: boolean
+      urlBase?: string
+    }
   ): Promise<{ success: boolean; version?: string; error?: string; remotePath?: string; pathAccessible?: boolean }> {
     switch (type) {
       case 'sabnzbd': {
@@ -887,6 +1222,70 @@ export class DownloadManager {
         }
 
         return result
+      }
+
+      case 'nzbget': {
+        const config: NzbgetConfig = {
+          host: settings.host || 'localhost',
+          port: settings.port || 6789,
+          username: settings.username,
+          password: settings.password,
+          useSsl: settings.useSsl || false,
+        }
+
+        const result = await nzbgetService.testConnection(config)
+
+        if (result.success) {
+          // Get the destination directory for path mapping
+          try {
+            const destDir = await nzbgetService.getConfigValue(config, 'DestDir')
+            if (destDir) {
+              const fs = await import('node:fs/promises')
+              let pathAccessible = false
+              try {
+                await fs.access(destDir)
+                pathAccessible = true
+              } catch {
+                pathAccessible = false
+              }
+
+              return {
+                ...result,
+                remotePath: destDir,
+                pathAccessible,
+              }
+            }
+          } catch {
+            // Ignore config fetch errors
+          }
+        }
+
+        return result
+      }
+
+      case 'qbittorrent': {
+        const config: QBittorrentConfig = {
+          host: settings.host || 'localhost',
+          port: settings.port || 8080,
+          username: settings.username,
+          password: settings.password,
+          useSsl: settings.useSsl || false,
+        }
+
+        return qbittorrentService.testConnection(config)
+      }
+
+      case 'transmission': {
+        const config: TransmissionConfig = {
+          host: settings.host || 'localhost',
+          port: settings.port || 9091,
+          username: settings.username,
+          password: settings.password,
+          useSsl: settings.useSsl || false,
+          urlBase: settings.urlBase,
+        }
+
+        return transmissionService.testConnection(config)
       }
 
       default:

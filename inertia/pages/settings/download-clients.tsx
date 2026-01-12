@@ -49,15 +49,20 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { FolderBrowser } from '@/components/folder-browser'
 
+type DownloadClientType = 'sabnzbd' | 'nzbget' | 'qbittorrent' | 'transmission'
+
 interface DownloadClient {
   id: number
   name: string
-  type: 'sabnzbd' | 'nzbget'
+  type: DownloadClientType
   host: string
   port: number
   apiKey: string
+  username: string
+  password: string
   useSsl: boolean
   category: string
+  urlBase: string
   enabled: boolean
   priority: number
   removeCompletedDownloads: boolean
@@ -67,6 +72,19 @@ interface DownloadClient {
 }
 
 type FormData = Omit<DownloadClient, 'id'>
+
+const isUsenetClient = (type: DownloadClientType) => type === 'sabnzbd' || type === 'nzbget'
+const isTorrentClient = (type: DownloadClientType) => type === 'qbittorrent' || type === 'transmission'
+
+const getDefaultPort = (type: DownloadClientType): number => {
+  switch (type) {
+    case 'sabnzbd': return 8080
+    case 'nzbget': return 6789
+    case 'qbittorrent': return 8080
+    case 'transmission': return 9091
+    default: return 8080
+  }
+}
 
 interface DownloadItem {
   name: string
@@ -82,8 +100,11 @@ const defaultFormData: FormData = {
   host: 'localhost',
   port: 8080,
   apiKey: '',
+  username: '',
+  password: '',
   useSsl: false,
   category: '',
+  urlBase: '',
   enabled: true,
   priority: 1,
   removeCompletedDownloads: true,
@@ -257,9 +278,12 @@ export default function DownloadClients() {
       type: client.type,
       host: client.host,
       port: client.port,
-      apiKey: client.apiKey,
+      apiKey: client.apiKey || '',
+      username: client.username || '',
+      password: client.password || '',
       useSsl: client.useSsl,
-      category: client.category,
+      category: client.category || '',
+      urlBase: client.urlBase || '',
       enabled: client.enabled,
       priority: client.priority,
       removeCompletedDownloads: client.removeCompletedDownloads,
@@ -285,7 +309,10 @@ export default function DownloadClients() {
           host: formData.host,
           port: formData.port,
           apiKey: formData.apiKey,
+          username: formData.username,
+          password: formData.password,
           useSsl: formData.useSsl,
+          urlBase: formData.urlBase,
         }),
       })
 
@@ -323,8 +350,18 @@ export default function DownloadClients() {
   }
 
   const saveClient = async () => {
-    if (!formData.name || !formData.host || !formData.apiKey) {
+    if (!formData.name || !formData.host) {
       toast.error('Please fill in all required fields')
+      return
+    }
+
+    // Validate credentials based on client type
+    if (isUsenetClient(formData.type) && formData.type === 'sabnzbd' && !formData.apiKey) {
+      toast.error('API Key is required for SABnzbd')
+      return
+    }
+    if (formData.type === 'nzbget' && !formData.username) {
+      toast.error('Username is required for NZBGet')
       return
     }
 
@@ -401,7 +438,7 @@ export default function DownloadClients() {
           <CardHeader>
             <CardTitle>Download Clients</CardTitle>
             <CardDescription>
-              Configure download clients to process NZB files. SABnzbd is the recommended client.
+              Configure download clients to process NZB and torrent files.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -506,8 +543,8 @@ export default function DownloadClients() {
                 onValueChange={(value) =>
                   setFormData({
                     ...formData,
-                    type: value as 'sabnzbd' | 'nzbget',
-                    port: value === 'sabnzbd' ? 8080 : 6789,
+                    type: value as DownloadClientType,
+                    port: getDefaultPort(value as DownloadClientType),
                   })
                 }
               >
@@ -517,6 +554,8 @@ export default function DownloadClients() {
                 <SelectPopup>
                   <SelectItem value="sabnzbd">SABnzbd</SelectItem>
                   <SelectItem value="nzbget">NZBGet</SelectItem>
+                  <SelectItem value="qbittorrent">qBittorrent</SelectItem>
+                  <SelectItem value="transmission">Transmission</SelectItem>
                 </SelectPopup>
               </Select>
             </div>
@@ -542,16 +581,57 @@ export default function DownloadClients() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="apiKey">API Key *</Label>
-              <Input
-                id="apiKey"
-                type="password"
-                value={formData.apiKey}
-                onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                placeholder="Your API key"
-              />
-            </div>
+            {/* Credentials - varies by client type */}
+            {formData.type === 'sabnzbd' && (
+              <div className="space-y-2">
+                <Label htmlFor="apiKey">API Key *</Label>
+                <Input
+                  id="apiKey"
+                  type="password"
+                  value={formData.apiKey}
+                  onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                  placeholder="Your API key"
+                />
+              </div>
+            )}
+
+            {(formData.type === 'nzbget' || isTorrentClient(formData.type)) && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username {formData.type === 'nzbget' ? '*' : ''}</Label>
+                  <Input
+                    id="username"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    placeholder={formData.type === 'qbittorrent' ? 'admin' : 'nzbget'}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder="Password"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* URL Base for Transmission */}
+            {formData.type === 'transmission' && (
+              <div className="space-y-2">
+                <Label htmlFor="urlBase">URL Base</Label>
+                <Input
+                  id="urlBase"
+                  value={formData.urlBase}
+                  onChange={(e) => setFormData({ ...formData, urlBase: e.target.value })}
+                  placeholder="/transmission (optional)"
+                />
+                <p className="text-xs text-muted-foreground">Usually /transmission - only change if you modified it</p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
@@ -559,7 +639,7 @@ export default function DownloadClients() {
                 id="category"
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder="music (optional)"
+                placeholder={isTorrentClient(formData.type) ? 'hamster (optional)' : 'music (optional)'}
               />
             </div>
 
@@ -568,7 +648,7 @@ export default function DownloadClients() {
               <div>
                 <Label className="text-base font-medium">Remote Path Mapping</Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Required if SABnzbd runs in Docker with different paths than Hamster.
+                  Required if the download client runs in Docker with different paths than Hamster.
                 </p>
               </div>
               <div className="space-y-2">
@@ -684,7 +764,7 @@ export default function DownloadClients() {
                 Delete
               </Button>
             )}
-            <Button variant="outline" onClick={testConnection} disabled={testing || !formData.host || !formData.apiKey}>
+            <Button variant="outline" onClick={testConnection} disabled={testing || !formData.host}>
               {testing ? (
                 <Spinner className="mr-2" />
               ) : (
