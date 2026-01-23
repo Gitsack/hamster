@@ -163,6 +163,7 @@ interface MovieSearchResult {
   posterUrl?: string
   releaseDate?: string
   rating?: number
+  genres?: string[]
   inLibrary: boolean
 }
 
@@ -177,6 +178,7 @@ interface TvShowSearchResult {
   rating?: number
   seasonCount?: number
   episodeCount?: number
+  genres?: string[]
   inLibrary: boolean
 }
 
@@ -1651,12 +1653,14 @@ export default function SearchPage() {
                       />
                     </div>
                   )}
-                  <Badge
-                    className="absolute top-2 left-2 text-xs"
-                    variant="secondary"
-                  >
-                    {type === 'movie' ? 'MOVIE' : 'TV'}
-                  </Badge>
+                  {item.genres && item.genres.length > 0 && (
+                    <Badge
+                      className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-black/40 backdrop-blur-sm text-white/90 border-0"
+                      variant="secondary"
+                    >
+                      {item.genres[0].toUpperCase()}
+                    </Badge>
+                  )}
                   {item.inLibrary && (
                     <Badge
                       className="absolute top-2 right-2 text-xs gap-1"

@@ -118,6 +118,7 @@ export default class MoviesController {
           posterUrl: movie.posterPath,
           releaseDate: movie.releaseDate,
           rating: movie.voteAverage,
+          genres: movie.genres,
           inLibrary: existingIds.has(String(movie.id)),
         })),
       })

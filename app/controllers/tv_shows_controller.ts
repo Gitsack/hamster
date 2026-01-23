@@ -134,6 +134,7 @@ export default class TvShowsController {
           rating: show.voteAverage,
           seasonCount: show.numberOfSeasons,
           episodeCount: show.numberOfEpisodes,
+          genres: show.genres,
           inLibrary: existingIds.has(String(show.id)),
         })),
       })

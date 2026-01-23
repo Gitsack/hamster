@@ -4,6 +4,48 @@ import PQueue from 'p-queue'
 const TMDB_API = 'https://api.themoviedb.org/3'
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p'
 
+// TMDB Genre ID to Name mappings (from /genre/movie/list and /genre/tv/list)
+const MOVIE_GENRES: Record<number, string> = {
+  28: 'Action',
+  12: 'Adventure',
+  16: 'Animation',
+  35: 'Comedy',
+  80: 'Crime',
+  99: 'Documentary',
+  18: 'Drama',
+  10751: 'Family',
+  14: 'Fantasy',
+  36: 'History',
+  27: 'Horror',
+  10402: 'Music',
+  9648: 'Mystery',
+  10749: 'Romance',
+  878: 'Sci-Fi',
+  10770: 'TV Movie',
+  53: 'Thriller',
+  10752: 'War',
+  37: 'Western',
+}
+
+const TV_GENRES: Record<number, string> = {
+  10759: 'Action',
+  16: 'Animation',
+  35: 'Comedy',
+  80: 'Crime',
+  99: 'Documentary',
+  18: 'Drama',
+  10751: 'Family',
+  10762: 'Kids',
+  9648: 'Mystery',
+  10763: 'News',
+  10764: 'Reality',
+  10765: 'Sci-Fi',
+  10766: 'Soap',
+  10767: 'Talk',
+  10768: 'Politics',
+  37: 'Western',
+}
+
 // Rate limit: 40 requests per 10 seconds
 const queue = new PQueue({ interval: 250, intervalCap: 1 })
 
@@ -111,6 +153,10 @@ export class TmdbService {
   }
 
   private mapMovie(m: any, imdbId?: string): TmdbMovie {
+    // Map genre_ids to names using our mapping, or use full genre objects if available
+    const genres = m.genres?.map((g: any) => g.name) ||
+      m.genre_ids?.map((id: number) => MOVIE_GENRES[id]).filter(Boolean) || []
+
     return {
       id: m.id,
       title: m.title,
@@ -124,7 +170,7 @@ export class TmdbService {
       backdropPath: m.backdrop_path ? `${TMDB_IMAGE_BASE}/original${m.backdrop_path}` : null,
       voteAverage: m.vote_average || 0,
       voteCount: m.vote_count || 0,
-      genres: m.genres?.map((g: any) => g.name) || m.genre_ids?.map((id: number) => String(id)) || [],
+      genres,
       imdbId: imdbId || m.imdb_id || null,
     }
   }
@@ -191,6 +237,10 @@ export class TmdbService {
   }
 
   private mapTvShow(s: any): TmdbTvShow {
+    // Map genre_ids to names using our mapping, or use full genre objects if available
+    const genres = s.genres?.map((g: any) => g.name) ||
+      s.genre_ids?.map((id: number) => TV_GENRES[id]).filter(Boolean) || []
+
     return {
       id: s.id,
       name: s.name,
@@ -203,7 +253,7 @@ export class TmdbService {
       backdropPath: s.backdrop_path ? `${TMDB_IMAGE_BASE}/original${s.backdrop_path}` : null,
       voteAverage: s.vote_average || 0,
       voteCount: s.vote_count || 0,
-      genres: s.genres?.map((g: any) => g.name) || s.genre_ids?.map((id: number) => String(id)) || [],
+      genres,
       networks: s.networks?.map((n: any) => n.name) || [],
       numberOfSeasons: s.number_of_seasons || 0,
       numberOfEpisodes: s.number_of_episodes || 0,
