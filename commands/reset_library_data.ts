@@ -36,7 +36,9 @@ export default class ResetLibraryData extends BaseCommand {
       `)
 
       this.logger.success('All library and download data cleared.')
-      this.logger.info('Settings preserved: app_settings, root_folders, download_clients, indexers, quality_profiles, etc.')
+      this.logger.info(
+        'Settings preserved: app_settings, root_folders, download_clients, indexers, quality_profiles, etc.'
+      )
     } catch (error) {
       this.logger.error('Failed to reset library data')
       this.logger.error(error instanceof Error ? error.message : String(error))

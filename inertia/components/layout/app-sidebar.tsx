@@ -122,7 +122,7 @@ export function AppSidebar() {
             <SidebarMenuButton size="lg" asChild>
               <Link href="/">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <HamsterIcon className='size-6'  />
+                  <HamsterIcon className="size-6" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Hamster</span>
@@ -199,7 +199,9 @@ export function AppSidebar() {
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
                       <AvatarFallback className="rounded-lg">
-                        {user?.fullName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+                        {user?.fullName?.[0]?.toUpperCase() ||
+                          user?.email?.[0]?.toUpperCase() ||
+                          'U'}
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">

@@ -6,7 +6,16 @@ export default class extends BaseSchema {
   async up() {
     this.schema.createTable(this.tableName, (table) => {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
-      table.enum('event_type', ['grabbed', 'download_completed', 'import_completed', 'import_failed', 'deleted', 'renamed']).notNullable()
+      table
+        .enum('event_type', [
+          'grabbed',
+          'download_completed',
+          'import_completed',
+          'import_failed',
+          'deleted',
+          'renamed',
+        ])
+        .notNullable()
       table.text('source_title').nullable()
       table.uuid('album_id').references('id').inTable('albums').onDelete('SET NULL')
       table.uuid('artist_id').references('id').inTable('artists').onDelete('SET NULL')

@@ -10,13 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Select,
-  SelectPopup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 
@@ -101,12 +95,16 @@ export function AddMediaDialog({
               <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select profile">
-                    {(value: string) => qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'}
+                    {(value: string) =>
+                      qualityProfiles.find((p) => p.id === value)?.name || 'Select profile'
+                    }
                   </SelectValue>
                 </SelectTrigger>
                 <SelectPopup>
                   {qualityProfiles.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
                   ))}
                 </SelectPopup>
               </Select>
@@ -141,7 +139,9 @@ export function AddMediaDialog({
           </div>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button onClick={handleAdd} disabled={adding || !selectedQualityProfile}>
             {adding && <Spinner className="mr-2" />}
             Add {mediaTypeLabels[mediaType]}

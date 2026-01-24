@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { MusicNote01Icon, Film01Icon, Tv01Icon, Book01Icon, CdIcon } from '@hugeicons/core-free-icons'
+import {
+  MusicNote01Icon,
+  Film01Icon,
+  Tv01Icon,
+  Book01Icon,
+  CdIcon,
+} from '@hugeicons/core-free-icons'
 
 type MediaType = 'music' | 'movies' | 'tv' | 'books' | 'album'
 
@@ -20,7 +26,13 @@ interface MediaImageProps {
   iconClassName?: string
 }
 
-export function MediaImage({ src, alt, mediaType, className = '', iconClassName = 'h-16 w-16' }: MediaImageProps) {
+export function MediaImage({
+  src,
+  alt,
+  mediaType,
+  className = '',
+  iconClassName = 'h-16 w-16',
+}: MediaImageProps) {
   const [hasError, setHasError] = useState(false)
   const Icon = MEDIA_ICONS[mediaType]
 

@@ -52,11 +52,11 @@ export class PushoverProvider {
     })
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({})) as { errors?: string[] }
+      const data = (await response.json().catch(() => ({}))) as { errors?: string[] }
       throw new Error(`Pushover error: ${data.errors?.join(', ') || response.status}`)
     }
 
-    const result = await response.json() as { status: number; errors?: string[] }
+    const result = (await response.json()) as { status: number; errors?: string[] }
     if (result.status !== 1) {
       throw new Error(`Pushover error: ${result.errors?.join(', ') || 'Unknown error'}`)
     }
@@ -98,7 +98,7 @@ export class PushoverProvider {
       signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT),
     })
 
-    const result = await response.json() as { status: number; errors?: string[] }
+    const result = (await response.json()) as { status: number; errors?: string[] }
 
     if (result.status === 1) {
       return { success: true }

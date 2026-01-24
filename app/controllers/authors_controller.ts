@@ -221,7 +221,9 @@ export default class AuthorsController {
 
       // Get existing books in library for this author
       const existingBooks = author
-        ? await Book.query().where('authorId', author.id).select('openlibraryId', 'id', 'requested', 'hasFile')
+        ? await Book.query()
+            .where('authorId', author.id)
+            .select('openlibraryId', 'id', 'requested', 'hasFile')
         : []
 
       const existingMap = new Map(existingBooks.map((b) => [b.openlibraryId, b]))

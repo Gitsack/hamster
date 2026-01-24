@@ -7,7 +7,16 @@ export default class extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
       table.string('name', 255).notNullable().unique()
-      table.enum('type', ['rss_sync', 'library_scan', 'cleanup', 'refresh_artist', 'backup', 'download_monitor']).notNullable()
+      table
+        .enum('type', [
+          'rss_sync',
+          'library_scan',
+          'cleanup',
+          'refresh_artist',
+          'backup',
+          'download_monitor',
+        ])
+        .notNullable()
       table.integer('interval_minutes').notNullable()
       table.timestamp('last_run_at').nullable()
       table.timestamp('next_run_at').nullable()

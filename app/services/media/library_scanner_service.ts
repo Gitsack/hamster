@@ -43,10 +43,7 @@ export class LibraryScannerService {
   /**
    * Scan a single root folder
    */
-  async scanRootFolder(
-    rootFolderId: string,
-    onProgress?: ProgressCallback
-  ): Promise<ScanResult> {
+  async scanRootFolder(rootFolderId: string, onProgress?: ProgressCallback): Promise<ScanResult> {
     const rootFolder = await RootFolder.find(rootFolderId)
     if (!rootFolder) {
       return {

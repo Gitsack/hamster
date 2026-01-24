@@ -54,10 +54,7 @@ export async function checkFfmpegAvailable(): Promise<{ ffmpeg: boolean; ffprobe
     })
   }
 
-  const [ffmpeg, ffprobe] = await Promise.all([
-    checkCommand('ffmpeg'),
-    checkCommand('ffprobe'),
-  ])
+  const [ffmpeg, ffprobe] = await Promise.all([checkCommand('ffmpeg'), checkCommand('ffprobe')])
 
   return { ffmpeg, ffprobe }
 }
@@ -67,13 +64,7 @@ export async function checkFfmpegAvailable(): Promise<{ ffmpeg: boolean; ffprobe
  */
 export async function probeFile(filePath: string): Promise<MediaAnalysis> {
   return new Promise((resolve, reject) => {
-    const args = [
-      '-v', 'quiet',
-      '-print_format', 'json',
-      '-show_format',
-      '-show_streams',
-      filePath,
-    ]
+    const args = ['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', filePath]
 
     const proc = spawn('ffprobe', args)
     let stdout = ''
@@ -177,19 +168,32 @@ export function getSegmentTranscodeArgs(
 ): string[] {
   return [
     '-hide_banner',
-    '-loglevel', 'error',
-    '-ss', startTime.toString(),
-    '-i', inputPath,
-    '-t', segmentDuration.toString(),
-    '-c:v', 'copy', // Copy video stream (no re-encoding)
-    '-c:a', 'aac', // Transcode audio to AAC
-    '-b:a', '192k', // Audio bitrate
-    '-ac', '2', // Stereo output
-    '-ar', '48000', // Sample rate
-    '-f', 'mpegts', // Output format for HLS segments
-    '-mpegts_copyts', '1', // Preserve timestamps
-    '-avoid_negative_ts', 'make_zero',
-    '-max_muxing_queue_size', '1024',
+    '-loglevel',
+    'error',
+    '-ss',
+    startTime.toString(),
+    '-i',
+    inputPath,
+    '-t',
+    segmentDuration.toString(),
+    '-c:v',
+    'copy', // Copy video stream (no re-encoding)
+    '-c:a',
+    'aac', // Transcode audio to AAC
+    '-b:a',
+    '192k', // Audio bitrate
+    '-ac',
+    '2', // Stereo output
+    '-ar',
+    '48000', // Sample rate
+    '-f',
+    'mpegts', // Output format for HLS segments
+    '-mpegts_copyts',
+    '1', // Preserve timestamps
+    '-avoid_negative_ts',
+    'make_zero',
+    '-max_muxing_queue_size',
+    '1024',
     'pipe:1', // Output to stdout
   ]
 }
@@ -205,19 +209,32 @@ export function getHlsTranscodeArgs(
 ): string[] {
   return [
     '-hide_banner',
-    '-loglevel', 'error',
-    '-i', inputPath,
-    '-c:v', 'copy', // Copy video stream
-    '-c:a', 'aac', // Transcode audio to AAC
-    '-b:a', '192k',
-    '-ac', '2',
-    '-ar', '48000',
-    '-f', 'hls',
-    '-hls_time', segmentDuration.toString(),
-    '-hls_list_size', '0', // Keep all segments in playlist
-    '-hls_segment_type', 'mpegts',
-    '-hls_flags', 'independent_segments+split_by_time',
-    '-hls_segment_filename', `${outputDir}/segment-%d.ts`,
+    '-loglevel',
+    'error',
+    '-i',
+    inputPath,
+    '-c:v',
+    'copy', // Copy video stream
+    '-c:a',
+    'aac', // Transcode audio to AAC
+    '-b:a',
+    '192k',
+    '-ac',
+    '2',
+    '-ar',
+    '48000',
+    '-f',
+    'hls',
+    '-hls_time',
+    segmentDuration.toString(),
+    '-hls_list_size',
+    '0', // Keep all segments in playlist
+    '-hls_segment_type',
+    'mpegts',
+    '-hls_flags',
+    'independent_segments+split_by_time',
+    '-hls_segment_filename',
+    `${outputDir}/segment-%d.ts`,
     `${outputDir}/master.m3u8`,
   ]
 }
@@ -240,9 +257,7 @@ export function generateHlsManifest(
 
   for (let i = 0; i < segmentCount; i++) {
     const isLastSegment = i === segmentCount - 1
-    const actualDuration = isLastSegment
-      ? duration - (i * segmentDuration)
-      : segmentDuration
+    const actualDuration = isLastSegment ? duration - i * segmentDuration : segmentDuration
 
     manifest += `#EXTINF:${actualDuration.toFixed(3)},\n`
     manifest += `/api/v1/playback/hls/${sessionId}/${i}.ts\n`

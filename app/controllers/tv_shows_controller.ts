@@ -9,6 +9,7 @@ import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
 import { downloadManager } from '#services/download_clients/download_manager'
+import { libraryCleanupService } from '#services/library/library_cleanup_service'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 
@@ -549,11 +550,10 @@ export default class TvShowsController {
 
     const { requested } = request.only(['requested'])
     const newStatus = requested ?? true
-    episode.requested = newStatus
-    await episode.save()
 
-    // If unrequesting, cancel any active download for this episode
+    // If unrequesting (setting to false)
     if (!newStatus) {
+      // Cancel any active download for this episode
       const activeDownload = await Download.query()
         .where('episodeId', episode.id)
         .whereIn('status', ['queued', 'downloading', 'paused'])
@@ -569,10 +569,48 @@ export default class TvShowsController {
           )
         }
       }
+
+      // If episode has a file, return error - frontend should show confirmation dialog
+      if (episode.hasFile) {
+        return response.badRequest({
+          error: 'Item has downloaded files',
+          hasFile: true,
+          message: 'Use destroyEpisode endpoint with deleteFile=true to remove files and record',
+        })
+      }
+
+      // Episode has no file - delete it and trigger cascade removal
+      const seasonId = episode.seasonId
+      const showId = episode.tvShowId
+      console.log(
+        `[TvShowsController] Unrequesting episode without file, deleting: S${episode.seasonNumber}E${episode.episodeNumber}`
+      )
+      await episode.delete()
+
+      // Check if season should be removed
+      const seasonRemoved = await libraryCleanupService.removeSeasonIfEmpty(seasonId)
+
+      // Check if show should be removed
+      if (!seasonRemoved) {
+        await libraryCleanupService.removeTvShowIfEmpty(showId)
+      } else {
+        // If season was removed, still need to check show
+        await libraryCleanupService.removeTvShowIfEmpty(showId)
+      }
+
+      return response.json({
+        id: episode.id,
+        deleted: true,
+        message: 'Removed from library',
+      })
     }
 
+    // Requesting (setting to true)
+    episode.requested = true
+    await episode.save()
+
     // Trigger search if marking as requested and episode doesn't have file
-    if (newStatus && !episode.hasFile) {
+    if (!episode.hasFile) {
       requestedSearchTask.searchSingleEpisode(episode.id).catch((error) => {
         console.error('Failed to trigger search for episode:', error)
       })
@@ -598,30 +636,21 @@ export default class TvShowsController {
     const { requested } = request.only(['requested'])
     const newStatus = requested ?? true
 
-    // Update season
-    season.requested = newStatus
-    await season.save()
-
-    // Update all episodes in this season
-    await Episode.query().where('seasonId', season.id).update({ requested: newStatus })
-
-    // If unrequesting, cancel all active downloads for episodes in this season
+    // If unrequesting (setting to false)
     if (!newStatus) {
       const episodeIds = season.episodes.map((e) => e.id)
 
-      // First try to find downloads by episodeId
+      // Cancel all active downloads for episodes in this season
       let activeDownloads = await Download.query()
         .whereIn('episodeId', episodeIds)
         .whereIn('status', ['queued', 'downloading', 'paused'])
 
       // Fallback: also search by tvShowId for downloads that might not have episodeId set
-      // but belong to this show (matching title pattern for this season)
       if (activeDownloads.length === 0) {
         const showDownloads = await Download.query()
           .where('tvShowId', params.id)
           .whereIn('status', ['queued', 'downloading', 'paused'])
 
-        // Filter to only include downloads for this season (S0X pattern in title)
         const seasonPattern = new RegExp(`S0?${season.seasonNumber}E`, 'i')
         activeDownloads = showDownloads.filter((d) => seasonPattern.test(d.title))
       }
@@ -633,16 +662,53 @@ export default class TvShowsController {
           console.error(`[TvShowsController] Failed to cancel download ${download.id}:`, error)
         }
       }
-    }
 
-    // Trigger search if marking as requested
-    if (newStatus) {
-      const show = await TvShow.find(params.id)
-      if (show) {
-        requestedSearchTask.searchTvShowEpisodes(show.id).catch((error) => {
-          console.error('Failed to trigger search for season:', error)
+      // Check if any episodes have files
+      const episodesWithFiles = season.episodes.filter((e) => e.hasFile)
+      if (episodesWithFiles.length > 0) {
+        return response.badRequest({
+          error: 'Season has episodes with downloaded files',
+          hasFile: true,
+          episodesWithFiles: episodesWithFiles.length,
+          message: 'Delete episode files first before unrequesting the season',
         })
       }
+
+      // No episodes have files - delete all episodes in the season
+      const showId = params.id
+      console.log(
+        `[TvShowsController] Unrequesting season without files, deleting: Season ${season.seasonNumber}`
+      )
+
+      // Delete all episodes
+      await Episode.query().where('seasonId', season.id).delete()
+
+      // Delete the season
+      await season.delete()
+
+      // Check if show should be removed
+      await libraryCleanupService.removeTvShowIfEmpty(showId)
+
+      return response.json({
+        seasonNumber: params.seasonNumber,
+        deleted: true,
+        message: 'Season removed from library',
+      })
+    }
+
+    // Requesting (setting to true)
+    season.requested = newStatus
+    await season.save()
+
+    // Update all episodes in this season
+    await Episode.query().where('seasonId', season.id).update({ requested: newStatus })
+
+    // Trigger search if marking as requested
+    const show = await TvShow.find(params.id)
+    if (show) {
+      requestedSearchTask.searchTvShowEpisodes(show.id).catch((error) => {
+        console.error('Failed to trigger search for season:', error)
+      })
     }
 
     return response.json({
@@ -1168,6 +1234,91 @@ export default class TvShowsController {
     return response.json({
       message: 'File deleted successfully',
       episodeId: episode.id,
+    })
+  }
+
+  /**
+   * Delete an episode completely (optionally with its file)
+   * Use this when user confirms deletion of an episode that has a file
+   */
+  async destroyEpisode({ params, request, response }: HttpContext) {
+    const episode = await Episode.query()
+      .where('id', params.episodeId)
+      .preload('tvShow', (query) => query.preload('rootFolder'))
+      .preload('episodeFile')
+      .first()
+
+    if (!episode) {
+      return response.notFound({ error: 'Episode not found' })
+    }
+
+    const deleteFile = request.input('deleteFile') === 'true'
+    let fileDeleted = false
+    const seasonId = episode.seasonId
+    const showId = episode.tvShowId
+
+    // If episode has a file and deleteFile is requested, delete the file first
+    if (deleteFile && episode.episodeFile && episode.tvShow?.rootFolder) {
+      const absolutePath = path.join(
+        episode.tvShow.rootFolder.path,
+        episode.episodeFile.relativePath
+      )
+      const folderPath = path.dirname(absolutePath)
+
+      try {
+        await fs.unlink(absolutePath)
+        console.log(`[TvShowsController] Deleted episode file: ${absolutePath}`)
+        fileDeleted = true
+
+        // Try to remove the season folder if empty
+        try {
+          const remainingFiles = await fs.readdir(folderPath)
+          if (remainingFiles.length === 0) {
+            await fs.rmdir(folderPath)
+            console.log(`[TvShowsController] Removed empty folder: ${folderPath}`)
+
+            // Try to remove the show folder if also empty
+            const showFolder = path.dirname(folderPath)
+            const remainingSeasons = await fs.readdir(showFolder)
+            if (remainingSeasons.length === 0) {
+              await fs.rmdir(showFolder)
+              console.log(`[TvShowsController] Removed empty show folder: ${showFolder}`)
+            }
+          }
+        } catch {
+          // Folder might not be empty or other error, ignore
+        }
+      } catch (error) {
+        console.error(`[TvShowsController] Failed to delete file: ${absolutePath}`, error)
+        // Continue with record deletion even if file deletion fails
+      }
+
+      // Delete the EpisodeFile record
+      if (episode.episodeFile) {
+        await EpisodeFile.query().where('id', episode.episodeFile.id).delete()
+      }
+    }
+
+    // Delete the episode
+    console.log(
+      `[TvShowsController] Deleting episode: S${episode.seasonNumber}E${episode.episodeNumber}`
+    )
+    await episode.delete()
+
+    // Check if season should be removed
+    const seasonRemoved = await libraryCleanupService.removeSeasonIfEmpty(seasonId)
+
+    // Check if show should be removed
+    if (!seasonRemoved) {
+      await libraryCleanupService.removeTvShowIfEmpty(showId)
+    } else {
+      await libraryCleanupService.removeTvShowIfEmpty(showId)
+    }
+
+    return response.json({
+      id: params.episodeId,
+      deleted: true,
+      fileDeleted,
     })
   }
 }

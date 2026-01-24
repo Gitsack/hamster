@@ -72,9 +72,13 @@ export class MovieImportService {
       } catch (error) {
         const isTimeout = error instanceof Error && error.message === 'Path check timeout'
         if (isTimeout) {
-          result.errors.push(`Path not responding: ${outputPath}. Network storage may not be mounted or is unresponsive.`)
+          result.errors.push(
+            `Path not responding: ${outputPath}. Network storage may not be mounted or is unresponsive.`
+          )
         } else {
-          result.errors.push(`Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`)
+          result.errors.push(
+            `Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`
+          )
         }
         return result
       }
@@ -166,10 +170,7 @@ export class MovieImportService {
   ): Promise<{ success: boolean; error?: string; destinationPath?: string }> {
     // Generate destination path
     const extension = path.extname(sourcePath)
-    const relativePath = await fileNamingService.getMoviePath(
-      { movie, quality },
-      extension
-    )
+    const relativePath = await fileNamingService.getMoviePath({ movie, quality }, extension)
     const absolutePath = path.join(rootFolder.path, relativePath)
 
     // Create directories
@@ -239,7 +240,15 @@ export class MovieImportService {
 
         if (entry.isDirectory()) {
           // Skip sample/extras directories
-          const skipDirs = ['sample', 'samples', 'subs', 'subtitles', 'extras', 'featurettes', 'behind the scenes']
+          const skipDirs = [
+            'sample',
+            'samples',
+            'subs',
+            'subtitles',
+            'extras',
+            'featurettes',
+            'behind the scenes',
+          ]
           if (!skipDirs.includes(entry.name.toLowerCase())) {
             const subFiles = await this.findVideoFiles(fullPath)
             results.push(...subFiles)

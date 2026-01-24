@@ -51,8 +51,8 @@ export default function Home() {
               <span className="text-primary"> Media Library</span>
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Organize, discover, and manage your movies, TV shows, music, and books all in one place.
-              Hamster automatically fetches metadata and keeps your collection organized.
+              Organize, discover, and manage your movies, TV shows, music, and books all in one
+              place. Hamster automatically fetches metadata and keeps your collection organized.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               {isLoggedIn ? (

@@ -27,9 +27,7 @@ export default class UnmatchedFilesController {
     const page = query.page || 1
     const limit = query.limit || 50
 
-    const filesQuery = UnmatchedFile.query()
-      .preload('rootFolder')
-      .orderBy('createdAt', 'desc')
+    const filesQuery = UnmatchedFile.query().preload('rootFolder').orderBy('createdAt', 'desc')
 
     if (query.mediaType) {
       filesQuery.where('mediaType', query.mediaType)
@@ -52,10 +50,7 @@ export default class UnmatchedFilesController {
    * Get a single unmatched file
    */
   async show({ params, response }: HttpContext) {
-    const file = await UnmatchedFile.query()
-      .where('id', params.id)
-      .preload('rootFolder')
-      .first()
+    const file = await UnmatchedFile.query().where('id', params.id).preload('rootFolder').first()
 
     if (!file) {
       return response.notFound({ error: 'Unmatched file not found' })

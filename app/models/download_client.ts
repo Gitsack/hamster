@@ -19,8 +19,8 @@ export interface DownloadClientSettings {
   port?: number
   useSsl?: boolean
   // Remote path mapping (for Docker setups)
-  remotePath?: string  // Path as seen by the download client (e.g., /downloads)
-  localPath?: string   // Path as seen by Hamster (e.g., /mnt/downloads)
+  remotePath?: string // Path as seen by the download client (e.g., /downloads)
+  localPath?: string // Path as seen by Hamster (e.g., /mnt/downloads)
 
   // Usenet specific
   apiKey?: string
@@ -31,7 +31,7 @@ export interface DownloadClientSettings {
   password?: string
   downloadDirectory?: string
   addPaused?: boolean
-  urlBase?: string  // For clients with configurable URL base (e.g., /transmission/)
+  urlBase?: string // For clients with configurable URL base (e.g., /transmission/)
 }
 
 /**

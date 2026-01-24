@@ -5,9 +5,7 @@ export default function Calendar() {
   return (
     <AppLayout title="Calendar">
       <Head title="Calendar" />
-      <div className="text-muted-foreground">
-        Upcoming releases will appear here.
-      </div>
+      <div className="text-muted-foreground">Upcoming releases will appear here.</div>
     </AppLayout>
   )
 }

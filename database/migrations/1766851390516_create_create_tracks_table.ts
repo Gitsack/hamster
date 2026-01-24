@@ -7,7 +7,13 @@ export default class extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
       table.uuid('release_id').references('id').inTable('releases').onDelete('CASCADE').index()
-      table.uuid('album_id').notNullable().references('id').inTable('albums').onDelete('CASCADE').index()
+      table
+        .uuid('album_id')
+        .notNullable()
+        .references('id')
+        .inTable('albums')
+        .onDelete('CASCADE')
+        .index()
       table.uuid('musicbrainz_id').nullable().index()
       table.string('title', 500).notNullable()
       table.integer('disc_number').defaultTo(1).notNullable()

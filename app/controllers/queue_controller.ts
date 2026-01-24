@@ -30,7 +30,8 @@ export default class QueueController {
       QueueController.lastRefresh = now
 
       // Fire and forget - don't await
-      downloadManager.refreshQueue()
+      downloadManager
+        .refreshQueue()
         .catch((error) => {
           console.error('[QueueController] Background refresh failed:', error)
         })
@@ -109,16 +110,17 @@ export default class QueueController {
    * Grab a release
    */
   async grab({ request, response }: HttpContext) {
-    const { title, downloadUrl, size, albumId, releaseId, indexerId, indexerName, guid } = request.only([
-      'title',
-      'downloadUrl',
-      'size',
-      'albumId',
-      'releaseId',
-      'indexerId',
-      'indexerName',
-      'guid',
-    ])
+    const { title, downloadUrl, size, albumId, releaseId, indexerId, indexerName, guid } =
+      request.only([
+        'title',
+        'downloadUrl',
+        'size',
+        'albumId',
+        'releaseId',
+        'indexerId',
+        'indexerName',
+        'guid',
+      ])
 
     if (!title || !downloadUrl) {
       return response.badRequest({ error: 'Title and download URL are required' })
@@ -203,7 +205,8 @@ export default class QueueController {
         .whereNotNull('outputPath')
         .whereIn('status', ['completed', 'importing'])
         .where((query) => {
-          query.whereNotNull('albumId')
+          query
+            .whereNotNull('albumId')
             .orWhereNotNull('bookId')
             .orWhereNotNull('movieId')
             .orWhereNotNull('episodeId')
@@ -230,7 +233,9 @@ export default class QueueController {
 
         console.log(`Attempting to import: ${download.title}`)
         console.log(`  Output path: ${download.outputPath}`)
-        console.log(`  Album ID: ${download.albumId}, Book ID: ${download.bookId}, Movie ID: ${download.movieId}, Episode ID: ${download.episodeId}`)
+        console.log(
+          `  Album ID: ${download.albumId}, Book ID: ${download.bookId}, Movie ID: ${download.movieId}, Episode ID: ${download.episodeId}`
+        )
 
         try {
           let importResult: { success: boolean; filesImported: number; errors: string[] }
@@ -248,7 +253,9 @@ export default class QueueController {
             continue // Should not happen due to query filter
           }
 
-          console.log(`  Import result: ${importResult.filesImported} files, errors: ${importResult.errors.join(', ')}`)
+          console.log(
+            `  Import result: ${importResult.filesImported} files, errors: ${importResult.errors.join(', ')}`
+          )
 
           if (importResult.success && importResult.filesImported > 0) {
             results.imported++
@@ -465,9 +472,7 @@ export default class QueueController {
    * Clear all failed downloads (removes from database, doesn't touch files)
    */
   async clearFailed({ response }: HttpContext) {
-    const deleted = await Download.query()
-      .where('status', 'failed')
-      .delete()
+    const deleted = await Download.query().where('status', 'failed').delete()
 
     return response.json({
       message: `Cleared ${deleted} failed downloads`,

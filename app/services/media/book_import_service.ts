@@ -82,10 +82,14 @@ export class BookImportService {
         const isTimeout = error instanceof Error && error.message === 'Path check timeout'
         if (isTimeout) {
           console.log(`[BookImportService] Path timeout: ${outputPath}`)
-          result.errors.push(`Path not responding: ${outputPath}. Network storage may not be mounted or is unresponsive.`)
+          result.errors.push(
+            `Path not responding: ${outputPath}. Network storage may not be mounted or is unresponsive.`
+          )
         } else {
           console.log(`[BookImportService] Path NOT accessible: ${outputPath}`, error)
-          result.errors.push(`Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`)
+          result.errors.push(
+            `Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`
+          )
         }
         return result
       }
@@ -110,7 +114,9 @@ export class BookImportService {
 
       const rootFolder = await RootFolder.find(author.rootFolderId)
       if (!rootFolder) {
-        console.log(`[BookImportService] Root folder not found for rootFolderId: ${author.rootFolderId}`)
+        console.log(
+          `[BookImportService] Root folder not found for rootFolderId: ${author.rootFolderId}`
+        )
         result.errors.push('Root folder not found for author')
         return result
       }
@@ -120,7 +126,9 @@ export class BookImportService {
       onProgress?.({ phase: 'scanning', total: 0, current: 0 })
       console.log(`[BookImportService] Scanning for book files in: ${outputPath}`)
       const bookFiles = await this.findBookFiles(outputPath)
-      console.log(`[BookImportService] Found ${bookFiles.length} book files: ${bookFiles.join(', ')}`)
+      console.log(
+        `[BookImportService] Found ${bookFiles.length} book files: ${bookFiles.join(', ')}`
+      )
 
       if (bookFiles.length === 0) {
         // List all files in the directory to help debug
@@ -153,15 +161,12 @@ export class BookImportService {
 
       try {
         console.log(`[BookImportService] Importing file: ${preferredFile}`)
-        const importResult = await this.importBookFile(
-          preferredFile,
-          book,
-          author,
-          rootFolder
-        )
+        const importResult = await this.importBookFile(preferredFile, book, author, rootFolder)
 
         if (importResult.success) {
-          console.log(`[BookImportService] Successfully imported to: ${importResult.destinationPath}`)
+          console.log(
+            `[BookImportService] Successfully imported to: ${importResult.destinationPath}`
+          )
           result.filesImported++
           result.importedPath = importResult.destinationPath
         } else {
@@ -195,7 +200,9 @@ export class BookImportService {
       result.errors.push(errorMsg)
     }
 
-    console.log(`[BookImportService] Final result: success=${result.success}, imported=${result.filesImported}, errors=${result.errors.join('; ')}`)
+    console.log(
+      `[BookImportService] Final result: success=${result.success}, imported=${result.filesImported}, errors=${result.errors.join('; ')}`
+    )
     return result
   }
 
@@ -245,10 +252,7 @@ export class BookImportService {
     const format = fileNamingService.getBookFormat(sourcePath)
 
     // Generate destination path
-    const relativePath = await fileNamingService.getBookPath(
-      { book, author, format },
-      extension
-    )
+    const relativePath = await fileNamingService.getBookPath({ book, author, format }, extension)
     const absolutePath = path.join(rootFolder.path, relativePath)
 
     // Create directories

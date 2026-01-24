@@ -34,10 +34,7 @@ export class FileScannerService {
   /**
    * Scan a root folder and update the library
    */
-  async scanRootFolder(
-    rootFolderId: number,
-    onProgress?: ProgressCallback
-  ): Promise<ScanResult> {
+  async scanRootFolder(rootFolderId: number, onProgress?: ProgressCallback): Promise<ScanResult> {
     const rootFolder = await RootFolder.find(rootFolderId)
     if (!rootFolder) {
       return {
@@ -133,7 +130,10 @@ export class FileScannerService {
       }
     }
 
-    const artistPath = path.join(rootFolder.path, await fileNamingService.getArtistFolderName({ artist }))
+    const artistPath = path.join(
+      rootFolder.path,
+      await fileNamingService.getArtistFolderName({ artist })
+    )
     return this.scanDirectory(artistPath, rootFolder, onProgress)
   }
 
@@ -269,10 +269,7 @@ export class FileScannerService {
       }
     } else {
       // Use or create a default "Singles" album
-      album = await Album.query()
-        .where('artistId', artist.id)
-        .where('title', 'Singles')
-        .first()
+      album = await Album.query().where('artistId', artist.id).where('title', 'Singles').first()
 
       if (!album) {
         album = await Album.create({
@@ -311,7 +308,8 @@ export class FileScannerService {
       .first()
 
     if (!track) {
-      const trackTitle = mediaInfo.title || parsed?.title || path.basename(filePath, path.extname(filePath))
+      const trackTitle =
+        mediaInfo.title || parsed?.title || path.basename(filePath, path.extname(filePath))
       track = await Track.create({
         albumId: album.id,
         title: trackTitle,
@@ -429,10 +427,7 @@ export class FileScannerService {
   /**
    * Find existing artist by name or MusicBrainz ID (across all root folders)
    */
-  private async findExistingArtist(
-    name: string,
-    rootFolderId: string
-  ): Promise<Artist | null> {
+  private async findExistingArtist(name: string, rootFolderId: string): Promise<Artist | null> {
     // 1. Try exact match by name in the same root folder first
     const exactMatch = await Artist.query()
       .where('rootFolderId', rootFolderId)
@@ -441,9 +436,7 @@ export class FileScannerService {
     if (exactMatch) return exactMatch
 
     // 2. Try to find by name across all root folders (case-insensitive)
-    const candidates = await Artist.query()
-      .whereRaw('LOWER(name) = ?', [name.toLowerCase()])
-      .exec()
+    const candidates = await Artist.query().whereRaw('LOWER(name) = ?', [name.toLowerCase()]).exec()
 
     if (candidates.length === 0) return null
 
@@ -464,14 +457,10 @@ export class FileScannerService {
     const normalizedTitle = this.normalizeAlbumTitle(title)
 
     // Get all albums for this artist
-    const albums = await Album.query()
-      .where('artistId', artistId)
-      .where('title', '!=', 'Singles')
+    const albums = await Album.query().where('artistId', artistId).where('title', '!=', 'Singles')
 
     // Try exact match first
-    const exactMatch = albums.find(
-      (a) => a.title.toLowerCase() === title.toLowerCase()
-    )
+    const exactMatch = albums.find((a) => a.title.toLowerCase() === title.toLowerCase())
     if (exactMatch) return exactMatch
 
     // Try normalized match
@@ -493,7 +482,10 @@ export class FileScannerService {
       const byYear = albums.find((a) => {
         if (!a.releaseDate) return false
         const albumYear = a.releaseDate.year
-        return albumYear === year && this.normalizeAlbumTitle(a.title).includes(normalizedTitle.substring(0, 5))
+        return (
+          albumYear === year &&
+          this.normalizeAlbumTitle(a.title).includes(normalizedTitle.substring(0, 5))
+        )
       })
       if (byYear) return byYear
     }
@@ -526,9 +518,7 @@ export class FileScannerService {
       const results = await musicBrainzService.searchArtists(artist.name, 5)
       if (results.length > 0) {
         // Find best match (exact name match preferred)
-        const exactMatch = results.find(
-          (r) => r.name.toLowerCase() === artist.name.toLowerCase()
-        )
+        const exactMatch = results.find((r) => r.name.toLowerCase() === artist.name.toLowerCase())
         const best = exactMatch || results[0]
 
         artist.musicbrainzId = best.id
@@ -547,19 +537,14 @@ export class FileScannerService {
   /**
    * Enrich album with MusicBrainz metadata
    */
-  private async enrichAlbumFromMusicBrainz(
-    album: Album,
-    artistName: string
-  ): Promise<void> {
+  private async enrichAlbumFromMusicBrainz(album: Album, artistName: string): Promise<void> {
     if (album.musicbrainzId) return // Already enriched
 
     try {
       const results = await musicBrainzService.searchAlbums(album.title, artistName, 5)
       if (results.length > 0) {
         // Find best match (exact title match preferred)
-        const exactMatch = results.find(
-          (r) => r.title.toLowerCase() === album.title.toLowerCase()
-        )
+        const exactMatch = results.find((r) => r.title.toLowerCase() === album.title.toLowerCase())
         const best = exactMatch || results[0]
 
         album.musicbrainzId = best.id

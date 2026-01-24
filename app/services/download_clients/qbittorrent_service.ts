@@ -143,7 +143,9 @@ export class QBittorrentService {
   /**
    * Test connection to qBittorrent
    */
-  async testConnection(config: QBittorrentConfig): Promise<{ success: boolean; version?: string; error?: string }> {
+  async testConnection(
+    config: QBittorrentConfig
+  ): Promise<{ success: boolean; version?: string; error?: string }> {
     try {
       await this.authenticate(config)
 
@@ -313,7 +315,11 @@ export class QBittorrentService {
   /**
    * Delete torrent(s)
    */
-  async delete(config: QBittorrentConfig, hashes: string | string[], deleteFiles = false): Promise<void> {
+  async delete(
+    config: QBittorrentConfig,
+    hashes: string | string[],
+    deleteFiles = false
+  ): Promise<void> {
     const hashStr = Array.isArray(hashes) ? hashes.join('|') : hashes
     const formData = new URLSearchParams()
     formData.append('hashes', hashStr)
@@ -333,7 +339,10 @@ export class QBittorrentService {
   /**
    * Get torrent properties
    */
-  async getTorrentProperties(config: QBittorrentConfig, hash: string): Promise<Record<string, unknown>> {
+  async getTorrentProperties(
+    config: QBittorrentConfig,
+    hash: string
+  ): Promise<Record<string, unknown>> {
     const response = await this.request(config, `/torrents/properties?hash=${hash}`)
 
     if (!response.ok) {
@@ -346,7 +355,9 @@ export class QBittorrentService {
   /**
    * Get all categories
    */
-  async getCategories(config: QBittorrentConfig): Promise<Record<string, { name: string; savePath: string }>> {
+  async getCategories(
+    config: QBittorrentConfig
+  ): Promise<Record<string, { name: string; savePath: string }>> {
     const response = await this.request(config, '/torrents/categories')
 
     if (!response.ok) {

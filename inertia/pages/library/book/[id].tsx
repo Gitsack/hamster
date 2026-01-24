@@ -25,8 +25,6 @@ import {
   MoreVerticalIcon,
   Delete01Icon,
   Book01Icon,
-  ViewIcon,
-  ViewOffIcon,
   Calendar01Icon,
   FileDownloadIcon,
   Search01Icon,
@@ -83,7 +81,9 @@ export default function BookDetail() {
   const [deletingFile, setDeletingFile] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
-  const [activeDownload, setActiveDownload] = useState<{ progress: number; status: string } | null>(null)
+  const [activeDownload, setActiveDownload] = useState<{ progress: number; status: string } | null>(
+    null
+  )
 
   useEffect(() => {
     fetchBook()
@@ -139,22 +139,42 @@ export default function BookDetail() {
     if (!book) return
 
     const wasRequested = book.requested
+
+    // If unrequesting a book with a file, show confirmation dialog
+    if (wasRequested && book.hasFile) {
+      setDeleteDialogOpen(true)
+      return
+    }
+
     // Optimistic update
     setBook({ ...book, requested: !wasRequested })
     setToggling(true)
 
     try {
-      const response = await fetch(`/api/v1/books/${bookId}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/v1/books/${bookId}/request`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requested: !wasRequested }),
       })
+
+      const data = await response.json()
+
       if (response.ok) {
-        toast.success(wasRequested ? 'Book unrequested' : 'Book requested')
+        if (data.deleted) {
+          // Book was deleted (no file, unrequested)
+          toast.success('Removed from library')
+          router.visit('/library')
+        } else {
+          toast.success(wasRequested ? 'Book unrequested' : 'Book requested')
+        }
+      } else if (data.hasFile) {
+        // Book has a file - show confirmation dialog
+        setBook({ ...book, requested: wasRequested }) // Revert
+        setDeleteDialogOpen(true)
       } else {
         // Revert on error
         setBook({ ...book, requested: wasRequested })
-        toast.error('Failed to update book')
+        toast.error(data.error || 'Failed to update book')
       }
     } catch (error) {
       console.error('Failed to update book:', error)
@@ -166,19 +186,18 @@ export default function BookDetail() {
     }
   }
 
-  const deleteBook = async () => {
+  const deleteBook = async (withFile: boolean = false) => {
     setDeleting(true)
     try {
-      const response = await fetch(`/api/v1/books/${bookId}`, {
+      const url = withFile ? `/api/v1/books/${bookId}?deleteFile=true` : `/api/v1/books/${bookId}`
+
+      const response = await fetch(url, {
         method: 'DELETE',
       })
       if (response.ok) {
-        toast.success('Book deleted')
-        if (book?.author?.id) {
-          router.visit(`/author/${book.author.id}`)
-        } else {
-          router.visit('/library')
-        }
+        toast.success(withFile ? 'Book and files deleted' : 'Book deleted')
+        // Author may have been deleted too - navigate to library
+        router.visit('/library')
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to delete')
@@ -303,20 +322,12 @@ export default function BookDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={toggleWanted}>
-                <HugeiconsIcon
-                  icon={book.requested ? ViewOffIcon : ViewIcon}
-                  className="h-4 w-4 mr-2"
-                />
-                {book.requested ? 'Unrequest' : 'Request'}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
               >
                 <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
-                Delete
+                Remove from Library
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -331,17 +342,10 @@ export default function BookDetail() {
           {/* Book cover */}
           <div className="w-full md:w-48 aspect-[2/3] md:aspect-auto md:h-72 bg-muted rounded-lg overflow-hidden flex-shrink-0">
             {book.coverUrl ? (
-              <img
-                src={book.coverUrl}
-                alt={book.title}
-                className="w-full h-full object-cover"
-              />
+              <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon
-                  icon={Book01Icon}
-                  className="h-16 w-16 text-muted-foreground/50"
-                />
+                <HugeiconsIcon icon={Book01Icon} className="h-16 w-16 text-muted-foreground/50" />
               </div>
             )}
           </div>
@@ -392,9 +396,7 @@ export default function BookDetail() {
                   {book.pageCount} pages
                 </div>
               )}
-              {book.publisher && (
-                <div className="text-muted-foreground">{book.publisher}</div>
-              )}
+              {book.publisher && <div className="text-muted-foreground">{book.publisher}</div>}
             </div>
 
             {/* Series info */}
@@ -449,7 +451,9 @@ export default function BookDetail() {
                 <div className="flex items-center gap-3">
                   <HugeiconsIcon icon={Book01Icon} className="h-8 w-8 text-muted-foreground" />
                   <div>
-                    <p className="font-medium truncate max-w-md">{book.bookFile.path.split('/').pop()}</p>
+                    <p className="font-medium truncate max-w-md">
+                      {book.bookFile.path.split('/').pop()}
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       {book.bookFile.format && `${book.bookFile.format.toUpperCase()} • `}
                       {formatFileSize(book.bookFile.size)}
@@ -486,21 +490,31 @@ export default function BookDetail() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {book.title}?</DialogTitle>
+            <DialogTitle>
+              {book.hasFile ? 'Remove from library?' : `Delete ${book.title}?`}
+            </DialogTitle>
             <DialogDescription>
-              This will remove the book from your library. Files on disk will not be deleted.
+              {book.hasFile
+                ? 'This will permanently delete the downloaded files from disk and remove the book from your library.'
+                : 'This will remove the book from your library.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={deleteBook} disabled={deleting}>
+            <Button
+              variant="destructive"
+              onClick={() => deleteBook(book.hasFile)}
+              disabled={deleting}
+            >
               {deleting ? (
                 <>
                   <Spinner className="mr-2" />
                   Deleting...
                 </>
+              ) : book.hasFile ? (
+                'Delete Files & Remove'
               ) : (
                 'Delete'
               )}

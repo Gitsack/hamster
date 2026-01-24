@@ -1,9 +1,9 @@
-"use client"
+'use client'
 
-import * as React from "react"
-import { createPortal } from "react-dom"
-import { XIcon } from "lucide-react"
-import { cn } from "@/lib/utils"
+import * as React from 'react'
+import { createPortal } from 'react-dom'
+import { XIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface DialogContextValue {
   open: boolean
@@ -15,7 +15,7 @@ const DialogContext = React.createContext<DialogContextValue | null>(null)
 function useDialog() {
   const context = React.useContext(DialogContext)
   if (!context) {
-    throw new Error("Dialog components must be used within a Dialog")
+    throw new Error('Dialog components must be used within a Dialog')
   }
   return context
 }
@@ -27,18 +27,26 @@ interface DialogProps {
   defaultOpen?: boolean
 }
 
-function Dialog({ children, open: controlledOpen, onOpenChange, defaultOpen = false }: DialogProps) {
+function Dialog({
+  children,
+  open: controlledOpen,
+  onOpenChange,
+  defaultOpen = false,
+}: DialogProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
 
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : uncontrolledOpen
 
-  const handleOpenChange = React.useCallback((newOpen: boolean) => {
-    if (!isControlled) {
-      setUncontrolledOpen(newOpen)
-    }
-    onOpenChange?.(newOpen)
-  }, [isControlled, onOpenChange])
+  const handleOpenChange = React.useCallback(
+    (newOpen: boolean) => {
+      if (!isControlled) {
+        setUncontrolledOpen(newOpen)
+      }
+      onOpenChange?.(newOpen)
+    },
+    [isControlled, onOpenChange]
+  )
 
   return (
     <DialogContext.Provider value={{ open, onOpenChange: handleOpenChange }}>
@@ -62,9 +70,9 @@ function DialogTrigger({ asChild, children, onClick, ...props }: DialogTriggerPr
   if (asChild && React.isValidElement(children)) {
     return React.cloneElement(children as React.ReactElement<any>, {
       onClick: (e: React.MouseEvent) => {
-        (children as React.ReactElement<any>).props.onClick?.(e)
+        ;(children as React.ReactElement<any>).props.onClick?.(e)
         onOpenChange(true)
-      }
+      },
     })
   }
 
@@ -75,7 +83,11 @@ function DialogTrigger({ asChild, children, onClick, ...props }: DialogTriggerPr
   )
 }
 
-function DialogClose({ children, onClick, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+function DialogClose({
+  children,
+  onClick,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const { onOpenChange } = useDialog()
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -94,7 +106,12 @@ interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
   showCloseButton?: boolean
 }
 
-function DialogContent({ className, children, showCloseButton = true, ...props }: DialogContentProps) {
+function DialogContent({
+  className,
+  children,
+  showCloseButton = true,
+  ...props
+}: DialogContentProps) {
   const { open, onOpenChange } = useDialog()
   const [mounted, setMounted] = React.useState(false)
 
@@ -143,7 +160,7 @@ function DialogContent({ className, children, showCloseButton = true, ...props }
         aria-modal="true"
         data-slot="dialog-content"
         className={cn(
-          "bg-background relative z-10 grid w-full max-w-lg gap-4 rounded-lg border p-6 shadow-lg outline-none max-h-[85vh] overflow-y-auto mx-4",
+          'bg-background relative z-10 grid w-full max-w-lg gap-4 rounded-lg border p-6 shadow-lg outline-none max-h-[85vh] overflow-y-auto mx-4',
           className
         )}
         {...props}
@@ -165,44 +182,41 @@ function DialogContent({ className, children, showCloseButton = true, ...props }
   )
 }
 
-function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
+      className={cn('flex flex-col gap-2 text-center sm:text-left', className)}
       {...props}
     />
   )
 }
 
-function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
+function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="dialog-footer"
-      className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
-        className
-      )}
+      className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
       {...props}
     />
   )
 }
 
-function DialogTitle({ className, ...props }: React.ComponentProps<"h2">) {
+function DialogTitle({ className, ...props }: React.ComponentProps<'h2'>) {
   return (
     <h2
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      className={cn('text-lg leading-none font-semibold', className)}
       {...props}
     />
   )
 }
 
-function DialogDescription({ className, ...props }: React.ComponentProps<"p">) {
+function DialogDescription({ className, ...props }: React.ComponentProps<'p'>) {
   return (
     <p
       data-slot="dialog-description"
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn('text-muted-foreground text-sm', className)}
       {...props}
     />
   )

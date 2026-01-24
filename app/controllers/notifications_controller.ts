@@ -6,7 +6,15 @@ import { notificationService } from '#services/notifications/notification_servic
 const notificationProviderValidator = vine.compile(
   vine.object({
     name: vine.string().minLength(1).maxLength(255),
-    type: vine.enum(['email', 'discord', 'telegram', 'pushover', 'slack', 'gotify', 'apprise'] as const),
+    type: vine.enum([
+      'email',
+      'discord',
+      'telegram',
+      'pushover',
+      'slack',
+      'gotify',
+      'apprise',
+    ] as const),
     enabled: vine.boolean().optional(),
     settings: vine.record(vine.any()),
     onGrab: vine.boolean().optional(),
@@ -243,10 +251,7 @@ export default class NotificationsController {
   /**
    * Mask sensitive settings for API responses
    */
-  private maskSensitiveSettings(
-    type: string,
-    settings: unknown
-  ): Record<string, unknown> {
+  private maskSensitiveSettings(type: string, settings: unknown): Record<string, unknown> {
     const settingsObj = settings as Record<string, unknown>
     const sensitiveFields: Record<string, string[]> = {
       discord: ['webhookUrl'],
@@ -277,10 +282,7 @@ export default class NotificationsController {
   /**
    * Merge settings, keeping existing values for unchanged masked fields
    */
-  private mergeSettings(
-    existing: unknown,
-    incoming: unknown
-  ): Record<string, unknown> {
+  private mergeSettings(existing: unknown, incoming: unknown): Record<string, unknown> {
     const existingObj = existing as Record<string, unknown>
     const incomingObj = incoming as Record<string, unknown>
     const merged = { ...incomingObj }

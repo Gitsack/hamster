@@ -70,9 +70,28 @@ interface BookNamingData {
 export class FileNamingService {
   private readonly illegalChars = /[<>:"/\\|?*\x00-\x1f]/g
   private readonly reservedNames = [
-    'CON', 'PRN', 'AUX', 'NUL',
-    'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
-    'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+    'CON',
+    'PRN',
+    'AUX',
+    'NUL',
+    'COM1',
+    'COM2',
+    'COM3',
+    'COM4',
+    'COM5',
+    'COM6',
+    'COM7',
+    'COM8',
+    'COM9',
+    'LPT1',
+    'LPT2',
+    'LPT3',
+    'LPT4',
+    'LPT5',
+    'LPT6',
+    'LPT7',
+    'LPT8',
+    'LPT9',
   ]
 
   private patternsCache: NamingPatterns | null = null
@@ -274,8 +293,19 @@ export class FileNamingService {
    */
   getSupportedAudioExtensions(): string[] {
     return [
-      '.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus',
-      '.wav', '.wma', '.alac', '.ape', '.wv', '.dsf', '.dff',
+      '.flac',
+      '.mp3',
+      '.m4a',
+      '.aac',
+      '.ogg',
+      '.opus',
+      '.wav',
+      '.wma',
+      '.alac',
+      '.ape',
+      '.wv',
+      '.dsf',
+      '.dff',
     ]
   }
 
@@ -360,8 +390,20 @@ export class FileNamingService {
    */
   getSupportedVideoExtensions(): string[] {
     return [
-      '.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm',
-      '.m4v', '.mpg', '.mpeg', '.ts', '.m2ts', '.vob', '.ogv',
+      '.mkv',
+      '.mp4',
+      '.avi',
+      '.mov',
+      '.wmv',
+      '.flv',
+      '.webm',
+      '.m4v',
+      '.mpg',
+      '.mpeg',
+      '.ts',
+      '.m2ts',
+      '.vob',
+      '.ogv',
     ]
   }
 

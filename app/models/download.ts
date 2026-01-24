@@ -11,7 +11,13 @@ import Episode from './episode.js'
 import Book from './book.js'
 import type { MediaType } from './app_setting.js'
 
-export type DownloadStatus = 'queued' | 'downloading' | 'paused' | 'completed' | 'failed' | 'importing'
+export type DownloadStatus =
+  | 'queued'
+  | 'downloading'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'importing'
 
 export interface NzbInfo {
   guid?: string

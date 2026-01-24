@@ -24,10 +24,7 @@ class DownloadMonitorTask {
     this.run().catch(console.error)
 
     // Then run periodically
-    this.intervalId = setInterval(
-      () => this.run().catch(console.error),
-      intervalSeconds * 1000
-    )
+    this.intervalId = setInterval(() => this.run().catch(console.error), intervalSeconds * 1000)
   }
 
   /**

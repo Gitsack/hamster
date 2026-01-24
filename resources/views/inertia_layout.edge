@@ -1,21 +1,23 @@
 <!DOCTYPE html>
 <html>
 
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
-  <title inertia>Hamster</title>
+    <title inertia>
+      Hamster
+    </title>
 
-  @stack('dumper')
-  @viteReactRefresh()
-  @inertiaHead()
-  @vite(['inertia/app/app.tsx', `inertia/pages/${page.component}.tsx`])
-</head>
+    @stack('dumper')
+    @viteReactRefresh()
+    @inertiaHead()
+    @vite(['inertia/app/app.tsx', `inertia/pages/${page.component}.tsx`])
+  </head>
 
-<body class="min-h-screen w-full overflow-x-hidden font-sans">
-  @inertia()
-</body>
+  <body class="min-h-screen w-full overflow-x-hidden font-sans">
+    @inertia()
+  </body>
 
 </html>

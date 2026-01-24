@@ -8,13 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import {
-  Select,
-  SelectPopup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -67,21 +61,32 @@ import {
   Calendar03Icon,
   InformationCircleIcon,
 } from '@hugeicons/core-free-icons'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
-import { useState, useEffect, useMemo, useCallback, useRef, Component, ErrorInfo, ReactNode } from 'react'
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  Component,
+  ErrorInfo,
+  ReactNode,
+} from 'react'
 import { toast } from 'sonner'
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
 import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dialog'
-import { MediaStatusBadge, CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
+import {
+  MediaStatusBadge,
+  CardStatusBadge,
+  type MediaItemStatus,
+} from '@/components/library/media-status-badge'
 
 // Error boundary to catch rendering errors
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
   constructor(props: { children: ReactNode }) {
     super(props)
     this.state = { hasError: false, error: null }
@@ -300,7 +305,8 @@ function formatAge(dateString: string): string {
 
 export default function SearchPage() {
   // Get initial mode from URL params
-  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+  const urlParams =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   const initialMode = (urlParams?.get('mode') as MediaType | 'direct') || 'music'
   const initialType = (urlParams?.get('type') as MusicSearchType) || 'artist'
 
@@ -323,7 +329,9 @@ export default function SearchPage() {
   const [movieResults, setMovieResults] = useState<MovieSearchResult[]>([])
 
   // Movies discover results (all categories as lanes)
-  const [movieDiscoverLanes, setMovieDiscoverLanes] = useState<Record<string, MovieSearchResult[]>>({})
+  const [movieDiscoverLanes, setMovieDiscoverLanes] = useState<Record<string, MovieSearchResult[]>>(
+    {}
+  )
   const [loadingMovieDiscover, setLoadingMovieDiscover] = useState(false)
 
   // TV search results
@@ -354,14 +362,18 @@ export default function SearchPage() {
 
   // Download clients
   const [downloadClients, setDownloadClients] = useState<DownloadClient[]>([])
-  const [selectedIndexerResult, setSelectedIndexerResult] = useState<IndexerSearchResult | null>(null)
+  const [selectedIndexerResult, setSelectedIndexerResult] = useState<IndexerSearchResult | null>(
+    null
+  )
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [bulkDownloading, setBulkDownloading] = useState(false)
 
   // Add dialogs state
   const [qualityProfiles, setQualityProfiles] = useState<QualityProfile[]>([])
-  const [rootFolders, setRootFolders] = useState<{ id: string; path: string; mediaType: string }[]>([])
+  const [rootFolders, setRootFolders] = useState<{ id: string; path: string; mediaType: string }[]>(
+    []
+  )
   const [loadingOptions, setLoadingOptions] = useState(true)
 
   // Music add state
@@ -451,10 +463,22 @@ export default function SearchPage() {
   const [addBooks, setAddBooks] = useState(true)
 
   // Filtered quality profiles by media type
-  const movieProfiles = useMemo(() => qualityProfiles.filter((p) => p.mediaType === 'movies'), [qualityProfiles])
-  const tvProfiles = useMemo(() => qualityProfiles.filter((p) => p.mediaType === 'tv'), [qualityProfiles])
-  const musicProfiles = useMemo(() => qualityProfiles.filter((p) => p.mediaType === 'music'), [qualityProfiles])
-  const bookProfiles = useMemo(() => qualityProfiles.filter((p) => p.mediaType === 'books'), [qualityProfiles])
+  const movieProfiles = useMemo(
+    () => qualityProfiles.filter((p) => p.mediaType === 'movies'),
+    [qualityProfiles]
+  )
+  const tvProfiles = useMemo(
+    () => qualityProfiles.filter((p) => p.mediaType === 'tv'),
+    [qualityProfiles]
+  )
+  const musicProfiles = useMemo(
+    () => qualityProfiles.filter((p) => p.mediaType === 'music'),
+    [qualityProfiles]
+  )
+  const bookProfiles = useMemo(
+    () => qualityProfiles.filter((p) => p.mediaType === 'books'),
+    [qualityProfiles]
+  )
 
   // Set default profile when dialogs open
   useEffect(() => {
@@ -658,17 +682,23 @@ export default function SearchPage() {
       } else if (searchMode === 'music') {
         switch (musicSearchType) {
           case 'artist': {
-            const response = await fetch(`/api/v1/artists/search?q=${encodeURIComponent(searchQuery)}`)
+            const response = await fetch(
+              `/api/v1/artists/search?q=${encodeURIComponent(searchQuery)}`
+            )
             if (response.ok) setArtistResults(await response.json())
             break
           }
           case 'album': {
-            const response = await fetch(`/api/v1/albums/search?q=${encodeURIComponent(searchQuery)}`)
+            const response = await fetch(
+              `/api/v1/albums/search?q=${encodeURIComponent(searchQuery)}`
+            )
             if (response.ok) setAlbumResults(await response.json())
             break
           }
           case 'track': {
-            const response = await fetch(`/api/v1/tracks/search?q=${encodeURIComponent(searchQuery)}`)
+            const response = await fetch(
+              `/api/v1/tracks/search?q=${encodeURIComponent(searchQuery)}`
+            )
             if (response.ok) setTrackResults(await response.json())
             break
           }
@@ -681,7 +711,9 @@ export default function SearchPage() {
         if (response.ok) setTvShowResults(await response.json())
       } else if (searchMode === 'books') {
         if (booksSearchType === 'author') {
-          const response = await fetch(`/api/v1/authors/search?q=${encodeURIComponent(searchQuery)}`)
+          const response = await fetch(
+            `/api/v1/authors/search?q=${encodeURIComponent(searchQuery)}`
+          )
           if (response.ok) setAuthorResults(await response.json())
         } else {
           const response = await fetch(`/api/v1/books/search?q=${encodeURIComponent(searchQuery)}`)
@@ -703,20 +735,28 @@ export default function SearchPage() {
   }
 
   // Movie discover categories config
-  const movieDiscoverCategories = useMemo(() => [
-    { key: 'popular', label: 'Popular Movies' },
-    { key: 'now_playing', label: 'Now in Cinemas' },
-    { key: 'upcoming', label: 'Upcoming Movies' },
-    { key: 'trending', label: 'Trending This Week' },
-  ] as const, [])
+  const movieDiscoverCategories = useMemo(
+    () =>
+      [
+        { key: 'popular', label: 'Popular Movies' },
+        { key: 'now_playing', label: 'Now in Cinemas' },
+        { key: 'upcoming', label: 'Upcoming Movies' },
+        { key: 'trending', label: 'Trending This Week' },
+      ] as const,
+    []
+  )
 
   // TV discover categories config
-  const tvDiscoverCategories = useMemo(() => [
-    { key: 'popular', label: 'Popular Shows' },
-    { key: 'on_the_air', label: 'Currently Airing' },
-    { key: 'top_rated', label: 'Top Rated' },
-    { key: 'trending', label: 'Trending This Week' },
-  ] as const, [])
+  const tvDiscoverCategories = useMemo(
+    () =>
+      [
+        { key: 'popular', label: 'Popular Shows' },
+        { key: 'on_the_air', label: 'Currently Airing' },
+        { key: 'top_rated', label: 'Top Rated' },
+        { key: 'trending', label: 'Trending This Week' },
+      ] as const,
+    []
+  )
 
   // Fetch all movie discover lanes
   const fetchAllMovieDiscoverLanes = useCallback(async () => {
@@ -764,12 +804,31 @@ export default function SearchPage() {
 
   // Load discover content when switching to movies/tv tab with no search query
   useEffect(() => {
-    if (searchMode === 'movies' && !searchQuery && Object.keys(movieDiscoverLanes).length === 0 && !loadingMovieDiscover) {
+    if (
+      searchMode === 'movies' &&
+      !searchQuery &&
+      Object.keys(movieDiscoverLanes).length === 0 &&
+      !loadingMovieDiscover
+    ) {
       fetchAllMovieDiscoverLanes()
-    } else if (searchMode === 'tv' && !searchQuery && Object.keys(tvDiscoverLanes).length === 0 && !loadingTvDiscover) {
+    } else if (
+      searchMode === 'tv' &&
+      !searchQuery &&
+      Object.keys(tvDiscoverLanes).length === 0 &&
+      !loadingTvDiscover
+    ) {
       fetchAllTvDiscoverLanes()
     }
-  }, [searchMode, searchQuery, movieDiscoverLanes, tvDiscoverLanes, loadingMovieDiscover, loadingTvDiscover, fetchAllMovieDiscoverLanes, fetchAllTvDiscoverLanes])
+  }, [
+    searchMode,
+    searchQuery,
+    movieDiscoverLanes,
+    tvDiscoverLanes,
+    loadingMovieDiscover,
+    loadingTvDiscover,
+    fetchAllMovieDiscoverLanes,
+    fetchAllTvDiscoverLanes,
+  ])
 
   // Direct search functions
   const toggleSort = (field: SortField) => {
@@ -918,7 +977,9 @@ export default function SearchPage() {
         toast.success(`${artist.name} added to library`)
         setAddArtistDialogOpen(false)
         setArtistResults((prev) =>
-          prev.map((r) => r.musicbrainzId === artist.musicbrainzId ? { ...r, inLibrary: true } : r)
+          prev.map((r) =>
+            r.musicbrainzId === artist.musicbrainzId ? { ...r, inLibrary: true } : r
+          )
         )
         router.visit(`/artist/${data.id}`)
       } else {
@@ -958,7 +1019,7 @@ export default function SearchPage() {
         toast.success(`${album.title} added to library`)
         setAddAlbumDialogOpen(false)
         setAlbumResults((prev) =>
-          prev.map((r) => r.musicbrainzId === album.musicbrainzId ? { ...r, inLibrary: true } : r)
+          prev.map((r) => (r.musicbrainzId === album.musicbrainzId ? { ...r, inLibrary: true } : r))
         )
         router.visit(`/album/${data.id}`)
       } else {
@@ -978,7 +1039,11 @@ export default function SearchPage() {
     addAlbumWithProfile(selectedAlbum, selectedQualityProfile)
   }
 
-  const addMovieWithProfile = async (movie: MovieSearchResult, qualityProfileId: string, navigate = true) => {
+  const addMovieWithProfile = async (
+    movie: MovieSearchResult,
+    qualityProfileId: string,
+    navigate = true
+  ) => {
     const movieRootFolder = rootFolders.find((rf) => rf.mediaType === 'movies')
     if (!movieRootFolder) {
       toast.error('No root folder configured for movies. Please add one in Settings.')
@@ -1007,13 +1072,21 @@ export default function SearchPage() {
         setAddMovieDialogOpen(false)
         // Update in search results
         setMovieResults((prev) =>
-          prev.map((r) => r.tmdbId === movie.tmdbId ? { ...r, inLibrary: true, libraryId: data.id, requested: true } : r)
+          prev.map((r) =>
+            r.tmdbId === movie.tmdbId
+              ? { ...r, inLibrary: true, libraryId: data.id, requested: true }
+              : r
+          )
         )
         // Update in discover lanes
         setMovieDiscoverLanes((prev) => {
           const updated: Record<string, MovieSearchResult[]> = {}
           for (const [key, lane] of Object.entries(prev)) {
-            updated[key] = lane.map((m) => m.tmdbId === movie.tmdbId ? { ...m, inLibrary: true, libraryId: data.id, requested: true } : m)
+            updated[key] = lane.map((m) =>
+              m.tmdbId === movie.tmdbId
+                ? { ...m, inLibrary: true, libraryId: data.id, requested: true }
+                : m
+            )
           }
           return updated
         })
@@ -1037,7 +1110,12 @@ export default function SearchPage() {
     addMovieWithProfile(selectedMovie, selectedQualityProfile)
   }
 
-  const addTvShowWithProfile = async (show: TvShowSearchResult, qualityProfileId: string, selection: SeasonEpisodeSelection | null, navigate = true) => {
+  const addTvShowWithProfile = async (
+    show: TvShowSearchResult,
+    qualityProfileId: string,
+    selection: SeasonEpisodeSelection | null,
+    navigate = true
+  ) => {
     const tvRootFolder = rootFolders.find((rf) => rf.mediaType === 'tv')
     if (!tvRootFolder) {
       toast.error('No root folder configured for TV shows. Please add one in Settings.')
@@ -1069,13 +1147,21 @@ export default function SearchPage() {
         setEpisodeSelection(null)
         // Update in search results
         setTvShowResults((prev) =>
-          prev.map((r) => r.tmdbId === show.tmdbId ? { ...r, inLibrary: true, libraryId: data.id, requested: true } : r)
+          prev.map((r) =>
+            r.tmdbId === show.tmdbId
+              ? { ...r, inLibrary: true, libraryId: data.id, requested: true }
+              : r
+          )
         )
         // Update in discover lanes
         setTvDiscoverLanes((prev) => {
           const updated: Record<string, TvShowSearchResult[]> = {}
           for (const [key, lane] of Object.entries(prev)) {
-            updated[key] = lane.map((s) => s.tmdbId === show.tmdbId ? { ...s, inLibrary: true, libraryId: data.id, requested: true } : s)
+            updated[key] = lane.map((s) =>
+              s.tmdbId === show.tmdbId
+                ? { ...s, inLibrary: true, libraryId: data.id, requested: true }
+                : s
+            )
           }
           return updated
         })
@@ -1108,32 +1194,57 @@ export default function SearchPage() {
 
     // Helper to update movie in all relevant state
     const updateMovie = (updater: (m: MovieSearchResult) => MovieSearchResult) => {
-      setMovieResults((prev) => prev.map((m) => m.tmdbId === tmdbId ? updater(m) : m))
+      setMovieResults((prev) => prev.map((m) => (m.tmdbId === tmdbId ? updater(m) : m)))
       setMovieDiscoverLanes((prev) => {
         const updated: Record<string, MovieSearchResult[]> = {}
         for (const [key, lane] of Object.entries(prev)) {
-          updated[key] = lane.map((m) => m.tmdbId === tmdbId ? updater(m) : m)
+          updated[key] = lane.map((m) => (m.tmdbId === tmdbId ? updater(m) : m))
         }
         return updated
       })
     }
 
     const wasRequested = movie.requested
+
+    // If unrequesting a movie with a file, show error
+    if (wasRequested && movie.hasFile) {
+      toast.error('Movie has downloaded files. Delete files first before unrequesting.')
+      setTogglingMovies((prev) => {
+        const next = new Set(prev)
+        next.delete(tmdbId)
+        return next
+      })
+      return
+    }
+
     // Optimistic update
     updateMovie((m) => ({ ...m, requested: !wasRequested }))
 
     try {
-      const response = await fetch(`/api/v1/movies/${movie.libraryId}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/v1/movies/${movie.libraryId}/request`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requested: !wasRequested }),
       })
+
+      const data = await response.json()
+
       if (response.ok) {
-        toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
+        if (data.deleted) {
+          // Movie was deleted - update local state to remove from library
+          toast.success('Removed from library')
+          updateMovie((m) => ({ ...m, inLibrary: false, libraryId: undefined, requested: false }))
+        } else {
+          toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
+        }
+      } else if (data.hasFile) {
+        // Revert on error
+        updateMovie((m) => ({ ...m, requested: wasRequested }))
+        toast.error('Movie has downloaded files. Delete files first before unrequesting.')
       } else {
         // Revert on error
         updateMovie((m) => ({ ...m, requested: wasRequested }))
-        toast.error('Failed to update movie')
+        toast.error(data.error || 'Failed to update movie')
       }
     } catch (error) {
       console.error('Failed to update movie:', error)
@@ -1157,11 +1268,11 @@ export default function SearchPage() {
 
     // Helper to update show in all relevant state
     const updateShow = (updater: (s: TvShowSearchResult) => TvShowSearchResult) => {
-      setTvShowResults((prev) => prev.map((s) => s.tmdbId === tmdbId ? updater(s) : s))
+      setTvShowResults((prev) => prev.map((s) => (s.tmdbId === tmdbId ? updater(s) : s)))
       setTvDiscoverLanes((prev) => {
         const updated: Record<string, TvShowSearchResult[]> = {}
         for (const [key, lane] of Object.entries(prev)) {
-          updated[key] = lane.map((s) => s.tmdbId === tmdbId ? updater(s) : s)
+          updated[key] = lane.map((s) => (s.tmdbId === tmdbId ? updater(s) : s))
         }
         return updated
       })
@@ -1201,34 +1312,81 @@ export default function SearchPage() {
   const toggleMovieDetailsRequested = async () => {
     if (!movieDetails?.libraryId || !movieDetails?.inLibrary) return
 
-    setTogglingDetails(true)
     const wasRequested = movieDetails.requested
+
+    // If unrequesting a movie with a file, show error
+    if (wasRequested && movieDetails.hasFile) {
+      toast.error('Movie has downloaded files. Delete files first before unrequesting.')
+      return
+    }
+
+    setTogglingDetails(true)
 
     // Optimistic update
     setMovieDetails({ ...movieDetails, requested: !wasRequested })
 
     try {
-      const response = await fetch(`/api/v1/movies/${movieDetails.libraryId}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/v1/movies/${movieDetails.libraryId}/request`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requested: !wasRequested }),
       })
+
+      const data = await response.json()
+
       if (response.ok) {
-        toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
-        // Also update in the search results/discover lanes
         const tmdbId = movieDetails.tmdbId
-        setMovieResults((prev) => prev.map((m) => m.tmdbId === tmdbId ? { ...m, requested: !wasRequested } : m))
-        setMovieDiscoverLanes((prev) => {
-          const updated: Record<string, MovieSearchResult[]> = {}
-          for (const [key, lane] of Object.entries(prev)) {
-            updated[key] = lane.map((m) => m.tmdbId === tmdbId ? { ...m, requested: !wasRequested } : m)
-          }
-          return updated
-        })
+        if (data.deleted) {
+          // Movie was deleted - update local state to remove from library
+          toast.success('Removed from library')
+          setMovieDetails({
+            ...movieDetails,
+            inLibrary: false,
+            libraryId: undefined,
+            requested: false,
+          })
+          setMovieResults((prev) =>
+            prev.map((m) =>
+              m.tmdbId === tmdbId
+                ? { ...m, inLibrary: false, libraryId: undefined, requested: false }
+                : m
+            )
+          )
+          setMovieDiscoverLanes((prev) => {
+            const updated: Record<string, MovieSearchResult[]> = {}
+            for (const [key, lane] of Object.entries(prev)) {
+              updated[key] = lane.map((m) =>
+                m.tmdbId === tmdbId
+                  ? { ...m, inLibrary: false, libraryId: undefined, requested: false }
+                  : m
+              )
+            }
+            return updated
+          })
+        } else {
+          toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
+          // Also update in the search results/discover lanes
+          setMovieResults((prev) =>
+            prev.map((m) => (m.tmdbId === tmdbId ? { ...m, requested: !wasRequested } : m))
+          )
+          setMovieDiscoverLanes((prev) => {
+            const updated: Record<string, MovieSearchResult[]> = {}
+            for (const [key, lane] of Object.entries(prev)) {
+              updated[key] = lane.map((m) =>
+                m.tmdbId === tmdbId ? { ...m, requested: !wasRequested } : m
+              )
+            }
+            return updated
+          })
+        }
+      } else if (data.hasFile) {
+        // Revert on error
+        setMovieDetails({ ...movieDetails, requested: wasRequested })
+        toast.error('Movie has downloaded files. Delete files first before unrequesting.')
       } else {
         // Revert on error
         setMovieDetails({ ...movieDetails, requested: wasRequested })
-        toast.error('Failed to update movie')
+        toast.error(data.error || 'Failed to update movie')
       }
     } catch (error) {
       console.error('Failed to update movie:', error)
@@ -1259,11 +1417,15 @@ export default function SearchPage() {
         toast.success(wasRequested ? 'TV show unrequested' : 'TV show requested')
         // Also update in the search results/discover lanes
         const tmdbId = tvShowDetails.tmdbId
-        setTvShowResults((prev) => prev.map((s) => s.tmdbId === tmdbId ? { ...s, requested: !wasRequested } : s))
+        setTvShowResults((prev) =>
+          prev.map((s) => (s.tmdbId === tmdbId ? { ...s, requested: !wasRequested } : s))
+        )
         setTvDiscoverLanes((prev) => {
           const updated: Record<string, TvShowSearchResult[]> = {}
           for (const [key, lane] of Object.entries(prev)) {
-            updated[key] = lane.map((s) => s.tmdbId === tmdbId ? { ...s, requested: !wasRequested } : s)
+            updated[key] = lane.map((s) =>
+              s.tmdbId === tmdbId ? { ...s, requested: !wasRequested } : s
+            )
           }
           return updated
         })
@@ -1331,7 +1493,11 @@ export default function SearchPage() {
     }
   }
 
-  const addAuthorWithProfile = async (author: AuthorSearchResult, qualityProfileId: string, shouldAddBooks: boolean = true) => {
+  const addAuthorWithProfile = async (
+    author: AuthorSearchResult,
+    qualityProfileId: string,
+    shouldAddBooks: boolean = true
+  ) => {
     const booksRootFolder = rootFolders.find((rf) => rf.mediaType === 'books')
     if (!booksRootFolder) {
       toast.error('No root folder configured for books. Please add one in Settings.')
@@ -1358,7 +1524,9 @@ export default function SearchPage() {
         toast.success(`${author.name} added to library`)
         setAddAuthorDialogOpen(false)
         setAuthorResults((prev) =>
-          prev.map((r) => r.openlibraryId === author.openlibraryId ? { ...r, inLibrary: true } : r)
+          prev.map((r) =>
+            r.openlibraryId === author.openlibraryId ? { ...r, inLibrary: true } : r
+          )
         )
         router.visit(`/author/${data.id}`)
       } else {
@@ -1406,7 +1574,7 @@ export default function SearchPage() {
         toast.success(`${book.title} added to library`)
         setAddBookDialogOpen(false)
         setBookResults((prev) =>
-          prev.map((r) => r.openlibraryId === book.openlibraryId ? { ...r, inLibrary: true } : r)
+          prev.map((r) => (r.openlibraryId === book.openlibraryId ? { ...r, inLibrary: true } : r))
         )
         router.visit(`/book/${data.id}`)
       } else {
@@ -1515,7 +1683,7 @@ export default function SearchPage() {
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
 
   const handleImageError = useCallback((key: string) => {
-    setFailedImages(prev => new Set(prev).add(key))
+    setFailedImages((prev) => new Set(prev).add(key))
   }, [])
 
   // Sortable header component
@@ -1538,7 +1706,14 @@ export default function SearchPage() {
 
   // Render search result card
   const renderResultCard = (
-    item: { id: string; name: string; subtitle?: string; extra?: string; imageUrl?: string; inLibrary: boolean },
+    item: {
+      id: string
+      name: string
+      subtitle?: string
+      extra?: string
+      imageUrl?: string
+      inLibrary: boolean
+    },
     icon: typeof MusicNote01Icon,
     onClick: () => void,
     onAdd: () => void
@@ -1547,7 +1722,11 @@ export default function SearchPage() {
     const showImage = item.imageUrl && !failedImages.has(imageKey)
 
     return (
-      <Card key={item.id} className={`${item.inLibrary ? 'opacity-60' : ''} cursor-pointer hover:bg-muted/50 transition-colors`} onClick={onClick}>
+      <Card
+        key={item.id}
+        className={`${item.inLibrary ? 'opacity-60' : ''} cursor-pointer hover:bg-muted/50 transition-colors`}
+        onClick={onClick}
+      >
         <CardContent className="flex items-center gap-4 p-4">
           <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden">
             {showImage ? (
@@ -1582,7 +1761,13 @@ export default function SearchPage() {
                 In Library
               </Badge>
             ) : (
-              <Button size="sm" onClick={(e) => { e.stopPropagation(); onAdd() }}>
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAdd()
+                }}
+              >
                 <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
                 Add
               </Button>
@@ -1624,7 +1809,9 @@ export default function SearchPage() {
     if (musicSearchType === 'artist' && artistResults.length > 0) {
       return (
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">Found {artistResults.length} artists</div>
+          <div className="text-sm text-muted-foreground mb-4">
+            Found {artistResults.length} artists
+          </div>
           {artistResults.map((artist) => {
             const isExpanded = expandedArtistId === artist.musicbrainzId
             const albums = artistAlbums[artist.musicbrainzId] || []
@@ -1635,7 +1822,10 @@ export default function SearchPage() {
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
                     <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                      <HugeiconsIcon icon={MusicNote01Icon} className="h-8 w-8 text-muted-foreground/50" />
+                      <HugeiconsIcon
+                        icon={MusicNote01Icon}
+                        className="h-8 w-8 text-muted-foreground/50"
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium">{artist.name}</h3>
@@ -1704,17 +1894,25 @@ export default function SearchPage() {
                                         onError={() => handleImageError(imageKey)}
                                       />
                                     ) : (
-                                      <HugeiconsIcon icon={Album01Icon} className="h-6 w-6 text-muted-foreground/50" />
+                                      <HugeiconsIcon
+                                        icon={Album01Icon}
+                                        className="h-6 w-6 text-muted-foreground/50"
+                                      />
                                     )}
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <p className="font-medium text-sm truncate">{album.title}</p>
-                                    <p className="text-xs text-muted-foreground">{album.releaseDate || 'Unknown date'}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {album.releaseDate || 'Unknown date'}
+                                    </p>
                                   </div>
                                   <div className="flex items-center gap-2">
                                     {album.inLibrary ? (
                                       <Badge variant="outline" className="text-xs gap-1">
-                                        <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                                        <HugeiconsIcon
+                                          icon={CheckmarkCircle01Icon}
+                                          className="h-3 w-3"
+                                        />
                                         In Library
                                       </Badge>
                                     ) : (
@@ -1722,7 +1920,9 @@ export default function SearchPage() {
                                         size="sm"
                                         variant="outline"
                                         className="h-7 text-xs"
-                                        onClick={() => { handleAddAlbum(album) }}
+                                        onClick={() => {
+                                          handleAddAlbum(album)
+                                        }}
                                       >
                                         <HugeiconsIcon icon={Add01Icon} className="h-3 w-3 mr-1" />
                                         Add
@@ -1752,15 +1952,24 @@ export default function SearchPage() {
                                         Loading tracks...
                                       </div>
                                     ) : tracks.length === 0 ? (
-                                      <p className="text-xs text-muted-foreground">No tracks found</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        No tracks found
+                                      </p>
                                     ) : (
                                       <div className="space-y-1">
                                         {tracks.map((track, idx) => (
-                                          <div key={track.musicbrainzId} className="flex items-center gap-2 text-xs py-1 group">
-                                            <span className="text-muted-foreground w-5 text-right">{idx + 1}.</span>
+                                          <div
+                                            key={track.musicbrainzId}
+                                            className="flex items-center gap-2 text-xs py-1 group"
+                                          >
+                                            <span className="text-muted-foreground w-5 text-right">
+                                              {idx + 1}.
+                                            </span>
                                             <span className="flex-1 truncate">{track.title}</span>
                                             {track.duration && (
-                                              <span className="text-muted-foreground">{formatDuration(track.duration)}</span>
+                                              <span className="text-muted-foreground">
+                                                {formatDuration(track.duration)}
+                                              </span>
                                             )}
                                             {!album.inLibrary && (
                                               <Button
@@ -1769,7 +1978,10 @@ export default function SearchPage() {
                                                 className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                                                 onClick={() => handleAddAlbum(album, track.title)}
                                               >
-                                                <HugeiconsIcon icon={Add01Icon} className="h-3 w-3" />
+                                                <HugeiconsIcon
+                                                  icon={Add01Icon}
+                                                  className="h-3 w-3"
+                                                />
                                               </Button>
                                             )}
                                           </div>
@@ -1796,7 +2008,9 @@ export default function SearchPage() {
     if (musicSearchType === 'album' && albumResults.length > 0) {
       return (
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">Found {albumResults.length} albums</div>
+          <div className="text-sm text-muted-foreground mb-4">
+            Found {albumResults.length} albums
+          </div>
           {albumResults.map((album) => {
             const isExpanded = expandedAlbumId === album.musicbrainzId
             const tracks = albumTracks[album.musicbrainzId] || []
@@ -1807,14 +2021,19 @@ export default function SearchPage() {
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
                     <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                      <HugeiconsIcon icon={Album01Icon} className="h-8 w-8 text-muted-foreground/50" />
+                      <HugeiconsIcon
+                        icon={Album01Icon}
+                        className="h-8 w-8 text-muted-foreground/50"
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium">{album.title}</h3>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
                         <button
                           className="hover:text-primary hover:underline transition-colors"
-                          onClick={() => navigateToArtist(album.artistName, album.artistMusicbrainzId)}
+                          onClick={() =>
+                            navigateToArtist(album.artistName, album.artistMusicbrainzId)
+                          }
                         >
                           {album.artistName}
                         </button>
@@ -1833,7 +2052,12 @@ export default function SearchPage() {
                           In Library
                         </Badge>
                       ) : (
-                        <Button size="sm" onClick={() => { handleAddAlbum(album) }}>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            handleAddAlbum(album)
+                          }}
+                        >
                           <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
                           Add
                         </Button>
@@ -1866,11 +2090,18 @@ export default function SearchPage() {
                       ) : (
                         <div className="space-y-1">
                           {tracks.map((track, idx) => (
-                            <div key={track.musicbrainzId} className="flex items-center gap-3 text-sm py-1.5 px-2 rounded hover:bg-muted/50">
-                              <span className="text-muted-foreground w-6 text-right">{idx + 1}.</span>
+                            <div
+                              key={track.musicbrainzId}
+                              className="flex items-center gap-3 text-sm py-1.5 px-2 rounded hover:bg-muted/50"
+                            >
+                              <span className="text-muted-foreground w-6 text-right">
+                                {idx + 1}.
+                              </span>
                               <span className="flex-1 truncate">{track.title}</span>
                               {track.duration && (
-                                <span className="text-muted-foreground">{formatDuration(track.duration)}</span>
+                                <span className="text-muted-foreground">
+                                  {formatDuration(track.duration)}
+                                </span>
                               )}
                             </div>
                           ))}
@@ -1889,12 +2120,17 @@ export default function SearchPage() {
     if (musicSearchType === 'track' && trackResults.length > 0) {
       return (
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">Found {trackResults.length} tracks</div>
+          <div className="text-sm text-muted-foreground mb-4">
+            Found {trackResults.length} tracks
+          </div>
           {trackResults.map((track) => (
             <Card key={track.musicbrainzId} className={track.inLibrary ? 'opacity-60' : ''}>
               <CardContent className="flex items-center gap-4 p-4">
                 <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                  <HugeiconsIcon icon={MusicNoteSquare01Icon} className="h-8 w-8 text-muted-foreground/50" />
+                  <HugeiconsIcon
+                    icon={MusicNoteSquare01Icon}
+                    className="h-8 w-8 text-muted-foreground/50"
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium">{track.title}</h3>
@@ -1910,7 +2146,9 @@ export default function SearchPage() {
                         <span>•</span>
                         <button
                           className="hover:text-primary hover:underline transition-colors"
-                          onClick={() => navigateToAlbum(track.albumTitle!, track.albumMusicbrainzId!)}
+                          onClick={() =>
+                            navigateToAlbum(track.albumTitle!, track.albumMusicbrainzId!)
+                          }
                         >
                           {track.albumTitle}
                         </button>
@@ -1992,7 +2230,7 @@ export default function SearchPage() {
         const scrollAmount = 400
         scrollRef.current.scrollBy({
           left: direction === 'left' ? -scrollAmount : scrollAmount,
-          behavior: 'smooth'
+          behavior: 'smooth',
         })
       }
     }
@@ -2004,20 +2242,10 @@ export default function SearchPage() {
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">{title}</h3>
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => scroll('left')}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => scroll('left')}>
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => scroll('right')}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => scroll('right')}>
               <HugeiconsIcon icon={ArrowRight01Icon} className="h-4 w-4" />
             </Button>
           </div>
@@ -2068,7 +2296,11 @@ export default function SearchPage() {
                     if (item.inLibrary) {
                       if (type === 'movie') {
                         const movie = item as MovieSearchResult
-                        status = movie.hasFile ? 'downloaded' : movie.requested ? 'requested' : 'downloaded'
+                        status = movie.hasFile
+                          ? 'downloaded'
+                          : movie.requested
+                            ? 'requested'
+                            : 'downloaded'
                       } else {
                         const show = item as TvShowSearchResult
                         status = show.requested ? 'requested' : 'downloaded'
@@ -2078,13 +2310,17 @@ export default function SearchPage() {
                     // For 'none' status: add to library
                     // For 'requested' status: toggle requested state
                     // For 'downloaded' status: no action (can't unrequest downloaded items)
-                    const handleToggle = status === 'none'
-                      ? () => onAdd(item)
-                      : status === 'requested'
-                        ? () => onToggle(item)
-                        : undefined
+                    const handleToggle =
+                      status === 'none'
+                        ? () => onAdd(item)
+                        : status === 'requested'
+                          ? () => onToggle(item)
+                          : undefined
                     return (
-                      <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="absolute top-2 right-2 z-10"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <CardStatusBadge
                           status={status}
                           size="tiny"
@@ -2097,9 +2333,7 @@ export default function SearchPage() {
                   })()}
                   <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <p className="text-white text-sm font-medium line-clamp-2">{item.title}</p>
-                    {item.year && (
-                      <p className="text-white/70 text-xs">{item.year}</p>
-                    )}
+                    {item.year && <p className="text-white/70 text-xs">{item.year}</p>}
                   </div>
                 </div>
               </div>
@@ -2130,7 +2364,9 @@ export default function SearchPage() {
     if (movieResults.length > 0) {
       return (
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">Found {movieResults.length} movies</div>
+          <div className="text-sm text-muted-foreground mb-4">
+            Found {movieResults.length} movies
+          </div>
           {movieResults.map((movie) =>
             renderResultCard(
               {
@@ -2191,7 +2427,9 @@ export default function SearchPage() {
     if (tvShowResults.length > 0) {
       return (
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">Found {tvShowResults.length} TV shows</div>
+          <div className="text-sm text-muted-foreground mb-4">
+            Found {tvShowResults.length} TV shows
+          </div>
           {tvShowResults.map((show) =>
             renderResultCard(
               {
@@ -2251,7 +2489,9 @@ export default function SearchPage() {
     if (booksSearchType === 'author' && authorResults.length > 0) {
       return (
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">Found {authorResults.length} authors</div>
+          <div className="text-sm text-muted-foreground mb-4">
+            Found {authorResults.length} authors
+          </div>
           {authorResults.map((author) =>
             renderResultCard(
               {
@@ -2313,24 +2553,42 @@ export default function SearchPage() {
                     {isColumnVisible('select') && (
                       <TableHead className="w-[40px]">
                         <Checkbox
-                          checked={selectedResults.size === filteredIndexerResults.length && filteredIndexerResults.length > 0}
+                          checked={
+                            selectedResults.size === filteredIndexerResults.length &&
+                            filteredIndexerResults.length > 0
+                          }
                           onCheckedChange={toggleSelectAll}
                         />
                       </TableHead>
                     )}
-                    {isColumnVisible('protocol') && <TableHead className="w-[60px]">Type</TableHead>}
+                    {isColumnVisible('protocol') && (
+                      <TableHead className="w-[60px]">Type</TableHead>
+                    )}
                     {isColumnVisible('age') && <SortableHeader field="age">Age</SortableHeader>}
-                    {isColumnVisible('title') && <SortableHeader field="title">Title</SortableHeader>}
-                    {isColumnVisible('indexer') && <SortableHeader field="indexer">Indexer</SortableHeader>}
+                    {isColumnVisible('title') && (
+                      <SortableHeader field="title">Title</SortableHeader>
+                    )}
+                    {isColumnVisible('indexer') && (
+                      <SortableHeader field="indexer">Indexer</SortableHeader>
+                    )}
                     {isColumnVisible('size') && <SortableHeader field="size">Size</SortableHeader>}
-                    {isColumnVisible('grabs') && <SortableHeader field="grabs">Grabs</SortableHeader>}
-                    {isColumnVisible('category') && <SortableHeader field="category">Category</SortableHeader>}
-                    {isColumnVisible('actions') && <TableHead className="w-[80px]">Actions</TableHead>}
+                    {isColumnVisible('grabs') && (
+                      <SortableHeader field="grabs">Grabs</SortableHeader>
+                    )}
+                    {isColumnVisible('category') && (
+                      <SortableHeader field="category">Category</SortableHeader>
+                    )}
+                    {isColumnVisible('actions') && (
+                      <TableHead className="w-[80px]">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredIndexerResults.map((result) => (
-                    <TableRow key={result.id} className={selectedResults.has(result.id) ? 'bg-muted/50' : ''}>
+                    <TableRow
+                      key={result.id}
+                      className={selectedResults.has(result.id) ? 'bg-muted/50' : ''}
+                    >
                       {isColumnVisible('select') && (
                         <TableCell>
                           <Checkbox
@@ -2341,7 +2599,10 @@ export default function SearchPage() {
                       )}
                       {isColumnVisible('protocol') && (
                         <TableCell>
-                          <Badge variant={result.protocol === 'torrent' ? 'default' : 'secondary'} className="text-xs">
+                          <Badge
+                            variant={result.protocol === 'torrent' ? 'default' : 'secondary'}
+                            className="text-xs"
+                          >
                             {result.protocol === 'torrent' ? 'torrent' : 'nzb'}
                           </Badge>
                         </TableCell>
@@ -2366,14 +2627,22 @@ export default function SearchPage() {
                         <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
                       )}
                       {isColumnVisible('size') && (
-                        <TableCell className="whitespace-nowrap">{formatBytes(result.size)}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {formatBytes(result.size)}
+                        </TableCell>
                       )}
                       {isColumnVisible('grabs') && (
-                        <TableCell className="text-muted-foreground">{result.grabs ?? '-'}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {result.grabs ?? '-'}
+                        </TableCell>
                       )}
                       {isColumnVisible('category') && (
                         <TableCell>
-                          {result.category && <Badge variant="outline" className="text-xs">{result.category}</Badge>}
+                          {result.category && (
+                            <Badge variant="outline" className="text-xs">
+                              {result.category}
+                            </Badge>
+                          )}
                         </TableCell>
                       )}
                       {isColumnVisible('actions') && (
@@ -2386,7 +2655,12 @@ export default function SearchPage() {
                                 </a>
                               </Button>
                             )}
-                            <Button variant="ghost" size="icon" onClick={() => openDownloadDialog(result)} className="h-8 w-8">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openDownloadDialog(result)}
+                              className="h-8 w-8"
+                            >
                               <HugeiconsIcon icon={Download01Icon} className="h-4 w-4" />
                             </Button>
                           </div>
@@ -2476,11 +2750,20 @@ export default function SearchPage() {
               {searchMode === 'music' && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-muted-foreground">Search for:</span>
-                  <Tabs value={musicSearchType} onValueChange={(v) => setMusicSearchType(v as MusicSearchType)}>
+                  <Tabs
+                    value={musicSearchType}
+                    onValueChange={(v) => setMusicSearchType(v as MusicSearchType)}
+                  >
                     <TabsList className="h-8">
-                      <TabsTrigger value="artist" className="text-xs px-2 h-6">Artist</TabsTrigger>
-                      <TabsTrigger value="album" className="text-xs px-2 h-6">Album</TabsTrigger>
-                      <TabsTrigger value="track" className="text-xs px-2 h-6">Track</TabsTrigger>
+                      <TabsTrigger value="artist" className="text-xs px-2 h-6">
+                        Artist
+                      </TabsTrigger>
+                      <TabsTrigger value="album" className="text-xs px-2 h-6">
+                        Album
+                      </TabsTrigger>
+                      <TabsTrigger value="track" className="text-xs px-2 h-6">
+                        Track
+                      </TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
@@ -2490,10 +2773,17 @@ export default function SearchPage() {
               {searchMode === 'books' && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-muted-foreground">Search for:</span>
-                  <Tabs value={booksSearchType} onValueChange={(v) => setBooksSearchType(v as 'author' | 'book')}>
+                  <Tabs
+                    value={booksSearchType}
+                    onValueChange={(v) => setBooksSearchType(v as 'author' | 'book')}
+                  >
                     <TabsList className="h-8">
-                      <TabsTrigger value="author" className="text-xs px-2 h-6">Author</TabsTrigger>
-                      <TabsTrigger value="book" className="text-xs px-2 h-6">Book</TabsTrigger>
+                      <TabsTrigger value="author" className="text-xs px-2 h-6">
+                        Author
+                      </TabsTrigger>
+                      <TabsTrigger value="book" className="text-xs px-2 h-6">
+                        Book
+                      </TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
@@ -2536,7 +2826,9 @@ export default function SearchPage() {
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm">
-                              {selectedIndexers.length === 0 ? 'All' : `${selectedIndexers.length} selected`}
+                              {selectedIndexers.length === 0
+                                ? 'All'
+                                : `${selectedIndexers.length} selected`}
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="start">
@@ -2558,7 +2850,9 @@ export default function SearchPage() {
                             {selectedIndexers.length > 0 && (
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setSelectedIndexers([])}>Clear</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setSelectedIndexers([])}>
+                                  Clear
+                                </DropdownMenuItem>
                               </>
                             )}
                           </DropdownMenuContent>
@@ -2574,17 +2868,21 @@ export default function SearchPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {(['age', 'title', 'size', 'indexer', 'grabs'] as SortField[]).map((field) => (
-                              <DropdownMenuItem key={field} onClick={() => toggleSort(field)}>
-                                {field.charAt(0).toUpperCase() + field.slice(1)}
-                                {sortField === field && (
-                                  <HugeiconsIcon
-                                    icon={sortDirection === 'asc' ? ArrowUp01Icon : ArrowDown01Icon}
-                                    className="h-4 w-4 ml-2"
-                                  />
-                                )}
-                              </DropdownMenuItem>
-                            ))}
+                            {(['age', 'title', 'size', 'indexer', 'grabs'] as SortField[]).map(
+                              (field) => (
+                                <DropdownMenuItem key={field} onClick={() => toggleSort(field)}>
+                                  {field.charAt(0).toUpperCase() + field.slice(1)}
+                                  {sortField === field && (
+                                    <HugeiconsIcon
+                                      icon={
+                                        sortDirection === 'asc' ? ArrowUp01Icon : ArrowDown01Icon
+                                      }
+                                      className="h-4 w-4 ml-2"
+                                    />
+                                  )}
+                                </DropdownMenuItem>
+                              )
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
 
@@ -2622,7 +2920,11 @@ export default function SearchPage() {
                     {selectedResults.size} release{selectedResults.size > 1 ? 's' : ''} selected
                   </span>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setSelectedResults(new Set())}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedResults(new Set())}
+                    >
                       Clear
                     </Button>
                     <Button size="sm" onClick={grabSelected} disabled={bulkDownloading}>
@@ -2639,11 +2941,21 @@ export default function SearchPage() {
             )}
 
             {/* Results */}
-            <TabsContent value="music" className="mt-4">{renderMusicResults()}</TabsContent>
-            <TabsContent value="movies" className="mt-4">{renderMovieResults()}</TabsContent>
-            <TabsContent value="tv" className="mt-4">{renderTvResults()}</TabsContent>
-            <TabsContent value="books" className="mt-4">{renderBooksResults()}</TabsContent>
-            <TabsContent value="direct" className="mt-4">{renderDirectResults()}</TabsContent>
+            <TabsContent value="music" className="mt-4">
+              {renderMusicResults()}
+            </TabsContent>
+            <TabsContent value="movies" className="mt-4">
+              {renderMovieResults()}
+            </TabsContent>
+            <TabsContent value="tv" className="mt-4">
+              {renderTvResults()}
+            </TabsContent>
+            <TabsContent value="books" className="mt-4">
+              {renderBooksResults()}
+            </TabsContent>
+            <TabsContent value="direct" className="mt-4">
+              {renderDirectResults()}
+            </TabsContent>
           </Tabs>
         </div>
 
@@ -2677,10 +2989,20 @@ export default function SearchPage() {
                       {movieDetails.inLibrary && (
                         <div className="absolute top-3 right-3">
                           <MediaStatusBadge
-                            status={movieDetails.hasFile ? 'downloaded' : movieDetails.requested ? 'requested' : 'downloaded'}
+                            status={
+                              movieDetails.hasFile
+                                ? 'downloaded'
+                                : movieDetails.requested
+                                  ? 'requested'
+                                  : 'downloaded'
+                            }
                             size="sm"
                             isToggling={togglingDetails}
-                            onToggleRequest={!movieDetails.hasFile && movieDetails.requested ? toggleMovieDetailsRequested : undefined}
+                            onToggleRequest={
+                              !movieDetails.hasFile && movieDetails.requested
+                                ? toggleMovieDetailsRequested
+                                : undefined
+                            }
                           />
                         </div>
                       )}
@@ -2706,7 +3028,9 @@ export default function SearchPage() {
                         <HugeiconsIcon icon={StarIcon} className="h-4 w-4 fill-current" />
                         <span className="font-medium">{movieDetails.rating.toFixed(1)}</span>
                         {movieDetails.votes && (
-                          <span className="text-muted-foreground">({movieDetails.votes.toLocaleString()})</span>
+                          <span className="text-muted-foreground">
+                            ({movieDetails.votes.toLocaleString()})
+                          </span>
                         )}
                       </div>
                     )}
@@ -2716,7 +3040,9 @@ export default function SearchPage() {
                   {movieDetails.genres && movieDetails.genres.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {movieDetails.genres.map((genre) => (
-                        <Badge key={genre} variant="secondary">{genre}</Badge>
+                        <Badge key={genre} variant="secondary">
+                          {genre}
+                        </Badge>
                       ))}
                     </div>
                   )}
@@ -2725,7 +3051,10 @@ export default function SearchPage() {
                   {movieDetails.cast && movieDetails.cast.length > 0 && (
                     <div>
                       <h4 className="font-medium mb-3">Cast</h4>
-                      <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent" style={{ scrollbarWidth: 'thin' }}>
+                      <div
+                        className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+                        style={{ scrollbarWidth: 'thin' }}
+                      >
                         {movieDetails.cast.map((actor) => (
                           <div key={actor.id} className="flex-shrink-0 w-16 text-center">
                             <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted mb-1.5">
@@ -2741,8 +3070,12 @@ export default function SearchPage() {
                                 </div>
                               )}
                             </div>
-                            <p className="text-[11px] font-medium leading-tight line-clamp-2">{actor.name}</p>
-                            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">{actor.character}</p>
+                            <p className="text-[11px] font-medium leading-tight line-clamp-2">
+                              {actor.name}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
+                              {actor.character}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -2753,14 +3086,19 @@ export default function SearchPage() {
                   {movieDetails.overview && (
                     <div>
                       <h4 className="font-medium mb-2">Overview</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{movieDetails.overview}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        {movieDetails.overview}
+                      </p>
                     </div>
                   )}
 
                   {/* Status */}
                   {movieDetails.status && (
                     <div className="flex items-center gap-2 text-sm">
-                      <HugeiconsIcon icon={InformationCircleIcon} className="h-4 w-4 text-muted-foreground" />
+                      <HugeiconsIcon
+                        icon={InformationCircleIcon}
+                        className="h-4 w-4 text-muted-foreground"
+                      />
                       <span className="text-muted-foreground">Status:</span>
                       <span>{movieDetails.status}</span>
                     </div>
@@ -2828,7 +3166,9 @@ export default function SearchPage() {
                             status={tvShowDetails.requested ? 'requested' : 'downloaded'}
                             size="sm"
                             isToggling={togglingDetails}
-                            onToggleRequest={tvShowDetails.requested ? toggleTvShowDetailsRequested : undefined}
+                            onToggleRequest={
+                              tvShowDetails.requested ? toggleTvShowDetailsRequested : undefined
+                            }
                           />
                         </div>
                       )}
@@ -2846,7 +3186,10 @@ export default function SearchPage() {
                     {tvShowDetails.seasonCount && (
                       <div className="flex items-center gap-1.5 text-muted-foreground">
                         <HugeiconsIcon icon={Tv01Icon} className="h-4 w-4" />
-                        <span>{tvShowDetails.seasonCount} Season{tvShowDetails.seasonCount !== 1 ? 's' : ''}</span>
+                        <span>
+                          {tvShowDetails.seasonCount} Season
+                          {tvShowDetails.seasonCount !== 1 ? 's' : ''}
+                        </span>
                       </div>
                     )}
                     {tvShowDetails.rating && (
@@ -2854,7 +3197,9 @@ export default function SearchPage() {
                         <HugeiconsIcon icon={StarIcon} className="h-4 w-4 fill-current" />
                         <span className="font-medium">{tvShowDetails.rating.toFixed(1)}</span>
                         {tvShowDetails.votes && (
-                          <span className="text-muted-foreground">({tvShowDetails.votes.toLocaleString()})</span>
+                          <span className="text-muted-foreground">
+                            ({tvShowDetails.votes.toLocaleString()})
+                          </span>
                         )}
                       </div>
                     )}
@@ -2864,7 +3209,9 @@ export default function SearchPage() {
                   {tvShowDetails.genres && tvShowDetails.genres.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {tvShowDetails.genres.map((genre) => (
-                        <Badge key={genre} variant="secondary">{genre}</Badge>
+                        <Badge key={genre} variant="secondary">
+                          {genre}
+                        </Badge>
                       ))}
                     </div>
                   )}
@@ -2880,7 +3227,10 @@ export default function SearchPage() {
                   {tvShowDetails.cast && tvShowDetails.cast.length > 0 && (
                     <div>
                       <h4 className="font-medium mb-3">Cast</h4>
-                      <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent" style={{ scrollbarWidth: 'thin' }}>
+                      <div
+                        className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+                        style={{ scrollbarWidth: 'thin' }}
+                      >
                         {tvShowDetails.cast.map((actor) => (
                           <div key={actor.id} className="flex-shrink-0 w-16 text-center">
                             <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted mb-1.5">
@@ -2896,8 +3246,12 @@ export default function SearchPage() {
                                 </div>
                               )}
                             </div>
-                            <p className="text-[11px] font-medium leading-tight line-clamp-2">{actor.name}</p>
-                            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">{actor.character}</p>
+                            <p className="text-[11px] font-medium leading-tight line-clamp-2">
+                              {actor.name}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
+                              {actor.character}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -2908,14 +3262,19 @@ export default function SearchPage() {
                   {tvShowDetails.overview && (
                     <div>
                       <h4 className="font-medium mb-2">Overview</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{tvShowDetails.overview}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        {tvShowDetails.overview}
+                      </p>
                     </div>
                   )}
 
                   {/* Status */}
                   {tvShowDetails.status && (
                     <div className="flex items-center gap-2 text-sm">
-                      <HugeiconsIcon icon={InformationCircleIcon} className="h-4 w-4 text-muted-foreground" />
+                      <HugeiconsIcon
+                        icon={InformationCircleIcon}
+                        className="h-4 w-4 text-muted-foreground"
+                      />
                       <span className="text-muted-foreground">Status:</span>
                       <span>{tvShowDetails.status}</span>
                     </div>
@@ -2996,7 +3355,9 @@ export default function SearchPage() {
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDownloadDialogOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setDownloadDialogOpen(false)}>
+                Cancel
+              </Button>
               <Button onClick={() => grabRelease()} disabled={downloading}>
                 {downloading ? (
                   <Spinner className="mr-2" />
@@ -3070,7 +3431,9 @@ export default function SearchPage() {
           qualityProfiles={movieProfiles}
           loading={loadingOptions}
           adding={addingMovie}
-          onAdd={(profileId) => selectedMovie && addMovieWithProfile(selectedMovie, profileId, navigateAfterAdd)}
+          onAdd={(profileId) =>
+            selectedMovie && addMovieWithProfile(selectedMovie, profileId, navigateAfterAdd)
+          }
         />
 
         <AddMediaDialog
@@ -3082,14 +3445,18 @@ export default function SearchPage() {
           qualityProfiles={tvProfiles}
           loading={loadingOptions}
           adding={addingTvShow}
-          onAdd={(profileId) => selectedTvShow && addTvShowWithProfile(selectedTvShow, profileId, episodeSelection, navigateAfterAdd)}
-          episodeSelectionSummary={episodeSelection && (
-            episodeSelection.selectedSeasons
+          onAdd={(profileId) =>
+            selectedTvShow &&
+            addTvShowWithProfile(selectedTvShow, profileId, episodeSelection, navigateAfterAdd)
+          }
+          episodeSelectionSummary={
+            episodeSelection &&
+            (episodeSelection.selectedSeasons
               ? `${episodeSelection.selectedSeasons.length} season${episodeSelection.selectedSeasons.length !== 1 ? 's' : ''} selected`
               : episodeSelection.selectedEpisodes
                 ? `${Object.values(episodeSelection.selectedEpisodes).reduce((sum, eps) => sum + eps.length, 0)} episodes selected`
-                : 'All episodes selected'
-          )}
+                : 'All episodes selected')
+          }
           onChangeEpisodeSelection={() => {
             setAddTvShowDialogOpen(false)
             setSeasonPickerOpen(true)
@@ -3105,7 +3472,10 @@ export default function SearchPage() {
           qualityProfiles={bookProfiles}
           loading={loadingOptions}
           adding={addingAuthor}
-          onAdd={(profileId, options) => selectedAuthor && addAuthorWithProfile(selectedAuthor, profileId, options?.addBooks ?? true)}
+          onAdd={(profileId, options) =>
+            selectedAuthor &&
+            addAuthorWithProfile(selectedAuthor, profileId, options?.addBooks ?? true)
+          }
           showAddBooksOption
         />
 

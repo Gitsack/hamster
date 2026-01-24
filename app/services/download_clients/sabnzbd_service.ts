@@ -9,7 +9,17 @@ export interface SabnzbdConfig {
 export interface SabnzbdQueueItem {
   nzo_id: string
   filename: string
-  status: 'Queued' | 'Downloading' | 'Paused' | 'Grabbing' | 'Fetching' | 'Verifying' | 'Repairing' | 'Extracting' | 'Moving' | 'Running'
+  status:
+    | 'Queued'
+    | 'Downloading'
+    | 'Paused'
+    | 'Grabbing'
+    | 'Fetching'
+    | 'Verifying'
+    | 'Repairing'
+    | 'Extracting'
+    | 'Moving'
+    | 'Running'
   percentage: string
   mb: string
   mbleft: string
@@ -69,7 +79,9 @@ export class SabnzbdService {
   /**
    * Test connection to SABnzbd
    */
-  async testConnection(config: SabnzbdConfig): Promise<{ success: boolean; version?: string; error?: string }> {
+  async testConnection(
+    config: SabnzbdConfig
+  ): Promise<{ success: boolean; version?: string; error?: string }> {
     try {
       const url = this.buildUrl(config, { mode: 'version' })
       const response = await fetch(url, { signal: AbortSignal.timeout(10000) })
@@ -110,7 +122,10 @@ export class SabnzbdService {
     } catch (error) {
       const elapsed = Date.now() - startTime
       const host = `${config.useSsl ? 'https' : 'http'}://${config.host}:${config.port}`
-      console.error(`[SABnzbd] getQueue failed after ${elapsed}ms to ${host}:`, error instanceof Error ? error.message : error)
+      console.error(
+        `[SABnzbd] getQueue failed after ${elapsed}ms to ${host}:`,
+        error instanceof Error ? error.message : error
+      )
       throw error
     }
   }
@@ -135,7 +150,10 @@ export class SabnzbdService {
     } catch (error) {
       const elapsed = Date.now() - startTime
       const host = `${config.useSsl ? 'https' : 'http'}://${config.host}:${config.port}`
-      console.error(`[SABnzbd] getHistory failed after ${elapsed}ms to ${host}:`, error instanceof Error ? error.message : error)
+      console.error(
+        `[SABnzbd] getHistory failed after ${elapsed}ms to ${host}:`,
+        error instanceof Error ? error.message : error
+      )
       throw error
     }
   }
@@ -306,7 +324,9 @@ export class SabnzbdService {
   /**
    * Get SABnzbd configuration (including folder paths)
    */
-  async getConfig(config: SabnzbdConfig): Promise<{ completeDir?: string; incompleteDir?: string }> {
+  async getConfig(
+    config: SabnzbdConfig
+  ): Promise<{ completeDir?: string; incompleteDir?: string }> {
     const url = this.buildUrl(config, { mode: 'get_config' })
     const response = await fetch(url, { signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT) })
 

@@ -6,13 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Select,
-  SelectPopup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -90,9 +84,7 @@ export default function AddArtist() {
     setHasSearched(true)
 
     try {
-      const response = await fetch(
-        `/api/v1/artists/search?q=${encodeURIComponent(searchQuery)}`
-      )
+      const response = await fetch(`/api/v1/artists/search?q=${encodeURIComponent(searchQuery)}`)
       if (response.ok) {
         const data = await response.json()
         setSearchResults(data)
@@ -146,9 +138,7 @@ export default function AddArtist() {
         // Update search results to mark this artist as in library
         setSearchResults((prev) =>
           prev.map((r) =>
-            r.musicbrainzId === selectedArtist.musicbrainzId
-              ? { ...r, inLibrary: true }
-              : r
+            r.musicbrainzId === selectedArtist.musicbrainzId ? { ...r, inLibrary: true } : r
           )
         )
 
@@ -231,10 +221,7 @@ export default function AddArtist() {
         ) : searchResults.length > 0 ? (
           <div className="space-y-2">
             {searchResults.map((artist) => (
-              <Card
-                key={artist.musicbrainzId}
-                className={artist.inLibrary ? 'opacity-60' : ''}
-              >
+              <Card key={artist.musicbrainzId} className={artist.inLibrary ? 'opacity-60' : ''}>
                 <CardContent className="flex items-center gap-4 p-4">
                   <div className="h-16 w-16 rounded bg-muted flex-shrink-0 flex items-center justify-center">
                     <HugeiconsIcon
@@ -273,10 +260,7 @@ export default function AddArtist() {
                   <div className="flex items-center gap-2">
                     {artist.inLibrary ? (
                       <Badge variant="outline" className="gap-1">
-                        <HugeiconsIcon
-                          icon={CheckmarkCircle01Icon}
-                          className="h-3 w-3"
-                        />
+                        <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
                         In Library
                       </Badge>
                     ) : (
@@ -293,10 +277,7 @@ export default function AddArtist() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <div className="rounded-full bg-muted p-6 mb-4">
-                <HugeiconsIcon
-                  icon={Search01Icon}
-                  className="h-12 w-12 text-muted-foreground"
-                />
+                <HugeiconsIcon icon={Search01Icon} className="h-12 w-12 text-muted-foreground" />
               </div>
               <h3 className="text-lg font-medium mb-2">No artists found</h3>
               <p className="text-muted-foreground">
@@ -326,14 +307,13 @@ export default function AddArtist() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="qualityProfile">Quality Profile</Label>
-                <Select
-                  value={selectedQualityProfile}
-                  onValueChange={setSelectedQualityProfile}
-                >
+                <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
                   <SelectTrigger id="qualityProfile">
-                    {selectedQualityProfile
-                      ? qualityProfiles.find((p) => p.id === selectedQualityProfile)?.name
-                      : <span className="text-muted-foreground">Select quality profile</span>}
+                    {selectedQualityProfile ? (
+                      qualityProfiles.find((p) => p.id === selectedQualityProfile)?.name
+                    ) : (
+                      <span className="text-muted-foreground">Select quality profile</span>
+                    )}
                   </SelectTrigger>
                   <SelectPopup>
                     {qualityProfiles.map((profile) => (
@@ -364,11 +344,7 @@ export default function AddArtist() {
             </Button>
             <Button
               onClick={addArtist}
-              disabled={
-                adding ||
-                loadingOptions ||
-                !selectedQualityProfile
-              }
+              disabled={adding || loadingOptions || !selectedQualityProfile}
             >
               {adding ? (
                 <>

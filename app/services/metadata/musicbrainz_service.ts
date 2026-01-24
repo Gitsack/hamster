@@ -60,7 +60,7 @@ async function fetchWithRateLimit(url: string): Promise<Response> {
     const response = await fetch(url, {
       headers: {
         'User-Agent': USER_AGENT,
-        Accept: 'application/json',
+        'Accept': 'application/json',
       },
     })
 
@@ -173,7 +173,8 @@ export class MusicBrainzService {
       country: release.country,
       date: release.date,
       format: release.media?.[0]?.format,
-      trackCount: release.media?.reduce((sum: number, m: any) => sum + (m['track-count'] || 0), 0) || 0,
+      trackCount:
+        release.media?.reduce((sum: number, m: any) => sum + (m['track-count'] || 0), 0) || 0,
       media: (release.media || []).map((medium: any) => ({
         format: medium.format,
         trackCount: medium['track-count'] || 0,

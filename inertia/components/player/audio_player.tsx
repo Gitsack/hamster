@@ -87,12 +87,7 @@ export function AudioPlayer() {
               <HugeiconsIcon icon={ShuffleIcon} className="h-4 w-4" />
             </Button>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={previous}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={previous}>
               <HugeiconsIcon icon={Backward01Icon} className="h-4 w-4" />
             </Button>
 
@@ -112,12 +107,7 @@ export function AudioPlayer() {
               )}
             </Button>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={next}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={next}>
               <HugeiconsIcon icon={Forward01Icon} className="h-4 w-4" />
             </Button>
 
@@ -147,20 +137,13 @@ export function AudioPlayer() {
               onValueChange={([value]) => seek(value)}
               className="flex-1"
             />
-            <span className="text-xs text-muted-foreground w-10">
-              {formatTime(duration)}
-            </span>
+            <span className="text-xs text-muted-foreground w-10">{formatTime(duration)}</span>
           </div>
         </div>
 
         {/* Volume control */}
         <div className="flex items-center gap-2 w-36">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={toggleMute}
-          >
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleMute}>
             <HugeiconsIcon
               icon={isMuted || volume === 0 ? VolumeOffIcon : VolumeHighIcon}
               className="h-4 w-4"

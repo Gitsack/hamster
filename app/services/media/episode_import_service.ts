@@ -76,9 +76,13 @@ export class EpisodeImportService {
       } catch (error) {
         const isTimeout = error instanceof Error && error.message === 'Path check timeout'
         if (isTimeout) {
-          result.errors.push(`Path not responding: ${outputPath}. Network storage may not be mounted or is unresponsive.`)
+          result.errors.push(
+            `Path not responding: ${outputPath}. Network storage may not be mounted or is unresponsive.`
+          )
         } else {
-          result.errors.push(`Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`)
+          result.errors.push(
+            `Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`
+          )
         }
         return result
       }

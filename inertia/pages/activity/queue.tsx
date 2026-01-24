@@ -284,56 +284,53 @@ export default function Queue() {
               </div>
             ) : (
               <div className="overflow-x-auto -mx-6 px-6">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10"></TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead className="w-32">Status</TableHead>
-                    <TableHead className="w-48">Progress</TableHead>
-                    <TableHead className="w-24 text-right">Size</TableHead>
-                    <TableHead className="w-24 text-right">ETA</TableHead>
-                    <TableHead className="w-24"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {queue.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{getStatusIcon(item.status)}</TableCell>
-                      <TableCell>
-                        <div className="font-medium truncate max-w-md">{item.title}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {item.downloadClient}
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(item.status)}</TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <Progress value={Number(item.progress) || 0} className="h-2" />
-                          <div className="text-xs text-muted-foreground">
-                            {(Number(item.progress) || 0).toFixed(1)}%
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {formatSize(item.size)}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {formatEta(item.eta)}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteId(item.id)}
-                        >
-                          <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10"></TableHead>
+                      <TableHead>Title</TableHead>
+                      <TableHead className="w-32">Status</TableHead>
+                      <TableHead className="w-48">Progress</TableHead>
+                      <TableHead className="w-24 text-right">Size</TableHead>
+                      <TableHead className="w-24 text-right">ETA</TableHead>
+                      <TableHead className="w-24"></TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {queue.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>{getStatusIcon(item.status)}</TableCell>
+                        <TableCell>
+                          <div className="font-medium truncate max-w-md">{item.title}</div>
+                          <div className="text-xs text-muted-foreground">{item.downloadClient}</div>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(item.status)}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Progress value={Number(item.progress) || 0} className="h-2" />
+                            <div className="text-xs text-muted-foreground">
+                              {(Number(item.progress) || 0).toFixed(1)}%
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {formatSize(item.size)}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {formatEta(item.eta)}
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" onClick={() => setDeleteId(item.id)}>
+                            <HugeiconsIcon
+                              icon={Delete01Icon}
+                              className="h-4 w-4 text-destructive"
+                            />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </CardContent>

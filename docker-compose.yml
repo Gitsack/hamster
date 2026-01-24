@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-hamster} -d ${DB_DATABASE:-hamster}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-hamster} -d ${DB_DATABASE:-hamster}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,7 +30,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "${PORT:-3333}:3333"
+      - '${PORT:-3333}:3333'
     environment:
       # User/Group IDs - set to match your host user (run `id` to check)
       PUID: ${PUID:-1000}
@@ -68,7 +68,7 @@ services:
       # Persistent app data (logs, cache, etc.)
       - app_data:/app/tmp
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3333/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:3333/health']
       interval: 30s
       timeout: 10s
       start_period: 60s

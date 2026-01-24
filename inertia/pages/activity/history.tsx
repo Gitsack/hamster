@@ -12,13 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Select,
-  SelectPopup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   CheckmarkCircle01Icon,
@@ -181,57 +175,53 @@ export default function History() {
             ) : (
               <>
                 <div className="overflow-x-auto -mx-6 px-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead className="w-28">Status</TableHead>
-                      <TableHead className="w-24 text-right">Size</TableHead>
-                      <TableHead className="w-40">Client</TableHead>
-                      <TableHead className="w-44">Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {history.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="max-w-md">
-                          <div className="font-medium truncate">{item.title}</div>
-                          {item.albumTitle && (
-                            <div className="text-xs text-muted-foreground">
-                              {item.albumTitle}
-                            </div>
-                          )}
-                          {item.errorMessage && (
-                            <div
-                              className="text-xs text-destructive mt-1 cursor-pointer hover:text-destructive/80"
-                              onClick={() => toggleError(item.id)}
-                            >
-                              {expandedErrors.has(item.id) ? (
-                                <span className="break-words whitespace-pre-wrap">
-                                  {item.errorMessage}
-                                </span>
-                              ) : (
-                                <span className="line-clamp-1">
-                                  {item.errorMessage}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(item.status)}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {formatSize(item.size)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {item.downloadClient || '-'}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatDate(item.completedAt)}
-                        </TableCell>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead className="w-28">Status</TableHead>
+                        <TableHead className="w-24 text-right">Size</TableHead>
+                        <TableHead className="w-40">Client</TableHead>
+                        <TableHead className="w-44">Date</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {history.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="max-w-md">
+                            <div className="font-medium truncate">{item.title}</div>
+                            {item.albumTitle && (
+                              <div className="text-xs text-muted-foreground">{item.albumTitle}</div>
+                            )}
+                            {item.errorMessage && (
+                              <div
+                                className="text-xs text-destructive mt-1 cursor-pointer hover:text-destructive/80"
+                                onClick={() => toggleError(item.id)}
+                              >
+                                {expandedErrors.has(item.id) ? (
+                                  <span className="break-words whitespace-pre-wrap">
+                                    {item.errorMessage}
+                                  </span>
+                                ) : (
+                                  <span className="line-clamp-1">{item.errorMessage}</span>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(item.status)}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatSize(item.size)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {item.downloadClient || '-'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatDate(item.completedAt)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
 
                 {/* Pagination */}

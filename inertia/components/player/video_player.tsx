@@ -180,7 +180,10 @@ export function VideoPlayer({ mediaType, mediaFileId, title, onError }: VideoPla
 
   if (error) {
     return (
-      <div className="relative w-full bg-black flex items-center justify-center" style={{ aspectRatio: '16/9' }}>
+      <div
+        className="relative w-full bg-black flex items-center justify-center"
+        style={{ aspectRatio: '16/9' }}
+      >
         <div className="text-center text-white p-4">
           <p className="text-red-400 mb-2">Failed to play video</p>
           <p className="text-sm text-gray-400">{error}</p>
@@ -210,12 +213,7 @@ export function VideoPlayer({ mediaType, mediaFileId, title, onError }: VideoPla
         </div>
       )}
 
-      <video
-        ref={videoRef}
-        controls
-        className="w-full h-full bg-black"
-        playsInline
-      >
+      <video ref={videoRef} controls className="w-full h-full bg-black" playsInline>
         Your browser does not support the video element.
       </video>
     </div>

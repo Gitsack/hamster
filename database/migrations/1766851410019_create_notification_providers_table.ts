@@ -43,7 +43,11 @@ export default class extends BaseSchema {
     this.schema.createTable('notification_history', (table) => {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
-      table.uuid('provider_id').references('id').inTable('notification_providers').onDelete('CASCADE')
+      table
+        .uuid('provider_id')
+        .references('id')
+        .inTable('notification_providers')
+        .onDelete('CASCADE')
       table.string('event_type', 50).notNullable()
       table.string('title', 255).notNullable()
       table.text('message').nullable()

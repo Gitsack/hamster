@@ -147,7 +147,13 @@ export default class DownloadClientsController {
   }
 
   async test({ request, response }: HttpContext) {
-    const { type, host, port, apiKey, useSsl } = request.only(['type', 'host', 'port', 'apiKey', 'useSsl'])
+    const { type, host, port, apiKey, useSsl } = request.only([
+      'type',
+      'host',
+      'port',
+      'apiKey',
+      'useSsl',
+    ])
 
     if (!type || !host || !port || !apiKey) {
       return response.badRequest({ error: 'Type, host, port, and API key are required' })
@@ -294,9 +300,7 @@ export default class DownloadClientsController {
 
       return response.json({
         success: result.success,
-        message: result.success
-          ? `Imported ${result.filesImported} files`
-          : 'Import failed',
+        message: result.success ? `Imported ${result.filesImported} files` : 'Import failed',
         filesImported: result.filesImported,
         errors: result.errors,
       })
@@ -381,33 +385,33 @@ export default class DownloadClientsController {
   private getMimeType(filename: string): string {
     const ext = filename.toLowerCase().split('.').pop()
     const mimeTypes: Record<string, string> = {
-      mp3: 'audio/mpeg',
-      flac: 'audio/flac',
-      wav: 'audio/wav',
-      ogg: 'audio/ogg',
-      m4a: 'audio/mp4',
-      aac: 'audio/aac',
-      mp4: 'video/mp4',
-      mkv: 'video/x-matroska',
-      avi: 'video/x-msvideo',
-      mov: 'video/quicktime',
-      wmv: 'video/x-ms-wmv',
-      webm: 'video/webm',
-      pdf: 'application/pdf',
-      epub: 'application/epub+zip',
-      mobi: 'application/x-mobipocket-ebook',
-      zip: 'application/zip',
-      rar: 'application/x-rar-compressed',
+      'mp3': 'audio/mpeg',
+      'flac': 'audio/flac',
+      'wav': 'audio/wav',
+      'ogg': 'audio/ogg',
+      'm4a': 'audio/mp4',
+      'aac': 'audio/aac',
+      'mp4': 'video/mp4',
+      'mkv': 'video/x-matroska',
+      'avi': 'video/x-msvideo',
+      'mov': 'video/quicktime',
+      'wmv': 'video/x-ms-wmv',
+      'webm': 'video/webm',
+      'pdf': 'application/pdf',
+      'epub': 'application/epub+zip',
+      'mobi': 'application/x-mobipocket-ebook',
+      'zip': 'application/zip',
+      'rar': 'application/x-rar-compressed',
       '7z': 'application/x-7z-compressed',
-      nzb: 'application/x-nzb',
-      txt: 'text/plain',
-      srt: 'text/plain',
-      sub: 'text/plain',
-      jpg: 'image/jpeg',
-      jpeg: 'image/jpeg',
-      png: 'image/png',
-      gif: 'image/gif',
-      webp: 'image/webp',
+      'nzb': 'application/x-nzb',
+      'txt': 'text/plain',
+      'srt': 'text/plain',
+      'sub': 'text/plain',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
     }
     return mimeTypes[ext || ''] || 'application/octet-stream'
   }

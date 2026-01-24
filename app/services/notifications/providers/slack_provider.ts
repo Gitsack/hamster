@@ -41,7 +41,7 @@ export class SlackProvider {
 
     // Add image if provided
     if (payload.imageUrl) {
-      (body.blocks as unknown[]).push({
+      ;(body.blocks as unknown[]).push({
         type: 'image',
         image_url: payload.imageUrl,
         alt_text: payload.title,
@@ -50,7 +50,7 @@ export class SlackProvider {
 
     // Add link button if URL provided
     if (payload.url) {
-      (body.blocks as unknown[]).push({
+      ;(body.blocks as unknown[]).push({
         type: 'actions',
         elements: [
           {
@@ -67,7 +67,7 @@ export class SlackProvider {
     }
 
     // Add context footer
-    (body.blocks as unknown[]).push({
+    ;(body.blocks as unknown[]).push({
       type: 'context',
       elements: [
         {

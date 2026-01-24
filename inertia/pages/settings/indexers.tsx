@@ -25,7 +25,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Delete02Icon, Add01Icon, Edit02Icon, CheckmarkCircle02Icon, Alert02Icon } from '@hugeicons/core-free-icons'
+import {
+  Delete02Icon,
+  Add01Icon,
+  Edit02Icon,
+  CheckmarkCircle02Icon,
+  Alert02Icon,
+} from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 
 interface Indexer {
@@ -147,9 +153,7 @@ export default function Indexers() {
     setSaving(true)
     try {
       const method = editingIndexer ? 'PUT' : 'POST'
-      const url = editingIndexer
-        ? `/api/v1/indexers/${editingIndexer.id}`
-        : '/api/v1/indexers'
+      const url = editingIndexer ? `/api/v1/indexers/${editingIndexer.id}` : '/api/v1/indexers'
 
       const response = await fetch(url, {
         method,
@@ -440,9 +444,7 @@ export default function Indexers() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Direct Indexers</CardTitle>
-                <CardDescription>
-                  Add Newznab-compatible indexers directly
-                </CardDescription>
+                <CardDescription>Add Newznab-compatible indexers directly</CardDescription>
               </div>
               <Button onClick={() => openIndexerDialog()}>
                 <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
@@ -471,9 +473,7 @@ export default function Indexers() {
                   {indexers.map((indexer) => (
                     <TableRow key={indexer.id}>
                       <TableCell className="font-medium">{indexer.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {indexer.url}
-                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{indexer.url}</TableCell>
                       <TableCell>
                         <Switch
                           checked={indexer.enabled}

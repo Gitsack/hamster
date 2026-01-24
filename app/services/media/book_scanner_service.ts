@@ -395,9 +395,7 @@ export class BookScannerService {
       if (results.length > 0) {
         // Find best match by name similarity
         const normalizedSearch = this.normalizeAuthorName(name)
-        const match = results.find(
-          (a) => this.normalizeAuthorName(a.name) === normalizedSearch
-        )
+        const match = results.find((a) => this.normalizeAuthorName(a.name) === normalizedSearch)
         return match || results[0]
       }
       return null
@@ -445,10 +443,7 @@ export class BookScannerService {
   /**
    * Create author from OpenLibrary data
    */
-  private async createAuthorFromOpenLibrary(
-    olAuthor: any,
-    rootFolderId: string
-  ): Promise<Author> {
+  private async createAuthorFromOpenLibrary(olAuthor: any, rootFolderId: string): Promise<Author> {
     return Author.create({
       name: olAuthor.name,
       sortName: this.generateSortName(olAuthor.name),

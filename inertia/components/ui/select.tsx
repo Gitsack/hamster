@@ -1,36 +1,31 @@
-"use client"
+'use client'
 
-import * as React from "react"
-import { Select as BaseSelect } from "@base-ui/react/select"
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
-import { cn } from "@/lib/utils"
+import * as React from 'react'
+import { Select as BaseSelect } from '@base-ui/react/select'
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 // Context to share stable ID with child components for SSR hydration
 const SelectIdContext = React.createContext<string | undefined>(undefined)
 
-function Select({
-  children,
-  ...props
-}: React.ComponentProps<typeof BaseSelect.Root>) {
+function Select({ children, ...props }: React.ComponentProps<typeof BaseSelect.Root>) {
   const reactId = React.useId()
 
   return (
     <SelectIdContext.Provider value={reactId}>
-      <BaseSelect.Root {...props}>
-        {children}
-      </BaseSelect.Root>
+      <BaseSelect.Root {...props}>{children}</BaseSelect.Root>
     </SelectIdContext.Provider>
   )
 }
 
 function SelectTrigger({
   className,
-  size = "default",
+  size = 'default',
   children,
   id,
   ...props
 }: React.ComponentProps<typeof BaseSelect.Trigger> & {
-  size?: "sm" | "default"
+  size?: 'sm' | 'default'
 }) {
   const selectId = React.useContext(SelectIdContext)
   const triggerId = id || (selectId ? `${selectId}-trigger` : undefined)
@@ -54,22 +49,17 @@ function SelectTrigger({
   )
 }
 
-function SelectValue({
-  className,
-  ...props
-}: React.ComponentProps<typeof BaseSelect.Value>) {
+function SelectValue({ className, ...props }: React.ComponentProps<typeof BaseSelect.Value>) {
   return (
     <BaseSelect.Value
       data-slot="select-value"
-      className={cn("line-clamp-1 flex items-center gap-2", className)}
+      className={cn('line-clamp-1 flex items-center gap-2', className)}
       {...props}
     />
   )
 }
 
-function SelectPortal({
-  ...props
-}: React.ComponentProps<typeof BaseSelect.Portal>) {
+function SelectPortal({ ...props }: React.ComponentProps<typeof BaseSelect.Portal>) {
   return <BaseSelect.Portal data-slot="select-portal" {...props} />
 }
 
@@ -80,7 +70,7 @@ function SelectPositioner({
   return (
     <BaseSelect.Positioner
       data-slot="select-positioner"
-      className={cn("outline-none z-[9999]", className)}
+      className={cn('outline-none z-[9999]', className)}
       {...props}
     />
   )
@@ -102,7 +92,7 @@ function SelectPopup({
           id={popupId}
           data-slot="select-popup"
           className={cn(
-            "bg-popover text-popover-foreground relative z-[9999] max-h-[min(var(--available-height),20rem)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border p-1 shadow-md",
+            'bg-popover text-popover-foreground relative z-[9999] max-h-[min(var(--available-height),20rem)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border p-1 shadow-md',
             className
           )}
           {...props}
@@ -116,17 +106,8 @@ function SelectPopup({
   )
 }
 
-function SelectGroup({
-  className,
-  ...props
-}: React.ComponentProps<typeof BaseSelect.Group>) {
-  return (
-    <BaseSelect.Group
-      data-slot="select-group"
-      className={cn("", className)}
-      {...props}
-    />
-  )
+function SelectGroup({ className, ...props }: React.ComponentProps<typeof BaseSelect.Group>) {
+  return <BaseSelect.Group data-slot="select-group" className={cn('', className)} {...props} />
 }
 
 function SelectGroupLabel({
@@ -136,7 +117,7 @@ function SelectGroupLabel({
   return (
     <BaseSelect.GroupLabel
       data-slot="select-group-label"
-      className={cn("text-muted-foreground px-2 py-1.5 text-xs", className)}
+      className={cn('text-muted-foreground px-2 py-1.5 text-xs', className)}
       {...props}
     />
   )
@@ -167,15 +148,12 @@ function SelectItem({
   )
 }
 
-function SelectSeparator({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+function SelectSeparator({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="select-separator"
       role="separator"
-      className={cn("bg-border pointer-events-none -mx-1 my-1 h-px", className)}
+      className={cn('bg-border pointer-events-none -mx-1 my-1 h-px', className)}
       {...props}
     />
   )
@@ -188,10 +166,7 @@ function SelectScrollUpButton({
   return (
     <BaseSelect.ScrollUpArrow
       data-slot="select-scroll-up-button"
-      className={cn(
-        "flex cursor-default items-center justify-center py-1",
-        className
-      )}
+      className={cn('flex cursor-default items-center justify-center py-1', className)}
       {...props}
     >
       <ChevronUpIcon className="size-4" />
@@ -206,10 +181,7 @@ function SelectScrollDownButton({
   return (
     <BaseSelect.ScrollDownArrow
       data-slot="select-scroll-down-button"
-      className={cn(
-        "flex cursor-default items-center justify-center py-1",
-        className
-      )}
+      className={cn('flex cursor-default items-center justify-center py-1', className)}
       {...props}
     >
       <ChevronDownIcon className="size-4" />

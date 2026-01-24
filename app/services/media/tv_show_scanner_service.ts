@@ -458,10 +458,7 @@ export class TvShowScannerService {
   /**
    * Create show from parsed info
    */
-  private async createShowFromParsed(
-    showData: GroupedShow,
-    rootFolderId: string
-  ): Promise<TvShow> {
+  private async createShowFromParsed(showData: GroupedShow, rootFolderId: string): Promise<TvShow> {
     return TvShow.create({
       title: showData.showTitle,
       sortTitle: this.generateSortTitle(showData.showTitle),
@@ -481,10 +478,10 @@ export class TvShowScannerService {
     const statusMap: Record<string, string> = {
       'Returning Series': 'continuing',
       'In Production': 'continuing',
-      Planned: 'upcoming',
-      Ended: 'ended',
-      Canceled: 'ended',
-      Pilot: 'upcoming',
+      'Planned': 'upcoming',
+      'Ended': 'ended',
+      'Canceled': 'ended',
+      'Pilot': 'upcoming',
     }
     return statusMap[status] || 'unknown'
   }

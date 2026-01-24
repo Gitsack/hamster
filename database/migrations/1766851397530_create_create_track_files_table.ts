@@ -7,7 +7,13 @@ export default class extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
       table.uuid('track_id').references('id').inTable('tracks').onDelete('CASCADE')
-      table.uuid('album_id').notNullable().references('id').inTable('albums').onDelete('CASCADE').index()
+      table
+        .uuid('album_id')
+        .notNullable()
+        .references('id')
+        .inTable('albums')
+        .onDelete('CASCADE')
+        .index()
       table.text('relative_path').notNullable()
       table.bigInteger('size_bytes').notNullable()
       table.string('quality', 50).nullable()

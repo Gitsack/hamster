@@ -204,7 +204,10 @@ export class MovieParser {
 
     // Remove year patterns
     if (year) {
-      title = title.replace(new RegExp(`\\(${year}\\)|\\[${year}\\]|\\.${year}\\.|\\s${year}\\s`, 'g'), ' ')
+      title = title.replace(
+        new RegExp(`\\(${year}\\)|\\[${year}\\]|\\.${year}\\.|\\s${year}\\s`, 'g'),
+        ' '
+      )
     }
 
     // Remove quality indicators

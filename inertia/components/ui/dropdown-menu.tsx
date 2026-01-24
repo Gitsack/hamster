@@ -1,24 +1,19 @@
-"use client"
+'use client'
 
-import * as React from "react"
-import { Menu as BaseMenu } from "@base-ui/react/menu"
-import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
-import { cn } from "@/lib/utils"
+import * as React from 'react'
+import { Menu as BaseMenu } from '@base-ui/react/menu'
+import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 // Context to share stable ID with child components for SSR hydration
 const DropdownMenuIdContext = React.createContext<string | undefined>(undefined)
 
-function DropdownMenu({
-  children,
-  ...props
-}: React.ComponentProps<typeof BaseMenu.Root>) {
+function DropdownMenu({ children, ...props }: React.ComponentProps<typeof BaseMenu.Root>) {
   const reactId = React.useId()
 
   return (
     <DropdownMenuIdContext.Provider value={reactId}>
-      <BaseMenu.Root {...props}>
-        {children}
-      </BaseMenu.Root>
+      <BaseMenu.Root {...props}>{children}</BaseMenu.Root>
     </DropdownMenuIdContext.Provider>
   )
 }
@@ -67,7 +62,7 @@ function DropdownMenuPositioner({
   return (
     <BaseMenu.Positioner
       data-slot="dropdown-menu-positioner"
-      className={cn("outline-none z-50", className)}
+      className={cn('outline-none z-50', className)}
       {...props}
     />
   )
@@ -95,7 +90,7 @@ function DropdownMenuPopup({
           id={popupId}
           data-slot="dropdown-menu-popup"
           className={cn(
-            "bg-popover text-popover-foreground z-50 max-h-[var(--available-height)] min-w-[8rem] overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md",
+            'bg-popover text-popover-foreground z-50 max-h-[var(--available-height)] min-w-[8rem] overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md',
             className
           )}
           {...props}
@@ -108,13 +103,13 @@ function DropdownMenuPopup({
 function DropdownMenuItem({
   className,
   inset,
-  variant = "default",
+  variant = 'default',
   asChild,
   children,
   ...props
 }: React.ComponentProps<typeof BaseMenu.Item> & {
   inset?: boolean
-  variant?: "default" | "destructive"
+  variant?: 'default' | 'destructive'
   asChild?: boolean
 }) {
   const itemClassName = cn(
@@ -181,12 +176,8 @@ function DropdownMenuCheckboxItem({
   )
 }
 
-function DropdownMenuRadioGroup({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.RadioGroup>) {
-  return (
-    <BaseMenu.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />
-  )
+function DropdownMenuRadioGroup({ ...props }: React.ComponentProps<typeof BaseMenu.RadioGroup>) {
+  return <BaseMenu.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />
 }
 
 function DropdownMenuRadioItem({
@@ -224,10 +215,7 @@ function DropdownMenuGroupLabel({
     <BaseMenu.GroupLabel
       data-slot="dropdown-menu-group-label"
       data-inset={inset}
-      className={cn(
-        "px-2 py-1.5 text-sm font-medium data-[inset]:pl-8",
-        className
-      )}
+      className={cn('px-2 py-1.5 text-sm font-medium data-[inset]:pl-8', className)}
       {...props}
     />
   )
@@ -240,23 +228,17 @@ function DropdownMenuSeparator({
   return (
     <BaseMenu.Separator
       data-slot="dropdown-menu-separator"
-      className={cn("bg-border -mx-1 my-1 h-px", className)}
+      className={cn('bg-border -mx-1 my-1 h-px', className)}
       {...props}
     />
   )
 }
 
-function DropdownMenuShortcut({
-  className,
-  ...props
-}: React.ComponentProps<"span">) {
+function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<'span'>) {
   return (
     <span
       data-slot="dropdown-menu-shortcut"
-      className={cn(
-        "text-muted-foreground ml-auto text-xs tracking-widest",
-        className
-      )}
+      className={cn('text-muted-foreground ml-auto text-xs tracking-widest', className)}
       {...props}
     />
   )
@@ -298,7 +280,7 @@ function DropdownMenuSubContent({
         <BaseMenu.Popup
           data-slot="dropdown-menu-sub-content"
           className={cn(
-            "bg-popover text-popover-foreground z-50 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-lg",
+            'bg-popover text-popover-foreground z-50 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-lg',
             className
           )}
           {...props}

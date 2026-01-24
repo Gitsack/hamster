@@ -291,8 +291,8 @@ export function SeasonPickerDialog({
         <DialogHeader>
           <DialogTitle>Select Episodes</DialogTitle>
           <DialogDescription>
-            Choose which seasons and episodes of "{showTitle}" you want to request.
-            Click on a season to select individual episodes.
+            Choose which seasons and episodes of "{showTitle}" you want to request. Click on a
+            season to select individual episodes.
           </DialogDescription>
         </DialogHeader>
 
@@ -307,9 +307,7 @@ export function SeasonPickerDialog({
           </div>
         )}
 
-        {error && (
-          <div className="text-sm text-destructive py-4 text-center">{error}</div>
-        )}
+        {error && <div className="text-sm text-destructive py-4 text-center">{error}</div>}
 
         {!loading && !error && seasons.length > 0 && (
           <>
@@ -355,12 +353,14 @@ export function SeasonPickerDialog({
                         checked={isFullySelected}
                         ref={(el) => {
                           if (el && isPartiallySelected) {
-                            (el as any).indeterminate = true
+                            ;(el as any).indeterminate = true
                           }
                         }}
                         onCheckedChange={() => {}}
                         onClick={(e) => toggleSeason(season.seasonNumber, e)}
-                        className={cn(isPartiallySelected && "data-[state=unchecked]:bg-primary/50")}
+                        className={cn(
+                          isPartiallySelected && 'data-[state=unchecked]:bg-primary/50'
+                        )}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm">{season.title}</div>
@@ -385,16 +385,22 @@ export function SeasonPickerDialog({
                           </div>
                         ) : episodes ? (
                           episodes.map((episode) => {
-                            const isSelected = selectedEpisodes[season.seasonNumber]?.has(episode.episodeNumber)
+                            const isSelected = selectedEpisodes[season.seasonNumber]?.has(
+                              episode.episodeNumber
+                            )
                             return (
                               <div
                                 key={episode.episodeNumber}
                                 className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
-                                onClick={() => toggleEpisode(season.seasonNumber, episode.episodeNumber)}
+                                onClick={() =>
+                                  toggleEpisode(season.seasonNumber, episode.episodeNumber)
+                                }
                               >
                                 <Checkbox
                                   checked={isSelected}
-                                  onCheckedChange={() => toggleEpisode(season.seasonNumber, episode.episodeNumber)}
+                                  onCheckedChange={() =>
+                                    toggleEpisode(season.seasonNumber, episode.episodeNumber)
+                                  }
                                 />
                                 <span className="font-mono text-xs text-muted-foreground w-6">
                                   {episode.episodeNumber}
@@ -421,9 +427,7 @@ export function SeasonPickerDialog({
         )}
 
         {!loading && !error && seasons.length === 0 && (
-          <div className="text-sm text-muted-foreground py-4 text-center">
-            No seasons found
-          </div>
+          <div className="text-sm text-muted-foreground py-4 text-center">No seasons found</div>
         )}
 
         <DialogFooter>

@@ -10,7 +10,10 @@ export async function accessWithTimeout(filePath: string, timeoutMs = 3000): Pro
   await Promise.race([
     fs.access(filePath),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Path check timeout - network storage may be unmounted')), timeoutMs)
+      setTimeout(
+        () => reject(new Error('Path check timeout - network storage may be unmounted')),
+        timeoutMs
+      )
     ),
   ])
 }
@@ -36,11 +39,17 @@ export async function isAccessible(filePath: string, timeoutMs = 3000): Promise<
  * @param timeoutMs - Timeout in milliseconds (default: 3000)
  * @returns Promise that resolves with fs.Stats
  */
-export async function statWithTimeout(filePath: string, timeoutMs = 3000): Promise<Awaited<ReturnType<typeof fs.stat>>> {
+export async function statWithTimeout(
+  filePath: string,
+  timeoutMs = 3000
+): Promise<Awaited<ReturnType<typeof fs.stat>>> {
   return Promise.race([
     fs.stat(filePath),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Stat timeout - network storage may be unmounted')), timeoutMs)
+      setTimeout(
+        () => reject(new Error('Stat timeout - network storage may be unmounted')),
+        timeoutMs
+      )
     ),
   ])
 }
@@ -50,14 +59,14 @@ export async function statWithTimeout(filePath: string, timeoutMs = 3000): Promi
  * @param dirPath - The directory path to read
  * @param timeoutMs - Timeout in milliseconds (default: 5000)
  */
-export async function readdirWithTimeout(
-  dirPath: string,
-  timeoutMs = 5000
-): Promise<string[]> {
+export async function readdirWithTimeout(dirPath: string, timeoutMs = 5000): Promise<string[]> {
   return Promise.race([
     fs.readdir(dirPath),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Readdir timeout - network storage may be unmounted')), timeoutMs)
+      setTimeout(
+        () => reject(new Error('Readdir timeout - network storage may be unmounted')),
+        timeoutMs
+      )
     ),
   ])
 }

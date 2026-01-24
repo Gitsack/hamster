@@ -57,10 +57,13 @@ setTimeout(async () => {
   }
 }, 60000) // 1 minute after startup
 
-setInterval(async () => {
-  try {
-    await blacklistService.cleanupExpired()
-  } catch (error) {
-    console.error('[Blacklist] Failed to cleanup expired entries:', error)
-  }
-}, 24 * 60 * 60 * 1000) // Every 24 hours
+setInterval(
+  async () => {
+    try {
+      await blacklistService.cleanupExpired()
+    } catch (error) {
+      console.error('[Blacklist] Failed to cleanup expired entries:', error)
+    }
+  },
+  24 * 60 * 60 * 1000
+) // Every 24 hours

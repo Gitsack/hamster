@@ -31,8 +31,7 @@ import {
   MusicNote01Icon,
   CheckmarkCircle01Icon,
   Cancel01Icon,
-  ViewIcon,
-  ViewOffIcon,
+  Delete01Icon,
   FileDownloadIcon,
   PlayIcon,
   PauseIcon,
@@ -74,7 +73,7 @@ interface Album {
   albumType: string
   secondaryTypes: string[]
   imageUrl: string | null
-  monitored: boolean
+  requested: boolean
   anyReleaseOk: boolean
   tracks: Track[]
   trackFiles: TrackFile[]
@@ -129,18 +128,39 @@ export default function AlbumDetail() {
     }
   }
 
-  const toggleMonitored = async () => {
+  const toggleRequested = async () => {
     if (!album) return
+
+    const wasRequested = album.requested
+
+    // If unrequesting an album with files, show error (files must be deleted first)
+    if (wasRequested && album.trackFiles.length > 0) {
+      toast.error('Album has downloaded files. Delete files first before unrequesting.')
+      return
+    }
 
     try {
       const response = await fetch(`/api/v1/albums/${albumId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ monitored: !album.monitored }),
+        body: JSON.stringify({ requested: !wasRequested }),
       })
+
+      const data = await response.json()
+
       if (response.ok) {
-        setAlbum({ ...album, monitored: !album.monitored })
-        toast.success(album.monitored ? 'Album unrequested' : 'Album requested')
+        if (data.deleted) {
+          // Album was deleted - navigate back
+          toast.success('Removed from library')
+          router.visit('/library')
+        } else {
+          setAlbum({ ...album, requested: !wasRequested })
+          toast.success(wasRequested ? 'Album unrequested' : 'Album requested')
+        }
+      } else if (data.hasFile) {
+        toast.error('Album has downloaded files. Delete files first before unrequesting.')
+      } else {
+        toast.error(data.error || 'Failed to update album')
       }
     } catch (error) {
       console.error('Failed to update album:', error)
@@ -180,7 +200,9 @@ export default function AlbumDetail() {
         toast.success(`Download started: ${data.release?.title || data.title}`)
       } else {
         const error = await response.json()
-        toast.error(error.error || (trackId ? 'No single/EP found for this track' : 'Failed to find releases'))
+        toast.error(
+          error.error || (trackId ? 'No single/EP found for this track' : 'Failed to find releases')
+        )
       }
     } catch (error) {
       console.error('Failed to download:', error)
@@ -261,8 +283,7 @@ export default function AlbumDetail() {
   // Calculate statistics
   const totalTracks = album?.tracks.length || 0
   const tracksWithFiles = album?.tracks.filter((t) => t.hasFile).length || 0
-  const percentComplete =
-    totalTracks > 0 ? Math.round((tracksWithFiles / totalTracks) * 100) : 0
+  const percentComplete = totalTracks > 0 ? Math.round((tracksWithFiles / totalTracks) * 100) : 0
 
   // Format duration
   const formatDuration = (ms: number | null) => {
@@ -340,28 +361,26 @@ export default function AlbumDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={toggleMonitored}>
-                <HugeiconsIcon
-                  icon={album.monitored ? ViewOffIcon : ViewIcon}
-                  className="h-4 w-4 mr-2"
-                />
-                {album.monitored ? 'Unrequest' : 'Request'}
-              </DropdownMenuItem>
               {!album.musicbrainzId && (
-                <>
-                  <DropdownMenuItem onClick={enrichAlbum} disabled={enriching}>
-                    <HugeiconsIcon
-                      icon={Search01Icon}
-                      className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
-                    />
-                    {enriching ? 'Enriching...' : 'Enrich from MusicBrainz'}
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem onClick={enrichAlbum} disabled={enriching}>
+                  <HugeiconsIcon
+                    icon={Search01Icon}
+                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                  />
+                  {enriching ? 'Enriching...' : 'Enrich from MusicBrainz'}
+                </DropdownMenuItem>
               )}
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={searchReleases} disabled={searching}>
                 <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
                 {searching ? 'Searching...' : 'Manual Search'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={toggleRequested}
+              >
+                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                Remove from Library
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -376,17 +395,10 @@ export default function AlbumDetail() {
           {/* Album art */}
           <div className="w-full md:w-48 aspect-square md:aspect-auto md:h-48 bg-muted rounded-lg overflow-hidden flex-shrink-0">
             {album.imageUrl ? (
-              <img
-                src={album.imageUrl}
-                alt={album.title}
-                className="w-full h-full object-cover"
-              />
+              <img src={album.imageUrl} alt={album.title} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon
-                  icon={CdIcon}
-                  className="h-16 w-16 text-muted-foreground/50"
-                />
+                <HugeiconsIcon icon={CdIcon} className="h-16 w-16 text-muted-foreground/50" />
               </div>
             )}
           </div>
@@ -447,9 +459,7 @@ export default function AlbumDetail() {
             <TabsTrigger value="tracks">Tracks</TabsTrigger>
             <TabsTrigger value="files">Files</TabsTrigger>
             {searchResults.length > 0 && (
-              <TabsTrigger value="search">
-                Search Results ({searchResults.length})
-              </TabsTrigger>
+              <TabsTrigger value="search">Search Results ({searchResults.length})</TabsTrigger>
             )}
           </TabsList>
 
@@ -512,9 +522,7 @@ export default function AlbumDetail() {
                               ? `${track.discNumber}-${track.trackNumber}`
                               : track.trackNumber}
                           </TableCell>
-                          <TableCell className="font-medium">
-                            {track.title}
-                          </TableCell>
+                          <TableCell className="font-medium">{track.title}</TableCell>
                           <TableCell className="text-right text-muted-foreground">
                             {formatDuration(track.durationMs)}
                           </TableCell>
@@ -539,10 +547,7 @@ export default function AlbumDetail() {
                                 {downloading ? (
                                   <Spinner />
                                 ) : (
-                                  <HugeiconsIcon
-                                    icon={Search01Icon}
-                                    className="h-4 w-4"
-                                  />
+                                  <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
                                 )}
                               </Button>
                             )}
@@ -560,9 +565,7 @@ export default function AlbumDetail() {
             {album.trackFiles.length === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <p className="text-muted-foreground">
-                    No files imported for this album yet.
-                  </p>
+                  <p className="text-muted-foreground">No files imported for this album yet.</p>
                 </CardContent>
               </Card>
             ) : (
@@ -627,13 +630,9 @@ export default function AlbumDetail() {
                         <TableCell className="font-medium max-w-md truncate">
                           {result.title}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {result.indexer}
-                        </TableCell>
+                        <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
                         <TableCell>
-                          {result.quality && (
-                            <Badge variant="outline">{result.quality}</Badge>
-                          )}
+                          {result.quality && <Badge variant="outline">{result.quality}</Badge>}
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">
                           {formatSize(result.size)}
@@ -651,10 +650,7 @@ export default function AlbumDetail() {
                             {grabbing === result.id ? (
                               <Spinner />
                             ) : (
-                              <HugeiconsIcon
-                                icon={FileDownloadIcon}
-                                className="h-4 w-4"
-                              />
+                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
                             )}
                           </Button>
                         </TableCell>

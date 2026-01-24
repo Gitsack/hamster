@@ -52,9 +52,7 @@ export const defaultNamingPatterns: NamingPatterns = {
 // Available variables per media type
 export const templateVariables: Record<MediaType, Record<string, TemplateVariable[]>> = {
   music: {
-    artistFolder: [
-      { name: 'artist_name', description: 'Artist name', example: 'Michael Jackson' },
-    ],
+    artistFolder: [{ name: 'artist_name', description: 'Artist name', example: 'Michael Jackson' }],
     albumFolder: [
       { name: 'album_title', description: 'Album title', example: 'Thriller' },
       { name: 'year', description: 'Release year', example: '1982' },
@@ -92,9 +90,7 @@ export const templateVariables: Record<MediaType, Record<string, TemplateVariabl
     ],
   },
   books: {
-    authorFolder: [
-      { name: 'author_name', description: 'Author name', example: 'Stephen King' },
-    ],
+    authorFolder: [{ name: 'author_name', description: 'Author name', example: 'Stephen King' }],
     bookFile: [
       { name: 'book_title', description: 'Book title', example: 'The Shining' },
       { name: 'year', description: 'Publication year', example: '1977' },
@@ -108,19 +104,22 @@ export class NamingTemplateService {
    * Variables are in the format {variable_name}
    */
   parseTemplate(pattern: string, variables: Record<string, string | number | undefined>): string {
-    return pattern.replace(/\{(\w+)\}/g, (_match, varName) => {
-      const value = variables[varName]
-      if (value === undefined || value === null || value === '') {
-        // Remove the placeholder and any surrounding brackets/parentheses if value is missing
-        return ''
-      }
-      return String(value)
-    })
-      // Clean up empty brackets/parentheses left by missing values
-      .replace(/\s*\(\s*\)/g, '')
-      .replace(/\s*\[\s*\]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
+    return (
+      pattern
+        .replace(/\{(\w+)\}/g, (_match, varName) => {
+          const value = variables[varName]
+          if (value === undefined || value === null || value === '') {
+            // Remove the placeholder and any surrounding brackets/parentheses if value is missing
+            return ''
+          }
+          return String(value)
+        })
+        // Clean up empty brackets/parentheses left by missing values
+        .replace(/\s*\(\s*\)/g, '')
+        .replace(/\s*\[\s*\]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    )
   }
 
   /**
@@ -154,7 +153,11 @@ export class NamingTemplateService {
   /**
    * Validate a pattern - check if all variables are valid for the field
    */
-  validatePattern(mediaType: MediaType, field: string, pattern: string): { valid: boolean; invalidVars: string[] } {
+  validatePattern(
+    mediaType: MediaType,
+    field: string,
+    pattern: string
+  ): { valid: boolean; invalidVars: string[] } {
     const validVars = this.getVariables(mediaType, field).map((v) => v.name)
     const usedVars = pattern.match(/\{(\w+)\}/g)?.map((m) => m.slice(1, -1)) || []
     const invalidVars = usedVars.filter((v) => !validVars.includes(v))

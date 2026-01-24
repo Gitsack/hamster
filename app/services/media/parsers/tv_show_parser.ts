@@ -231,7 +231,12 @@ export class TvShowParser {
 
   private extractEpisodeInfo(
     name: string
-  ): { seasonNumber: number; episodeNumber: number; isMultiEpisode?: boolean; endEpisodeNumber?: number } | null {
+  ): {
+    seasonNumber: number
+    episodeNumber: number
+    isMultiEpisode?: boolean
+    endEpisodeNumber?: number
+  } | null {
     const patterns = [
       // "S01E01-E03" or "S01E01-03" (multi-episode)
       /S(\d{1,2})E(\d{1,3})[-E](\d{1,3})/i,
@@ -332,7 +337,10 @@ export class TvShowParser {
 
     // Remove year (in parentheses, brackets, dots, or space-separated)
     if (year) {
-      title = title.replace(new RegExp(`\\(${year}\\)|\\[${year}\\]|\\.${year}|\\s${year}(?=\\s|$)`, 'g'), '')
+      title = title.replace(
+        new RegExp(`\\(${year}\\)|\\[${year}\\]|\\.${year}|\\s${year}(?=\\s|$)`, 'g'),
+        ''
+      )
     }
 
     return this.cleanShowTitle(title)

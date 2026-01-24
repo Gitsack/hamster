@@ -8,6 +8,7 @@ import { musicBrainzService } from '#services/metadata/musicbrainz_service'
 import { coverArtService } from '#services/metadata/cover_art_service'
 import { DateTime } from 'luxon'
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
+import { libraryCleanupService } from '#services/library/library_cleanup_service'
 
 const addAlbumValidator = vine.compile(
   vine.object({
@@ -34,9 +35,7 @@ export default class AlbumsController {
   async index({ request, response }: HttpContext) {
     const artistId = request.input('artistId')
 
-    const query = Album.query()
-      .preload('artist')
-      .orderBy('releaseDate', 'desc')
+    const query = Album.query().preload('artist').orderBy('releaseDate', 'desc')
 
     if (artistId) {
       query.where('artistId', artistId)
@@ -48,7 +47,10 @@ export default class AlbumsController {
     const albumsWithCounts = await Promise.all(
       albums.map(async (album) => {
         const trackCount = await Track.query().where('albumId', album.id).count('* as total')
-        const fileCount = await Track.query().where('albumId', album.id).where('hasFile', true).count('* as total')
+        const fileCount = await Track.query()
+          .where('albumId', album.id)
+          .where('hasFile', true)
+          .count('* as total')
 
         return {
           id: album.id,
@@ -192,11 +194,11 @@ export default class AlbumsController {
           )
 
           // Or by title if no exact position match (case-insensitive)
-          const existingByTitle = existingByNumber || existingTracks.find(
-            (t) =>
-              !t.musicbrainzId &&
-              t.title.toLowerCase() === mbTrack.title.toLowerCase()
-          )
+          const existingByTitle =
+            existingByNumber ||
+            existingTracks.find(
+              (t) => !t.musicbrainzId && t.title.toLowerCase() === mbTrack.title.toLowerCase()
+            )
 
           const existing = existingByNumber || existingByTitle
 
@@ -369,6 +371,34 @@ export default class AlbumsController {
 
     const data = await request.validateUsing(updateAlbumValidator)
 
+    // Handle unrequesting
+    if (data.requested === false && album.requested === true) {
+      // Check if album has any files
+      const hasFiles = await libraryCleanupService.albumHasFiles(album.id)
+
+      if (hasFiles) {
+        return response.badRequest({
+          error: 'Album has downloaded files',
+          hasFile: true,
+          message: 'Delete album files first before unrequesting',
+        })
+      }
+
+      // Album has no files - delete it and cascade to artist
+      const artistId = album.artistId
+      console.log(`[AlbumsController] Unrequesting album without files, deleting: ${album.title}`)
+      await album.delete()
+
+      // Check if artist should be removed
+      await libraryCleanupService.removeArtistIfEmpty(artistId)
+
+      return response.json({
+        id: album.id,
+        deleted: true,
+        message: 'Removed from library',
+      })
+    }
+
     album.merge({
       requested: data.requested ?? album.requested,
       anyReleaseOk: data.anyReleaseOk ?? album.anyReleaseOk,
@@ -515,7 +545,13 @@ export default class AlbumsController {
     // Check if searching for a specific track
     const trackIdParam = request.qs().trackId
     const trackId = trackIdParam ? parseInt(String(trackIdParam), 10) : null
-    let searchQuery: { artist?: string; album?: string; track?: string; year?: number; limit: number }
+    let searchQuery: {
+      artist?: string
+      album?: string
+      track?: string
+      year?: number
+      limit: number
+    }
 
     if (trackId && !isNaN(trackId)) {
       // Search for specific track (might find a single or EP)
@@ -716,9 +752,7 @@ export default class AlbumsController {
     }
 
     // Find best match (exact title match preferred)
-    const exactMatch = results.find(
-      (r) => r.title.toLowerCase() === album.title.toLowerCase()
-    )
+    const exactMatch = results.find((r) => r.title.toLowerCase() === album.title.toLowerCase())
     const best = exactMatch || results[0]
 
     // Update album with MusicBrainz data

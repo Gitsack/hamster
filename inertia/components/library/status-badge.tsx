@@ -1,11 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { HugeiconsIcon } from '@hugeicons/react'
-import {
-  CheckmarkCircle01Icon,
-  Clock01Icon,
-  Download01Icon,
-} from '@hugeicons/core-free-icons'
+import { CheckmarkCircle01Icon, Clock01Icon, Download01Icon } from '@hugeicons/core-free-icons'
 import { cn } from '@/lib/utils'
 
 export type ItemStatus = 'downloaded' | 'requested' | 'downloading' | 'none'
@@ -17,7 +13,12 @@ interface StatusBadgeProps {
   showLabel?: boolean
 }
 
-export function StatusBadge({ status, progress = 0, className, showLabel = true }: StatusBadgeProps) {
+export function StatusBadge({
+  status,
+  progress = 0,
+  className,
+  showLabel = true,
+}: StatusBadgeProps) {
   if (status === 'none') return null
 
   const statusConfig = {
@@ -44,10 +45,7 @@ export function StatusBadge({ status, progress = 0, className, showLabel = true 
   const config = statusConfig[status]
 
   return (
-    <Badge
-      variant={config.variant}
-      className={cn(config.className, 'gap-1', className)}
-    >
+    <Badge variant={config.variant} className={cn(config.className, 'gap-1', className)}>
       <HugeiconsIcon icon={config.icon} className="h-3 w-3" />
       {showLabel && <span>{config.label}</span>}
       {status === 'downloading' && progress > 0 && (
@@ -81,7 +79,11 @@ interface StatusIndicatorProps {
   position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 }
 
-export function StatusIndicator({ status, progress, position = 'top-right' }: StatusIndicatorProps) {
+export function StatusIndicator({
+  status,
+  progress,
+  position = 'top-right',
+}: StatusIndicatorProps) {
   if (status === 'none') return null
 
   const positionClasses = {

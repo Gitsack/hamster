@@ -37,11 +37,11 @@ export class TelegramProvider {
     })
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({})) as { description?: string }
+      const data = (await response.json().catch(() => ({}))) as { description?: string }
       throw new Error(`Telegram API error: ${data.description || response.status}`)
     }
 
-    const result = await response.json() as { ok: boolean; description?: string }
+    const result = (await response.json()) as { ok: boolean; description?: string }
     if (!result.ok) {
       throw new Error(`Telegram API error: ${result.description || 'Unknown error'}`)
     }
@@ -96,10 +96,7 @@ export class TelegramProvider {
    * Escape HTML special characters
    */
   private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   }
 }
 

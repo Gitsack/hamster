@@ -53,9 +53,7 @@ export default function Register({ errors = {} }: RegisterProps) {
                   autoComplete="name"
                   autoFocus
                 />
-                {errors?.fullName && (
-                  <p className="text-sm text-destructive">{errors.fullName}</p>
-                )}
+                {errors?.fullName && <p className="text-sm text-destructive">{errors.fullName}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -68,9 +66,7 @@ export default function Register({ errors = {} }: RegisterProps) {
                   required
                   autoComplete="email"
                 />
-                {errors?.email && (
-                  <p className="text-sm text-destructive">{errors.email}</p>
-                )}
+                {errors?.email && <p className="text-sm text-destructive">{errors.email}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
@@ -83,9 +79,7 @@ export default function Register({ errors = {} }: RegisterProps) {
                   required
                   autoComplete="new-password"
                 />
-                {errors?.password && (
-                  <p className="text-sm text-destructive">{errors.password}</p>
-                )}
+                {errors?.password && <p className="text-sm text-destructive">{errors.password}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="passwordConfirmation">Confirm Password</Label>

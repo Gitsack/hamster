@@ -1,8 +1,8 @@
-"use client"
+'use client'
 
-import * as React from "react"
-import { Tabs as BaseTabs } from "@base-ui/react/tabs"
-import { cn } from "@/lib/utils"
+import * as React from 'react'
+import { Tabs as BaseTabs } from '@base-ui/react/tabs'
+import { cn } from '@/lib/utils'
 
 // Context to share stable ID with child components
 const TabsIdContext = React.createContext<string | undefined>(undefined)
@@ -18,20 +18,12 @@ function Tabs({
 
   return (
     <TabsIdContext.Provider value={stableId}>
-      <BaseTabs.Root
-        data-slot="tabs"
-        className={cn("flex flex-col gap-2", className)}
-        {...props}
-      />
+      <BaseTabs.Root data-slot="tabs" className={cn('flex flex-col gap-2', className)} {...props} />
     </TabsIdContext.Provider>
   )
 }
 
-function TabsList({
-  className,
-  id,
-  ...props
-}: React.ComponentProps<typeof BaseTabs.List>) {
+function TabsList({ className, id, ...props }: React.ComponentProps<typeof BaseTabs.List>) {
   const tabsId = React.useContext(TabsIdContext)
   const listId = id || (tabsId ? `${tabsId}-list` : undefined)
 
@@ -40,7 +32,7 @@ function TabsList({
       id={listId}
       data-slot="tabs-list"
       className={cn(
-        "bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]",
+        'bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]',
         className
       )}
       {...props}
@@ -85,7 +77,7 @@ function TabsContent({
       id={panelId}
       value={value}
       data-slot="tabs-content"
-      className={cn("flex-1 outline-none", className)}
+      className={cn('flex-1 outline-none', className)}
       {...props}
     />
   )

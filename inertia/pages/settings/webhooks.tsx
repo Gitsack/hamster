@@ -14,13 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectPopup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -115,7 +109,8 @@ const webhookTemplates: WebhookTemplate[] = [
         required: true,
       },
     ],
-    buildUrl: (values) => `${values.serverUrl?.replace(/\/$/, '')}/Library/Refresh?api_key=${values.apiKey}`,
+    buildUrl: (values) =>
+      `${values.serverUrl?.replace(/\/$/, '')}/Library/Refresh?api_key=${values.apiKey}`,
     formData: {
       name: 'Jellyfin Library Refresh',
       method: 'POST',
@@ -199,7 +194,8 @@ const webhookTemplates: WebhookTemplate[] = [
         required: true,
       },
     ],
-    buildUrl: (values) => `${values.serverUrl?.replace(/\/$/, '')}/Library/Refresh?api_key=${values.apiKey}`,
+    buildUrl: (values) =>
+      `${values.serverUrl?.replace(/\/$/, '')}/Library/Refresh?api_key=${values.apiKey}`,
     formData: {
       name: 'Emby Library Refresh',
       method: 'POST',
@@ -404,9 +400,7 @@ export default function Webhooks() {
     setSaving(true)
 
     try {
-      const url = editingWebhook
-        ? `/api/v1/webhooks/${editingWebhook.id}`
-        : '/api/v1/webhooks'
+      const url = editingWebhook ? `/api/v1/webhooks/${editingWebhook.id}` : '/api/v1/webhooks'
       const method = editingWebhook ? 'PUT' : 'POST'
 
       const response = await fetch(url, {
@@ -615,9 +609,7 @@ export default function Webhooks() {
                       }
                       placeholder={field.placeholder}
                     />
-                    {field.help && (
-                      <p className="text-sm text-muted-foreground">{field.help}</p>
-                    )}
+                    {field.help && <p className="text-sm text-muted-foreground">{field.help}</p>}
                   </div>
                 ))}
               </>
@@ -708,7 +700,9 @@ export default function Webhooks() {
                   <Checkbox
                     id="onUpgrade"
                     checked={formData.onUpgrade}
-                    onCheckedChange={(checked) => setFormData({ ...formData, onUpgrade: !!checked })}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, onUpgrade: !!checked })
+                    }
                   />
                   <Label htmlFor="onUpgrade" className="font-normal cursor-pointer">
                     On Upgrade

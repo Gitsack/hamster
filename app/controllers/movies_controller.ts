@@ -325,16 +325,51 @@ export default class MoviesController {
     return response.json({ id: movie.id, title: movie.title, requested: movie.requested })
   }
 
-  async destroy({ params, response }: HttpContext) {
-    const movie = await Movie.find(params.id)
+  async destroy({ params, request, response }: HttpContext) {
+    const movie = await Movie.query()
+      .where('id', params.id)
+      .preload('rootFolder')
+      .preload('movieFile')
+      .first()
+
     if (!movie) {
       return response.notFound({ error: 'Movie not found' })
     }
 
-    // TODO: Delete files if requested
+    const deleteFile = request.input('deleteFile') === 'true'
+    let fileDeleted = false
+
+    // If movie has a file and deleteFile is requested, delete the file first
+    if (deleteFile && movie.movieFile && movie.rootFolder) {
+      const absolutePath = path.join(movie.rootFolder.path, movie.movieFile.relativePath)
+      const folderPath = path.dirname(absolutePath)
+
+      try {
+        await fs.unlink(absolutePath)
+        console.log(`[MoviesController] Deleted movie file: ${absolutePath}`)
+        fileDeleted = true
+
+        // Try to remove the folder if empty
+        try {
+          const remainingFiles = await fs.readdir(folderPath)
+          if (remainingFiles.length === 0) {
+            await fs.rmdir(folderPath)
+            console.log(`[MoviesController] Removed empty folder: ${folderPath}`)
+          }
+        } catch {
+          // Folder might not be empty or other error, ignore
+        }
+      } catch (error) {
+        console.error(`[MoviesController] Failed to delete file: ${absolutePath}`, error)
+        // Continue with record deletion even if file deletion fails
+      }
+
+      // Delete the MovieFile record
+      await MovieFile.query().where('id', movie.movieFile.id).delete()
+    }
 
     await movie.delete()
-    return response.noContent()
+    return response.json({ id: movie.id, deleted: true, fileDeleted })
   }
 
   async setWanted({ params, request, response }: HttpContext) {
@@ -344,11 +379,35 @@ export default class MoviesController {
     }
 
     const { requested } = request.only(['requested'])
-    movie.requested = requested ?? true
+    const newStatus = requested ?? true
+
+    // If unrequesting (setting to false)
+    if (!newStatus) {
+      // If movie has a file, return error - frontend should show confirmation dialog
+      if (movie.hasFile) {
+        return response.badRequest({
+          error: 'Item has downloaded files',
+          hasFile: true,
+          message: 'Use DELETE endpoint with deleteFile=true to remove files and record',
+        })
+      }
+
+      // Movie has no file - delete it from library
+      console.log(`[MoviesController] Unrequesting movie without file, deleting: ${movie.title}`)
+      await movie.delete()
+      return response.json({
+        id: movie.id,
+        deleted: true,
+        message: 'Removed from library',
+      })
+    }
+
+    // Requesting (setting to true)
+    movie.requested = true
     await movie.save()
 
     // Trigger immediate search if marking as requested
-    if (movie.requested && !movie.hasFile) {
+    if (!movie.hasFile) {
       requestedSearchTask.searchSingleMovie(movie.id).catch((error) => {
         console.error('Failed to trigger search for movie:', error)
       })

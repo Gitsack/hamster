@@ -88,7 +88,9 @@ export default function AuthorDetail() {
   const [refreshing, setRefreshing] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [activeDownloads, setActiveDownloads] = useState<Map<number, { progress: number; status: string }>>(new Map())
+  const [activeDownloads, setActiveDownloads] = useState<
+    Map<number, { progress: number; status: string }>
+  >(new Map())
   const [togglingBooks, setTogglingBooks] = useState<Set<number>>(new Set())
   const [addingBooks, setAddingBooks] = useState<Set<string>>(new Set())
   const [requestingAll, setRequestingAll] = useState(false)
@@ -169,7 +171,9 @@ export default function AuthorDetail() {
       })
       if (response.ok) {
         const data = await response.json()
-        toast.success(`Author refreshed${data.booksAdded > 0 ? `, ${data.booksAdded} books added` : ''}`)
+        toast.success(
+          `Author refreshed${data.booksAdded > 0 ? `, ${data.booksAdded} books added` : ''}`
+        )
         fetchAuthor()
         if (author?.openlibraryId) {
           fetchBibliography(author.openlibraryId)
@@ -292,7 +296,9 @@ export default function AuthorDetail() {
           authorId: String(author.id),
           title: book.title,
           rootFolderId: String(author.rootFolder?.id),
-          qualityProfileId: author.qualityProfile?.id ? String(author.qualityProfile.id) : undefined,
+          qualityProfileId: author.qualityProfile?.id
+            ? String(author.qualityProfile.id)
+            : undefined,
           requested: true,
         }),
       })
@@ -356,7 +362,9 @@ export default function AuthorDetail() {
       if (failedCount === 0) {
         toast.success(`Requested ${booksToRequest.length} books`)
       } else if (failedCount < booksToRequest.length) {
-        toast.warning(`Requested ${booksToRequest.length - failedCount} books, ${failedCount} failed`)
+        toast.warning(
+          `Requested ${booksToRequest.length - failedCount} books, ${failedCount} failed`
+        )
       } else {
         toast.error('Failed to request books')
         // Revert on complete failure
@@ -373,9 +381,7 @@ export default function AuthorDetail() {
 
   // Merge library books with bibliography for complete view
   const mergedBooks = useMemo(() => {
-    const libraryMap = new Map(
-      author?.books.map((b) => [b.id, b]) || []
-    )
+    const libraryMap = new Map(author?.books.map((b) => [b.id, b]) || [])
 
     // Map bibliography books, enriching with library data if available
     const merged = bibliography.map((b) => {
@@ -509,17 +515,10 @@ export default function AuthorDetail() {
           {/* Author image */}
           <div className="w-full md:w-48 aspect-square md:aspect-auto md:h-48 bg-muted rounded-lg overflow-hidden flex-shrink-0">
             {author.imageUrl ? (
-              <img
-                src={author.imageUrl}
-                alt={author.name}
-                className="w-full h-full object-cover"
-              />
+              <img src={author.imageUrl} alt={author.name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon
-                  icon={Book01Icon}
-                  className="h-16 w-16 text-muted-foreground/50"
-                />
+                <HugeiconsIcon icon={Book01Icon} className="h-16 w-16 text-muted-foreground/50" />
               </div>
             )}
           </div>
@@ -560,9 +559,7 @@ export default function AuthorDetail() {
               {author.qualityProfile && (
                 <Badge variant="outline">{author.qualityProfile.name}</Badge>
               )}
-              {author.rootFolder && (
-                <Badge variant="outline">{author.rootFolder.path}</Badge>
-              )}
+              {author.rootFolder && <Badge variant="outline">{author.rootFolder.path}</Badge>}
             </div>
           </div>
         </div>
@@ -575,9 +572,7 @@ export default function AuthorDetail() {
                 Bibliography ({mergedBooks.length})
                 {loadingBibliography && <Spinner className="ml-2 h-3 w-3" />}
               </TabsTrigger>
-              <TabsTrigger value="library">
-                In Library ({inLibraryBooks.length})
-              </TabsTrigger>
+              <TabsTrigger value="library">In Library ({inLibraryBooks.length})</TabsTrigger>
               <TabsTrigger value="downloaded">
                 Downloaded ({downloadedBooksFiltered.length})
               </TabsTrigger>
@@ -585,9 +580,7 @@ export default function AuthorDetail() {
                 Requested ({requestedBooksFiltered.length})
               </TabsTrigger>
               {notInLibraryBooks.length > 0 && (
-                <TabsTrigger value="available">
-                  Available ({notInLibraryBooks.length})
-                </TabsTrigger>
+                <TabsTrigger value="available">Available ({notInLibraryBooks.length})</TabsTrigger>
               )}
             </TabsList>
             {author.books.some((b) => !b.requested && !b.hasFile) && (
@@ -614,7 +607,13 @@ export default function AuthorDetail() {
 
           <TabsContent value="all" className="space-y-4">
             {mergedBooks.length === 0 ? (
-              <EmptyState message={loadingBibliography ? 'Loading bibliography...' : 'No books found. Try refreshing to fetch from OpenLibrary.'} />
+              <EmptyState
+                message={
+                  loadingBibliography
+                    ? 'Loading bibliography...'
+                    : 'No books found. Try refreshing to fetch from OpenLibrary.'
+                }
+              />
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {mergedBooks.map((book) => (
@@ -625,17 +624,19 @@ export default function AuthorDetail() {
                     isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
                     isAdding={addingBooks.has(book.openlibraryId)}
                     onToggleRequest={toggleBookRequested}
-                    onAdd={() => addBook({
-                      openlibraryId: book.openlibraryId,
-                      title: book.title,
-                      description: book.description,
-                      coverUrl: book.coverUrl,
-                      subjects: null,
-                      inLibrary: book.inLibrary,
-                      bookId: book.libraryId || null,
-                      requested: book.requested,
-                      hasFile: book.hasFile,
-                    })}
+                    onAdd={() =>
+                      addBook({
+                        openlibraryId: book.openlibraryId,
+                        title: book.title,
+                        description: book.description,
+                        coverUrl: book.coverUrl,
+                        subjects: null,
+                        inLibrary: book.inLibrary,
+                        bookId: book.libraryId || null,
+                        requested: book.requested,
+                        hasFile: book.hasFile,
+                      })
+                    }
                   />
                 ))}
               </div>
@@ -715,17 +716,19 @@ export default function AuthorDetail() {
                     isToggling={false}
                     isAdding={addingBooks.has(book.openlibraryId)}
                     onToggleRequest={toggleBookRequested}
-                    onAdd={() => addBook({
-                      openlibraryId: book.openlibraryId,
-                      title: book.title,
-                      description: book.description,
-                      coverUrl: book.coverUrl,
-                      subjects: null,
-                      inLibrary: book.inLibrary,
-                      bookId: book.libraryId || null,
-                      requested: book.requested,
-                      hasFile: book.hasFile,
-                    })}
+                    onAdd={() =>
+                      addBook({
+                        openlibraryId: book.openlibraryId,
+                        title: book.title,
+                        description: book.description,
+                        coverUrl: book.coverUrl,
+                        subjects: null,
+                        inLibrary: book.inLibrary,
+                        bookId: book.libraryId || null,
+                        requested: book.requested,
+                        hasFile: book.hasFile,
+                      })
+                    }
                   />
                 ))}
               </div>
@@ -740,8 +743,8 @@ export default function AuthorDetail() {
           <DialogHeader>
             <DialogTitle>Delete {author.name}?</DialogTitle>
             <DialogDescription>
-              This will remove the author and all associated books from your library.
-              Files on disk will not be deleted.
+              This will remove the author and all associated books from your library. Files on disk
+              will not be deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -751,7 +754,7 @@ export default function AuthorDetail() {
             <Button variant="destructive" onClick={deleteAuthor} disabled={deleting}>
               {deleting ? (
                 <>
-                <Spinner />
+                  <Spinner />
                   Deleting...
                 </>
               ) : (
@@ -800,7 +803,14 @@ interface MergedBookCardProps {
   onAdd: () => void
 }
 
-function MergedBookCard({ book, downloadInfo, isToggling, isAdding, onToggleRequest, onAdd }: MergedBookCardProps) {
+function MergedBookCard({
+  book,
+  downloadInfo,
+  isToggling,
+  isAdding,
+  onToggleRequest,
+  onAdd,
+}: MergedBookCardProps) {
   const [downloading, setDownloading] = useState(false)
 
   const getBookStatus = (): MediaItemStatus => {

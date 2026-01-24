@@ -184,10 +184,7 @@ export default class PlaybackController {
       return response.badRequest({ error: 'Invalid album ID' })
     }
 
-    const album = await Album.query()
-      .where('id', albumId)
-      .preload('artist')
-      .first()
+    const album = await Album.query().where('id', albumId).preload('artist').first()
 
     if (!album) {
       return response.notFound({ error: 'Album not found' })
@@ -204,11 +201,7 @@ export default class PlaybackController {
       return response.notFound({ error: 'No artwork available' })
     }
 
-    const albumPath = path.join(
-      rootFolder.path,
-      album.artist.name,
-      album.title
-    )
+    const albumPath = path.join(rootFolder.path, album.artist.name, album.title)
 
     const coverPaths = [
       path.join(albumPath, 'folder.jpg'),
@@ -244,10 +237,7 @@ export default class PlaybackController {
       }
 
       // Get album with artist first
-      const album = await Album.query()
-        .where('id', albumId)
-        .preload('artist')
-        .first()
+      const album = await Album.query().where('id', albumId).preload('artist').first()
 
       if (!album) {
         return response.notFound({ error: 'Album not found' })
@@ -289,7 +279,10 @@ export default class PlaybackController {
       return response.json(playlist)
     } catch (error) {
       console.error('Album playlist error:', error)
-      return response.internalServerError({ error: 'Failed to load playlist', details: String(error) })
+      return response.internalServerError({
+        error: 'Failed to load playlist',
+        details: String(error),
+      })
     }
   }
 

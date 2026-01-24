@@ -45,7 +45,11 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
-import { MediaStatusBadge, getMediaItemStatus, type MediaItemStatus } from '@/components/library/media-status-badge'
+import {
+  MediaStatusBadge,
+  getMediaItemStatus,
+  type MediaItemStatus,
+} from '@/components/library/media-status-badge'
 
 interface Artist {
   id: number
@@ -122,47 +126,50 @@ interface MissingItem {
   airDate?: string | null
 }
 
-const MEDIA_TYPE_CONFIG: Record<MediaType, {
-  label: string
-  icon: typeof MusicNote01Icon
-  addUrl: string
-  itemLabel: string
-  countLabel: string
-}> = {
+const MEDIA_TYPE_CONFIG: Record<
+  MediaType,
+  {
+    label: string
+    icon: typeof MusicNote01Icon
+    addUrl: string
+    itemLabel: string
+    countLabel: string
+  }
+> = {
   music: {
     label: 'Music',
     icon: MusicNote01Icon,
     addUrl: '/search?mode=music&type=artist',
     itemLabel: 'artist',
-    countLabel: 'albums'
+    countLabel: 'albums',
   },
   movies: {
     label: 'Movies',
     icon: Film01Icon,
     addUrl: '/search?mode=movies',
     itemLabel: 'movie',
-    countLabel: 'movies'
+    countLabel: 'movies',
   },
   tv: {
     label: 'TV Shows',
     icon: Tv01Icon,
     addUrl: '/search?mode=tv',
     itemLabel: 'show',
-    countLabel: 'shows'
+    countLabel: 'shows',
   },
   books: {
     label: 'Books',
     icon: Book01Icon,
     addUrl: '/search?mode=books',
     itemLabel: 'author',
-    countLabel: 'books'
+    countLabel: 'books',
   },
   missing: {
     label: 'Missing',
     icon: Clock01Icon,
     addUrl: '/search',
     itemLabel: 'item',
-    countLabel: 'items'
+    countLabel: 'items',
   },
 }
 
@@ -173,7 +180,12 @@ export default function Library() {
   const [tvShows, setTvShows] = useState<TvShow[]>([])
   const [authors, setAuthors] = useState<Author[]>([])
   const [missingItems, setMissingItems] = useState<MissingItem[]>([])
-  const [missingCounts, setMissingCounts] = useState({ albums: 0, movies: 0, episodes: 0, books: 0 })
+  const [missingCounts, setMissingCounts] = useState({
+    albums: 0,
+    movies: 0,
+    episodes: 0,
+    books: 0,
+  })
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
@@ -183,9 +195,23 @@ export default function Library() {
 
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [itemToDelete, setItemToDelete] = useState<{ type: MediaType; id: number; name: string } | null>(null)
+  const [itemToDelete, setItemToDelete] = useState<{
+    type: MediaType
+    id: number
+    name: string
+  } | null>(null)
   const [deleteFiles, setDeleteFiles] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  // File deletion confirmation dialog state (for items with files)
+  const [fileConfirmDialogOpen, setFileConfirmDialogOpen] = useState(false)
+  const [itemWithFile, setItemWithFile] = useState<{
+    type: MediaType
+    id: number
+    name: string
+    hasFile?: boolean
+  } | null>(null)
+  const [deletingWithFile, setDeletingWithFile] = useState(false)
 
   // Library scan state
   const [scanning, setScanning] = useState(false)
@@ -351,9 +377,12 @@ export default function Library() {
         books: 'authors',
       }
 
-      const response = await fetch(`/api/v1/${endpoints[itemToDelete.type]}/${itemToDelete.id}?deleteFiles=${deleteFiles}`, {
-        method: 'DELETE',
-      })
+      const response = await fetch(
+        `/api/v1/${endpoints[itemToDelete.type]}/${itemToDelete.id}?deleteFiles=${deleteFiles}`,
+        {
+          method: 'DELETE',
+        }
+      )
 
       if (response.ok) {
         toast.success(`${itemToDelete.name} removed from library`)
@@ -417,7 +446,9 @@ export default function Library() {
       }
 
       const allRootFolders = await rootFoldersRes.json()
-      const foldersToScan = allRootFolders.filter((rf: { mediaType: string }) => rf.mediaType === mediaType)
+      const foldersToScan = allRootFolders.filter(
+        (rf: { mediaType: string }) => rf.mediaType === mediaType
+      )
 
       if (foldersToScan.length === 0) {
         toast.error(`No root folders configured for ${MEDIA_TYPE_CONFIG[activeTab].label}`)
@@ -459,7 +490,9 @@ export default function Library() {
               }
             }
           } catch (err) {
-            errors.push(`Error scanning ${folder.path}: ${err instanceof Error ? err.message : 'Unknown error'}`)
+            errors.push(
+              `Error scanning ${folder.path}: ${err instanceof Error ? err.message : 'Unknown error'}`
+            )
           }
         })()
 
@@ -488,7 +521,12 @@ export default function Library() {
   }
 
   // Handle enriching items
-  const handleEnrich = async (mediaType: MediaType, id: number, name: string, e: React.MouseEvent) => {
+  const handleEnrich = async (
+    mediaType: MediaType,
+    id: number,
+    name: string,
+    e: React.MouseEvent
+  ) => {
     e.preventDefault()
     e.stopPropagation()
 
@@ -534,47 +572,107 @@ export default function Library() {
   }
 
   // Handle toggling request status
-  const handleToggleRequest = async (mediaType: MediaType, id: number, currentlyRequested: boolean, e?: React.MouseEvent) => {
+  const handleToggleRequest = async (
+    mediaType: MediaType,
+    id: number,
+    currentlyRequested: boolean,
+    hasFile?: boolean,
+    name?: string,
+    e?: React.MouseEvent
+  ) => {
     e?.preventDefault()
     e?.stopPropagation()
+
+    // If unrequesting an item that has a file, show confirmation dialog
+    if (currentlyRequested && hasFile) {
+      setItemWithFile({ type: mediaType, id, name: name || 'this item', hasFile })
+      setFileConfirmDialogOpen(true)
+      return
+    }
 
     const itemKey = `${mediaType}-${id}`
     setTogglingItems((prev) => new Set(prev).add(itemKey))
 
-    const endpoints: Record<MediaType, string> = {
-      music: 'artists',
-      movies: 'movies',
-      tv: 'tvshows',
-      books: 'authors',
-      missing: '',
+    // Use the appropriate endpoint based on media type
+    const getEndpoint = () => {
+      switch (mediaType) {
+        case 'movies':
+          return `/api/v1/movies/${id}/request`
+        case 'books':
+          // For books, use books/:id/request, not authors/:id
+          return `/api/v1/books/${id}/request`
+        case 'music':
+          return `/api/v1/artists/${id}`
+        case 'tv':
+          return `/api/v1/tvshows/${id}`
+        default:
+          return ''
+      }
     }
 
+    const endpoint = getEndpoint()
+    const isRequestEndpoint = mediaType === 'movies' || mediaType === 'books'
+
     try {
-      const response = await fetch(`/api/v1/${endpoints[mediaType]}/${id}`, {
-        method: 'PUT',
+      const response = await fetch(endpoint, {
+        method: isRequestEndpoint ? 'POST' : 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requested: !currentlyRequested }),
       })
 
+      const data = await response.json()
+
       if (response.ok) {
-        toast.success(currentlyRequested ? 'Item unrequested' : 'Item requested')
-        // Update local state
-        switch (mediaType) {
-          case 'movies':
-            setMovies((prev) => prev.map((m) => m.id === id ? { ...m, requested: !currentlyRequested } : m))
-            break
-          case 'music':
-            setArtists((prev) => prev.map((a) => a.id === id ? { ...a, requested: !currentlyRequested } : a))
-            break
-          case 'tv':
-            setTvShows((prev) => prev.map((t) => t.id === id ? { ...t, requested: !currentlyRequested } : t))
-            break
-          case 'books':
-            setAuthors((prev) => prev.map((a) => a.id === id ? { ...a, requested: !currentlyRequested } : a))
-            break
+        // Check if item was deleted
+        if (data.deleted) {
+          toast.success('Removed from library')
+          // Remove item from local state
+          switch (mediaType) {
+            case 'movies':
+              setMovies((prev) => prev.filter((m) => m.id !== id))
+              break
+            case 'music':
+              setArtists((prev) => prev.filter((a) => a.id !== id))
+              break
+            case 'tv':
+              setTvShows((prev) => prev.filter((t) => t.id !== id))
+              break
+            case 'books':
+              setAuthors((prev) => prev.filter((a) => a.id !== id))
+              break
+          }
+        } else {
+          toast.success(currentlyRequested ? 'Item unrequested' : 'Item requested')
+          // Update local state
+          switch (mediaType) {
+            case 'movies':
+              setMovies((prev) =>
+                prev.map((m) => (m.id === id ? { ...m, requested: !currentlyRequested } : m))
+              )
+              break
+            case 'music':
+              setArtists((prev) =>
+                prev.map((a) => (a.id === id ? { ...a, requested: !currentlyRequested } : a))
+              )
+              break
+            case 'tv':
+              setTvShows((prev) =>
+                prev.map((t) => (t.id === id ? { ...t, requested: !currentlyRequested } : t))
+              )
+              break
+            case 'books':
+              setAuthors((prev) =>
+                prev.map((a) => (a.id === id ? { ...a, requested: !currentlyRequested } : a))
+              )
+              break
+          }
         }
+      } else if (data.hasFile) {
+        // Item has a file - show confirmation dialog
+        setItemWithFile({ type: mediaType, id, name: name || 'this item', hasFile: true })
+        setFileConfirmDialogOpen(true)
       } else {
-        toast.error('Failed to update request status')
+        toast.error(data.error || 'Failed to update request status')
       }
     } catch (error) {
       console.error('Failed to toggle request:', error)
@@ -588,11 +686,70 @@ export default function Library() {
     }
   }
 
+  // Handle deleting an item with its file
+  const handleDeleteWithFile = async () => {
+    if (!itemWithFile) return
+
+    setDeletingWithFile(true)
+
+    const getEndpoint = () => {
+      switch (itemWithFile.type) {
+        case 'movies':
+          return `/api/v1/movies/${itemWithFile.id}?deleteFile=true`
+        case 'books':
+          return `/api/v1/books/${itemWithFile.id}?deleteFile=true`
+        default:
+          return ''
+      }
+    }
+
+    const endpoint = getEndpoint()
+    if (!endpoint) {
+      toast.error('Cannot delete this item type')
+      setDeletingWithFile(false)
+      return
+    }
+
+    try {
+      const response = await fetch(endpoint, { method: 'DELETE' })
+
+      if (response.ok) {
+        toast.success('Removed from library and deleted files')
+        // Remove item from local state
+        switch (itemWithFile.type) {
+          case 'movies':
+            setMovies((prev) => prev.filter((m) => m.id !== itemWithFile.id))
+            break
+          case 'books':
+            // For books, the author might have been deleted too - refresh the page
+            fetchData()
+            break
+        }
+        setFileConfirmDialogOpen(false)
+        setItemWithFile(null)
+      } else {
+        const data = await response.json()
+        toast.error(data.error || 'Failed to delete')
+      }
+    } catch (error) {
+      console.error('Failed to delete:', error)
+      toast.error('Failed to delete')
+    } finally {
+      setDeletingWithFile(false)
+    }
+  }
+
   // Get status for items
-  const getItemStatusInfo = (item: { requested?: boolean; hasFile?: boolean }, downloadProgress?: number, downloadStatus?: string): { status: MediaItemStatus; progress: number } => {
+  const getItemStatusInfo = (
+    item: { requested?: boolean; hasFile?: boolean },
+    downloadProgress?: number,
+    downloadStatus?: string
+  ): { status: MediaItemStatus; progress: number } => {
     return getMediaItemStatus(
       item,
-      downloadProgress !== undefined ? { progress: downloadProgress, status: downloadStatus || 'downloading' } : null
+      downloadProgress !== undefined
+        ? { progress: downloadProgress, status: downloadStatus || 'downloading' }
+        : null
     )
   }
 
@@ -602,9 +759,12 @@ export default function Library() {
       .filter((artist) => artist.name.toLowerCase().includes(searchQuery.toLowerCase()))
       .sort((a, b) => {
         switch (sortBy) {
-          case 'recent': return b.id - a.id
-          case 'count': return Number(b.albumCount) - Number(a.albumCount)
-          default: return (a.sortName || a.name).localeCompare(b.sortName || b.name)
+          case 'recent':
+            return b.id - a.id
+          case 'count':
+            return Number(b.albumCount) - Number(a.albumCount)
+          default:
+            return (a.sortName || a.name).localeCompare(b.sortName || b.name)
         }
       })
   }
@@ -614,9 +774,12 @@ export default function Library() {
       .filter((movie) => movie.title.toLowerCase().includes(searchQuery.toLowerCase()))
       .sort((a, b) => {
         switch (sortBy) {
-          case 'recent': return b.id - a.id
-          case 'year': return (b.year || 0) - (a.year || 0)
-          default: return a.title.localeCompare(b.title)
+          case 'recent':
+            return b.id - a.id
+          case 'year':
+            return (b.year || 0) - (a.year || 0)
+          default:
+            return a.title.localeCompare(b.title)
         }
       })
   }
@@ -626,10 +789,14 @@ export default function Library() {
       .filter((show) => show.title.toLowerCase().includes(searchQuery.toLowerCase()))
       .sort((a, b) => {
         switch (sortBy) {
-          case 'recent': return b.id - a.id
-          case 'year': return (b.year || 0) - (a.year || 0)
-          case 'count': return b.episodeCount - a.episodeCount
-          default: return a.title.localeCompare(b.title)
+          case 'recent':
+            return b.id - a.id
+          case 'year':
+            return (b.year || 0) - (a.year || 0)
+          case 'count':
+            return b.episodeCount - a.episodeCount
+          default:
+            return a.title.localeCompare(b.title)
         }
       })
   }
@@ -639,28 +806,39 @@ export default function Library() {
       .filter((author) => author.name.toLowerCase().includes(searchQuery.toLowerCase()))
       .sort((a, b) => {
         switch (sortBy) {
-          case 'recent': return b.id - a.id
-          case 'count': return Number(b.bookCount) - Number(a.bookCount)
-          default: return a.name.localeCompare(b.name)
+          case 'recent':
+            return b.id - a.id
+          case 'count':
+            return Number(b.bookCount) - Number(a.bookCount)
+          default:
+            return a.name.localeCompare(b.name)
         }
       })
   }
 
   const getCurrentItems = () => {
     switch (activeTab) {
-      case 'music': return getFilteredArtists()
-      case 'movies': return getFilteredMovies()
-      case 'tv': return getFilteredTvShows()
-      case 'books': return getFilteredAuthors()
+      case 'music':
+        return getFilteredArtists()
+      case 'movies':
+        return getFilteredMovies()
+      case 'tv':
+        return getFilteredTvShows()
+      case 'books':
+        return getFilteredAuthors()
     }
   }
 
   const getTotalCount = () => {
     switch (activeTab) {
-      case 'music': return artists.length
-      case 'movies': return movies.length
-      case 'tv': return tvShows.length
-      case 'books': return authors.length
+      case 'music':
+        return artists.length
+      case 'movies':
+        return movies.length
+      case 'tv':
+        return tvShows.length
+      case 'books':
+        return authors.length
     }
   }
 
@@ -695,7 +873,7 @@ export default function Library() {
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
 
   const handleImageError = useCallback((key: string) => {
-    setFailedImages(prev => new Set(prev).add(key))
+    setFailedImages((prev) => new Set(prev).add(key))
   }, [])
 
   // Render grid item for any media type
@@ -713,12 +891,16 @@ export default function Library() {
     const config = MEDIA_TYPE_CONFIG[item.mediaType]
     const imageKey = `${item.mediaType}-${item.id}`
     const showImage = item.imageUrl && !failedImages.has(imageKey)
-    const queueItem = queue.find(q => {
+    const queueItem = queue.find((q) => {
       switch (item.mediaType) {
-        case 'music': return q.artistId === item.id
-        case 'movies': return q.movieId === item.id
-        case 'tv': return q.tvShowId === item.id
-        case 'books': return q.bookId === item.id
+        case 'music':
+          return q.artistId === item.id
+        case 'movies':
+          return q.movieId === item.id
+        case 'tv':
+          return q.tvShowId === item.id
+        case 'books':
+          return q.bookId === item.id
       }
     })
     const isDownloading = !!queueItem
@@ -726,14 +908,13 @@ export default function Library() {
     const isToggling = togglingItems.has(imageKey)
 
     // Get status info
-    const { status, progress } = getItemStatusInfo(
-      item,
-      queueItem?.progress,
-      queueItem?.status
-    )
+    const { status, progress } = getItemStatusInfo(item, queueItem?.progress, queueItem?.status)
 
     return (
-      <Card key={imageKey} className="py-0 overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group relative">
+      <Card
+        key={imageKey}
+        className="py-0 overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group relative"
+      >
         <Link href={item.detailUrl}>
           <div className="aspect-[2/3] bg-muted relative">
             {showImage ? (
@@ -741,20 +922,26 @@ export default function Library() {
                 src={item.imageUrl!}
                 alt={item.name}
                 className={`w-full h-full object-cover transition-all duration-300 ${
-                  isNotRequested ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100' : ''
+                  isNotRequested
+                    ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100'
+                    : ''
                 }`}
                 loading="lazy"
                 onError={() => handleImageError(imageKey)}
               />
             ) : (
-              <div className={`w-full h-full flex items-center justify-center transition-all duration-300 ${
-                isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
-              }`}>
+              <div
+                className={`w-full h-full flex items-center justify-center transition-all duration-300 ${
+                  isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
+                }`}
+              >
                 <HugeiconsIcon icon={config.icon} className="h-16 w-16 text-muted-foreground/50" />
               </div>
             )}
           </div>
-          <CardContent className={`p-3 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}>
+          <CardContent
+            className={`p-3 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}
+          >
             <h3 className="font-medium truncate group-hover:text-primary transition-colors">
               {item.name}
             </h3>
@@ -771,7 +958,15 @@ export default function Library() {
               progress={progress}
               size="sm"
               isToggling={isToggling}
-              onToggleRequest={() => handleToggleRequest(item.mediaType, item.id, item.requested ?? false)}
+              onToggleRequest={() =>
+                handleToggleRequest(
+                  item.mediaType,
+                  item.id,
+                  item.requested ?? false,
+                  item.hasFile,
+                  item.name
+                )
+              }
               showRequestButton={false}
             />
           </div>
@@ -809,18 +1004,12 @@ export default function Library() {
                     />
                     {enrichingItems.has(`${item.mediaType}-${item.id}`)
                       ? 'Enriching...'
-                      : item.mediaType === 'music' ? 'Enrich from MusicBrainz' : 'Enrich from TMDB'}
+                      : item.mediaType === 'music'
+                        ? 'Enrich from MusicBrainz'
+                        : 'Enrich from TMDB'}
                   </DropdownMenuItem>
                 </>
               )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={(e) => openDeleteDialog(item.mediaType, item.id, item.name, e)}
-              >
-                <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4 mr-2" />
-                Remove from Library
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -844,12 +1033,16 @@ export default function Library() {
     const config = MEDIA_TYPE_CONFIG[item.mediaType]
     const imageKey = `${item.mediaType}-${item.id}`
     const showImage = item.imageUrl && !failedImages.has(imageKey)
-    const queueItem = queue.find(q => {
+    const queueItem = queue.find((q) => {
       switch (item.mediaType) {
-        case 'music': return q.artistId === item.id
-        case 'movies': return q.movieId === item.id
-        case 'tv': return q.tvShowId === item.id
-        case 'books': return q.bookId === item.id
+        case 'music':
+          return q.artistId === item.id
+        case 'movies':
+          return q.movieId === item.id
+        case 'tv':
+          return q.tvShowId === item.id
+        case 'books':
+          return q.bookId === item.id
       }
     })
     const isDownloading = !!queueItem
@@ -857,14 +1050,13 @@ export default function Library() {
     const isToggling = togglingItems.has(imageKey)
 
     // Get status info
-    const { status, progress } = getItemStatusInfo(
-      item,
-      queueItem?.progress,
-      queueItem?.status
-    )
+    const { status, progress } = getItemStatusInfo(item, queueItem?.progress, queueItem?.status)
 
     return (
-      <Card key={imageKey} className="hover:ring-2 hover:ring-primary transition-all cursor-pointer group">
+      <Card
+        key={imageKey}
+        className="hover:ring-2 hover:ring-primary transition-all cursor-pointer group"
+      >
         <CardContent className="flex items-center gap-4 p-4">
           <Link href={item.detailUrl} className="flex items-center gap-4 flex-1 min-w-0">
             <div className="h-16 w-12 rounded bg-muted flex-shrink-0 overflow-hidden relative">
@@ -873,20 +1065,26 @@ export default function Library() {
                   src={item.imageUrl!}
                   alt={item.name}
                   className={`w-full h-full object-cover transition-all duration-300 ${
-                    isNotRequested ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100' : ''
+                    isNotRequested
+                      ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100'
+                      : ''
                   }`}
                   loading="lazy"
                   onError={() => handleImageError(imageKey)}
                 />
               ) : (
-                <div className={`w-full h-full flex items-center justify-center transition-all duration-300 ${
-                  isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
-                }`}>
+                <div
+                  className={`w-full h-full flex items-center justify-center transition-all duration-300 ${
+                    isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
+                  }`}
+                >
                   <HugeiconsIcon icon={config.icon} className="h-6 w-6 text-muted-foreground/50" />
                 </div>
               )}
             </div>
-            <div className={`flex-1 min-w-0 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}>
+            <div
+              className={`flex-1 min-w-0 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}
+            >
               <h3 className="font-medium truncate">{item.name}</h3>
               {item.subtitle && (
                 <p className="text-sm text-muted-foreground truncate">{item.subtitle}</p>
@@ -900,12 +1098,22 @@ export default function Library() {
                 progress={progress}
                 size="sm"
                 isToggling={isToggling}
-                onToggleRequest={() => handleToggleRequest(item.mediaType, item.id, item.requested ?? false)}
+                onToggleRequest={() =>
+                  handleToggleRequest(
+                    item.mediaType,
+                    item.id,
+                    item.requested ?? false,
+                    item.hasFile,
+                    item.name
+                  )
+                }
                 showRequestButton={false}
               />
             )}
             {item.badges?.map((badge, i) => (
-              <Badge key={i} variant="outline">{badge}</Badge>
+              <Badge key={i} variant="outline">
+                {badge}
+              </Badge>
             ))}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -933,18 +1141,12 @@ export default function Library() {
                       />
                       {enrichingItems.has(`${item.mediaType}-${item.id}`)
                         ? 'Enriching...'
-                        : item.mediaType === 'music' ? 'Enrich from MusicBrainz' : 'Enrich from TMDB'}
+                        : item.mediaType === 'music'
+                          ? 'Enrich from MusicBrainz'
+                          : 'Enrich from TMDB'}
                     </DropdownMenuItem>
                   </>
                 )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={(e) => openDeleteDialog(item.mediaType, item.id, item.name, e)}
-                >
-                  <HugeiconsIcon icon={Delete02Icon} className="h-4 w-4 mr-2" />
-                  Remove from Library
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -957,7 +1159,7 @@ export default function Library() {
     const items = getFilteredArtists()
     if (items.length === 0) return renderEmptyState()
 
-    const gridItems = items.map(artist => ({
+    const gridItems = items.map((artist) => ({
       id: artist.id,
       name: artist.name,
       imageUrl: artist.imageUrl,
@@ -971,24 +1173,26 @@ export default function Library() {
     if (viewMode === 'grid') {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {gridItems.map(item => renderGridItem(item))}
+          {gridItems.map((item) => renderGridItem(item))}
         </div>
       )
     }
 
     return (
       <div className="space-y-2">
-        {items.map(artist => renderListItem({
-          id: artist.id,
-          name: artist.name,
-          imageUrl: artist.imageUrl,
-          subtitle: `${artist.albumCount} ${Number(artist.albumCount) === 1 ? 'album' : 'albums'}${artist.artistType ? ` • ${artist.artistType}` : ''}`,
-          detailUrl: `/artist/${artist.id}`,
-          requested: artist.requested,
-          mediaType: 'music',
-          badges: artist.qualityProfile ? [artist.qualityProfile.name] : [],
-          externalId: artist.musicbrainzId,
-        }))}
+        {items.map((artist) =>
+          renderListItem({
+            id: artist.id,
+            name: artist.name,
+            imageUrl: artist.imageUrl,
+            subtitle: `${artist.albumCount} ${Number(artist.albumCount) === 1 ? 'album' : 'albums'}${artist.artistType ? ` • ${artist.artistType}` : ''}`,
+            detailUrl: `/artist/${artist.id}`,
+            requested: artist.requested,
+            mediaType: 'music',
+            badges: artist.qualityProfile ? [artist.qualityProfile.name] : [],
+            externalId: artist.musicbrainzId,
+          })
+        )}
       </div>
     )
   }
@@ -997,11 +1201,13 @@ export default function Library() {
     const items = getFilteredMovies()
     if (items.length === 0) return renderEmptyState()
 
-    const gridItems = items.map(movie => ({
+    const gridItems = items.map((movie) => ({
       id: movie.id,
       name: movie.title,
       imageUrl: movie.posterUrl,
-      subtitle: movie.year ? `${movie.year}${movie.runtime ? ` • ${movie.runtime} min` : ''}` : undefined,
+      subtitle: movie.year
+        ? `${movie.year}${movie.runtime ? ` • ${movie.runtime} min` : ''}`
+        : undefined,
       detailUrl: `/movie/${movie.id}`,
       requested: movie.requested,
       hasFile: movie.hasFile,
@@ -1012,25 +1218,29 @@ export default function Library() {
     if (viewMode === 'grid') {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {gridItems.map(item => renderGridItem(item))}
+          {gridItems.map((item) => renderGridItem(item))}
         </div>
       )
     }
 
     return (
       <div className="space-y-2">
-        {items.map(movie => renderListItem({
-          id: movie.id,
-          name: movie.title,
-          imageUrl: movie.posterUrl,
-          subtitle: movie.year ? `${movie.year}${movie.runtime ? ` • ${movie.runtime} min` : ''}` : undefined,
-          detailUrl: `/movie/${movie.id}`,
-          requested: movie.requested,
-          hasFile: movie.hasFile,
-          mediaType: 'movies',
-          badges: movie.status ? [movie.status] : [],
-          externalId: movie.tmdbId,
-        }))}
+        {items.map((movie) =>
+          renderListItem({
+            id: movie.id,
+            name: movie.title,
+            imageUrl: movie.posterUrl,
+            subtitle: movie.year
+              ? `${movie.year}${movie.runtime ? ` • ${movie.runtime} min` : ''}`
+              : undefined,
+            detailUrl: `/movie/${movie.id}`,
+            requested: movie.requested,
+            hasFile: movie.hasFile,
+            mediaType: 'movies',
+            badges: movie.status ? [movie.status] : [],
+            externalId: movie.tmdbId,
+          })
+        )}
       </div>
     )
   }
@@ -1040,7 +1250,7 @@ export default function Library() {
     if (items.length === 0) return renderEmptyState()
 
     // TV shows don't show requested status at show level (it's managed at episode level)
-    const gridItems = items.map(show => ({
+    const gridItems = items.map((show) => ({
       id: show.id,
       name: show.title,
       imageUrl: show.posterUrl,
@@ -1053,23 +1263,25 @@ export default function Library() {
     if (viewMode === 'grid') {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {gridItems.map(item => renderGridItem(item))}
+          {gridItems.map((item) => renderGridItem(item))}
         </div>
       )
     }
 
     return (
       <div className="space-y-2">
-        {items.map(show => renderListItem({
-          id: show.id,
-          name: show.title,
-          imageUrl: show.posterUrl,
-          subtitle: `${show.seasonCount} season${show.seasonCount !== 1 ? 's' : ''} • ${show.episodeCount} episodes`,
-          detailUrl: `/tvshow/${show.id}`,
-          mediaType: 'tv',
-          badges: [show.network, show.status].filter(Boolean) as string[],
-          externalId: show.tmdbId,
-        }))}
+        {items.map((show) =>
+          renderListItem({
+            id: show.id,
+            name: show.title,
+            imageUrl: show.posterUrl,
+            subtitle: `${show.seasonCount} season${show.seasonCount !== 1 ? 's' : ''} • ${show.episodeCount} episodes`,
+            detailUrl: `/tvshow/${show.id}`,
+            mediaType: 'tv',
+            badges: [show.network, show.status].filter(Boolean) as string[],
+            externalId: show.tmdbId,
+          })
+        )}
       </div>
     )
   }
@@ -1078,7 +1290,7 @@ export default function Library() {
     const items = getFilteredAuthors()
     if (items.length === 0) return renderEmptyState()
 
-    const gridItems = items.map(author => ({
+    const gridItems = items.map((author) => ({
       id: author.id,
       name: author.name,
       imageUrl: author.imageUrl,
@@ -1091,22 +1303,24 @@ export default function Library() {
     if (viewMode === 'grid') {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {gridItems.map(item => renderGridItem(item))}
+          {gridItems.map((item) => renderGridItem(item))}
         </div>
       )
     }
 
     return (
       <div className="space-y-2">
-        {items.map(author => renderListItem({
-          id: author.id,
-          name: author.name,
-          imageUrl: author.imageUrl,
-          subtitle: `${author.bookCount} ${Number(author.bookCount) === 1 ? 'book' : 'books'}`,
-          detailUrl: `/author/${author.id}`,
-          requested: author.requested,
-          mediaType: 'books',
-        }))}
+        {items.map((author) =>
+          renderListItem({
+            id: author.id,
+            name: author.name,
+            imageUrl: author.imageUrl,
+            subtitle: `${author.bookCount} ${Number(author.bookCount) === 1 ? 'book' : 'books'}`,
+            detailUrl: `/author/${author.id}`,
+            requested: author.requested,
+            mediaType: 'books',
+          })
+        )}
       </div>
     )
   }
@@ -1115,7 +1329,10 @@ export default function Library() {
     if (missingItems.length === 0) {
       return (
         <div className="text-center py-12">
-          <HugeiconsIcon icon={CheckmarkCircle02Icon} className="h-12 w-12 mx-auto text-green-500 mb-4" />
+          <HugeiconsIcon
+            icon={CheckmarkCircle02Icon}
+            className="h-12 w-12 mx-auto text-green-500 mb-4"
+          />
           <h3 className="text-lg font-medium mb-2">All caught up!</h3>
           <p className="text-muted-foreground">No missing items to download</p>
         </div>
@@ -1124,19 +1341,27 @@ export default function Library() {
 
     const getTypeIcon = (type: MissingItem['type']) => {
       switch (type) {
-        case 'album': return MusicNote01Icon
-        case 'movie': return Film01Icon
-        case 'episode': return Tv01Icon
-        case 'book': return Book01Icon
+        case 'album':
+          return MusicNote01Icon
+        case 'movie':
+          return Film01Icon
+        case 'episode':
+          return Tv01Icon
+        case 'book':
+          return Book01Icon
       }
     }
 
     const getTypeLabel = (type: MissingItem['type']) => {
       switch (type) {
-        case 'album': return 'Album'
-        case 'movie': return 'Movie'
-        case 'episode': return 'Episode'
-        case 'book': return 'Book'
+        case 'album':
+          return 'Album'
+        case 'movie':
+          return 'Movie'
+        case 'episode':
+          return 'Episode'
+        case 'book':
+          return 'Book'
       }
     }
 
@@ -1144,10 +1369,18 @@ export default function Library() {
       const [type, id] = item.id.split('-')
       let endpoint = ''
       switch (type) {
-        case 'album': endpoint = `/api/v1/albums/${id}/search`; break
-        case 'movie': endpoint = `/api/v1/movies/${id}/search`; break
-        case 'episode': endpoint = `/api/v1/tvshows/0/episodes/${id}/search`; break
-        case 'book': endpoint = `/api/v1/books/${id}/search`; break
+        case 'album':
+          endpoint = `/api/v1/albums/${id}/search`
+          break
+        case 'movie':
+          endpoint = `/api/v1/movies/${id}/search`
+          break
+        case 'episode':
+          endpoint = `/api/v1/tvshows/0/episodes/${id}/search`
+          break
+        case 'book':
+          endpoint = `/api/v1/books/${id}/search`
+          break
       }
 
       try {
@@ -1172,7 +1405,9 @@ export default function Library() {
         <div className="text-sm text-muted-foreground mb-4">
           {missingCounts.albums > 0 && <span className="mr-4">{missingCounts.albums} albums</span>}
           {missingCounts.movies > 0 && <span className="mr-4">{missingCounts.movies} movies</span>}
-          {missingCounts.episodes > 0 && <span className="mr-4">{missingCounts.episodes} episodes</span>}
+          {missingCounts.episodes > 0 && (
+            <span className="mr-4">{missingCounts.episodes} episodes</span>
+          )}
           {missingCounts.books > 0 && <span className="mr-4">{missingCounts.books} books</span>}
         </div>
         <div className="space-y-2">
@@ -1186,7 +1421,10 @@ export default function Library() {
                   <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center">
-                    <HugeiconsIcon icon={getTypeIcon(item.type)} className="h-6 w-6 text-muted-foreground" />
+                    <HugeiconsIcon
+                      icon={getTypeIcon(item.type)}
+                      className="h-6 w-6 text-muted-foreground"
+                    />
                   </div>
                 )}
               </div>
@@ -1199,11 +1437,7 @@ export default function Library() {
                   {item.subtitle && <span className="truncate">{item.subtitle}</span>}
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleSearch(item)}
-              >
+              <Button variant="ghost" size="sm" onClick={() => handleSearch(item)}>
                 <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-1" />
                 Search
               </Button>
@@ -1216,11 +1450,16 @@ export default function Library() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'music': return renderMusicContent()
-      case 'movies': return renderMoviesContent()
-      case 'tv': return renderTvContent()
-      case 'books': return renderBooksContent()
-      case 'missing': return renderMissingContent()
+      case 'music':
+        return renderMusicContent()
+      case 'movies':
+        return renderMoviesContent()
+      case 'tv':
+        return renderTvContent()
+      case 'books':
+        return renderBooksContent()
+      case 'missing':
+        return renderMissingContent()
     }
   }
 
@@ -1250,7 +1489,11 @@ export default function Library() {
       case 'movies':
         return [...base, { value: 'year', label: 'Year' }]
       case 'tv':
-        return [...base, { value: 'year', label: 'Year' }, { value: 'count', label: 'Episode Count' }]
+        return [
+          ...base,
+          { value: 'year', label: 'Year' },
+          { value: 'count', label: 'Episode Count' },
+        ]
       case 'books':
         return [...base, { value: 'count', label: 'Book Count' }]
       case 'missing':
@@ -1305,7 +1548,10 @@ export default function Library() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {getSortOptions().map((option) => (
-                    <DropdownMenuItem key={option.value} onClick={() => setSortBy(option.value as SortBy)}>
+                    <DropdownMenuItem
+                      key={option.value}
+                      onClick={() => setSortBy(option.value as SortBy)}
+                    >
                       {option.label} {sortBy === option.value && '✓'}
                     </DropdownMenuItem>
                   ))}
@@ -1333,12 +1579,7 @@ export default function Library() {
 
               {/* Scan Library button - hidden on missing tab */}
               {activeTab !== 'missing' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleScanLibrary}
-                  disabled={scanning}
-                >
+                <Button variant="outline" size="sm" onClick={handleScanLibrary} disabled={scanning}>
                   {scanning ? (
                     <Spinner className="h-4 w-4 mr-2" />
                   ) : (
@@ -1386,7 +1627,9 @@ export default function Library() {
           <DialogHeader>
             <DialogTitle>Remove {itemToDelete?.name}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to remove this {itemToDelete ? MEDIA_TYPE_CONFIG[itemToDelete.type].itemLabel : 'item'} from your library? This action cannot be undone.
+              Are you sure you want to remove this{' '}
+              {itemToDelete ? MEDIA_TYPE_CONFIG[itemToDelete.type].itemLabel : 'item'} from your
+              library? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
 
@@ -1420,6 +1663,51 @@ export default function Library() {
                 </>
               ) : (
                 'Remove'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* File deletion confirmation dialog */}
+      <Dialog
+        open={fileConfirmDialogOpen}
+        onOpenChange={(open) => {
+          setFileConfirmDialogOpen(open)
+          if (!open) setItemWithFile(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove from library?</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium">{itemWithFile?.name}</span> has downloaded files. This
+              will permanently delete the files from disk and remove the item from your library.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFileConfirmDialogOpen(false)
+                setItemWithFile(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteWithFile}
+              disabled={deletingWithFile}
+            >
+              {deletingWithFile ? (
+                <>
+                  <Spinner className="mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Files & Remove'
               )}
             </Button>
           </DialogFooter>

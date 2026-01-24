@@ -56,7 +56,8 @@ export default class SystemController {
     const rootFolderCheck = await this.checkRootFolders()
     checks.push(rootFolderCheck)
     if (rootFolderCheck.status === 'error') overallStatus = 'error'
-    else if (rootFolderCheck.status === 'warning' && overallStatus !== 'error') overallStatus = 'warning'
+    else if (rootFolderCheck.status === 'warning' && overallStatus !== 'error')
+      overallStatus = 'warning'
 
     // Check indexers
     const indexerCheck = await this.checkIndexers()
@@ -67,7 +68,8 @@ export default class SystemController {
     const downloadClientCheck = await this.checkDownloadClients()
     checks.push(downloadClientCheck)
     if (downloadClientCheck.status === 'error') overallStatus = 'error'
-    else if (downloadClientCheck.status === 'warning' && overallStatus !== 'error') overallStatus = 'warning'
+    else if (downloadClientCheck.status === 'warning' && overallStatus !== 'error')
+      overallStatus = 'warning'
 
     const healthResponse: HealthResponse = {
       status: overallStatus,

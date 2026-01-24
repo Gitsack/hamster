@@ -56,7 +56,10 @@ export class GotifyProvider {
     })
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({})) as { error?: string; errorDescription?: string }
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string
+        errorDescription?: string
+      }
       throw new Error(`Gotify error: ${data.errorDescription || data.error || response.status}`)
     }
   }

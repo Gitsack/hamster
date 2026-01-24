@@ -1,7 +1,13 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 
-export type TaskType = 'rss_sync' | 'library_scan' | 'cleanup' | 'refresh_artist' | 'backup' | 'download_monitor'
+export type TaskType =
+  | 'rss_sync'
+  | 'library_scan'
+  | 'cleanup'
+  | 'refresh_artist'
+  | 'backup'
+  | 'download_monitor'
 
 export default class ScheduledTask extends BaseModel {
   @column({ isPrimary: true })

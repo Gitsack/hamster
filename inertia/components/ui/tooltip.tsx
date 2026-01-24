@@ -1,8 +1,8 @@
-"use client"
+'use client'
 
-import * as React from "react"
-import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip"
-import { cn } from "@/lib/utils"
+import * as React from 'react'
+import { Tooltip as BaseTooltip } from '@base-ui/react/tooltip'
+import { cn } from '@/lib/utils'
 
 function TooltipProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>
@@ -45,7 +45,7 @@ function TooltipPositioner({
   return (
     <BaseTooltip.Positioner
       data-slot="tooltip-positioner"
-      className={cn("outline-none", className)}
+      className={cn('outline-none', className)}
       {...props}
     />
   )
@@ -65,7 +65,7 @@ function TooltipContent({
         <BaseTooltip.Popup
           data-slot="tooltip-content"
           className={cn(
-            "bg-foreground text-background z-50 w-fit rounded-md px-3 py-1.5 text-xs text-balance",
+            'bg-foreground text-background z-50 w-fit rounded-md px-3 py-1.5 text-xs text-balance',
             className
           )}
           {...props}

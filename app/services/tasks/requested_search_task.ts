@@ -14,11 +14,7 @@ import { blacklistService } from '#services/blacklist/blacklist_service'
  * - Removing extra whitespace
  */
 function normalizeTitle(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[._-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+  return title.toLowerCase().replace(/[._-]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 /**
@@ -77,7 +73,10 @@ function doesMovieReleaseTitleMatch(releaseTitle: string, expectedTitle: string)
     // Verify the character after the title is a space, year, or quality indicator
     const afterTitle = normalizedRelease.slice(normalizedExpected.length).trim()
     // Should start with year (4 digits), quality (720p, 1080p, etc), or be empty/end
-    if (afterTitle === '' || /^\d{4}|^\d{3,4}p|^bluray|^webrip|^web dl|^hdtv|^dvdrip|^brrip|^remux|^uhd/i.test(afterTitle)) {
+    if (
+      afterTitle === '' ||
+      /^\d{4}|^\d{3,4}p|^bluray|^webrip|^web dl|^hdtv|^dvdrip|^brrip|^remux|^uhd/i.test(afterTitle)
+    ) {
       return true
     }
   }
@@ -91,7 +90,11 @@ function doesMovieReleaseTitleMatch(releaseTitle: string, expectedTitle: string)
     if (releasePrefix === normalizedExpected) {
       const nextWord = releaseWords[expectedWords.length] || ''
       // Next word should be year or quality, not another word from a different title
-      if (/^\d{4}$|^\d{3,4}p$|^bluray$|^webrip$|^web$|^hdtv$|^dvdrip$|^brrip$|^remux$|^uhd$/i.test(nextWord)) {
+      if (
+        /^\d{4}$|^\d{3,4}p$|^bluray$|^webrip$|^web$|^hdtv$|^dvdrip$|^brrip$|^remux$|^uhd$/i.test(
+          nextWord
+        )
+      ) {
         return true
       }
     }
@@ -269,7 +272,9 @@ class RequestedSearchTask {
         const availableResults = await blacklistService.filterBlacklisted(searchResults)
 
         if (availableResults.length === 0) {
-          console.log(`[RequestedSearch] No results for album: ${album.artist?.name} - ${album.title}`)
+          console.log(
+            `[RequestedSearch] No results for album: ${album.artist?.name} - ${album.title}`
+          )
           continue
         }
 
@@ -279,9 +284,14 @@ class RequestedSearchTask {
         const bestResult = sorted[0]
 
         // Final check before grabbing
-        const stillRequested = await Album.query().where('id', album.id).where('requested', true).first()
+        const stillRequested = await Album.query()
+          .where('id', album.id)
+          .where('requested', true)
+          .first()
         if (!stillRequested) {
-          console.log(`[RequestedSearch] Skipping grab for album ${album.title} - unrequested during search`)
+          console.log(
+            `[RequestedSearch] Skipping grab for album ${album.title} - unrequested during search`
+          )
           continue
         }
 
@@ -313,9 +323,7 @@ class RequestedSearchTask {
   private async searchMovies(result: RequestedSearchResult) {
     console.log('[RequestedSearch] Searching for requested movies...')
 
-    const requestedMovies = await Movie.query()
-      .where('requested', true)
-      .where('hasFile', false)
+    const requestedMovies = await Movie.query().where('requested', true).where('hasFile', false)
 
     console.log(`[RequestedSearch] Found ${requestedMovies.length} requested movies`)
 
@@ -356,7 +364,9 @@ class RequestedSearchTask {
         const availableResults = await blacklistService.filterBlacklisted(matchingResults)
 
         if (availableResults.length === 0) {
-          console.log(`[RequestedSearch] No matching results for movie: ${movie.title} (${movie.year}) (${searchResults.length} results didn't match title or were blacklisted)`)
+          console.log(
+            `[RequestedSearch] No matching results for movie: ${movie.title} (${movie.year}) (${searchResults.length} results didn't match title or were blacklisted)`
+          )
           continue
         }
 
@@ -366,9 +376,14 @@ class RequestedSearchTask {
         const bestResult = availableResults[0] // Already sorted by size
 
         // Final check before grabbing
-        const stillRequested = await Movie.query().where('id', movie.id).where('requested', true).first()
+        const stillRequested = await Movie.query()
+          .where('id', movie.id)
+          .where('requested', true)
+          .first()
         if (!stillRequested) {
-          console.log(`[RequestedSearch] Skipping grab for movie ${movie.title} - unrequested during search`)
+          console.log(
+            `[RequestedSearch] Skipping grab for movie ${movie.title} - unrequested during search`
+          )
           continue
         }
 
@@ -440,7 +455,9 @@ class RequestedSearchTask {
         const availableResults = await blacklistService.filterBlacklisted(searchResults)
 
         if (availableResults.length === 0) {
-          console.log(`[RequestedSearch] No results for book: ${book.title} by ${book.author?.name}`)
+          console.log(
+            `[RequestedSearch] No results for book: ${book.title} by ${book.author?.name}`
+          )
           continue
         }
 
@@ -451,9 +468,14 @@ class RequestedSearchTask {
         const bestResult = sorted[0]
 
         // Final check before grabbing
-        const stillRequested = await Book.query().where('id', book.id).where('requested', true).first()
+        const stillRequested = await Book.query()
+          .where('id', book.id)
+          .where('requested', true)
+          .first()
         if (!stillRequested) {
-          console.log(`[RequestedSearch] Skipping grab for book ${book.title} - unrequested during search`)
+          console.log(
+            `[RequestedSearch] Skipping grab for book ${book.title} - unrequested during search`
+          )
           continue
         }
 
@@ -494,7 +516,9 @@ class RequestedSearchTask {
       .preload('tvShow')
       .limit(MAX_EPISODES_PER_RUN * 3) // Fetch a few more in case some are skipped
 
-    console.log(`[RequestedSearch] Found ${requestedEpisodes.length} requested episodes (processing max ${MAX_EPISODES_PER_RUN})`)
+    console.log(
+      `[RequestedSearch] Found ${requestedEpisodes.length} requested episodes (processing max ${MAX_EPISODES_PER_RUN})`
+    )
 
     // Get episodes that already have active downloads
     const activeDownloads = await Download.query()
@@ -508,7 +532,9 @@ class RequestedSearchTask {
     for (const episode of requestedEpisodes) {
       // Stop after processing max episodes
       if (processedCount >= MAX_EPISODES_PER_RUN) {
-        console.log(`[RequestedSearch] Reached max episodes per run (${MAX_EPISODES_PER_RUN}), stopping`)
+        console.log(
+          `[RequestedSearch] Reached max episodes per run (${MAX_EPISODES_PER_RUN}), stopping`
+        )
         break
       }
 
@@ -529,7 +555,9 @@ class RequestedSearchTask {
       // Re-check if episode is still requested (user may have unrequested during search)
       const currentEpisode = await Episode.find(episode.id)
       if (!currentEpisode || !currentEpisode.requested) {
-        console.log(`[RequestedSearch] Skipping episode ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - no longer requested`)
+        console.log(
+          `[RequestedSearch] Skipping episode ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - no longer requested`
+        )
         continue
       }
 
@@ -571,13 +599,13 @@ class RequestedSearchTask {
           .first()
 
         if (!stillRequested) {
-          console.log(`[RequestedSearch] Skipping grab for ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - unrequested during search`)
+          console.log(
+            `[RequestedSearch] Skipping grab for ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - unrequested during search`
+          )
           continue
         }
 
-        console.log(
-          `[RequestedSearch] Grabbing episode: ${bestResult.title}`
-        )
+        console.log(`[RequestedSearch] Grabbing episode: ${bestResult.title}`)
 
         await downloadManager.grab({
           title: bestResult.title,
@@ -611,7 +639,11 @@ class RequestedSearchTask {
     albumId: string
   ): Promise<{ found: boolean; grabbed: boolean; error?: string }> {
     try {
-      const album = await Album.query().where('id', albumId).preload('artist').preload('tracks').first()
+      const album = await Album.query()
+        .where('id', albumId)
+        .preload('artist')
+        .preload('tracks')
+        .first()
 
       if (!album) {
         return { found: false, grabbed: false, error: 'Album not found' }
@@ -897,7 +929,9 @@ class RequestedSearchTask {
         // Re-check if episode is still requested (user may have unrequested during search)
         const currentEpisode = await Episode.find(episode.id)
         if (!currentEpisode || !currentEpisode.requested) {
-          console.log(`[RequestedSearch] Skipping episode ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - no longer requested`)
+          console.log(
+            `[RequestedSearch] Skipping episode ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - no longer requested`
+          )
           continue
         }
 
@@ -931,7 +965,9 @@ class RequestedSearchTask {
             .first()
 
           if (!stillRequested) {
-            console.log(`[RequestedSearch] Skipping grab for ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - unrequested during search`)
+            console.log(
+              `[RequestedSearch] Skipping grab for ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - unrequested during search`
+            )
             continue
           }
 

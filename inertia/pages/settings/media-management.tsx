@@ -16,11 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import {
-  CollapsibleRoot,
-  CollapsibleTrigger,
-  CollapsiblePanel,
-} from '@/components/ui/accordion'
+import { CollapsibleRoot, CollapsibleTrigger, CollapsiblePanel } from '@/components/ui/accordion'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Folder01Icon,
@@ -58,7 +54,10 @@ interface AppSettings {
   hasTmdbApiKey: boolean
 }
 
-const mediaTypeInfo: Record<MediaType, { label: string; icon: any; description: string; needsApiKey?: boolean }> = {
+const mediaTypeInfo: Record<
+  MediaType,
+  { label: string; icon: any; description: string; needsApiKey?: boolean }
+> = {
   music: {
     label: 'Music',
     icon: MusicNote01Icon,
@@ -125,7 +124,6 @@ interface QualityProfile {
   items: QualityItem[]
 }
 
-
 // Quality options per media type
 const QUALITY_OPTIONS: Record<MediaType, { id: number; name: string }[]> = {
   music: [
@@ -171,7 +169,6 @@ const QUALITY_OPTIONS: Record<MediaType, { id: number; name: string }[]> = {
   ],
 }
 
-
 export default function MediaManagement() {
   const [settings, setSettings] = useState<AppSettings>({
     enabledMediaTypes: ['music'],
@@ -182,7 +179,9 @@ export default function MediaManagement() {
 
   // Naming patterns state
   const [namingData, setNamingData] = useState<NamingPatternsData | null>(null)
-  const [editedPatterns, setEditedPatterns] = useState<Record<MediaType, Record<string, string>>>({} as any)
+  const [editedPatterns, setEditedPatterns] = useState<Record<MediaType, Record<string, string>>>(
+    {} as any
+  )
   const [savingPatterns, setSavingPatterns] = useState<Record<MediaType, boolean>>({} as any)
 
   // Folder dialog state
@@ -256,7 +255,9 @@ export default function MediaManagement() {
   const handleToggleMediaType = async (mediaType: MediaType, enabled: boolean) => {
     // Check if TMDB API key is needed
     if (enabled && mediaTypeInfo[mediaType].needsApiKey && !settings.hasTmdbApiKey) {
-      toast.error(`Please configure your TMDB API key first to enable ${mediaTypeInfo[mediaType].label}`)
+      toast.error(
+        `Please configure your TMDB API key first to enable ${mediaTypeInfo[mediaType].label}`
+      )
       setApiKeyDialogOpen(true)
       return
     }
@@ -415,17 +416,21 @@ export default function MediaManagement() {
       if (response.ok) {
         const data = await response.json()
         // Update namingData with new patterns and examples
-        setNamingData((prev) => prev ? {
-          ...prev,
-          patterns: {
-            ...prev.patterns,
-            [mediaType]: data.patterns,
-          },
-          examples: {
-            ...prev.examples,
-            [mediaType]: data.examples,
-          },
-        } : null)
+        setNamingData((prev) =>
+          prev
+            ? {
+                ...prev,
+                patterns: {
+                  ...prev.patterns,
+                  [mediaType]: data.patterns,
+                },
+                examples: {
+                  ...prev.examples,
+                  [mediaType]: data.examples,
+                },
+              }
+            : null
+        )
         toast.success(`${mediaTypeInfo[mediaType].label} naming patterns saved`)
       } else {
         const error = await response.json()
@@ -498,7 +503,7 @@ export default function MediaManagement() {
       if (response.ok) {
         const data = await response.json()
         if (editingQuality) {
-          setQualityProfiles((prev) => prev.map((p) => p.id === data.id ? data : p))
+          setQualityProfiles((prev) => prev.map((p) => (p.id === data.id ? data : p)))
         } else {
           setQualityProfiles((prev) => [...prev, data])
         }
@@ -546,9 +551,7 @@ export default function MediaManagement() {
 
   const toggleQualityItem = (itemId: number) => {
     setQualityItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId ? { ...item, allowed: !item.allowed } : item
-      )
+      prev.map((item) => (item.id === itemId ? { ...item, allowed: !item.allowed } : item))
     )
   }
 
@@ -565,9 +568,7 @@ export default function MediaManagement() {
         <Card>
           <CardHeader>
             <CardTitle>API Keys</CardTitle>
-            <CardDescription>
-              Configure API keys for metadata providers
-            </CardDescription>
+            <CardDescription>Configure API keys for metadata providers</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between rounded-lg border p-4">
@@ -638,7 +639,9 @@ export default function MediaManagement() {
                     <div className="flex items-center gap-3">
                       <div
                         className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                          isEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                          isEnabled
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-muted text-muted-foreground'
                         }`}
                       >
                         <HugeiconsIcon icon={info.icon} className="size-5" />
@@ -660,23 +663,42 @@ export default function MediaManagement() {
                       {/* Library Folder */}
                       <div className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-2">
-                          <HugeiconsIcon icon={Folder01Icon} className="size-4 text-muted-foreground" />
+                          <HugeiconsIcon
+                            icon={Folder01Icon}
+                            className="size-4 text-muted-foreground"
+                          />
                           <span className="text-sm font-medium">Library Folder</span>
                         </div>
                         {folder ? (
                           <div className="flex items-center gap-2">
-                            <code className="text-sm bg-muted px-2 py-1 rounded">{folder.path}</code>
+                            <code className="text-sm bg-muted px-2 py-1 rounded">
+                              {folder.path}
+                            </code>
                             {folder.accessible ? (
-                              <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-4 text-green-600" />
+                              <HugeiconsIcon
+                                icon={CheckmarkCircle02Icon}
+                                className="size-4 text-green-600"
+                              />
                             ) : (
-                              <HugeiconsIcon icon={Alert02Icon} className="size-4 text-destructive" />
+                              <HugeiconsIcon
+                                icon={Alert02Icon}
+                                className="size-4 text-destructive"
+                              />
                             )}
-                            <Button variant="ghost" size="sm" onClick={() => openFolderDialog(mediaType)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openFolderDialog(mediaType)}
+                            >
                               <HugeiconsIcon icon={Edit01Icon} className="size-4" />
                             </Button>
                           </div>
                         ) : (
-                          <Button variant="outline" size="sm" onClick={() => openFolderDialog(mediaType)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openFolderDialog(mediaType)}
+                          >
                             <HugeiconsIcon icon={Add01Icon} className="size-4 mr-1" />
                             Set Folder
                           </Button>
@@ -692,40 +714,50 @@ export default function MediaManagement() {
                         </div>
                         <CollapsiblePanel>
                           <div className="space-y-4 px-4 pb-4">
-                            {namingData && editedPatterns[mediaType] && Object.entries(editedPatterns[mediaType]).map(([field, pattern]) => {
-                              const variables = namingData.variables[mediaType]?.[field] || []
-                              const example = getExampleForPattern(mediaType, field, pattern)
-                              return (
-                                <div key={field} className="space-y-1.5">
-                                  <Label className="text-xs text-muted-foreground">
-                                    {fieldLabels[field] || field}
-                                  </Label>
-                                  <Input
-                                    value={pattern}
-                                    onChange={(e) => handlePatternChange(mediaType, field, e.target.value)}
-                                    className="h-8 text-sm font-mono"
-                                  />
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {variables.map((v) => (
-                                      <button
-                                        key={v.name}
-                                        type="button"
-                                        onClick={() => handlePatternChange(mediaType, field, pattern + `{${v.name}}`)}
-                                        className="text-xs px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-muted-foreground font-mono"
-                                        title={v.description}
-                                      >
-                                        {`{${v.name}}`}
-                                      </button>
-                                    ))}
+                            {namingData &&
+                              editedPatterns[mediaType] &&
+                              Object.entries(editedPatterns[mediaType]).map(([field, pattern]) => {
+                                const variables = namingData.variables[mediaType]?.[field] || []
+                                const example = getExampleForPattern(mediaType, field, pattern)
+                                return (
+                                  <div key={field} className="space-y-1.5">
+                                    <Label className="text-xs text-muted-foreground">
+                                      {fieldLabels[field] || field}
+                                    </Label>
+                                    <Input
+                                      value={pattern}
+                                      onChange={(e) =>
+                                        handlePatternChange(mediaType, field, e.target.value)
+                                      }
+                                      className="h-8 text-sm font-mono"
+                                    />
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {variables.map((v) => (
+                                        <button
+                                          key={v.name}
+                                          type="button"
+                                          onClick={() =>
+                                            handlePatternChange(
+                                              mediaType,
+                                              field,
+                                              pattern + `{${v.name}}`
+                                            )
+                                          }
+                                          className="text-xs px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-muted-foreground font-mono"
+                                          title={v.description}
+                                        >
+                                          {`{${v.name}}`}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    {example && (
+                                      <p className="text-xs text-muted-foreground">
+                                        Example: {example}
+                                      </p>
+                                    )}
                                   </div>
-                                  {example && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Example: {example}
-                                    </p>
-                                  )}
-                                </div>
-                              )
-                            })}
+                                )
+                              })}
                             {hasPatternChanges(mediaType) && (
                               <Button
                                 size="sm"
@@ -761,11 +793,17 @@ export default function MediaManagement() {
                                     <div>
                                       <span className="font-medium">{profile.name}</span>
                                       <div className="flex flex-wrap gap-1 mt-1">
-                                        {profile.items.filter((i) => i.allowed).map((item) => (
-                                          <Badge key={item.id} variant="secondary" className="text-xs">
-                                            {item.name}
-                                          </Badge>
-                                        ))}
+                                        {profile.items
+                                          .filter((i) => i.allowed)
+                                          .map((item) => (
+                                            <Badge
+                                              key={item.id}
+                                              variant="secondary"
+                                              className="text-xs"
+                                            >
+                                              {item.name}
+                                            </Badge>
+                                          ))}
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-1">
@@ -781,14 +819,19 @@ export default function MediaManagement() {
                                         size="sm"
                                         onClick={() => openDeleteDialog(profile)}
                                       >
-                                        <HugeiconsIcon icon={Delete02Icon} className="size-4 text-destructive" />
+                                        <HugeiconsIcon
+                                          icon={Delete02Icon}
+                                          className="size-4 text-destructive"
+                                        />
                                       </Button>
                                     </div>
                                   </div>
                                 ))}
                               </div>
                             ) : (
-                              <p className="text-sm text-muted-foreground italic">No quality profiles configured.</p>
+                              <p className="text-sm text-muted-foreground italic">
+                                No quality profiles configured.
+                              </p>
                             )}
                             <Button
                               variant="outline"
@@ -801,7 +844,6 @@ export default function MediaManagement() {
                           </div>
                         </CollapsiblePanel>
                       </CollapsibleRoot>
-
                     </div>
                   )}
                 </div>
@@ -819,7 +861,8 @@ export default function MediaManagement() {
               {editingFolderId ? 'Edit' : 'Set'} {mediaTypeInfo[editingMediaType].label} Folder
             </DialogTitle>
             <DialogDescription>
-              Select a folder where your {mediaTypeInfo[editingMediaType].label.toLowerCase()} files are stored.
+              Select a folder where your {mediaTypeInfo[editingMediaType].label.toLowerCase()} files
+              are stored.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -856,8 +899,8 @@ export default function MediaManagement() {
           <DialogHeader>
             <DialogTitle>TMDB API Key</DialogTitle>
             <DialogDescription>
-              Enter your TMDB API key to enable Movies and TV Shows metadata.
-              You can get a free API key at{' '}
+              Enter your TMDB API key to enable Movies and TV Shows metadata. You can get a free API
+              key at{' '}
               <a
                 href="https://www.themoviedb.org/settings/api"
                 target="_blank"
@@ -907,11 +950,10 @@ export default function MediaManagement() {
       <Dialog open={qualityDialogOpen} onOpenChange={setQualityDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {editingQuality ? 'Edit' : 'Add'} Quality Profile
-            </DialogTitle>
+            <DialogTitle>{editingQuality ? 'Edit' : 'Add'} Quality Profile</DialogTitle>
             <DialogDescription>
-              Define which quality levels are acceptable for {mediaTypeInfo[qualityMediaType].label.toLowerCase()} downloads.
+              Define which quality levels are acceptable for{' '}
+              {mediaTypeInfo[qualityMediaType].label.toLowerCase()} downloads.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -964,7 +1006,9 @@ export default function MediaManagement() {
             </Button>
             <Button
               onClick={handleSaveQuality}
-              disabled={savingQuality || !qualityName.trim() || !qualityItems.some((i) => i.allowed)}
+              disabled={
+                savingQuality || !qualityName.trim() || !qualityItems.some((i) => i.allowed)
+              }
             >
               {savingQuality ? 'Saving...' : editingQuality ? 'Save' : 'Add'}
             </Button>
@@ -978,7 +1022,8 @@ export default function MediaManagement() {
           <DialogHeader>
             <DialogTitle>Delete Profile</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the quality profile "{deletingProfile?.name}"? This action cannot be undone.
+              Are you sure you want to delete the quality profile "{deletingProfile?.name}"? This
+              action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -991,11 +1036,7 @@ export default function MediaManagement() {
             >
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmDelete}
-              disabled={deleting}
-            >
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleting}>
               {deleting ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>

@@ -6,10 +6,16 @@ export default class extends BaseSchema {
   async up() {
     this.schema.createTable(this.tableName, (table) => {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
-      table.uuid('download_client_id').references('id').inTable('download_clients').onDelete('SET NULL')
+      table
+        .uuid('download_client_id')
+        .references('id')
+        .inTable('download_clients')
+        .onDelete('SET NULL')
       table.string('external_id', 255).nullable()
       table.string('title', 500).notNullable()
-      table.enum('status', ['queued', 'downloading', 'paused', 'completed', 'failed', 'importing']).defaultTo('queued')
+      table
+        .enum('status', ['queued', 'downloading', 'paused', 'completed', 'failed', 'importing'])
+        .defaultTo('queued')
       table.decimal('progress', 5, 2).defaultTo(0)
       table.bigInteger('size_bytes').nullable()
       table.bigInteger('remaining_bytes').nullable()

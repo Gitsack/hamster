@@ -182,10 +182,7 @@ export default function ManualSearch() {
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <HugeiconsIcon
-                      icon={CdIcon}
-                      className="h-10 w-10 text-muted-foreground/50"
-                    />
+                    <HugeiconsIcon icon={CdIcon} className="h-10 w-10 text-muted-foreground/50" />
                   </div>
                 )}
               </div>
@@ -199,9 +196,7 @@ export default function ManualSearch() {
                 </Link>
                 <div className="flex items-center gap-2 mt-2">
                   {album.releaseDate && (
-                    <Badge variant="outline">
-                      {album.releaseDate.split('-')[0]}
-                    </Badge>
+                    <Badge variant="outline">{album.releaseDate.split('-')[0]}</Badge>
                   )}
                   <Badge className="capitalize">{album.albumType}</Badge>
                 </div>
@@ -224,15 +219,12 @@ export default function ManualSearch() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <div className="rounded-full bg-muted p-6 mb-4">
-                <HugeiconsIcon
-                  icon={Search01Icon}
-                  className="h-12 w-12 text-muted-foreground"
-                />
+                <HugeiconsIcon icon={Search01Icon} className="h-12 w-12 text-muted-foreground" />
               </div>
               <h3 className="text-lg font-medium mb-2">No releases found</h3>
               <p className="text-muted-foreground">
-                No releases found on your configured indexers. Try again later or
-                check your indexer settings.
+                No releases found on your configured indexers. Try again later or check your indexer
+                settings.
               </p>
             </CardContent>
           </Card>
@@ -269,9 +261,7 @@ export default function ManualSearch() {
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {result.indexer}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
                     <TableCell>
                       {result.quality ? (
                         <Badge variant="outline">{result.quality}</Badge>
@@ -297,10 +287,7 @@ export default function ManualSearch() {
                         {downloading === result.id ? (
                           <Spinner />
                         ) : (
-                          <HugeiconsIcon
-                            icon={FileDownloadIcon}
-                            className="h-4 w-4"
-                          />
+                          <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
                         )}
                       </Button>
                     </TableCell>

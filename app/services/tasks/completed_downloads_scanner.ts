@@ -6,7 +6,11 @@ import TvShow from '#models/tv_show'
 import Episode from '#models/episode'
 import Album from '#models/album'
 import Book from '#models/book'
-import { sabnzbdService, type SabnzbdConfig, type SabnzbdHistoryItem } from '#services/download_clients/sabnzbd_service'
+import {
+  sabnzbdService,
+  type SabnzbdConfig,
+  type SabnzbdHistoryItem,
+} from '#services/download_clients/sabnzbd_service'
 import { movieImportService } from '#services/media/movie_import_service'
 import { episodeImportService } from '#services/media/episode_import_service'
 import { downloadImportService } from '#services/media/download_import_service'
@@ -35,7 +39,9 @@ class CompletedDownloadsScanner {
       this.stop()
     }
 
-    console.log(`[CompletedScanner] Starting completed downloads scanner (every ${intervalMinutes} minutes)`)
+    console.log(
+      `[CompletedScanner] Starting completed downloads scanner (every ${intervalMinutes} minutes)`
+    )
 
     // Run immediately on start
     this.scan().catch(console.error)
@@ -80,7 +86,9 @@ class CompletedDownloadsScanner {
     this.cachedShows = shows
     this.cachedAlbums = albums as any
     this.cachedBooks = books as any
-    console.log(`[CompletedScanner] Cache loaded: ${movies.length} movies, ${shows.length} shows, ${albums.length} albums, ${books.length} books`)
+    console.log(
+      `[CompletedScanner] Cache loaded: ${movies.length} movies, ${shows.length} shows, ${albums.length} albums, ${books.length} books`
+    )
   }
 
   /**
@@ -126,7 +134,9 @@ class CompletedDownloadsScanner {
         }
       }
 
-      console.log(`[CompletedScanner] Scan complete: ${results.processed} processed, ${results.imported} imported`)
+      console.log(
+        `[CompletedScanner] Scan complete: ${results.processed} processed, ${results.imported} imported`
+      )
     } finally {
       this.clearCache()
       this.isRunning = false
@@ -138,7 +148,9 @@ class CompletedDownloadsScanner {
   /**
    * Scan a specific download client
    */
-  private async scanClient(client: DownloadClient): Promise<{ processed: number; imported: number; errors: string[] }> {
+  private async scanClient(
+    client: DownloadClient
+  ): Promise<{ processed: number; imported: number; errors: string[] }> {
     const results = { processed: 0, imported: 0, errors: [] as string[] }
 
     switch (client.type) {
@@ -169,7 +181,9 @@ class CompletedDownloadsScanner {
               results.errors.push(importResult.error)
             }
           } catch (error) {
-            results.errors.push(`Error processing ${slot.name}: ${error instanceof Error ? error.message : 'Unknown'}`)
+            results.errors.push(
+              `Error processing ${slot.name}: ${error instanceof Error ? error.message : 'Unknown'}`
+            )
           }
         }
         break
@@ -211,7 +225,9 @@ class CompletedDownloadsScanner {
         const fiveMinutesAgo = DateTime.now().minus({ minutes: 5 })
 
         if (completedAt && completedAt < fiveMinutesAgo) {
-          console.log(`[CompletedScanner] Found stuck import: ${existingDownload.title} (importing since ${completedAt.toISO()})`)
+          console.log(
+            `[CompletedScanner] Found stuck import: ${existingDownload.title} (importing since ${completedAt.toISO()})`
+          )
           // Re-trigger import for stuck downloads
           existingDownload.outputPath = slot.storage
           await existingDownload.save()
@@ -241,7 +257,9 @@ class CompletedDownloadsScanner {
       return { imported: false }
     }
 
-    console.log(`[CompletedScanner] Found orphaned download: ${slot.name} -> ${match.type} (${match.title})`)
+    console.log(
+      `[CompletedScanner] Found orphaned download: ${slot.name} -> ${match.type} (${match.title})`
+    )
 
     // Apply remote path mapping if configured
     let outputPath = slot.storage
@@ -273,7 +291,10 @@ class CompletedDownloadsScanner {
   /**
    * Check if a path is accessible with a timeout to avoid blocking on unmounted network paths
    */
-  private async isPathAccessible(path: string, timeoutMs = 3000): Promise<{ accessible: boolean; error?: string }> {
+  private async isPathAccessible(
+    path: string,
+    timeoutMs = 3000
+  ): Promise<{ accessible: boolean; error?: string }> {
     try {
       await Promise.race([
         fs.access(path),
@@ -320,7 +341,9 @@ class CompletedDownloadsScanner {
       // Check if path is accessible before attempting import (with timeout to avoid blocking)
       const pathCheck = await this.isPathAccessible(outputPath)
       if (!pathCheck.accessible) {
-        console.log(`[CompletedScanner] Path not accessible for ${download.title}: ${pathCheck.error}`)
+        console.log(
+          `[CompletedScanner] Path not accessible for ${download.title}: ${pathCheck.error}`
+        )
         download.status = 'failed'
         download.errorMessage = pathCheck.error || 'Path not accessible'
         await download.save()
@@ -347,13 +370,17 @@ class CompletedDownloadsScanner {
       if (result.success) {
         download.status = 'completed'
         await download.save()
-        console.log(`[CompletedScanner] Imported: ${download.title} (${result.filesImported} files)`)
+        console.log(
+          `[CompletedScanner] Imported: ${download.title} (${result.filesImported} files)`
+        )
         return { imported: true }
       } else {
         download.status = 'failed'
         download.errorMessage = result.errors.join('; ')
         await download.save()
-        console.log(`[CompletedScanner] Import failed: ${download.title} - ${result.errors.join('; ')}`)
+        console.log(
+          `[CompletedScanner] Import failed: ${download.title} - ${result.errors.join('; ')}`
+        )
         return { imported: false, error: result.errors.join('; ') }
       }
     } catch (error) {
@@ -371,7 +398,12 @@ class CompletedDownloadsScanner {
    */
   private async matchToLibrary(
     folderName: string
-  ): Promise<{ type: 'movie' | 'episode' | 'album' | 'book'; id: string; title: string; tvShowId?: string } | null> {
+  ): Promise<{
+    type: 'movie' | 'episode' | 'album' | 'book'
+    id: string
+    title: string
+    tvShowId?: string
+  } | null> {
     // Parse the folder name to extract title and year
     const parsed = this.parseFolderName(folderName)
 
@@ -387,7 +419,12 @@ class CompletedDownloadsScanner {
     if (parsed.title && (parsed.season !== undefined || parsed.episode !== undefined)) {
       const episodeMatch = await this.matchEpisode(parsed.title, parsed.season, parsed.episode)
       if (episodeMatch) {
-        return { type: 'episode', id: episodeMatch.id, title: episodeMatch.title, tvShowId: episodeMatch.tvShowId }
+        return {
+          type: 'episode',
+          id: episodeMatch.id,
+          title: episodeMatch.title,
+          tvShowId: episodeMatch.tvShowId,
+        }
       }
     }
 
@@ -456,7 +493,9 @@ class CompletedDownloadsScanner {
     }
 
     // Try to match music pattern (Artist - Album)
-    const musicMatch = cleaned.match(/^(.+?)\s*-\s*(.+?)(?:\s+(?:CD|LP|EP|FLAC|MP3|WEB|Vinyl|\d{4}))/i)
+    const musicMatch = cleaned.match(
+      /^(.+?)\s*-\s*(.+?)(?:\s+(?:CD|LP|EP|FLAC|MP3|WEB|Vinyl|\d{4}))/i
+    )
     if (musicMatch) {
       result.artist = musicMatch[1].trim()
       result.album = musicMatch[2].trim()
@@ -464,8 +503,9 @@ class CompletedDownloadsScanner {
     }
 
     // Try to match book pattern (Author - Title or Title by Author)
-    const bookMatch = cleaned.match(/^(.+?)\s+by\s+(.+?)(?:\s+epub|\s+mobi|\s+pdf)?$/i) ||
-                     cleaned.match(/^(.+?)\s*-\s*(.+?)(?:\s+epub|\s+mobi|\s+pdf)?$/i)
+    const bookMatch =
+      cleaned.match(/^(.+?)\s+by\s+(.+?)(?:\s+epub|\s+mobi|\s+pdf)?$/i) ||
+      cleaned.match(/^(.+?)\s*-\s*(.+?)(?:\s+epub|\s+mobi|\s+pdf)?$/i)
     if (bookMatch && cleaned.match(/epub|mobi|pdf|audiobook|ebook/i)) {
       result.author = bookMatch[2]?.trim() || bookMatch[1]?.trim()
       result.bookTitle = bookMatch[1]?.trim() || bookMatch[2]?.trim()
@@ -473,7 +513,9 @@ class CompletedDownloadsScanner {
     }
 
     // Extract title for movie (everything before quality/codec info)
-    const titleMatch = cleaned.match(/^(.+?)(?:\s+(?:REMASTERED|COMPLETE|EXTENDED|DIRECTORS|UNCUT|THEATRICAL|PROPER|RERIP|BLURAY|BLU-RAY|BDRIP|HDRIP|DVDRIP|WEBRIP|WEB-DL|HDTV|720p|1080p|2160p|4K|UHD|x264|x265|HEVC|H\.?264|H\.?265|AAC|DTS|AC3|ATMOS|REMUX|NF|AMZN|DSNP|ATVP))/i)
+    const titleMatch = cleaned.match(
+      /^(.+?)(?:\s+(?:REMASTERED|COMPLETE|EXTENDED|DIRECTORS|UNCUT|THEATRICAL|PROPER|RERIP|BLURAY|BLU-RAY|BDRIP|HDRIP|DVDRIP|WEBRIP|WEB-DL|HDTV|720p|1080p|2160p|4K|UHD|x264|x265|HEVC|H\.?264|H\.?265|AAC|DTS|AC3|ATMOS|REMUX|NF|AMZN|DSNP|ATVP))/i
+    )
     if (titleMatch) {
       result.title = titleMatch[1].replace(/\b\d{4}\b/, '').trim()
     } else {
@@ -548,9 +590,13 @@ class CompletedDownloadsScanner {
 
     for (const album of this.cachedAlbums) {
       const albumNormalized = album.title.toLowerCase().replace(/[^a-z0-9]/g, '')
-      const artistNormalized = (album as any).artist?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || ''
+      const artistNormalized =
+        (album as any).artist?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || ''
 
-      if (this.isSimilar(normalizedAlbum, albumNormalized) && this.isSimilar(normalizedArtist, artistNormalized)) {
+      if (
+        this.isSimilar(normalizedAlbum, albumNormalized) &&
+        this.isSimilar(normalizedArtist, artistNormalized)
+      ) {
         return { id: album.id, title: `${(album as any).artist?.name} - ${album.title}` }
       }
     }
@@ -567,9 +613,13 @@ class CompletedDownloadsScanner {
 
     for (const book of this.cachedBooks) {
       const titleNormalized = book.title.toLowerCase().replace(/[^a-z0-9]/g, '')
-      const authorNormalized = (book as any).author?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || ''
+      const authorNormalized =
+        (book as any).author?.name?.toLowerCase().replace(/[^a-z0-9]/g, '') || ''
 
-      if (this.isSimilar(normalizedTitle, titleNormalized) && this.isSimilar(normalizedAuthor, authorNormalized)) {
+      if (
+        this.isSimilar(normalizedTitle, titleNormalized) &&
+        this.isSimilar(normalizedAuthor, authorNormalized)
+      ) {
         return { id: book.id, title: `${(book as any).author?.name} - ${book.title}` }
       }
     }

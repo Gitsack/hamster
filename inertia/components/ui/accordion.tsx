@@ -1,48 +1,31 @@
-"use client"
+'use client'
 
-import * as React from "react"
-import { Accordion } from "@base-ui/react/accordion"
-import { Collapsible } from "@base-ui/react/collapsible"
-import { cn } from "@/lib/utils"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
+import * as React from 'react'
+import { Accordion } from '@base-ui/react/accordion'
+import { Collapsible } from '@base-ui/react/collapsible'
+import { cn } from '@/lib/utils'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 
-function AccordionRoot({
-  className,
-  ...props
-}: React.ComponentProps<typeof Accordion.Root>) {
+function AccordionRoot({ className, ...props }: React.ComponentProps<typeof Accordion.Root>) {
   return (
-    <Accordion.Root
-      data-slot="accordion"
-      className={cn("flex flex-col", className)}
-      {...props}
-    />
+    <Accordion.Root data-slot="accordion" className={cn('flex flex-col', className)} {...props} />
   )
 }
 
-function AccordionItem({
-  className,
-  ...props
-}: React.ComponentProps<typeof Accordion.Item>) {
+function AccordionItem({ className, ...props }: React.ComponentProps<typeof Accordion.Item>) {
   return (
     <Accordion.Item
       data-slot="accordion-item"
-      className={cn("border-b border-border", className)}
+      className={cn('border-b border-border', className)}
       {...props}
     />
   )
 }
 
-function AccordionHeader({
-  className,
-  ...props
-}: React.ComponentProps<typeof Accordion.Header>) {
+function AccordionHeader({ className, ...props }: React.ComponentProps<typeof Accordion.Header>) {
   return (
-    <Accordion.Header
-      data-slot="accordion-header"
-      className={cn("flex", className)}
-      {...props}
-    />
+    <Accordion.Header data-slot="accordion-header" className={cn('flex', className)} {...props} />
   )
 }
 
@@ -55,7 +38,7 @@ function AccordionTrigger({
     <Accordion.Trigger
       data-slot="accordion-trigger"
       className={cn(
-        "group flex flex-1 items-center justify-between gap-4 py-4 text-left text-sm font-medium transition-all hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&[data-panel-open]>svg]:rotate-180",
+        'group flex flex-1 items-center justify-between gap-4 py-4 text-left text-sm font-medium transition-all hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&[data-panel-open]>svg]:rotate-180',
         className
       )}
       {...props}
@@ -78,7 +61,7 @@ function AccordionPanel({
     <Accordion.Panel
       data-slot="accordion-panel"
       className={cn(
-        "h-[var(--accordion-panel-height)] overflow-hidden text-sm transition-[height] duration-200 ease-out data-[ending-style]:h-0 data-[starting-style]:h-0",
+        'h-[var(--accordion-panel-height)] overflow-hidden text-sm transition-[height] duration-200 ease-out data-[ending-style]:h-0 data-[starting-style]:h-0',
         className
       )}
       {...props}
@@ -89,14 +72,11 @@ function AccordionPanel({
 }
 
 // Collapsible components for standalone use
-function CollapsibleRoot({
-  className,
-  ...props
-}: React.ComponentProps<typeof Collapsible.Root>) {
+function CollapsibleRoot({ className, ...props }: React.ComponentProps<typeof Collapsible.Root>) {
   return (
     <Collapsible.Root
       data-slot="collapsible"
-      className={cn("flex flex-col", className)}
+      className={cn('flex flex-col', className)}
       {...props}
     />
   )
@@ -111,7 +91,7 @@ function CollapsibleTrigger({
     <Collapsible.Trigger
       data-slot="collapsible-trigger"
       className={cn(
-        "group flex items-center gap-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&[data-panel-open]>svg]:rotate-90",
+        'group flex items-center gap-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&[data-panel-open]>svg]:rotate-90',
         className
       )}
       {...props}
@@ -134,7 +114,7 @@ function CollapsiblePanel({
     <Collapsible.Panel
       data-slot="collapsible-panel"
       className={cn(
-        "h-[var(--collapsible-panel-height)] overflow-hidden text-sm transition-[height] duration-200 ease-out data-[ending-style]:h-0 data-[starting-style]:h-0",
+        'h-[var(--collapsible-panel-height)] overflow-hidden text-sm transition-[height] duration-200 ease-out data-[ending-style]:h-0 data-[starting-style]:h-0',
         className
       )}
       {...props}

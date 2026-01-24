@@ -14,13 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectPopup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -74,15 +68,21 @@ interface DownloadClient {
 type FormData = Omit<DownloadClient, 'id'>
 
 const isUsenetClient = (type: DownloadClientType) => type === 'sabnzbd' || type === 'nzbget'
-const isTorrentClient = (type: DownloadClientType) => type === 'qbittorrent' || type === 'transmission'
+const isTorrentClient = (type: DownloadClientType) =>
+  type === 'qbittorrent' || type === 'transmission'
 
 const getDefaultPort = (type: DownloadClientType): number => {
   switch (type) {
-    case 'sabnzbd': return 8080
-    case 'nzbget': return 6789
-    case 'qbittorrent': return 8080
-    case 'transmission': return 9091
-    default: return 8080
+    case 'sabnzbd':
+      return 8080
+    case 'nzbget':
+      return 6789
+    case 'qbittorrent':
+      return 8080
+    case 'transmission':
+      return 9091
+    default:
+      return 8080
   }
 }
 
@@ -122,7 +122,13 @@ export default function DownloadClients() {
   const [formData, setFormData] = useState<FormData>(defaultFormData)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<{ success: boolean; version?: string; error?: string; remotePath?: string; pathAccessible?: boolean } | null>(null)
+  const [testResult, setTestResult] = useState<{
+    success: boolean
+    version?: string
+    error?: string
+    remotePath?: string
+    pathAccessible?: boolean
+  } | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [showFolderBrowser, setShowFolderBrowser] = useState(false)
   const [browseDialogOpen, setBrowseDialogOpen] = useState(false)
@@ -260,7 +266,11 @@ export default function DownloadClients() {
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
     const date = new Date(dateStr)
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    return (
+      date.toLocaleDateString() +
+      ' ' +
+      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    )
   }
 
   const openAddDialog = () => {
@@ -495,11 +505,7 @@ export default function DownloadClients() {
                               <HugeiconsIcon icon={Folder01Icon} className="h-4 w-4" />
                             </Button>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditDialog(client)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(client)}>
                             <HugeiconsIcon icon={Edit01Icon} className="h-4 w-4" />
                           </Button>
                         </div>
@@ -515,7 +521,7 @@ export default function DownloadClients() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className={showFolderBrowser ? "max-w-2xl" : "max-w-lg"}>
+        <DialogContent className={showFolderBrowser ? 'max-w-2xl' : 'max-w-lg'}>
           <DialogHeader>
             <DialogTitle>
               {editingClient ? 'Edit Download Client' : 'Add Download Client'}
@@ -576,7 +582,9 @@ export default function DownloadClients() {
                   id="port"
                   type="number"
                   value={formData.port}
-                  onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) || 8080 })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, port: parseInt(e.target.value) || 8080 })
+                  }
                 />
               </div>
             </div>
@@ -629,7 +637,9 @@ export default function DownloadClients() {
                   onChange={(e) => setFormData({ ...formData, urlBase: e.target.value })}
                   placeholder="/transmission (optional)"
                 />
-                <p className="text-xs text-muted-foreground">Usually /transmission - only change if you modified it</p>
+                <p className="text-xs text-muted-foreground">
+                  Usually /transmission - only change if you modified it
+                </p>
               </div>
             )}
 
@@ -639,7 +649,9 @@ export default function DownloadClients() {
                 id="category"
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder={isTorrentClient(formData.type) ? 'hamster (optional)' : 'music (optional)'}
+                placeholder={
+                  isTorrentClient(formData.type) ? 'hamster (optional)' : 'music (optional)'
+                }
               />
             </div>
 
@@ -659,7 +671,9 @@ export default function DownloadClients() {
                   onChange={(e) => setFormData({ ...formData, remotePath: e.target.value })}
                   placeholder="/downloads"
                 />
-                <p className="text-xs text-muted-foreground">Path as SABnzbd sees it (auto-detected when you test connection)</p>
+                <p className="text-xs text-muted-foreground">
+                  Path as SABnzbd sees it (auto-detected when you test connection)
+                </p>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -700,7 +714,9 @@ export default function DownloadClients() {
               <Checkbox
                 id="useSsl"
                 checked={formData.useSsl}
-                onCheckedChange={(checked) => setFormData({ ...formData, useSsl: checked as boolean })}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, useSsl: checked as boolean })
+                }
               />
               <Label htmlFor="useSsl" className="font-normal cursor-pointer">
                 Use SSL
@@ -711,7 +727,9 @@ export default function DownloadClients() {
               <Checkbox
                 id="enabled"
                 checked={formData.enabled}
-                onCheckedChange={(checked) => setFormData({ ...formData, enabled: checked as boolean })}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, enabled: checked as boolean })
+                }
               />
               <Label htmlFor="enabled" className="font-normal cursor-pointer">
                 Enabled
@@ -773,9 +791,7 @@ export default function DownloadClients() {
               Test
             </Button>
             <Button onClick={saveClient} disabled={saving}>
-              {saving ? (
-                <Spinner className="mr-2" />
-              ) : null}
+              {saving ? <Spinner className="mr-2" /> : null}
               {editingClient ? 'Save' : 'Add'}
             </Button>
           </DialogFooter>
@@ -788,7 +804,8 @@ export default function DownloadClients() {
           <DialogHeader>
             <DialogTitle>Delete {editingClient?.name}?</DialogTitle>
             <DialogDescription>
-              This will remove the download client configuration. Active downloads will not be affected.
+              This will remove the download client configuration. Active downloads will not be
+              affected.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -796,9 +813,7 @@ export default function DownloadClients() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={deleteClient} disabled={deleting}>
-              {deleting ? (
-                <Spinner className="mr-2" />
-              ) : null}
+              {deleting ? <Spinner className="mr-2" /> : null}
               Delete
             </Button>
           </DialogFooter>

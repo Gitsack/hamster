@@ -185,15 +185,10 @@ export default function Requests() {
     <Card>
       <CardContent className="flex flex-col items-center justify-center py-16 text-center">
         <div className="rounded-full bg-muted p-6 mb-4">
-          <HugeiconsIcon
-            icon={CheckmarkCircle01Icon}
-            className="h-12 w-12 text-green-500"
-          />
+          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-12 w-12 text-green-500" />
         </div>
         <h3 className="text-lg font-medium mb-2">All caught up!</h3>
-        <p className="text-muted-foreground">
-          No pending requests in this category.
-        </p>
+        <p className="text-muted-foreground">No pending requests in this category.</p>
       </CardContent>
     </Card>
   )
@@ -252,7 +247,13 @@ export default function Requests() {
     <AppLayout
       title="Requests"
       actions={
-        <Button variant="outline" onClick={() => { fetchCounts(); fetchData() }}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            fetchCounts()
+            fetchData()
+          }}
+        >
           <HugeiconsIcon icon={RefreshIcon} className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -264,15 +265,10 @@ export default function Requests() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <div className="rounded-full bg-muted p-6 mb-4">
-              <HugeiconsIcon
-                icon={CheckmarkCircle01Icon}
-                className="h-12 w-12 text-green-500"
-              />
+              <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-12 w-12 text-green-500" />
             </div>
             <h3 className="text-lg font-medium mb-2">All caught up!</h3>
-            <p className="text-muted-foreground">
-              No pending requests. Your library is complete.
-            </p>
+            <p className="text-muted-foreground">No pending requests. Your library is complete.</p>
           </CardContent>
         </Card>
       ) : (
@@ -298,7 +294,11 @@ export default function Requests() {
 
           {/* Albums Tab */}
           <TabsContent value="albums">
-            {loading ? renderLoading() : albums.length === 0 ? renderEmptyState() : (
+            {loading ? (
+              renderLoading()
+            ) : albums.length === 0 ? (
+              renderEmptyState()
+            ) : (
               <>
                 <Card>
                   <Table>
@@ -319,27 +319,49 @@ export default function Requests() {
                           <TableCell>
                             <div className="h-12 w-12 rounded bg-muted overflow-hidden">
                               {album.imageUrl ? (
-                                <img src={album.imageUrl} alt={album.title} className="w-full h-full object-cover" loading="lazy" />
+                                <img
+                                  src={album.imageUrl}
+                                  alt={album.title}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
-                                  <HugeiconsIcon icon={CdIcon} className="h-6 w-6 text-muted-foreground/50" />
+                                  <HugeiconsIcon
+                                    icon={CdIcon}
+                                    className="h-6 w-6 text-muted-foreground/50"
+                                  />
                                 </div>
                               )}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Link href={`/album/${album.id}`} className="font-medium hover:text-primary transition-colors">
+                            <Link
+                              href={`/album/${album.id}`}
+                              className="font-medium hover:text-primary transition-colors"
+                            >
                               {album.title}
                             </Link>
                           </TableCell>
                           <TableCell>
-                            <Link href={`/artist/${album.artistId}`} className="text-muted-foreground hover:text-primary transition-colors">
+                            <Link
+                              href={`/artist/${album.artistId}`}
+                              className="text-muted-foreground hover:text-primary transition-colors"
+                            >
                               {album.artistName}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">{album.releaseDate?.split('-')[0] || '-'}</TableCell>
-                          <TableCell><Badge variant="outline" className="capitalize">{album.albumType}</Badge></TableCell>
-                          <TableCell className="text-muted-foreground">{album.trackCount}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {album.releaseDate?.split('-')[0] || '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="capitalize">
+                              {album.albumType}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {album.trackCount}
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Button size="sm" variant="outline" asChild>
@@ -367,7 +389,11 @@ export default function Requests() {
 
           {/* Movies Tab */}
           <TabsContent value="movies">
-            {loading ? renderLoading() : movies.length === 0 ? renderEmptyState() : (
+            {loading ? (
+              renderLoading()
+            ) : movies.length === 0 ? (
+              renderEmptyState()
+            ) : (
               <>
                 <Card>
                   <Table>
@@ -385,20 +411,33 @@ export default function Requests() {
                           <TableCell>
                             <div className="h-12 w-12 rounded bg-muted overflow-hidden">
                               {movie.posterUrl ? (
-                                <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" loading="lazy" />
+                                <img
+                                  src={movie.posterUrl}
+                                  alt={movie.title}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
-                                  <HugeiconsIcon icon={Video01Icon} className="h-6 w-6 text-muted-foreground/50" />
+                                  <HugeiconsIcon
+                                    icon={Video01Icon}
+                                    className="h-6 w-6 text-muted-foreground/50"
+                                  />
                                 </div>
                               )}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Link href={`/movie/${movie.id}`} className="font-medium hover:text-primary transition-colors">
+                            <Link
+                              href={`/movie/${movie.id}`}
+                              className="font-medium hover:text-primary transition-colors"
+                            >
                               {movie.title}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">{movie.year || '-'}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {movie.year || '-'}
+                          </TableCell>
                           <TableCell>
                             <Button size="sm" variant="ghost" asChild>
                               <Link href={`/movie/${movie.id}`}>
@@ -418,7 +457,11 @@ export default function Requests() {
 
           {/* TV Tab */}
           <TabsContent value="tv">
-            {loading ? renderLoading() : episodes.length === 0 ? renderEmptyState() : (
+            {loading ? (
+              renderLoading()
+            ) : episodes.length === 0 ? (
+              renderEmptyState()
+            ) : (
               <>
                 <Card>
                   <Table>
@@ -437,25 +480,42 @@ export default function Requests() {
                           <TableCell>
                             <div className="h-12 w-12 rounded bg-muted overflow-hidden">
                               {episode.posterUrl ? (
-                                <img src={episode.posterUrl} alt={episode.tvShowTitle} className="w-full h-full object-cover" loading="lazy" />
+                                <img
+                                  src={episode.posterUrl}
+                                  alt={episode.tvShowTitle}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
-                                  <HugeiconsIcon icon={Tv01Icon} className="h-6 w-6 text-muted-foreground/50" />
+                                  <HugeiconsIcon
+                                    icon={Tv01Icon}
+                                    className="h-6 w-6 text-muted-foreground/50"
+                                  />
                                 </div>
                               )}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Link href={`/tvshow/${episode.tvShowId}`} className="font-medium hover:text-primary transition-colors">
+                            <Link
+                              href={`/tvshow/${episode.tvShowId}`}
+                              className="font-medium hover:text-primary transition-colors"
+                            >
                               {episode.title || `Episode ${episode.episodeNumber}`}
                             </Link>
                           </TableCell>
                           <TableCell>
-                            <Link href={`/tvshow/${episode.tvShowId}`} className="text-muted-foreground hover:text-primary transition-colors">
+                            <Link
+                              href={`/tvshow/${episode.tvShowId}`}
+                              className="text-muted-foreground hover:text-primary transition-colors"
+                            >
                               {episode.tvShowTitle}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">S{episode.seasonNumber.toString().padStart(2, '0')}E{episode.episodeNumber.toString().padStart(2, '0')}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            S{episode.seasonNumber.toString().padStart(2, '0')}E
+                            {episode.episodeNumber.toString().padStart(2, '0')}
+                          </TableCell>
                           <TableCell>
                             <Button size="sm" variant="ghost" asChild>
                               <Link href={`/tvshow/${episode.tvShowId}`}>
@@ -475,7 +535,11 @@ export default function Requests() {
 
           {/* Books Tab */}
           <TabsContent value="books">
-            {loading ? renderLoading() : books.length === 0 ? renderEmptyState() : (
+            {loading ? (
+              renderLoading()
+            ) : books.length === 0 ? (
+              renderEmptyState()
+            ) : (
               <>
                 <Card>
                   <Table>
@@ -494,16 +558,27 @@ export default function Requests() {
                           <TableCell>
                             <div className="h-12 w-12 rounded bg-muted overflow-hidden">
                               {book.coverUrl ? (
-                                <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" loading="lazy" />
+                                <img
+                                  src={book.coverUrl}
+                                  alt={book.title}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
-                                  <HugeiconsIcon icon={Book01Icon} className="h-6 w-6 text-muted-foreground/50" />
+                                  <HugeiconsIcon
+                                    icon={Book01Icon}
+                                    className="h-6 w-6 text-muted-foreground/50"
+                                  />
                                 </div>
                               )}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Link href={`/book/${book.id}`} className="font-medium hover:text-primary transition-colors">
+                            <Link
+                              href={`/book/${book.id}`}
+                              className="font-medium hover:text-primary transition-colors"
+                            >
                               {book.title}
                             </Link>
                             {book.seriesName && (
@@ -513,11 +588,16 @@ export default function Requests() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Link href={`/author/${book.authorId}`} className="text-muted-foreground hover:text-primary transition-colors">
+                            <Link
+                              href={`/author/${book.authorId}`}
+                              className="text-muted-foreground hover:text-primary transition-colors"
+                            >
                               {book.authorName}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">{book.releaseDate?.split('-')[0] || '-'}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {book.releaseDate?.split('-')[0] || '-'}
+                          </TableCell>
                           <TableCell>
                             <Button size="sm" variant="ghost" asChild>
                               <Link href={`/book/${book.id}`}>

@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useRef, useCallback, useEffect, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  type ReactNode,
+} from 'react'
 
 export interface Track {
   id: number
@@ -147,7 +155,7 @@ export function AudioPlayerProvider({ children }: AudioPlayerProviderProps) {
       audio.removeEventListener('canplay', handleCanPlay)
       audio.pause()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadTrack = useCallback((track: Track) => {
@@ -165,16 +173,19 @@ export function AudioPlayerProvider({ children }: AudioPlayerProviderProps) {
     audioRef.current.load()
   }, [])
 
-  const play = useCallback((track?: Track) => {
-    if (!audioRef.current) return
+  const play = useCallback(
+    (track?: Track) => {
+      if (!audioRef.current) return
 
-    if (track) {
-      loadTrack(track)
-      audioRef.current.play()
-    } else if (state.currentTrack) {
-      audioRef.current.play()
-    }
-  }, [loadTrack, state.currentTrack])
+      if (track) {
+        loadTrack(track)
+        audioRef.current.play()
+      } else if (state.currentTrack) {
+        audioRef.current.play()
+      }
+    },
+    [loadTrack, state.currentTrack]
+  )
 
   const pause = useCallback(() => {
     audioRef.current?.pause()
@@ -263,17 +274,20 @@ export function AudioPlayerProvider({ children }: AudioPlayerProviderProps) {
     })
   }, [])
 
-  const setPlaylist = useCallback((tracks: Track[], startIndex = 0) => {
-    setState((prev) => ({
-      ...prev,
-      playlist: tracks,
-      currentIndex: startIndex,
-    }))
+  const setPlaylist = useCallback(
+    (tracks: Track[], startIndex = 0) => {
+      setState((prev) => ({
+        ...prev,
+        playlist: tracks,
+        currentIndex: startIndex,
+      }))
 
-    if (tracks.length > 0 && startIndex >= 0 && startIndex < tracks.length) {
-      play(tracks[startIndex])
-    }
-  }, [play])
+      if (tracks.length > 0 && startIndex >= 0 && startIndex < tracks.length) {
+        play(tracks[startIndex])
+      }
+    },
+    [play]
+  )
 
   const addToQueue = useCallback((track: Track) => {
     setState((prev) => ({
@@ -298,19 +312,22 @@ export function AudioPlayerProvider({ children }: AudioPlayerProviderProps) {
     }))
   }, [])
 
-  const playAlbum = useCallback(async (albumId: number) => {
-    try {
-      const response = await fetch(`/api/v1/playback/album/${albumId}/playlist`)
-      if (response.ok) {
-        const tracks: Track[] = await response.json()
-        if (tracks.length > 0) {
-          setPlaylist(tracks, 0)
+  const playAlbum = useCallback(
+    async (albumId: number) => {
+      try {
+        const response = await fetch(`/api/v1/playback/album/${albumId}/playlist`)
+        if (response.ok) {
+          const tracks: Track[] = await response.json()
+          if (tracks.length > 0) {
+            setPlaylist(tracks, 0)
+          }
         }
+      } catch (error) {
+        console.error('Failed to load album playlist:', error)
       }
-    } catch (error) {
-      console.error('Failed to load album playlist:', error)
-    }
-  }, [setPlaylist])
+    },
+    [setPlaylist]
+  )
 
   const value: AudioPlayerContextValue = {
     ...state,
@@ -330,9 +347,5 @@ export function AudioPlayerProvider({ children }: AudioPlayerProviderProps) {
     playAlbum,
   }
 
-  return (
-    <AudioPlayerContext.Provider value={value}>
-      {children}
-    </AudioPlayerContext.Provider>
-  )
+  return <AudioPlayerContext.Provider value={value}>{children}</AudioPlayerContext.Provider>
 }

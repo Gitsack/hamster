@@ -56,7 +56,9 @@ class FolderScanner {
         }
       }
 
-      console.log(`[FolderScanner] Scan complete: ${results.processed} folders processed, ${results.imported} imported`)
+      console.log(
+        `[FolderScanner] Scan complete: ${results.processed} folders processed, ${results.imported} imported`
+      )
     } finally {
       this.isRunning = false
     }
@@ -67,7 +69,9 @@ class FolderScanner {
   /**
    * Scan a specific download client's complete folder
    */
-  private async scanClientFolder(client: DownloadClient): Promise<{ processed: number; imported: number; errors: string[] }> {
+  private async scanClientFolder(
+    client: DownloadClient
+  ): Promise<{ processed: number; imported: number; errors: string[] }> {
     const results = { processed: 0, imported: 0, errors: [] as string[] }
 
     // Get the local path for the complete folder
@@ -87,7 +91,7 @@ class FolderScanner {
 
     // List all folders in the complete directory
     const entries = await fs.readdir(localPath, { withFileTypes: true })
-    const folders = entries.filter(e => e.isDirectory())
+    const folders = entries.filter((e) => e.isDirectory())
 
     console.log(`[FolderScanner] Found ${folders.length} folders in ${localPath}`)
 
@@ -122,7 +126,9 @@ class FolderScanner {
           continue
         }
 
-        console.log(`[FolderScanner] Found importable folder: ${folder.name} -> ${match.type} (${match.title})`)
+        console.log(
+          `[FolderScanner] Found importable folder: ${folder.name} -> ${match.type} (${match.title})`
+        )
 
         // Create a download record and import
         const importResult = await this.importFolder(folderPath, match, client)
@@ -134,7 +140,9 @@ class FolderScanner {
           results.errors.push(`${folder.name}: ${importResult.error}`)
         }
       } catch (error) {
-        results.errors.push(`${folder.name}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        results.errors.push(
+          `${folder.name}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     }
 
@@ -155,10 +163,7 @@ class FolderScanner {
         return episode?.hasFile ?? false
       }
       case 'album': {
-        const album = await Album.query()
-          .where('id', match.id)
-          .preload('trackFiles')
-          .first()
+        const album = await Album.query().where('id', match.id).preload('trackFiles').first()
         return (album?.trackFiles?.length ?? 0) > 0
       }
       case 'book': {
@@ -236,7 +241,12 @@ class FolderScanner {
    */
   private async matchToLibrary(
     folderName: string
-  ): Promise<{ type: 'movie' | 'episode' | 'album' | 'book'; id: string; title: string; tvShowId?: string } | null> {
+  ): Promise<{
+    type: 'movie' | 'episode' | 'album' | 'book'
+    id: string
+    title: string
+    tvShowId?: string
+  } | null> {
     // Normalize folder name for matching
     const normalized = this.normalizeFolderName(folderName)
     console.log(`[FolderScanner] Matching folder: "${folderName}" -> normalized: "${normalized}"`)
@@ -282,7 +292,9 @@ class FolderScanner {
 
     matches.sort((a, b) => b.confidence - a.confidence)
     const best = matches[0]
-    console.log(`[FolderScanner] Best match: ${best.type} "${best.title}" (confidence: ${best.confidence.toFixed(2)})`)
+    console.log(
+      `[FolderScanner] Best match: ${best.type} "${best.title}" (confidence: ${best.confidence.toFixed(2)})`
+    )
 
     return {
       type: best.type,
@@ -314,7 +326,8 @@ class FolderScanner {
     normalized: string
   ): Promise<{ id: string; title: string; confidence: number } | null> {
     // Music indicators in folder name
-    const musicIndicators = /\b(flac|mp3|aac|ogg|wav|alac|dsd|cd|lp|ep|vinyl|320|v0|v2|web|album|discography|\dcd)\b/i
+    const musicIndicators =
+      /\b(flac|mp3|aac|ogg|wav|alac|dsd|cd|lp|ep|vinyl|320|v0|v2|web|album|discography|\dcd)\b/i
     const hasMusicIndicator = musicIndicators.test(original)
 
     // Check for "Artist - Album" pattern (with hyphen)
@@ -379,15 +392,17 @@ class FolderScanner {
     const folderYear = yearMatch ? parseInt(yearMatch[1]) : null
 
     // Movie indicators
-    const movieIndicators = /\b(bluray|bdrip|dvdrip|webrip|web-dl|hdtv|remux|2160p|1080p|720p|480p|4k|uhd|hdrip|x264|x265|hevc|remastered|extended|directors|theatrical|uncut)\b/i
+    const movieIndicators =
+      /\b(bluray|bdrip|dvdrip|webrip|web-dl|hdtv|remux|2160p|1080p|720p|480p|4k|uhd|hdrip|x264|x265|hevc|remastered|extended|directors|theatrical|uncut)\b/i
     const hasMovieIndicator = movieIndicators.test(original)
 
     // Check it's NOT music (no "Artist - Album" with music indicators)
     const musicIndicators = /\b(flac|mp3|cd|lp|vinyl|320|v0|album|\dcd)\b/i
     const hasMusicIndicator = musicIndicators.test(original)
 
-    const movies = await Movie.query()
-      .where((q) => q.where('requested', true).orWhere('hasFile', false))
+    const movies = await Movie.query().where((q) =>
+      q.where('requested', true).orWhere('hasFile', false)
+    )
 
     let bestMatch: { id: string; title: string; confidence: number } | null = null
 
@@ -492,7 +507,9 @@ class FolderScanner {
       return null // Require book indicator for book matching
     }
 
-    const books = await Book.query().where((q) => q.where('requested', true).orWhere('hasFile', false)).preload('author')
+    const books = await Book.query()
+      .where((q) => q.where('requested', true).orWhere('hasFile', false))
+      .preload('author')
 
     let bestMatch: { id: string; title: string; confidence: number } | null = null
 

@@ -164,7 +164,10 @@ export class MediaInfoService {
   /**
    * Parse track/disc number from various formats
    */
-  private parseTrackNumber(trackInfo?: { no: number | null; of: number | null }): number | undefined {
+  private parseTrackNumber(trackInfo?: {
+    no: number | null
+    of: number | null
+  }): number | undefined {
     if (!trackInfo || trackInfo.no === null) return undefined
     return trackInfo.no
   }

@@ -120,7 +120,7 @@ export class TransmissionService {
       throw new Error(`Transmission RPC failed: HTTP ${response.status}`)
     }
 
-    const data = await response.json() as { result: string; arguments?: T }
+    const data = (await response.json()) as { result: string; arguments?: T }
 
     if (data.result !== 'success') {
       throw new Error(`Transmission RPC error: ${data.result}`)
@@ -132,9 +132,11 @@ export class TransmissionService {
   /**
    * Test connection to Transmission
    */
-  async testConnection(config: TransmissionConfig): Promise<{ success: boolean; version?: string; error?: string }> {
+  async testConnection(
+    config: TransmissionConfig
+  ): Promise<{ success: boolean; version?: string; error?: string }> {
     try {
-      const result = await this.request<{ version: string; 'rpc-version': number }>(
+      const result = await this.request<{ 'version': string; 'rpc-version': number }>(
         config,
         'session-get',
         { fields: ['version', 'rpc-version'] }
@@ -150,33 +152,29 @@ export class TransmissionService {
    * Get all torrents
    */
   async getTorrents(config: TransmissionConfig): Promise<TransmissionTorrent[]> {
-    const result = await this.request<{ torrents: TransmissionTorrent[] }>(
-      config,
-      'torrent-get',
-      {
-        fields: [
-          'id',
-          'hashString',
-          'name',
-          'status',
-          'percentDone',
-          'rateDownload',
-          'rateUpload',
-          'eta',
-          'error',
-          'errorString',
-          'isFinished',
-          'isStalled',
-          'totalSize',
-          'downloadedEver',
-          'uploadedEver',
-          'addedDate',
-          'doneDate',
-          'downloadDir',
-          'files',
-        ],
-      }
-    )
+    const result = await this.request<{ torrents: TransmissionTorrent[] }>(config, 'torrent-get', {
+      fields: [
+        'id',
+        'hashString',
+        'name',
+        'status',
+        'percentDone',
+        'rateDownload',
+        'rateUpload',
+        'eta',
+        'error',
+        'errorString',
+        'isFinished',
+        'isStalled',
+        'totalSize',
+        'downloadedEver',
+        'uploadedEver',
+        'addedDate',
+        'doneDate',
+        'downloadDir',
+        'files',
+      ],
+    })
 
     return result.torrents
   }
@@ -235,9 +233,8 @@ export class TransmissionService {
     } = {}
   ): Promise<{ id: number; hashString: string; name: string }> {
     // Handle both Buffer and ArrayBuffer
-    const buffer = fileContent instanceof Buffer
-      ? fileContent
-      : Buffer.from(new Uint8Array(fileContent))
+    const buffer =
+      fileContent instanceof Buffer ? fileContent : Buffer.from(new Uint8Array(fileContent))
     const base64 = buffer.toString('base64')
 
     const args: Record<string, unknown> = {
@@ -285,9 +282,13 @@ export class TransmissionService {
   /**
    * Remove torrent(s)
    */
-  async remove(config: TransmissionConfig, ids: number | number[], deleteLocalData = false): Promise<void> {
+  async remove(
+    config: TransmissionConfig,
+    ids: number | number[],
+    deleteLocalData = false
+  ): Promise<void> {
     await this.request(config, 'torrent-remove', {
-      ids: Array.isArray(ids) ? ids : [ids],
+      'ids': Array.isArray(ids) ? ids : [ids],
       'delete-local-data': deleteLocalData,
     })
   }
@@ -299,19 +300,15 @@ export class TransmissionService {
     // Get default download dir if not specified
     let downloadDir = path
     if (!downloadDir) {
-      const session = await this.request<{ 'download-dir': string }>(
-        config,
-        'session-get',
-        { fields: ['download-dir'] }
-      )
+      const session = await this.request<{ 'download-dir': string }>(config, 'session-get', {
+        fields: ['download-dir'],
+      })
       downloadDir = session['download-dir']
     }
 
-    const result = await this.request<{ 'size-bytes': number }>(
-      config,
-      'free-space',
-      { path: downloadDir }
-    )
+    const result = await this.request<{ 'size-bytes': number }>(config, 'free-space', {
+      path: downloadDir,
+    })
 
     return result['size-bytes']
   }
@@ -319,7 +316,10 @@ export class TransmissionService {
   /**
    * Map Transmission status to download status
    */
-  mapStatusToDownloadStatus(status: number, isFinished: boolean): 'queued' | 'downloading' | 'paused' | 'completed' | 'failed' {
+  mapStatusToDownloadStatus(
+    status: number,
+    isFinished: boolean
+  ): 'queued' | 'downloading' | 'paused' | 'completed' | 'failed' {
     if (isFinished) {
       return 'completed'
     }

@@ -82,7 +82,10 @@ export default class ArtistsController {
     const albumsWithCounts = await Promise.all(
       artist.albums.map(async (album) => {
         const trackCount = await Track.query().where('albumId', album.id).count('* as total')
-        const fileCount = await Track.query().where('albumId', album.id).where('hasFile', true).count('* as total')
+        const fileCount = await Track.query()
+          .where('albumId', album.id)
+          .where('hasFile', true)
+          .count('* as total')
 
         return {
           id: album.id,
@@ -301,9 +304,7 @@ export default class ArtistsController {
     }
 
     // Find best match (exact name match preferred)
-    const exactMatch = results.find(
-      (r) => r.name.toLowerCase() === artist.name.toLowerCase()
-    )
+    const exactMatch = results.find((r) => r.name.toLowerCase() === artist.name.toLowerCase())
     const best = exactMatch || results[0]
 
     // Update artist with MusicBrainz data
@@ -416,25 +417,30 @@ export default class ArtistsController {
    * Normalize album title for comparison (removes punctuation, extra spaces, common suffixes)
    */
   private normalizeTitle(title: string): string {
-    return title
-      .toLowerCase()
-      // Normalize unicode characters
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      // Remove common suffixes in parentheses
-      .replace(/\s*\((?:deluxe|special|bonus|expanded|remaster|anniversary|edition|version|disc \d+).*?\)/gi, '')
-      // Remove brackets content
-      .replace(/\s*\[.*?\]/g, '')
-      // Normalize quotes and apostrophes
-      .replace(/[''`]/g, "'")
-      .replace(/[""]/g, '"')
-      // Normalize dashes
-      .replace(/[–—]/g, '-')
-      // Remove punctuation for comparison
-      .replace(/[^\w\s'-]/g, '')
-      // Normalize whitespace
-      .replace(/\s+/g, ' ')
-      .trim()
+    return (
+      title
+        .toLowerCase()
+        // Normalize unicode characters
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        // Remove common suffixes in parentheses
+        .replace(
+          /\s*\((?:deluxe|special|bonus|expanded|remaster|anniversary|edition|version|disc \d+).*?\)/gi,
+          ''
+        )
+        // Remove brackets content
+        .replace(/\s*\[.*?\]/g, '')
+        // Normalize quotes and apostrophes
+        .replace(/[''`]/g, "'")
+        .replace(/[""]/g, '"')
+        // Normalize dashes
+        .replace(/[–—]/g, '-')
+        // Remove punctuation for comparison
+        .replace(/[^\w\s'-]/g, '')
+        // Normalize whitespace
+        .replace(/\s+/g, ' ')
+        .trim()
+    )
   }
 
   /**
@@ -449,7 +455,9 @@ export default class ArtistsController {
     // Get all existing albums for this artist (for title matching)
     const existingAlbums = await Album.query().where('artistId', artist.id)
 
-    console.log(`[Enrich] Artist "${artist.name}" has ${existingAlbums.length} existing albums, MusicBrainz has ${mbAlbums.length} albums`)
+    console.log(
+      `[Enrich] Artist "${artist.name}" has ${existingAlbums.length} existing albums, MusicBrainz has ${mbAlbums.length} albums`
+    )
 
     // Sort albums by release date (newest first) to get the most recent album cover
     const sortedAlbums = [...mbAlbums].sort((a, b) => {
@@ -501,9 +509,15 @@ export default class ArtistsController {
         if (existingNormalized === mbTitleNormalized) return true
 
         // Check if one contains the other (for "Album" vs "Album (Deluxe Edition)")
-        if (existingNormalized.includes(mbTitleNormalized) || mbTitleNormalized.includes(existingNormalized)) {
+        if (
+          existingNormalized.includes(mbTitleNormalized) ||
+          mbTitleNormalized.includes(existingNormalized)
+        ) {
           // Only match if the shorter one is at least 4 chars to avoid false positives
-          const shorter = existingNormalized.length < mbTitleNormalized.length ? existingNormalized : mbTitleNormalized
+          const shorter =
+            existingNormalized.length < mbTitleNormalized.length
+              ? existingNormalized
+              : mbTitleNormalized
           if (shorter.length >= 4) return true
         }
 
@@ -511,13 +525,17 @@ export default class ArtistsController {
       })
 
       if (existingByTitle) {
-        console.log(`[Enrich] Matched album "${existingByTitle.title}" -> MusicBrainz "${mbAlbum.title}" (${mbAlbum.id})`)
+        console.log(
+          `[Enrich] Matched album "${existingByTitle.title}" -> MusicBrainz "${mbAlbum.title}" (${mbAlbum.id})`
+        )
         // Update existing album with MusicBrainz data
         existingByTitle.merge({
           musicbrainzReleaseGroupId: mbAlbum.id,
           albumType,
           secondaryTypes: mbAlbum.secondaryTypes || [],
-          releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : existingByTitle.releaseDate,
+          releaseDate: mbAlbum.releaseDate
+            ? DateTime.fromISO(mbAlbum.releaseDate)
+            : existingByTitle.releaseDate,
           imageUrl: coverUrl || existingByTitle.imageUrl,
         })
         await existingByTitle.save()
@@ -528,8 +546,12 @@ export default class ArtistsController {
         // Log unmatched albums to help debug
         const unmatchedExisting = existingAlbums.filter((a) => !a.musicbrainzReleaseGroupId)
         if (unmatchedExisting.length > 0) {
-          console.log(`[Enrich] No match for MusicBrainz album "${mbAlbum.title}" (normalized: "${mbTitleNormalized}")`)
-          console.log(`[Enrich] Existing unmatched albums: ${unmatchedExisting.map((a) => `"${a.title}" (normalized: "${this.normalizeTitle(a.title)}")`).join(', ')}`)
+          console.log(
+            `[Enrich] No match for MusicBrainz album "${mbAlbum.title}" (normalized: "${mbTitleNormalized}")`
+          )
+          console.log(
+            `[Enrich] Existing unmatched albums: ${unmatchedExisting.map((a) => `"${a.title}" (normalized: "${this.normalizeTitle(a.title)}")`).join(', ')}`
+          )
         }
         // Create new album
         await Album.create({
@@ -584,9 +606,7 @@ export default class ArtistsController {
           // Or by title if no exact position match
           const existingByTitle = !existingByNumber
             ? existingTracks.find(
-                (t) =>
-                  !t.musicbrainzId &&
-                  t.title.toLowerCase() === mbTrack.title.toLowerCase()
+                (t) => !t.musicbrainzId && t.title.toLowerCase() === mbTrack.title.toLowerCase()
               )
             : null
 
@@ -611,7 +631,9 @@ export default class ArtistsController {
     }
   }
 
-  private mapAlbumType(primaryType?: string): 'album' | 'ep' | 'single' | 'compilation' | 'live' | 'remix' | 'other' {
+  private mapAlbumType(
+    primaryType?: string
+  ): 'album' | 'ep' | 'single' | 'compilation' | 'live' | 'remix' | 'other' {
     switch (primaryType?.toLowerCase()) {
       case 'album':
         return 'album'

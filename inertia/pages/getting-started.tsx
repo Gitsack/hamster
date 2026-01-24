@@ -296,7 +296,10 @@ function MediaTypeCard({
         <ul className="space-y-2">
           {features.map((feature, index) => (
             <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
-              <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-4 w-4 text-primary flex-shrink-0" />
+              <HugeiconsIcon
+                icon={CheckmarkCircle01Icon}
+                className="h-4 w-4 text-primary flex-shrink-0"
+              />
               {feature}
             </li>
           ))}
@@ -326,13 +329,7 @@ function FeatureCard({
   )
 }
 
-function SettingItem({
-  title,
-  description,
-}: {
-  title: string
-  description: string
-}) {
+function SettingItem({ title, description }: { title: string; description: string }) {
   return (
     <div className="flex items-start gap-3 pb-3 border-b last:border-0 last:pb-0">
       <div className="h-2 w-2 rounded-full bg-primary mt-2 flex-shrink-0" />

@@ -23,7 +23,11 @@ export default class extends BaseSchema {
       table.boolean('requested').defaultTo(false)
 
       // Configuration
-      table.uuid('quality_profile_id').references('id').inTable('quality_profiles').onDelete('SET NULL')
+      table
+        .uuid('quality_profile_id')
+        .references('id')
+        .inTable('quality_profiles')
+        .onDelete('SET NULL')
       table.uuid('root_folder_id').references('id').inTable('root_folders').onDelete('SET NULL')
 
       table.timestamp('added_at').nullable()

@@ -172,7 +172,7 @@ export class NzbgetService {
       throw new Error(`NZBGet RPC failed: HTTP ${response.status}`)
     }
 
-    const data = await response.json() as { result?: T; error?: { message: string } }
+    const data = (await response.json()) as { result?: T; error?: { message: string } }
 
     if (data.error) {
       throw new Error(`NZBGet RPC error: ${data.error.message}`)
@@ -184,7 +184,9 @@ export class NzbgetService {
   /**
    * Test connection to NZBGet
    */
-  async testConnection(config: NzbgetConfig): Promise<{ success: boolean; version?: string; error?: string }> {
+  async testConnection(
+    config: NzbgetConfig
+  ): Promise<{ success: boolean; version?: string; error?: string }> {
     try {
       const version = await this.request<string>(config, 'version')
       return { success: true, version }
@@ -334,7 +336,11 @@ export class NzbgetService {
   /**
    * Delete from history
    */
-  async deleteFromHistory(config: NzbgetConfig, nzbId: number, deleteFiles = false): Promise<boolean> {
+  async deleteFromHistory(
+    config: NzbgetConfig,
+    nzbId: number,
+    deleteFiles = false
+  ): Promise<boolean> {
     const command = deleteFiles ? 'HistoryDelete' : 'HistoryFinalDelete'
     return this.request<boolean>(config, 'editqueue', [command, '', [nzbId]])
   }
@@ -375,7 +381,9 @@ export class NzbgetService {
   /**
    * Map NZBGet status to download status
    */
-  mapStatusToDownloadStatus(status: string): 'queued' | 'downloading' | 'paused' | 'completed' | 'failed' {
+  mapStatusToDownloadStatus(
+    status: string
+  ): 'queued' | 'downloading' | 'paused' | 'completed' | 'failed' {
     // Queue statuses
     if (status === 'QUEUED' || status === 'FETCHING') {
       return 'queued'
@@ -388,7 +396,19 @@ export class NzbgetService {
     }
 
     // Post-processing statuses
-    if (['PP_QUEUED', 'LOADING_PARS', 'VERIFYING_SOURCES', 'REPAIRING', 'VERIFYING_REPAIRED', 'RENAMING', 'UNPACKING', 'MOVING', 'EXECUTING_SCRIPT'].includes(status)) {
+    if (
+      [
+        'PP_QUEUED',
+        'LOADING_PARS',
+        'VERIFYING_SOURCES',
+        'REPAIRING',
+        'VERIFYING_REPAIRED',
+        'RENAMING',
+        'UNPACKING',
+        'MOVING',
+        'EXECUTING_SCRIPT',
+      ].includes(status)
+    ) {
       return 'downloading' // Still processing
     }
 
@@ -396,7 +416,23 @@ export class NzbgetService {
     if (status === 'SUCCESS') {
       return 'completed'
     }
-    if (['FAILURE', 'BAD', 'DELETED', 'DUPE', 'COPY', 'FETCH_FAILURE', 'PAR_FAILURE', 'UNPACK_FAILURE', 'MOVE_FAILURE', 'SCRIPT_FAILURE', 'DISK_FAILURE', 'HEALTH_FAILURE', 'DELETED_FAILURE'].includes(status)) {
+    if (
+      [
+        'FAILURE',
+        'BAD',
+        'DELETED',
+        'DUPE',
+        'COPY',
+        'FETCH_FAILURE',
+        'PAR_FAILURE',
+        'UNPACK_FAILURE',
+        'MOVE_FAILURE',
+        'SCRIPT_FAILURE',
+        'DISK_FAILURE',
+        'HEALTH_FAILURE',
+        'DELETED_FAILURE',
+      ].includes(status)
+    ) {
       return 'failed'
     }
 

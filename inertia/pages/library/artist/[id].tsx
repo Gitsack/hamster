@@ -239,9 +239,7 @@ export default function ArtistDetail() {
       })
       if (response.ok) {
         setArtist({ ...artist, requested: !artist.requested })
-        toast.success(
-          artist.requested ? 'Artist unrequested' : 'Artist requested'
-        )
+        toast.success(artist.requested ? 'Artist unrequested' : 'Artist requested')
       }
     } catch (error) {
       console.error('Failed to update artist:', error)
@@ -353,9 +351,7 @@ export default function ArtistDetail() {
 
   // Merge library albums with discography for complete view
   const mergedAlbums = useMemo(() => {
-    const libraryMap = new Map(
-      artist?.albums.map((a) => [a.musicbrainzId, a]) || []
-    )
+    const libraryMap = new Map(artist?.albums.map((a) => [a.musicbrainzId, a]) || [])
 
     // Map discography albums, enriching with library data if available
     const merged = discography.map((d) => {
@@ -402,7 +398,9 @@ export default function ArtistDetail() {
 
   // Filter albums by category
   const downloadedAlbums = mergedAlbums.filter((a) => a.inLibrary && a.fileCount > 0)
-  const requestedAlbums = mergedAlbums.filter((a) => a.inLibrary && a.requested && a.fileCount === 0)
+  const requestedAlbums = mergedAlbums.filter(
+    (a) => a.inLibrary && a.requested && a.fileCount === 0
+  )
   const notInLibraryAlbums = mergedAlbums.filter((a) => !a.inLibrary)
 
   // Calculate statistics
@@ -501,11 +499,7 @@ export default function ArtistDetail() {
           {/* Artist image */}
           <div className="w-full md:w-48 aspect-square md:aspect-auto md:h-48 bg-muted rounded-lg overflow-hidden flex-shrink-0">
             {artist.imageUrl ? (
-              <img
-                src={artist.imageUrl}
-                alt={artist.name}
-                className="w-full h-full object-cover"
-              />
+              <img src={artist.imageUrl} alt={artist.name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <HugeiconsIcon
@@ -568,9 +562,7 @@ export default function ArtistDetail() {
               {artist.metadataProfile && (
                 <Badge variant="outline">{artist.metadataProfile.name}</Badge>
               )}
-              <Badge variant="outline">
-                {artist.albums.length} albums
-              </Badge>
+              <Badge variant="outline">{artist.albums.length} albums</Badge>
             </div>
           </div>
         </div>
@@ -582,16 +574,10 @@ export default function ArtistDetail() {
               Discography ({mergedAlbums.length})
               {loadingDiscography && <Spinner className="ml-2 h-3 w-3" />}
             </TabsTrigger>
-            <TabsTrigger value="downloaded">
-              Downloaded ({downloadedAlbums.length})
-            </TabsTrigger>
-            <TabsTrigger value="requested">
-              Requested ({requestedAlbums.length})
-            </TabsTrigger>
+            <TabsTrigger value="downloaded">Downloaded ({downloadedAlbums.length})</TabsTrigger>
+            <TabsTrigger value="requested">Requested ({requestedAlbums.length})</TabsTrigger>
             {notInLibraryAlbums.length > 0 && (
-              <TabsTrigger value="available">
-                Available ({notInLibraryAlbums.length})
-              </TabsTrigger>
+              <TabsTrigger value="available">Available ({notInLibraryAlbums.length})</TabsTrigger>
             )}
           </TabsList>
 
@@ -600,14 +586,13 @@ export default function ArtistDetail() {
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                   <div className="rounded-full bg-muted p-6 mb-4">
-                    <HugeiconsIcon
-                      icon={CdIcon}
-                      className="h-12 w-12 text-muted-foreground"
-                    />
+                    <HugeiconsIcon icon={CdIcon} className="h-12 w-12 text-muted-foreground" />
                   </div>
                   <h3 className="text-lg font-medium mb-2">No albums found</h3>
                   <p className="text-muted-foreground">
-                    {loadingDiscography ? 'Loading discography...' : 'Try refreshing to fetch albums from MusicBrainz.'}
+                    {loadingDiscography
+                      ? 'Loading discography...'
+                      : 'Try refreshing to fetch albums from MusicBrainz.'}
                   </p>
                 </CardContent>
               </Card>
@@ -618,7 +603,13 @@ export default function ArtistDetail() {
                     key={album.musicbrainzId}
                     album={album}
                     isAdding={addingAlbums.has(album.musicbrainzId)}
-                    onAdd={() => addAlbum({ ...album, artistName: artist.name, artistMusicbrainzId: artist.musicbrainzId! })}
+                    onAdd={() =>
+                      addAlbum({
+                        ...album,
+                        artistName: artist.name,
+                        artistMusicbrainzId: artist.musicbrainzId!,
+                      })
+                    }
                     onShowTracks={() => openAlbumDialog(album)}
                   />
                 ))}
@@ -672,7 +663,13 @@ export default function ArtistDetail() {
                     key={album.musicbrainzId}
                     album={album}
                     isAdding={addingAlbums.has(album.musicbrainzId)}
-                    onAdd={() => addAlbum({ ...album, artistName: artist.name, artistMusicbrainzId: artist.musicbrainzId! })}
+                    onAdd={() =>
+                      addAlbum({
+                        ...album,
+                        artistName: artist.name,
+                        artistMusicbrainzId: artist.musicbrainzId!,
+                      })
+                    }
                     onShowTracks={() => openAlbumDialog(album)}
                   />
                 ))}
@@ -688,19 +685,15 @@ export default function ArtistDetail() {
           <DialogHeader>
             <DialogTitle>Delete {artist.name}?</DialogTitle>
             <DialogDescription>
-              This will remove the artist and all associated metadata from your
-              library. Files on disk will not be deleted.
+              This will remove the artist and all associated metadata from your library. Files on
+              disk will not be deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={deleteArtist}
-              disabled={deleting}
-            >
+            <Button variant="destructive" onClick={deleteArtist} disabled={deleting}>
               {deleting ? (
                 <>
                   <Spinner className="mr-2" />
@@ -732,7 +725,8 @@ export default function ArtistDetail() {
               <div className="min-w-0">
                 <div className="font-semibold truncate">{selectedAlbum?.title}</div>
                 <div className="text-sm text-muted-foreground">
-                  {selectedAlbum?.releaseDate?.split('-')[0] || 'Unknown year'} · {selectedAlbum?.type}
+                  {selectedAlbum?.releaseDate?.split('-')[0] || 'Unknown year'} ·{' '}
+                  {selectedAlbum?.type}
                 </div>
               </div>
             </DialogTitle>
@@ -744,7 +738,10 @@ export default function ArtistDetail() {
               </div>
             ) : albumTracks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <HugeiconsIcon icon={MusicNote01Icon} className="h-12 w-12 text-muted-foreground mb-2" />
+                <HugeiconsIcon
+                  icon={MusicNote01Icon}
+                  className="h-12 w-12 text-muted-foreground mb-2"
+                />
                 <p className="text-muted-foreground">No tracks found</p>
               </div>
             ) : (
@@ -780,9 +777,7 @@ export default function ArtistDetail() {
           <DialogFooter className="mt-4">
             {selectedAlbum?.inLibrary && selectedAlbum?.libraryId ? (
               <Button asChild>
-                <Link href={`/album/${selectedAlbum.libraryId}`}>
-                  View Album
-                </Link>
+                <Link href={`/album/${selectedAlbum.libraryId}`}>View Album</Link>
               </Button>
             ) : selectedAlbum && !selectedAlbum.inLibrary ? (
               <Button
@@ -858,9 +853,7 @@ function MergedAlbumCard({ album, isAdding, onAdd, onShowTracks }: MergedAlbumCa
   const [imageError, setImageError] = useState(false)
 
   const percentComplete =
-    album.trackCount > 0
-      ? Math.round((album.fileCount / album.trackCount) * 100)
-      : 0
+    album.trackCount > 0 ? Math.round((album.fileCount / album.trackCount) * 100) : 0
 
   const isComplete = album.inLibrary && percentComplete === 100
   const isRequested = album.inLibrary && album.requested && !isComplete
@@ -904,9 +897,11 @@ function MergedAlbumCard({ album, isAdding, onAdd, onShowTracks }: MergedAlbumCa
   }
 
   // Get cover URL - use library image if available, otherwise generate from MusicBrainz
-  const coverUrl = album.imageUrl || (album.musicbrainzId
-    ? `https://coverartarchive.org/release-group/${album.musicbrainzId}/front-500`
-    : null)
+  const coverUrl =
+    album.imageUrl ||
+    (album.musicbrainzId
+      ? `https://coverartarchive.org/release-group/${album.musicbrainzId}/front-500`
+      : null)
   const showImage = coverUrl && !imageError
 
   return (
@@ -921,18 +916,13 @@ function MergedAlbumCard({ album, isAdding, onAdd, onShowTracks }: MergedAlbumCa
             <img
               src={coverUrl!}
               alt={album.title}
-              className={`w-full h-full object-cover ${
-                isNotInLibrary ? 'grayscale' : ''
-              }`}
+              className={`w-full h-full object-cover ${isNotInLibrary ? 'grayscale' : ''}`}
               loading="lazy"
               onError={() => setImageError(true)}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <HugeiconsIcon
-                icon={CdIcon}
-                className="h-16 w-16 text-muted-foreground/50"
-              />
+              <HugeiconsIcon icon={CdIcon} className="h-16 w-16 text-muted-foreground/50" />
             </div>
           )}
 
@@ -992,9 +982,7 @@ function MergedAlbumCard({ album, isAdding, onAdd, onShowTracks }: MergedAlbumCa
           {album.inLibrary && album.requested && (
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted-foreground/20">
               <div
-                className={`h-full transition-all ${
-                  isComplete ? 'bg-green-500' : 'bg-primary'
-                }`}
+                className={`h-full transition-all ${isComplete ? 'bg-green-500' : 'bg-primary'}`}
                 style={{ width: `${percentComplete}%` }}
               />
             </div>

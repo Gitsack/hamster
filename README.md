@@ -14,12 +14,14 @@ A self-hosted media management application for organizing and streaming your per
 ### Using Docker Compose
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/Gitsack/hamster.git
    cd hamster
    ```
 
 2. Create a `.env` file:
+
    ```bash
    # Required - generate with: openssl rand -hex 32
    APP_KEY=your-32-character-secret-key
@@ -45,6 +47,7 @@ A self-hosted media management application for organizing and streaming your per
    ```
 
 3. Start the application:
+
    ```bash
    docker compose up -d
    ```
@@ -61,13 +64,13 @@ docker pull ghcr.io/gitsack/hamster:latest
 
 The container expects media to be mounted at these paths:
 
-| Container Path | Description | Environment Variable |
-|----------------|-------------|---------------------|
-| `/media/music` | Music library | `MUSIC_PATH` |
-| `/media/movies` | Movies library | `MOVIES_PATH` |
-| `/media/tv` | TV Shows library | `TV_PATH` |
-| `/media/books` | Books library | `BOOKS_PATH` |
-| `/downloads` | Download client output | `DOWNLOADS_PATH` |
+| Container Path  | Description            | Environment Variable |
+| --------------- | ---------------------- | -------------------- |
+| `/media/music`  | Music library          | `MUSIC_PATH`         |
+| `/media/movies` | Movies library         | `MOVIES_PATH`        |
+| `/media/tv`     | TV Shows library       | `TV_PATH`            |
+| `/media/books`  | Books library          | `BOOKS_PATH`         |
+| `/downloads`    | Download client output | `DOWNLOADS_PATH`     |
 
 After starting, configure your root folders in the Hamster UI using the container paths (e.g., `/media/music`).
 
@@ -115,49 +118,52 @@ npm run dev
 
 ### Available Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server with HMR |
-| `npm run build` | Build for production |
-| `npm start` | Start production server |
-| `npm run lint` | Run ESLint |
-| `npm run format` | Format code with Prettier |
-| `npm run typecheck` | Run TypeScript type checking |
+| Command             | Description                       |
+| ------------------- | --------------------------------- |
+| `npm run dev`       | Start development server with HMR |
+| `npm run build`     | Build for production              |
+| `npm start`         | Start production server           |
+| `npm run lint`      | Run ESLint                        |
+| `npm run format`    | Format code with Prettier         |
+| `npm run typecheck` | Run TypeScript type checking      |
 
 ## Configuration
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `APP_KEY` | Application secret key (required) | - |
-| `PUID` | User ID for file permissions (Docker) | `1000` |
-| `PGID` | Group ID for file permissions (Docker) | `1000` |
-| `PORT` | Application port | `3333` |
-| `HOST` | Application host | `0.0.0.0` |
-| `NODE_ENV` | Environment mode | `development` |
-| `DB_HOST` | Database host | `localhost` |
-| `DB_PORT` | Database port | `5432` |
-| `DB_USER` | Database user | `hamster` |
-| `DB_PASSWORD` | Database password | `changeme` |
-| `DB_DATABASE` | Database name | `hamster` |
-| `LOG_LEVEL` | Logging level | `info` |
-| `TZ` | Timezone | `UTC` |
-| `SECURE_COOKIES` | Enable secure cookies (set `true` for HTTPS) | `false` |
+| Variable         | Description                                  | Default       |
+| ---------------- | -------------------------------------------- | ------------- |
+| `APP_KEY`        | Application secret key (required)            | -             |
+| `PUID`           | User ID for file permissions (Docker)        | `1000`        |
+| `PGID`           | Group ID for file permissions (Docker)       | `1000`        |
+| `PORT`           | Application port                             | `3333`        |
+| `HOST`           | Application host                             | `0.0.0.0`     |
+| `NODE_ENV`       | Environment mode                             | `development` |
+| `DB_HOST`        | Database host                                | `localhost`   |
+| `DB_PORT`        | Database port                                | `5432`        |
+| `DB_USER`        | Database user                                | `hamster`     |
+| `DB_PASSWORD`    | Database password                            | `changeme`    |
+| `DB_DATABASE`    | Database name                                | `hamster`     |
+| `LOG_LEVEL`      | Logging level                                | `info`        |
+| `TZ`             | Timezone                                     | `UTC`         |
+| `SECURE_COOKIES` | Enable secure cookies (set `true` for HTTPS) | `false`       |
 
 ## Troubleshooting
 
 **Container won't start:**
+
 - Check logs: `docker compose logs hamster`
 - Ensure `APP_KEY` is set in `.env`
 - Verify PostgreSQL is healthy: `docker compose ps`
 
 **Media not accessible:**
+
 - Verify volume paths exist on host
 - Ensure `PUID` and `PGID` in `.env` match your host user (run `id` to check)
 - Ensure paths are correctly set in `.env`
 
 **Permission issues:**
+
 ```bash
 # Check your user/group IDs
 id

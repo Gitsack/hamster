@@ -7,8 +7,8 @@ export interface CoverArt {
   back: boolean
   image: string
   thumbnails: {
-    small?: string
-    large?: string
+    'small'?: string
+    'large'?: string
     '250'?: string
     '500'?: string
     '1200'?: string

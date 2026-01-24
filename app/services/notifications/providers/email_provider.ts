@@ -52,7 +52,9 @@ export class EmailProvider {
 
     // For now, throw if not configured (indicates email needs nodemailer)
     if (process.env.NODE_ENV === 'production') {
-      throw new Error('Email provider requires nodemailer package. Install with: npm install nodemailer')
+      throw new Error(
+        'Email provider requires nodemailer package. Install with: npm install nodemailer'
+      )
     }
   }
 
@@ -147,13 +149,17 @@ export class EmailProvider {
       color: #6b7280;
       text-align: center;
     }
-    ${payload.imageUrl ? `
+    ${
+      payload.imageUrl
+        ? `
     .poster {
       max-width: 200px;
       border-radius: 8px;
       margin: 16px 0;
     }
-    ` : ''}
+    `
+        : ''
+    }
   </style>
 </head>
 <body>

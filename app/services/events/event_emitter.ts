@@ -29,12 +29,15 @@ export class EventEmitter {
   /**
    * Emit a grab event (release sent to download client)
    */
-  async emitGrab(data: {
-    media: MediaInfo
-    release: ReleaseInfo
-    downloadClient: string
-    downloadId: string
-  }, options: EmitOptions = {}): Promise<void> {
+  async emitGrab(
+    data: {
+      media: MediaInfo
+      release: ReleaseInfo
+      downloadClient: string
+      downloadId: string
+    },
+    options: EmitOptions = {}
+  ): Promise<void> {
     const payload: GrabEventPayload = {
       eventType: 'grab',
       instanceName: process.env.INSTANCE_NAME || 'Hamster',
@@ -48,13 +51,16 @@ export class EventEmitter {
   /**
    * Emit a download completed event
    */
-  async emitDownloadCompleted(data: {
-    media: MediaInfo
-    release: ReleaseInfo
-    downloadClient: string
-    downloadId: string
-    outputPath: string
-  }, options: EmitOptions = {}): Promise<void> {
+  async emitDownloadCompleted(
+    data: {
+      media: MediaInfo
+      release: ReleaseInfo
+      downloadClient: string
+      downloadId: string
+      outputPath: string
+    },
+    options: EmitOptions = {}
+  ): Promise<void> {
     const payload: DownloadCompletedEventPayload = {
       eventType: 'download.completed',
       instanceName: process.env.INSTANCE_NAME || 'Hamster',
@@ -62,18 +68,26 @@ export class EventEmitter {
       ...data,
     }
 
-    await this.dispatch('download.completed', payload, this.mapMediaType(data.media.mediaType), options)
+    await this.dispatch(
+      'download.completed',
+      payload,
+      this.mapMediaType(data.media.mediaType),
+      options
+    )
   }
 
   /**
    * Emit an import completed event
    */
-  async emitImportCompleted(data: {
-    media: MediaInfo
-    files: FileInfo[]
-    isUpgrade: boolean
-    previousQuality?: string
-  }, options: EmitOptions = {}): Promise<void> {
+  async emitImportCompleted(
+    data: {
+      media: MediaInfo
+      files: FileInfo[]
+      isUpgrade: boolean
+      previousQuality?: string
+    },
+    options: EmitOptions = {}
+  ): Promise<void> {
     const payload: ImportCompletedEventPayload = {
       eventType: 'import.completed',
       instanceName: process.env.INSTANCE_NAME || 'Hamster',
@@ -81,28 +95,39 @@ export class EventEmitter {
       ...data,
     }
 
-    await this.dispatch('import.completed', payload, this.mapMediaType(data.media.mediaType), options)
+    await this.dispatch(
+      'import.completed',
+      payload,
+      this.mapMediaType(data.media.mediaType),
+      options
+    )
 
     // Also emit upgrade event if this was an upgrade
     if (data.isUpgrade && data.previousQuality) {
-      await this.emitUpgrade({
-        media: data.media,
-        files: data.files,
-        previousQuality: data.previousQuality,
-        newQuality: data.files[0]?.quality || 'Unknown',
-      }, options)
+      await this.emitUpgrade(
+        {
+          media: data.media,
+          files: data.files,
+          previousQuality: data.previousQuality,
+          newQuality: data.files[0]?.quality || 'Unknown',
+        },
+        options
+      )
     }
   }
 
   /**
    * Emit an import failed event
    */
-  async emitImportFailed(data: {
-    media: MediaInfo
-    release?: ReleaseInfo
-    errorMessage: string
-    downloadId?: string
-  }, options: EmitOptions = {}): Promise<void> {
+  async emitImportFailed(
+    data: {
+      media: MediaInfo
+      release?: ReleaseInfo
+      errorMessage: string
+      downloadId?: string
+    },
+    options: EmitOptions = {}
+  ): Promise<void> {
     const payload: ImportFailedEventPayload = {
       eventType: 'import.failed',
       instanceName: process.env.INSTANCE_NAME || 'Hamster',
@@ -116,12 +141,15 @@ export class EventEmitter {
   /**
    * Emit an upgrade event
    */
-  async emitUpgrade(data: {
-    media: MediaInfo
-    files: FileInfo[]
-    previousQuality: string
-    newQuality: string
-  }, options: EmitOptions = {}): Promise<void> {
+  async emitUpgrade(
+    data: {
+      media: MediaInfo
+      files: FileInfo[]
+      previousQuality: string
+      newQuality: string
+    },
+    options: EmitOptions = {}
+  ): Promise<void> {
     const payload = {
       eventType: 'upgrade' as const,
       instanceName: process.env.INSTANCE_NAME || 'Hamster',
@@ -135,12 +163,15 @@ export class EventEmitter {
   /**
    * Emit a health issue event
    */
-  async emitHealthIssue(data: {
-    level: 'warning' | 'error'
-    source: string
-    message: string
-    wikiUrl?: string
-  }, options: EmitOptions = {}): Promise<void> {
+  async emitHealthIssue(
+    data: {
+      level: 'warning' | 'error'
+      source: string
+      message: string
+      wikiUrl?: string
+    },
+    options: EmitOptions = {}
+  ): Promise<void> {
     const payload: HealthIssueEventPayload = {
       eventType: 'health.issue',
       instanceName: process.env.INSTANCE_NAME || 'Hamster',
@@ -154,10 +185,13 @@ export class EventEmitter {
   /**
    * Emit a health restored event
    */
-  async emitHealthRestored(data: {
-    source: string
-    message: string
-  }, options: EmitOptions = {}): Promise<void> {
+  async emitHealthRestored(
+    data: {
+      source: string
+      message: string
+    },
+    options: EmitOptions = {}
+  ): Promise<void> {
     const payload: HealthRestoredEventPayload = {
       eventType: 'health.restored',
       instanceName: process.env.INSTANCE_NAME || 'Hamster',
@@ -236,9 +270,7 @@ export class EventEmitter {
       case 'import.completed': {
         const p = payload as ImportCompletedEventPayload
         title = `Imported: ${p.media?.title || 'Unknown'}`
-        message = p.isUpgrade
-          ? `Upgraded from ${p.previousQuality}`
-          : 'Successfully imported'
+        message = p.isUpgrade ? `Upgraded from ${p.previousQuality}` : 'Successfully imported'
         imageUrl = p.media?.posterUrl
         break
       }
@@ -250,7 +282,11 @@ export class EventEmitter {
         break
       }
       case 'upgrade': {
-        const p = payload as unknown as { media: MediaInfo; previousQuality: string; newQuality: string }
+        const p = payload as unknown as {
+          media: MediaInfo
+          previousQuality: string
+          newQuality: string
+        }
         title = `Upgraded: ${p.media?.title || 'Unknown'}`
         message = `${p.previousQuality} → ${p.newQuality}`
         imageUrl = p.media?.posterUrl

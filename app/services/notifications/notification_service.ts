@@ -64,13 +64,22 @@ export class NotificationService {
 
       switch (provider.type) {
         case 'discord':
-          await discordProvider.send(settings as Parameters<typeof discordProvider.send>[0], payload)
+          await discordProvider.send(
+            settings as Parameters<typeof discordProvider.send>[0],
+            payload
+          )
           break
         case 'telegram':
-          await telegramProvider.send(settings as Parameters<typeof telegramProvider.send>[0], payload)
+          await telegramProvider.send(
+            settings as Parameters<typeof telegramProvider.send>[0],
+            payload
+          )
           break
         case 'pushover':
-          await pushoverProvider.send(settings as Parameters<typeof pushoverProvider.send>[0], payload)
+          await pushoverProvider.send(
+            settings as Parameters<typeof pushoverProvider.send>[0],
+            payload
+          )
           break
         case 'slack':
           await slackProvider.send(settings as Parameters<typeof slackProvider.send>[0], payload)
@@ -119,7 +128,8 @@ export class NotificationService {
   async testProvider(provider: NotificationProvider): Promise<NotificationResult> {
     const testPayload: NotificationPayload = {
       title: 'Test Notification',
-      message: 'This is a test notification from Hamster. If you can see this, notifications are working!',
+      message:
+        'This is a test notification from Hamster. If you can see this, notifications are working!',
     }
 
     return this.sendToProvider(provider, 'health.restored', testPayload)

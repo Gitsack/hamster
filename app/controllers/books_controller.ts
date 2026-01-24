@@ -6,6 +6,7 @@ import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { openLibraryService } from '#services/metadata/openlibrary_service'
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
+import { libraryCleanupService } from '#services/library/library_cleanup_service'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 
@@ -26,10 +27,7 @@ export default class BooksController {
   async index({ request, response }: HttpContext) {
     const authorId = request.input('authorId')
 
-    let query = Book.query()
-      .preload('author')
-      .preload('bookFile')
-      .orderBy('sortTitle', 'asc')
+    let query = Book.query().preload('author').preload('bookFile').orderBy('sortTitle', 'asc')
 
     if (authorId) {
       query = query.where('authorId', authorId)
@@ -265,14 +263,56 @@ export default class BooksController {
     return response.json({ id: book.id, title: book.title, requested: book.requested })
   }
 
-  async destroy({ params, response }: HttpContext) {
-    const book = await Book.find(params.id)
+  async destroy({ params, request, response }: HttpContext) {
+    const book = await Book.query()
+      .where('id', params.id)
+      .preload('author', (query) => query.preload('rootFolder'))
+      .preload('bookFile')
+      .first()
+
     if (!book) {
       return response.notFound({ error: 'Book not found' })
     }
 
+    const deleteFile = request.input('deleteFile') === 'true'
+    let fileDeleted = false
+    const authorId = book.authorId
+
+    // If book has a file and deleteFile is requested, delete the file first
+    if (deleteFile && book.bookFile && book.author?.rootFolder) {
+      const absolutePath = path.join(book.author.rootFolder.path, book.bookFile.relativePath)
+      const folderPath = path.dirname(absolutePath)
+
+      try {
+        await fs.unlink(absolutePath)
+        console.log(`[BooksController] Deleted book file: ${absolutePath}`)
+        fileDeleted = true
+
+        // Try to remove the folder if empty
+        try {
+          const remainingFiles = await fs.readdir(folderPath)
+          if (remainingFiles.length === 0) {
+            await fs.rmdir(folderPath)
+            console.log(`[BooksController] Removed empty folder: ${folderPath}`)
+          }
+        } catch {
+          // Folder might not be empty or other error, ignore
+        }
+      } catch (error) {
+        console.error(`[BooksController] Failed to delete file: ${absolutePath}`, error)
+        // Continue with record deletion even if file deletion fails
+      }
+
+      // Delete the BookFile record
+      await BookFile.query().where('id', book.bookFile.id).delete()
+    }
+
     await book.delete()
-    return response.noContent()
+
+    // Check if author should be removed
+    await libraryCleanupService.removeAuthorIfEmpty(authorId)
+
+    return response.json({ id: book.id, deleted: true, fileDeleted })
   }
 
   async setWanted({ params, request, response }: HttpContext) {
@@ -282,11 +322,40 @@ export default class BooksController {
     }
 
     const { requested } = request.only(['requested'])
-    book.requested = requested ?? true
+    const newStatus = requested ?? true
+
+    // If unrequesting (setting to false)
+    if (!newStatus) {
+      // If book has a file, return error - frontend should show confirmation dialog
+      if (book.hasFile) {
+        return response.badRequest({
+          error: 'Book has downloaded files',
+          hasFile: true,
+          message: 'Use DELETE endpoint with deleteFile=true to remove files and record',
+        })
+      }
+
+      // Book has no file - delete it from library
+      const authorId = book.authorId
+      console.log(`[BooksController] Unrequesting book without file, deleting: ${book.title}`)
+      await book.delete()
+
+      // Check if author should be removed
+      await libraryCleanupService.removeAuthorIfEmpty(authorId)
+
+      return response.json({
+        id: book.id,
+        deleted: true,
+        message: 'Removed from library',
+      })
+    }
+
+    // Requesting (setting to true)
+    book.requested = true
     await book.save()
 
     // Trigger immediate search if marking as requested
-    if (book.requested && !book.hasFile) {
+    if (!book.hasFile) {
       requestedSearchTask.searchSingleBook(book.id).catch((error) => {
         console.error('Failed to trigger search for book:', error)
       })
@@ -331,10 +400,7 @@ export default class BooksController {
   }
 
   async download({ params, response }: HttpContext) {
-    const book = await Book.query()
-      .where('id', params.id)
-      .preload('author')
-      .first()
+    const book = await Book.query().where('id', params.id).preload('author').first()
 
     if (!book) {
       return response.notFound({ error: 'Book not found' })

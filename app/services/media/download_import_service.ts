@@ -85,9 +85,13 @@ export class DownloadImportService {
       } catch (error) {
         const isTimeout = error instanceof Error && error.message === 'Path check timeout'
         if (isTimeout) {
-          result.errors.push(`Path not responding: ${outputPath}. Network storage may not be mounted or is unresponsive.`)
+          result.errors.push(
+            `Path not responding: ${outputPath}. Network storage may not be mounted or is unresponsive.`
+          )
         } else {
-          result.errors.push(`Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`)
+          result.errors.push(
+            `Path not accessible: ${outputPath}. If SABnzbd runs in Docker, configure Remote Path Mapping in Download Client settings.`
+          )
         }
         return result
       }
@@ -137,12 +141,7 @@ export class DownloadImportService {
         })
 
         try {
-          const importResult = await this.importAudioFile(
-            filePath,
-            album,
-            artist,
-            rootFolder
-          )
+          const importResult = await this.importAudioFile(filePath, album, artist, rootFolder)
 
           if (importResult.success) {
             result.filesImported++
@@ -217,9 +216,7 @@ export class DownloadImportService {
       const mediaInfo = await mediaInfoService.getMediaInfo(firstFile)
 
       if (mediaInfo?.artist) {
-        artist = await Artist.query()
-          .whereILike('name', `%${mediaInfo.artist}%`)
-          .first()
+        artist = await Artist.query().whereILike('name', `%${mediaInfo.artist}%`).first()
       }
 
       if (mediaInfo?.album) {
@@ -238,9 +235,7 @@ export class DownloadImportService {
           const [, artistPart, albumPart] = match
 
           if (!artist) {
-            artist = await Artist.query()
-              .whereILike('name', `%${artistPart.trim()}%`)
-              .first()
+            artist = await Artist.query().whereILike('name', `%${artistPart.trim()}%`).first()
           }
 
           if (artist) {
@@ -333,7 +328,7 @@ export class DownloadImportService {
       track = await Track.create({
         albumId: album.id,
         title: mediaInfo.title || path.basename(sourcePath, path.extname(sourcePath)),
-        trackNumber: mediaInfo.trackNumber || await this.getNextTrackNumber(album.id),
+        trackNumber: mediaInfo.trackNumber || (await this.getNextTrackNumber(album.id)),
         discNumber: mediaInfo.discNumber || 1,
         durationMs: mediaInfo.duration ? Math.round(mediaInfo.duration * 1000) : null,
         hasFile: false,
@@ -342,10 +337,7 @@ export class DownloadImportService {
 
     // Generate destination path
     const extension = path.extname(sourcePath)
-    const relativePath = await fileNamingService.getTrackPath(
-      { track, album, artist },
-      extension
-    )
+    const relativePath = await fileNamingService.getTrackPath({ track, album, artist }, extension)
     const absolutePath = path.join(rootFolder.path, relativePath)
 
     // Create directories
@@ -457,9 +449,7 @@ export class DownloadImportService {
    * Ensure album has tracks (fetch from MusicBrainz if empty)
    */
   private async ensureAlbumHasTracks(album: Album): Promise<void> {
-    const trackCount = await Track.query()
-      .where('albumId', album.id)
-      .count('* as total')
+    const trackCount = await Track.query().where('albumId', album.id).count('* as total')
 
     const count = Number((trackCount[0].$extras as { total: string }).total) || 0
 
@@ -502,9 +492,7 @@ export class DownloadImportService {
    * Get next track number for an album
    */
   private async getNextTrackNumber(albumId: string): Promise<number> {
-    const result = await Track.query()
-      .where('albumId', albumId)
-      .max('trackNumber as maxTrack')
+    const result = await Track.query().where('albumId', albumId).max('trackNumber as maxTrack')
 
     const maxTrack = (result[0].$extras as { maxTrack: number | null }).maxTrack
     return (maxTrack || 0) + 1

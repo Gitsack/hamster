@@ -1,6 +1,10 @@
 import Indexer from '#models/indexer'
 import ProwlarrConfig from '#models/prowlarr_config'
-import { newznabService, type NewznabSearchResult, type NewznabIndexerConfig } from './newznab_service.js'
+import {
+  newznabService,
+  type NewznabSearchResult,
+  type NewznabIndexerConfig,
+} from './newznab_service.js'
 import { prowlarrService, type ProwlarrSearchResult } from './prowlarr_service.js'
 
 export interface UnifiedSearchResult {
@@ -209,7 +213,10 @@ export class IndexerManager {
   /**
    * Test an indexer connection
    */
-  async testIndexer(url: string, apiKey: string): Promise<{ success: boolean; error?: string; categories?: number[] }> {
+  async testIndexer(
+    url: string,
+    apiKey: string
+  ): Promise<{ success: boolean; error?: string; categories?: number[] }> {
     try {
       const capabilities = await newznabService.getCapabilities(url, apiKey)
 
@@ -235,7 +242,10 @@ export class IndexerManager {
       } catch (searchError) {
         // If search fails with auth error, report it
         const message = searchError instanceof Error ? searchError.message : 'Search failed'
-        if (message.toLowerCase().includes('credentials') || message.toLowerCase().includes('auth')) {
+        if (
+          message.toLowerCase().includes('credentials') ||
+          message.toLowerCase().includes('auth')
+        ) {
           return {
             success: false,
             error: `Capabilities OK but search failed: ${message}`,
@@ -304,7 +314,11 @@ export class IndexerManager {
     const lowerTitle = title.toLowerCase()
 
     if (lowerTitle.includes('flac') || lowerTitle.includes('lossless')) {
-      if (lowerTitle.includes('24bit') || lowerTitle.includes('24-bit') || lowerTitle.includes('hi-res')) {
+      if (
+        lowerTitle.includes('24bit') ||
+        lowerTitle.includes('24-bit') ||
+        lowerTitle.includes('hi-res')
+      ) {
         return 'FLAC 24bit'
       }
       return 'FLAC'
@@ -326,7 +340,8 @@ export class IndexerManager {
   private detectVideoQuality(title: string): string | undefined {
     const lowerTitle = title.toLowerCase()
 
-    if (lowerTitle.includes('2160p') || lowerTitle.includes('4k') || lowerTitle.includes('uhd')) return '2160p'
+    if (lowerTitle.includes('2160p') || lowerTitle.includes('4k') || lowerTitle.includes('uhd'))
+      return '2160p'
     if (lowerTitle.includes('1080p')) return '1080p'
     if (lowerTitle.includes('720p')) return '720p'
     if (lowerTitle.includes('480p') || lowerTitle.includes('sd')) return '480p'
@@ -442,7 +457,9 @@ export class IndexerManager {
     results.push(...directResults.flat())
 
     if (results.length === 0 && !prowlarrConfig && directIndexers.length === 0) {
-      throw new Error('No indexers configured. Please configure Prowlarr or add indexers in settings.')
+      throw new Error(
+        'No indexers configured. Please configure Prowlarr or add indexers in settings.'
+      )
     }
 
     // Sort by size (larger = better quality usually)
@@ -556,7 +573,9 @@ export class IndexerManager {
     results.push(...directResults.flat())
 
     if (results.length === 0 && !prowlarrConfig && directIndexers.length === 0) {
-      throw new Error('No indexers configured. Please configure Prowlarr or add indexers in settings.')
+      throw new Error(
+        'No indexers configured. Please configure Prowlarr or add indexers in settings.'
+      )
     }
 
     // Sort by size (larger = better quality usually)
@@ -662,7 +681,9 @@ export class IndexerManager {
     results.push(...directResults.flat())
 
     if (results.length === 0 && !prowlarrConfig && directIndexers.length === 0) {
-      throw new Error('No indexers configured. Please configure Prowlarr or add indexers in settings.')
+      throw new Error(
+        'No indexers configured. Please configure Prowlarr or add indexers in settings.'
+      )
     }
 
     // Sort by size (larger files first)

@@ -54,7 +54,9 @@ export class ProwlarrService {
   /**
    * Test Prowlarr connection
    */
-  async testConnection(config: ProwlarrConfig): Promise<{ success: boolean; version?: string; error?: string }> {
+  async testConnection(
+    config: ProwlarrConfig
+  ): Promise<{ success: boolean; version?: string; error?: string }> {
     try {
       const response = await fetch(`${this.normalizeUrl(config.url)}/api/v1/system/status`, {
         headers: {

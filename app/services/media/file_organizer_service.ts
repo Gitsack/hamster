@@ -50,11 +50,17 @@ export class FileOrganizerService {
 
       // Get or determine album/artist
       const album = options.album
-      const artist = options.artist || (album ? await album.related('artist').query().first() : null)
-      const rootFolder = options.rootFolder || (artist ? await RootFolder.find(artist.rootFolderId) : null)
+      const artist =
+        options.artist || (album ? await album.related('artist').query().first() : null)
+      const rootFolder =
+        options.rootFolder || (artist ? await RootFolder.find(artist.rootFolderId) : null)
 
       if (!album || !artist || !rootFolder) {
-        return { success: false, error: 'Album, artist, and root folder are required', sourceFile: sourcePath }
+        return {
+          success: false,
+          error: 'Album, artist, and root folder are required',
+          sourceFile: sourcePath,
+        }
       }
 
       // Find or create track based on file metadata
@@ -72,10 +78,7 @@ export class FileOrganizerService {
 
       // Generate destination path
       const extension = path.extname(sourcePath)
-      const relativePath = await fileNamingService.getTrackPath(
-        { track, album, artist },
-        extension
-      )
+      const relativePath = await fileNamingService.getTrackPath({ track, album, artist }, extension)
       const absolutePath = path.join(rootFolder.path, relativePath)
 
       // Create directories if needed
@@ -103,9 +106,7 @@ export class FileOrganizerService {
       const stats = await fs.stat(absolutePath)
 
       // Create or update track file record
-      let trackFile = await TrackFile.query()
-        .where('trackId', track.id)
-        .first()
+      let trackFile = await TrackFile.query().where('trackId', track.id).first()
 
       if (trackFile) {
         trackFile.merge({
@@ -157,10 +158,7 @@ export class FileOrganizerService {
   /**
    * Import all audio files from a directory
    */
-  async importDirectory(
-    sourceDir: string,
-    options: ImportOptions = {}
-  ): Promise<ImportResult[]> {
+  async importDirectory(sourceDir: string, options: ImportOptions = {}): Promise<ImportResult[]> {
     const results: ImportResult[] = []
     const files = await this.findAudioFiles(sourceDir)
 
@@ -222,9 +220,7 @@ export class FileOrganizerService {
     const rootFolder = await RootFolder.find(artist.rootFolderId)
     if (!rootFolder) return { moved: 0, errors: ['Root folder not found'] }
 
-    const tracks = await Track.query()
-      .where('albumId', album.id)
-      .preload('file')
+    const tracks = await Track.query().where('albumId', album.id).preload('file')
 
     let moved = 0
     const errors: string[] = []

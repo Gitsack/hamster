@@ -4,13 +4,7 @@ import { AppLayout } from '@/components/layout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import {
-  Select,
-  SelectPopup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 
@@ -101,7 +95,8 @@ export default function PlaybackSettingsPage() {
           <CardHeader>
             <CardTitle>Video Transcoding</CardTitle>
             <CardDescription>
-              Configure how videos with incompatible audio codecs (AC3, DTS, TrueHD) are transcoded for browser playback.
+              Configure how videos with incompatible audio codecs (AC3, DTS, TrueHD) are transcoded
+              for browser playback.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -116,9 +111,7 @@ export default function PlaybackSettingsPage() {
               <Switch
                 id="hw-accel"
                 checked={settings?.transcoding.useHardwareAcceleration ?? false}
-                onCheckedChange={(checked) =>
-                  updateSettings({ useHardwareAcceleration: checked })
-                }
+                onCheckedChange={(checked) => updateSettings({ useHardwareAcceleration: checked })}
                 disabled={saving}
               />
             </div>

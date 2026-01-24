@@ -25,8 +25,6 @@ import {
   MoreVerticalIcon,
   Delete01Icon,
   Film01Icon,
-  ViewIcon,
-  ViewOffIcon,
   Calendar01Icon,
   Search01Icon,
   Time01Icon,
@@ -94,7 +92,9 @@ export default function MovieDetail() {
   const [deletingFile, setDeletingFile] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
-  const [activeDownload, setActiveDownload] = useState<{ progress: number; status: string } | null>(null)
+  const [activeDownload, setActiveDownload] = useState<{ progress: number; status: string } | null>(
+    null
+  )
   const [enriching, setEnriching] = useState(false)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
   const audioPlayer = useAudioPlayer()
@@ -153,22 +153,42 @@ export default function MovieDetail() {
     if (!movie) return
 
     const wasRequested = movie.requested
+
+    // If unrequesting a movie with a file, show confirmation dialog
+    if (wasRequested && movie.hasFile) {
+      setDeleteDialogOpen(true)
+      return
+    }
+
     // Optimistic update
     setMovie({ ...movie, requested: !wasRequested })
     setToggling(true)
 
     try {
-      const response = await fetch(`/api/v1/movies/${movieId}`, {
-        method: 'PUT',
+      const response = await fetch(`/api/v1/movies/${movieId}/request`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requested: !wasRequested }),
       })
+
+      const data = await response.json()
+
       if (response.ok) {
-        toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
+        if (data.deleted) {
+          // Movie was deleted (no file, unrequested)
+          toast.success('Removed from library')
+          router.visit('/library')
+        } else {
+          toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
+        }
+      } else if (data.hasFile) {
+        // Movie has a file - show confirmation dialog
+        setMovie({ ...movie, requested: wasRequested }) // Revert
+        setDeleteDialogOpen(true)
       } else {
         // Revert on error
         setMovie({ ...movie, requested: wasRequested })
-        toast.error('Failed to update movie')
+        toast.error(data.error || 'Failed to update movie')
       }
     } catch (error) {
       console.error('Failed to update movie:', error)
@@ -180,14 +200,18 @@ export default function MovieDetail() {
     }
   }
 
-  const deleteMovie = async () => {
+  const deleteMovie = async (withFile: boolean = false) => {
     setDeleting(true)
     try {
-      const response = await fetch(`/api/v1/movies/${movieId}`, {
+      const url = withFile
+        ? `/api/v1/movies/${movieId}?deleteFile=true`
+        : `/api/v1/movies/${movieId}`
+
+      const response = await fetch(url, {
         method: 'DELETE',
       })
       if (response.ok) {
-        toast.success('Movie deleted')
+        toast.success(withFile ? 'Movie and files deleted' : 'Movie deleted')
         router.visit('/library')
       } else {
         const error = await response.json()
@@ -347,13 +371,6 @@ export default function MovieDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={toggleWanted}>
-                <HugeiconsIcon
-                  icon={movie.requested ? ViewOffIcon : ViewIcon}
-                  className="h-4 w-4 mr-2"
-                />
-                {movie.requested ? 'Unrequest' : 'Request'}
-              </DropdownMenuItem>
               {!movie.tmdbId && (
                 <DropdownMenuItem onClick={enrichMovie} disabled={enriching}>
                   <HugeiconsIcon
@@ -363,13 +380,13 @@ export default function MovieDetail() {
                   {enriching ? 'Enriching...' : 'Enrich from TMDB'}
                 </DropdownMenuItem>
               )}
-              <DropdownMenuSeparator />
+              {!movie.tmdbId && <DropdownMenuSeparator />}
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
               >
                 <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
-                Delete
+                Remove from Library
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -382,11 +399,7 @@ export default function MovieDetail() {
         {/* Backdrop */}
         {movie.backdropUrl && (
           <div className="relative h-48 md:h-64 -mx-4 -mt-4 mb-6 overflow-hidden">
-            <img
-              src={movie.backdropUrl}
-              alt={movie.title}
-              className="w-full h-full object-cover"
-            />
+            <img src={movie.backdropUrl} alt={movie.title} className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
           </div>
         )}
@@ -396,17 +409,10 @@ export default function MovieDetail() {
           {/* Movie poster */}
           <div className="w-full md:w-48 aspect-[2/3] md:aspect-auto md:h-72 bg-muted rounded-lg overflow-hidden flex-shrink-0">
             {movie.posterUrl ? (
-              <img
-                src={movie.posterUrl}
-                alt={movie.title}
-                className="w-full h-full object-cover"
-              />
+              <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon
-                  icon={Film01Icon}
-                  className="h-16 w-16 text-muted-foreground/50"
-                />
+                <HugeiconsIcon icon={Film01Icon} className="h-16 w-16 text-muted-foreground/50" />
               </div>
             )}
           </div>
@@ -416,9 +422,7 @@ export default function MovieDetail() {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <h1 className="text-2xl font-bold">{movie.title}</h1>
-                {movie.year && (
-                  <span className="text-muted-foreground">({movie.year})</span>
-                )}
+                {movie.year && <span className="text-muted-foreground">({movie.year})</span>}
               </div>
               {movie.originalTitle && movie.originalTitle !== movie.title && (
                 <p className="text-muted-foreground">{movie.originalTitle}</p>
@@ -438,9 +442,7 @@ export default function MovieDetail() {
                   />
                 )
               })()}
-              {movie.status && (
-                <Badge variant="outline">{movie.status}</Badge>
-              )}
+              {movie.status && <Badge variant="outline">{movie.status}</Badge>}
             </div>
 
             {/* Meta info */}
@@ -481,9 +483,7 @@ export default function MovieDetail() {
               {movie.qualityProfile && (
                 <Badge variant="secondary">{movie.qualityProfile.name}</Badge>
               )}
-              {movie.rootFolder && (
-                <Badge variant="secondary">{movie.rootFolder.path}</Badge>
-              )}
+              {movie.rootFolder && <Badge variant="secondary">{movie.rootFolder.path}</Badge>}
             </div>
 
             {/* External links */}
@@ -581,21 +581,31 @@ export default function MovieDetail() {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {movie.title}?</DialogTitle>
+            <DialogTitle>
+              {movie.hasFile ? 'Remove from library?' : `Delete ${movie.title}?`}
+            </DialogTitle>
             <DialogDescription>
-              This will remove the movie from your library. Files on disk will not be deleted.
+              {movie.hasFile
+                ? 'This will permanently delete the downloaded files from disk and remove the movie from your library.'
+                : 'This will remove the movie from your library.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={deleteMovie} disabled={deleting}>
+            <Button
+              variant="destructive"
+              onClick={() => deleteMovie(movie.hasFile)}
+              disabled={deleting}
+            >
               {deleting ? (
                 <>
                   <Spinner className="mr-2" />
                   Deleting...
                 </>
+              ) : movie.hasFile ? (
+                'Delete Files & Remove'
               ) : (
                 'Delete'
               )}
@@ -636,11 +646,7 @@ export default function MovieDetail() {
       <Dialog open={videoPlayerOpen} onOpenChange={setVideoPlayerOpen}>
         <DialogContent className="max-w-6xl p-0 overflow-hidden">
           {movie?.movieFile && videoPlayerOpen && (
-            <VideoPlayer
-              mediaType="movie"
-              mediaFileId={movie.movieFile.id}
-              title={movie.title}
-            />
+            <VideoPlayer mediaType="movie" mediaFileId={movie.movieFile.id} title={movie.title} />
           )}
         </DialogContent>
       </Dialog>

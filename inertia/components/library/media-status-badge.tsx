@@ -1,12 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   CheckmarkCircle01Icon,
@@ -15,6 +10,7 @@ import {
   Cancel01Icon,
   Add01Icon,
   PackageMovingIcon,
+  Delete02Icon,
 } from '@hugeicons/core-free-icons'
 import { cn } from '@/lib/utils'
 
@@ -52,14 +48,9 @@ export function MediaStatusBadge({
   showRequestButton = true,
 }: MediaStatusBadgeProps) {
   const sizeClasses =
-    size === 'tiny'
-      ? 'h-5 text-[10px] px-1.5'
-      : size === 'sm'
-        ? 'h-6 text-xs'
-        : 'h-7 text-sm'
+    size === 'tiny' ? 'h-5 text-[10px] px-1.5' : size === 'sm' ? 'h-6 text-xs' : 'h-7 text-sm'
 
-  const iconSize =
-    size === 'tiny' ? 'h-2.5 w-2.5' : size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'
+  const iconSize = size === 'tiny' ? 'h-2.5 w-2.5' : size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'
   const buttonIconSize = size === 'tiny' ? 'h-2.5 w-2.5' : size === 'sm' ? 'h-3 w-3' : 'h-4 w-4'
   const showText = size !== 'tiny'
 
@@ -76,16 +67,43 @@ export function MediaStatusBadge({
     )
   }
 
-  // Downloaded - Green, not interactive
+  // Downloaded - Green, can remove (hover shows destructive)
   if (status === 'downloaded') {
     return (
-      <Badge
-        variant="default"
-        className={cn('bg-green-600 hover:bg-green-600 text-white gap-1', sizeClasses, className)}
-      >
-        <HugeiconsIcon icon={CheckmarkCircle01Icon} className={iconSize} />
-        {showText && <span>Downloaded</span>}
-      </Badge>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="default"
+              className={cn(
+                'gap-1 cursor-pointer bg-green-600 hover:bg-destructive text-white transition-colors group',
+                sizeClasses,
+                className
+              )}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleRequest?.()
+              }}
+            >
+              <HugeiconsIcon
+                icon={CheckmarkCircle01Icon}
+                className={cn(iconSize, 'group-hover:hidden')}
+              />
+              <HugeiconsIcon
+                icon={Delete02Icon}
+                className={cn(iconSize, 'hidden group-hover:block')}
+              />
+              {showText && (
+                <>
+                  <span className="group-hover:hidden">Downloaded</span>
+                  <span className="hidden group-hover:inline">Remove</span>
+                </>
+              )}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>Click to delete file and remove from library</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     )
   }
 
@@ -108,7 +126,10 @@ export function MediaStatusBadge({
               }}
             >
               <HugeiconsIcon icon={Download01Icon} className={cn(iconSize, 'group-hover:hidden')} />
-              <HugeiconsIcon icon={Cancel01Icon} className={cn(iconSize, 'hidden group-hover:block')} />
+              <HugeiconsIcon
+                icon={Cancel01Icon}
+                className={cn(iconSize, 'hidden group-hover:block')}
+              />
               {showText && (
                 <>
                   <span className="group-hover:hidden">{Math.round(progress)}%</span>
@@ -141,8 +162,14 @@ export function MediaStatusBadge({
                 onToggleRequest?.()
               }}
             >
-              <HugeiconsIcon icon={PackageMovingIcon} className={cn(iconSize, 'group-hover:hidden animate-pulse')} />
-              <HugeiconsIcon icon={Cancel01Icon} className={cn(iconSize, 'hidden group-hover:block')} />
+              <HugeiconsIcon
+                icon={PackageMovingIcon}
+                className={cn(iconSize, 'group-hover:hidden animate-pulse')}
+              />
+              <HugeiconsIcon
+                icon={Cancel01Icon}
+                className={cn(iconSize, 'hidden group-hover:block')}
+              />
               {showText && (
                 <>
                   <span className="group-hover:hidden">Importing</span>
@@ -176,7 +203,10 @@ export function MediaStatusBadge({
               }}
             >
               <HugeiconsIcon icon={Clock01Icon} className={cn(iconSize, 'group-hover:hidden')} />
-              <HugeiconsIcon icon={Cancel01Icon} className={cn(iconSize, 'hidden group-hover:block')} />
+              <HugeiconsIcon
+                icon={Cancel01Icon}
+                className={cn(iconSize, 'hidden group-hover:block')}
+              />
               {showText && (
                 <>
                   <span className="group-hover:hidden">Requested</span>
@@ -295,11 +325,7 @@ export function CardStatusBadge({
   }
 
   const sizeClasses =
-    size === 'tiny'
-      ? 'h-5 text-[10px] px-1.5'
-      : size === 'sm'
-        ? 'h-6 text-xs'
-        : 'h-7 text-sm'
+    size === 'tiny' ? 'h-5 text-[10px] px-1.5' : size === 'sm' ? 'h-6 text-xs' : 'h-7 text-sm'
   const iconSize = size === 'tiny' ? 'h-2.5 w-2.5' : size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'
   const showText = size !== 'tiny'
 

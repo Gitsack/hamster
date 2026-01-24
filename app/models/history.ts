@@ -6,7 +6,13 @@ import Artist from './artist.js'
 import TrackFile from './track_file.js'
 import Download from './download.js'
 
-export type HistoryEventType = 'grabbed' | 'download_completed' | 'import_completed' | 'import_failed' | 'deleted' | 'renamed'
+export type HistoryEventType =
+  | 'grabbed'
+  | 'download_completed'
+  | 'import_completed'
+  | 'import_failed'
+  | 'deleted'
+  | 'renamed'
 
 export default class History extends BaseModel {
   static table = 'history'

@@ -14,13 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectPopup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -273,7 +267,9 @@ export default function Notifications() {
         </Label>
         <Input
           id={field.name}
-          type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
+          type={
+            field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'
+          }
           value={(formData.settings[field.name] as string) || ''}
           onChange={(e) =>
             setFormData({
@@ -304,7 +300,8 @@ export default function Notifications() {
           <CardHeader>
             <CardTitle>Notification Providers</CardTitle>
             <CardDescription>
-              Configure notification providers to receive alerts about downloads, imports, and system events.
+              Configure notification providers to receive alerts about downloads, imports, and
+              system events.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -378,9 +375,7 @@ export default function Notifications() {
             <DialogTitle>
               {editingProvider ? 'Edit Notification Provider' : 'Add Notification Provider'}
             </DialogTitle>
-            <DialogDescription>
-              Configure your notification provider settings.
-            </DialogDescription>
+            <DialogDescription>Configure your notification provider settings.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
@@ -480,7 +475,9 @@ export default function Notifications() {
                   <Checkbox
                     id="onUpgrade"
                     checked={formData.onUpgrade}
-                    onCheckedChange={(checked) => setFormData({ ...formData, onUpgrade: !!checked })}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, onUpgrade: !!checked })
+                    }
                   />
                   <Label htmlFor="onUpgrade" className="font-normal cursor-pointer">
                     On Upgrade
@@ -533,7 +530,9 @@ export default function Notifications() {
                   <Checkbox
                     id="includeTv"
                     checked={formData.includeTv}
-                    onCheckedChange={(checked) => setFormData({ ...formData, includeTv: !!checked })}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, includeTv: !!checked })
+                    }
                   />
                   <Label htmlFor="includeTv" className="font-normal cursor-pointer">
                     TV Shows
@@ -579,7 +578,9 @@ export default function Notifications() {
                   className="h-5 w-5"
                 />
                 <span>
-                  {testResult.success ? 'Test notification sent!' : testResult.error || 'Test failed'}
+                  {testResult.success
+                    ? 'Test notification sent!'
+                    : testResult.error || 'Test failed'}
                 </span>
               </div>
             )}

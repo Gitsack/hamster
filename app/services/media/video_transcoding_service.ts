@@ -2,11 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import {
-  probeFile,
-  needsTranscoding,
-  type MediaAnalysis,
-} from '#utils/ffmpeg_utils'
+import { probeFile, needsTranscoding, type MediaAnalysis } from '#utils/ffmpeg_utils'
 
 const TEMP_BASE_DIR = '/tmp/hamster-transcode'
 const SEGMENT_DURATION = 6 // seconds
@@ -72,11 +68,12 @@ function getHwAccelArgs(): string[] {
     return []
   }
 
-  const hwType = transcodingSettings.hardwareAccelType === 'auto'
-    ? detectedHwAccel
-    : transcodingSettings.hardwareAccelType === 'none'
-      ? null
-      : transcodingSettings.hardwareAccelType
+  const hwType =
+    transcodingSettings.hardwareAccelType === 'auto'
+      ? detectedHwAccel
+      : transcodingSettings.hardwareAccelType === 'none'
+        ? null
+        : transcodingSettings.hardwareAccelType
 
   if (!hwType) return []
 
@@ -267,30 +264,47 @@ class VideoTranscodingService {
 
     const args = [
       '-hide_banner',
-      '-loglevel', 'warning',
+      '-loglevel',
+      'warning',
       // Hardware acceleration (if enabled)
       ...hwAccelArgs,
-      '-i', session.filePath,
+      '-i',
+      session.filePath,
       // Use multiple threads for audio encoding
-      '-threads', '0',
+      '-threads',
+      '0',
       // Copy video stream (no re-encoding)
-      '-c:v', 'copy',
+      '-c:v',
+      'copy',
       // Transcode audio to AAC
-      '-c:a', 'aac',
-      '-b:a', '192k',
-      '-ac', '2',
-      '-ar', '48000',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '192k',
+      '-ac',
+      '2',
+      '-ar',
+      '48000',
       // Timestamp handling
-      '-avoid_negative_ts', 'make_zero',
-      '-max_muxing_queue_size', '4096',
+      '-avoid_negative_ts',
+      'make_zero',
+      '-max_muxing_queue_size',
+      '4096',
       // HLS output
-      '-f', 'hls',
-      '-hls_time', session.segmentDuration.toString(),
-      '-hls_list_size', '0', // Keep all segments in playlist
-      '-hls_segment_type', 'mpegts',
-      '-hls_flags', 'independent_segments',
-      '-hls_segment_filename', segmentPattern,
-      '-start_number', '0',
+      '-f',
+      'hls',
+      '-hls_time',
+      session.segmentDuration.toString(),
+      '-hls_list_size',
+      '0', // Keep all segments in playlist
+      '-hls_segment_type',
+      'mpegts',
+      '-hls_flags',
+      'independent_segments',
+      '-hls_segment_filename',
+      segmentPattern,
+      '-start_number',
+      '0',
       outputPath,
     ]
 
@@ -402,7 +416,7 @@ class VideoTranscodingService {
     for (let i = 0; i < segmentCount; i++) {
       const isLastSegment = i === segmentCount - 1
       const segmentDuration = isLastSegment
-        ? session.duration - (i * session.segmentDuration)
+        ? session.duration - i * session.segmentDuration
         : session.segmentDuration
 
       manifest += `#EXTINF:${segmentDuration.toFixed(3)},\n`
@@ -456,14 +470,19 @@ class VideoTranscodingService {
 
     // Check if we need to restart transcoding
     // Only restart if the segment is far ahead of what we're currently transcoding
-    const shouldRestart = !session.isRestarting &&
+    const shouldRestart =
+      !session.isRestarting &&
       (segmentIndex < session.currentStartSegment || // Seeking backwards
-       segmentIndex > session.currentStartSegment + 10) // Seeking far ahead
+        segmentIndex > session.currentStartSegment + 10) // Seeking far ahead
 
     if (shouldRestart) {
       // Check what's the highest segment we actually have
       let highestExistingSegment = -1
-      for (let i = Math.min(segmentIndex + 5, Math.ceil(session.duration / session.segmentDuration)); i >= 0; i--) {
+      for (
+        let i = Math.min(segmentIndex + 5, Math.ceil(session.duration / session.segmentDuration));
+        i >= 0;
+        i--
+      ) {
         const checkPath = path.join(session.sessionDir, `segment-${i}.ts`)
         if (fs.existsSync(checkPath)) {
           const stats = fs.statSync(checkPath)
@@ -475,11 +494,15 @@ class VideoTranscodingService {
       }
 
       // Only restart if the segment doesn't exist and is far from current progress
-      if (!fs.existsSync(segmentPath) &&
-          (segmentIndex < session.currentStartSegment - 2 ||
-           segmentIndex > highestExistingSegment + 3)) {
+      if (
+        !fs.existsSync(segmentPath) &&
+        (segmentIndex < session.currentStartSegment - 2 ||
+          segmentIndex > highestExistingSegment + 3)
+      ) {
         const seekTime = segmentIndex * session.segmentDuration
-        console.log(`Seeking to segment ${segmentIndex} (time: ${seekTime}s), highest existing: ${highestExistingSegment}, current start: ${session.currentStartSegment}`)
+        console.log(
+          `Seeking to segment ${segmentIndex} (time: ${seekTime}s), highest existing: ${highestExistingSegment}, current start: ${session.currentStartSegment}`
+        )
         await this.restartTranscodingFromPosition(session, segmentIndex)
       }
     }
@@ -517,7 +540,9 @@ class VideoTranscodingService {
 
       // Log progress every 3 seconds
       if (waited % 3000 === 0) {
-        console.log(`Waiting for segment ${segmentIndex}... (${waited / 1000}s elapsed, ffmpeg running: ${session.ffmpegProcess !== null})`)
+        console.log(
+          `Waiting for segment ${segmentIndex}... (${waited / 1000}s elapsed, ffmpeg running: ${session.ffmpegProcess !== null})`
+        )
       }
     }
 
@@ -540,7 +565,10 @@ class VideoTranscodingService {
   /**
    * Restart transcoding from a specific segment position (for seeking)
    */
-  private async restartTranscodingFromPosition(session: TranscodingSession, startSegment: number): Promise<void> {
+  private async restartTranscodingFromPosition(
+    session: TranscodingSession,
+    startSegment: number
+  ): Promise<void> {
     // Mark as restarting to prevent concurrent restarts
     session.isRestarting = true
     session.error = null // Clear any previous error
@@ -585,32 +613,50 @@ class VideoTranscodingService {
     // Use fast seeking (-ss before -i) with proper timestamp handling
     const args = [
       '-hide_banner',
-      '-loglevel', 'warning',
+      '-loglevel',
+      'warning',
       // Hardware acceleration (if enabled)
       ...hwAccelArgs,
       // Fast seek - before input
-      '-ss', startTime.toString(),
-      '-i', session.filePath,
+      '-ss',
+      startTime.toString(),
+      '-i',
+      session.filePath,
       // Use multiple threads for audio encoding
-      '-threads', '0',
+      '-threads',
+      '0',
       // Copy video stream
-      '-c:v', 'copy',
+      '-c:v',
+      'copy',
       // Transcode audio to AAC
-      '-c:a', 'aac',
-      '-b:a', '192k',
-      '-ac', '2',
-      '-ar', '48000',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '192k',
+      '-ac',
+      '2',
+      '-ar',
+      '48000',
       // Timestamp handling
-      '-avoid_negative_ts', 'make_zero',
-      '-max_muxing_queue_size', '4096',
+      '-avoid_negative_ts',
+      'make_zero',
+      '-max_muxing_queue_size',
+      '4096',
       // HLS output
-      '-f', 'hls',
-      '-hls_time', session.segmentDuration.toString(),
-      '-hls_list_size', '0',
-      '-hls_segment_type', 'mpegts',
-      '-hls_flags', 'independent_segments',
-      '-hls_segment_filename', segmentPattern,
-      '-start_number', startSegment.toString(),
+      '-f',
+      'hls',
+      '-hls_time',
+      session.segmentDuration.toString(),
+      '-hls_list_size',
+      '0',
+      '-hls_segment_type',
+      'mpegts',
+      '-hls_flags',
+      'independent_segments',
+      '-hls_segment_filename',
+      segmentPattern,
+      '-start_number',
+      startSegment.toString(),
       outputPath,
     ]
 

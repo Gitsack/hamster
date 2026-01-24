@@ -118,7 +118,8 @@ export class OpenLibraryService {
         key: work.key,
         title: work.title,
         authorKey: authorKey,
-        description: typeof work.description === 'string' ? work.description : work.description?.value,
+        description:
+          typeof work.description === 'string' ? work.description : work.description?.value,
         coverId: work.covers?.[0],
         subjects: work.subjects?.slice(0, 10),
       }))
@@ -137,7 +138,8 @@ export class OpenLibraryService {
         key: data.key,
         title: data.title,
         authorKey: data.authors?.[0]?.author?.key,
-        description: typeof data.description === 'string' ? data.description : data.description?.value,
+        description:
+          typeof data.description === 'string' ? data.description : data.description?.value,
         coverId: data.covers?.[0],
         subjects: data.subjects?.slice(0, 10),
       }

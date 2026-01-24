@@ -211,9 +211,11 @@ export class BookParser {
    * - "Series Name (Book 1)"
    * - "[Series Name 1]"
    */
-  private extractSeriesInfo(
-    name: string
-  ): { seriesName?: string; seriesPosition?: number; remaining: string } {
+  private extractSeriesInfo(name: string): {
+    seriesName?: string
+    seriesPosition?: number
+    remaining: string
+  } {
     const patterns = [
       // "Series Name #1 - Book Title" or "Series Name #1: Book Title"
       /^(.+?)\s*#(\d+)\s*[-:]\s*(.+)$/,

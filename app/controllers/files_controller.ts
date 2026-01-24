@@ -16,10 +16,7 @@ export default class FilesController {
    * Download a movie file
    */
   async downloadMovie({ params, response }: HttpContext) {
-    const movieFile = await MovieFile.query()
-      .where('id', params.id)
-      .preload('movie')
-      .first()
+    const movieFile = await MovieFile.query().where('id', params.id).preload('movie').first()
 
     if (!movieFile) {
       return response.notFound({ error: 'Movie file not found' })
@@ -52,10 +49,7 @@ export default class FilesController {
    * Download an episode file
    */
   async downloadEpisode({ params, response }: HttpContext) {
-    const episodeFile = await EpisodeFile.query()
-      .where('id', params.id)
-      .preload('tvShow')
-      .first()
+    const episodeFile = await EpisodeFile.query().where('id', params.id).preload('tvShow').first()
 
     if (!episodeFile) {
       return response.notFound({ error: 'Episode file not found' })
@@ -88,10 +82,7 @@ export default class FilesController {
    * Download a book file
    */
   async downloadBook({ params, response }: HttpContext) {
-    const bookFile = await BookFile.query()
-      .where('id', params.id)
-      .preload('book')
-      .first()
+    const bookFile = await BookFile.query().where('id', params.id).preload('book').first()
 
     if (!bookFile) {
       return response.notFound({ error: 'Book file not found' })

@@ -19,12 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
@@ -145,17 +140,35 @@ export default function TvShowDetail() {
   const [seasonDetails, setSeasonDetails] = useState<Record<number, SeasonDetail>>({})
   const [loadingSeasons, setLoadingSeasons] = useState<Set<number>>(new Set())
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null)
-  const [activeDownloads, setActiveDownloads] = useState<Map<string, { progress: number; status: string }>>(new Map())
+  const [activeDownloads, setActiveDownloads] = useState<
+    Map<string, { progress: number; status: string }>
+  >(new Map())
   const [togglingSeasons, setTogglingSeasons] = useState<Set<number>>(new Set())
   const [togglingEpisodes, setTogglingEpisodes] = useState<Set<number>>(new Set())
   const [deleteFileDialogOpen, setDeleteFileDialogOpen] = useState(false)
   const [deletingFile, setDeletingFile] = useState(false)
-  const [selectedEpisodeForDelete, setSelectedEpisodeForDelete] = useState<{ id: number; title: string; seasonNumber: number } | null>(null)
+  const [selectedEpisodeForDelete, setSelectedEpisodeForDelete] = useState<{
+    id: number
+    title: string
+    seasonNumber: number
+  } | null>(null)
+  const [removeWithFileDialogOpen, setRemoveWithFileDialogOpen] = useState(false)
+  const [episodeToRemove, setEpisodeToRemove] = useState<{
+    id: number
+    title: string
+    seasonNumber: number
+    hasFile: boolean
+  } | null>(null)
+  const [removingWithFile, setRemovingWithFile] = useState(false)
   const [requestingAllSeasons, setRequestingAllSeasons] = useState(false)
   const [enriching, setEnriching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
-  const [playingEpisode, setPlayingEpisode] = useState<{ id: number; fileId: number; title: string } | null>(null)
+  const [playingEpisode, setPlayingEpisode] = useState<{
+    id: number
+    fileId: number
+    title: string
+  } | null>(null)
   const audioPlayer = useAudioPlayer()
 
   useEffect(() => {
@@ -293,7 +306,11 @@ export default function TvShowDetail() {
     }
   }
 
-  const toggleSeasonRequested = async (seasonNumber: number, currentlyRequested: boolean, e: React.MouseEvent) => {
+  const toggleSeasonRequested = async (
+    seasonNumber: number,
+    currentlyRequested: boolean,
+    e: React.MouseEvent
+  ) => {
     e.stopPropagation()
     if (!show) return
 
@@ -327,10 +344,43 @@ export default function TvShowDetail() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requested: !currentlyRequested }),
       })
+
+      const data = await response.json()
+
       if (response.ok) {
-        toast.success(currentlyRequested ? 'Season unrequested' : 'Season requested')
-        // Refetch show data to update counts
-        fetchShow()
+        if (data.deleted) {
+          // Season was deleted - check if show still exists
+          toast.success('Season removed from library')
+          fetchShow()
+        } else {
+          toast.success(currentlyRequested ? 'Season unrequested' : 'Season requested')
+          fetchShow()
+        }
+      } else if (data.hasFile) {
+        // Season has episodes with files - show error
+        toast.error(
+          `Cannot unrequest: ${data.episodesWithFiles} episode(s) have downloaded files. Delete files first.`
+        )
+        // Revert
+        setShow({
+          ...show,
+          seasons: show.seasons.map((s) =>
+            s.seasonNumber === seasonNumber ? { ...s, requested: currentlyRequested } : s
+          ),
+        })
+        if (seasonDetails[seasonNumber]) {
+          setSeasonDetails((prev) => ({
+            ...prev,
+            [seasonNumber]: {
+              ...prev[seasonNumber],
+              requested: currentlyRequested,
+              episodes: prev[seasonNumber].episodes.map((ep) => ({
+                ...ep,
+                requested: currentlyRequested,
+              })),
+            },
+          }))
+        }
       } else {
         // Revert on error
         setShow({
@@ -339,7 +389,7 @@ export default function TvShowDetail() {
             s.seasonNumber === seasonNumber ? { ...s, requested: currentlyRequested } : s
           ),
         })
-        toast.error('Failed to update season')
+        toast.error(data.error || 'Failed to update season')
       }
     } catch (error) {
       console.error('Failed to update season:', error)
@@ -360,8 +410,21 @@ export default function TvShowDetail() {
     }
   }
 
-  const toggleEpisodeRequested = async (episodeId: number, currentlyRequested: boolean, seasonNumber: number) => {
+  const toggleEpisodeRequested = async (
+    episodeId: number,
+    currentlyRequested: boolean,
+    seasonNumber: number,
+    hasFile?: boolean,
+    title?: string
+  ) => {
     if (!show) return
+
+    // If unrequesting an episode with a file, show confirmation dialog
+    if (currentlyRequested && hasFile) {
+      setEpisodeToRemove({ id: episodeId, title: title || 'Episode', seasonNumber, hasFile: true })
+      setRemoveWithFileDialogOpen(true)
+      return
+    }
 
     // Optimistically update UI immediately
     setSeasonDetails((prev) => ({
@@ -383,10 +446,36 @@ export default function TvShowDetail() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requested: !currentlyRequested }),
       })
+
+      const data = await response.json()
+
       if (response.ok) {
-        toast.success(currentlyRequested ? 'Episode unrequested' : 'Episode requested')
-        // Refetch show data to update season counts
-        fetchShow()
+        if (data.deleted) {
+          // Episode was deleted - refresh show to check if season/show still exist
+          toast.success('Episode removed from library')
+          fetchShow()
+        } else {
+          toast.success(currentlyRequested ? 'Episode unrequested' : 'Episode requested')
+          fetchShow()
+        }
+      } else if (data.hasFile) {
+        // Episode has a file - show confirmation dialog
+        setSeasonDetails((prev) => ({
+          ...prev,
+          [seasonNumber]: {
+            ...prev[seasonNumber],
+            episodes: prev[seasonNumber].episodes.map((ep) =>
+              ep.id === episodeId ? { ...ep, requested: currentlyRequested } : ep
+            ),
+          },
+        }))
+        setEpisodeToRemove({
+          id: episodeId,
+          title: title || 'Episode',
+          seasonNumber,
+          hasFile: true,
+        })
+        setRemoveWithFileDialogOpen(true)
       } else {
         // Revert on error
         setSeasonDetails((prev) => ({
@@ -398,7 +487,7 @@ export default function TvShowDetail() {
             ),
           },
         }))
-        toast.error('Failed to update episode')
+        toast.error(data.error || 'Failed to update episode')
       }
     } catch (error) {
       console.error('Failed to update episode:', error)
@@ -419,6 +508,33 @@ export default function TvShowDetail() {
         next.delete(episodeId)
         return next
       })
+    }
+  }
+
+  const removeEpisodeWithFile = async () => {
+    if (!episodeToRemove) return
+
+    setRemovingWithFile(true)
+    try {
+      const response = await fetch(
+        `/api/v1/tvshows/${showId}/episodes/${episodeToRemove.id}?deleteFile=true`,
+        { method: 'DELETE' }
+      )
+
+      if (response.ok) {
+        toast.success('Episode and files removed from library')
+        setRemoveWithFileDialogOpen(false)
+        setEpisodeToRemove(null)
+        fetchShow()
+      } else {
+        const data = await response.json()
+        toast.error(data.error || 'Failed to remove episode')
+      }
+    } catch (error) {
+      console.error('Failed to remove episode:', error)
+      toast.error('Failed to remove episode')
+    } finally {
+      setRemovingWithFile(false)
     }
   }
 
@@ -556,7 +672,9 @@ export default function TvShowDetail() {
         toast.success(`Requested ${seasonsToRequest.length} seasons`)
         fetchShow() // Refresh to get updated counts
       } else if (failedCount < seasonsToRequest.length) {
-        toast.warning(`Requested ${seasonsToRequest.length - failedCount} seasons, ${failedCount} failed`)
+        toast.warning(
+          `Requested ${seasonsToRequest.length - failedCount} seasons, ${failedCount} failed`
+        )
         fetchShow()
       } else {
         toast.error('Failed to request seasons')
@@ -618,13 +736,6 @@ export default function TvShowDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={toggleWanted}>
-                <HugeiconsIcon
-                  icon={show.requested ? ViewOffIcon : ViewIcon}
-                  className="h-4 w-4 mr-2"
-                />
-                {show.requested ? 'Unrequest' : 'Request'}
-              </DropdownMenuItem>
               {!show.tmdbId && (
                 <DropdownMenuItem onClick={enrichTvShow} disabled={enriching}>
                   <HugeiconsIcon
@@ -649,7 +760,7 @@ export default function TvShowDetail() {
                 onClick={() => setDeleteDialogOpen(true)}
               >
                 <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
-                Delete
+                Remove from Library
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -662,11 +773,7 @@ export default function TvShowDetail() {
         {/* Backdrop */}
         {show.backdropUrl && (
           <div className="relative h-48 md:h-64 -mx-4 -mt-4 mb-6 overflow-hidden">
-            <img
-              src={show.backdropUrl}
-              alt={show.title}
-              className="w-full h-full object-cover"
-            />
+            <img src={show.backdropUrl} alt={show.title} className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
           </div>
         )}
@@ -676,17 +783,10 @@ export default function TvShowDetail() {
           {/* Show poster */}
           <div className="w-full md:w-48 aspect-[2/3] md:aspect-auto md:h-72 bg-muted rounded-lg overflow-hidden flex-shrink-0">
             {show.posterUrl ? (
-              <img
-                src={show.posterUrl}
-                alt={show.title}
-                className="w-full h-full object-cover"
-              />
+              <img src={show.posterUrl} alt={show.title} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon
-                  icon={Tv01Icon}
-                  className="h-16 w-16 text-muted-foreground/50"
-                />
+                <HugeiconsIcon icon={Tv01Icon} className="h-16 w-16 text-muted-foreground/50" />
               </div>
             )}
           </div>
@@ -696,9 +796,7 @@ export default function TvShowDetail() {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <h1 className="text-2xl font-bold">{show.title}</h1>
-                {show.year && (
-                  <span className="text-muted-foreground">({show.year})</span>
-                )}
+                {show.year && <span className="text-muted-foreground">({show.year})</span>}
               </div>
               {show.originalTitle && show.originalTitle !== show.title && (
                 <p className="text-muted-foreground">{show.originalTitle}</p>
@@ -707,12 +805,8 @@ export default function TvShowDetail() {
 
             {/* Status */}
             <div className="flex items-center gap-2 flex-wrap">
-              {show.status && (
-                <Badge variant="outline">{show.status}</Badge>
-              )}
-              {show.network && (
-                <Badge variant="outline">{show.network}</Badge>
-              )}
+              {show.status && <Badge variant="outline">{show.status}</Badge>}
+              {show.network && <Badge variant="outline">{show.network}</Badge>}
             </div>
 
             {/* Meta info */}
@@ -747,12 +841,8 @@ export default function TvShowDetail() {
 
             {/* Quality and folder info */}
             <div className="flex flex-wrap gap-2 text-sm">
-              {show.qualityProfile && (
-                <Badge variant="secondary">{show.qualityProfile.name}</Badge>
-              )}
-              {show.rootFolder && (
-                <Badge variant="secondary">{show.rootFolder.path}</Badge>
-              )}
+              {show.qualityProfile && <Badge variant="secondary">{show.qualityProfile.name}</Badge>}
+              {show.rootFolder && <Badge variant="secondary">{show.rootFolder.path}</Badge>}
             </div>
 
             {/* External links */}
@@ -825,24 +915,35 @@ export default function TvShowDetail() {
                         />
                       ) : (
                         <div className="h-16 w-12 rounded bg-muted flex items-center justify-center">
-                          <HugeiconsIcon icon={Tv01Icon} className="h-6 w-6 text-muted-foreground" />
+                          <HugeiconsIcon
+                            icon={Tv01Icon}
+                            className="h-6 w-6 text-muted-foreground"
+                          />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium">{season.title}</p>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span>{season.episodeCount} episodes</span>
-                          {(season.downloadedCount > 0 || season.downloadingCount > 0 || season.requestedCount > 0) && (
+                          {(season.downloadedCount > 0 ||
+                            season.downloadingCount > 0 ||
+                            season.requestedCount > 0) && (
                             <span className="text-muted-foreground/50">•</span>
                           )}
                           {season.downloadedCount > 0 && (
-                            <span className="text-green-600 font-medium">{season.downloadedCount} downloaded</span>
+                            <span className="text-green-600 font-medium">
+                              {season.downloadedCount} downloaded
+                            </span>
                           )}
                           {season.downloadingCount > 0 && (
-                            <span className="text-blue-600 font-medium">{season.downloadingCount} downloading</span>
+                            <span className="text-blue-600 font-medium">
+                              {season.downloadingCount} downloading
+                            </span>
                           )}
                           {season.requestedCount > 0 && (
-                            <span className="text-yellow-600 font-medium">{season.requestedCount} requested</span>
+                            <span className="text-yellow-600 font-medium">
+                              {season.requestedCount} requested
+                            </span>
                           )}
                         </div>
                       </div>
@@ -879,7 +980,9 @@ export default function TvShowDetail() {
                         </Button>
                       )}
                       <HugeiconsIcon
-                        icon={expandedSeason === season.seasonNumber ? ArrowUp01Icon : ArrowDown01Icon}
+                        icon={
+                          expandedSeason === season.seasonNumber ? ArrowUp01Icon : ArrowDown01Icon
+                        }
                         className="h-5 w-5 text-muted-foreground"
                       />
                     </button>
@@ -947,11 +1050,22 @@ export default function TvShowDetail() {
                                                   setVideoPlayerOpen(true)
                                                 }}
                                               >
-                                                <HugeiconsIcon icon={PlayIcon} className="h-3.5 w-3.5" />
+                                                <HugeiconsIcon
+                                                  icon={PlayIcon}
+                                                  className="h-3.5 w-3.5"
+                                                />
                                               </Button>
-                                              <Button variant="outline" size="icon" className="h-7 w-7" asChild>
+                                              <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                asChild
+                                              >
                                                 <a href={episode.episodeFile.downloadUrl} download>
-                                                  <HugeiconsIcon icon={FileDownloadIcon} className="h-3.5 w-3.5" />
+                                                  <HugeiconsIcon
+                                                    icon={FileDownloadIcon}
+                                                    className="h-3.5 w-3.5"
+                                                  />
                                                 </a>
                                               </Button>
                                             </>
@@ -969,7 +1083,10 @@ export default function TvShowDetail() {
                                               setDeleteFileDialogOpen(true)
                                             }}
                                           >
-                                            <HugeiconsIcon icon={Delete01Icon} className="h-3.5 w-3.5" />
+                                            <HugeiconsIcon
+                                              icon={Delete01Icon}
+                                              className="h-3.5 w-3.5"
+                                            />
                                           </Button>
                                         </>
                                       )
@@ -981,7 +1098,15 @@ export default function TvShowDetail() {
                                         status={status}
                                         progress={progress}
                                         isToggling={togglingEpisodes.has(episode.id)}
-                                        onToggleRequest={() => toggleEpisodeRequested(episode.id, episode.requested, season.seasonNumber)}
+                                        onToggleRequest={() =>
+                                          toggleEpisodeRequested(
+                                            episode.id,
+                                            episode.requested,
+                                            season.seasonNumber,
+                                            episode.hasFile,
+                                            episode.title || `Episode ${episode.episodeNumber}`
+                                          )
+                                        }
                                       />
                                     )
                                   })()}
@@ -1006,8 +1131,8 @@ export default function TvShowDetail() {
           <DialogHeader>
             <DialogTitle>Delete {show.title}?</DialogTitle>
             <DialogDescription>
-              This will remove the TV show and all seasons/episodes from your library.
-              Files on disk will not be deleted.
+              This will remove the TV show and all seasons/episodes from your library. Files on disk
+              will not be deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1029,16 +1154,19 @@ export default function TvShowDetail() {
       </Dialog>
 
       {/* Delete episode file confirmation dialog */}
-      <Dialog open={deleteFileDialogOpen} onOpenChange={(open) => {
-        setDeleteFileDialogOpen(open)
-        if (!open) setSelectedEpisodeForDelete(null)
-      }}>
+      <Dialog
+        open={deleteFileDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteFileDialogOpen(open)
+          if (!open) setSelectedEpisodeForDelete(null)
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete episode file?</DialogTitle>
             <DialogDescription>
-              This will permanently delete the file for "{selectedEpisodeForDelete?.title}" from disk.
-              The episode will remain in your library but will need to be downloaded again.
+              This will permanently delete the file for "{selectedEpisodeForDelete?.title}" from
+              disk. The episode will remain in your library but will need to be downloaded again.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1059,14 +1187,63 @@ export default function TvShowDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Remove episode with file confirmation dialog */}
+      <Dialog
+        open={removeWithFileDialogOpen}
+        onOpenChange={(open) => {
+          setRemoveWithFileDialogOpen(open)
+          if (!open) setEpisodeToRemove(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove from library?</DialogTitle>
+            <DialogDescription>
+              "{episodeToRemove?.title}" has downloaded files. This will permanently delete the
+              files from disk and remove the episode from your library.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRemoveWithFileDialogOpen(false)
+                setEpisodeToRemove(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={removeEpisodeWithFile}
+              disabled={removingWithFile}
+            >
+              {removingWithFile ? (
+                <>
+                  <Spinner className="mr-2" />
+                  Removing...
+                </>
+              ) : (
+                'Delete Files & Remove'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Video player dialog */}
-      <Dialog open={videoPlayerOpen} onOpenChange={(open) => {
-        setVideoPlayerOpen(open)
-        if (!open) setPlayingEpisode(null)
-      }}>
+      <Dialog
+        open={videoPlayerOpen}
+        onOpenChange={(open) => {
+          setVideoPlayerOpen(open)
+          if (!open) setPlayingEpisode(null)
+        }}
+      >
         <DialogContent className="max-w-6xl p-0 overflow-hidden">
           <DialogHeader className="p-4 pb-0">
-            <DialogTitle>{show?.title} - {playingEpisode?.title}</DialogTitle>
+            <DialogTitle>
+              {show?.title} - {playingEpisode?.title}
+            </DialogTitle>
           </DialogHeader>
           {playingEpisode && videoPlayerOpen && (
             <VideoPlayer
