@@ -86,7 +86,9 @@ router
 
     // Requests - redirect to library missing tab
     router.get('/requests', async ({ response }) => response.redirect('/library?tab=missing'))
-    router.get('/requests/search/:id', async ({ response }) => response.redirect('/library?tab=missing'))
+    router.get('/requests/search/:id', async ({ response }) =>
+      response.redirect('/library?tab=missing')
+    )
 
     // Activity
     router.on('/activity/queue').renderInertia('activity/queue').as('activity.queue')
@@ -94,12 +96,21 @@ router
 
     // Settings
     router.get('/settings', async ({ response }) => response.redirect('/settings/media-management'))
-    router.on('/settings/media-management').renderInertia('settings/media-management').as('settings.media-management')
+    router
+      .on('/settings/media-management')
+      .renderInertia('settings/media-management')
+      .as('settings.media-management')
     router.on('/settings/indexers').renderInertia('settings/indexers').as('settings.indexers')
-    router.on('/settings/download-clients').renderInertia('settings/download-clients').as('settings.download-clients')
+    router
+      .on('/settings/download-clients')
+      .renderInertia('settings/download-clients')
+      .as('settings.download-clients')
     router.on('/settings/playback').renderInertia('settings/playback').as('settings.playback')
     router.on('/settings/ui').renderInertia('settings/ui').as('settings.ui')
-    router.on('/settings/notifications').renderInertia('settings/notifications').as('settings.notifications')
+    router
+      .on('/settings/notifications')
+      .renderInertia('settings/notifications')
+      .as('settings.notifications')
     router.on('/settings/webhooks').renderInertia('settings/webhooks').as('settings.webhooks')
   })
   .use(middleware.auth())
@@ -174,6 +185,7 @@ router
     router.post('/movies', [MoviesController, 'store'])
     router.get('/movies/search', [MoviesController, 'search'])
     router.get('/movies/discover', [MoviesController, 'discover'])
+    router.get('/movies/preview', [MoviesController, 'preview'])
     router.get('/movies/requested', [MoviesController, 'requested'])
     router.get('/movies/:id', [MoviesController, 'show'])
     router.put('/movies/:id', [MoviesController, 'update'])
@@ -189,6 +201,7 @@ router
     router.post('/tvshows', [TvShowsController, 'store'])
     router.get('/tvshows/search', [TvShowsController, 'search'])
     router.get('/tvshows/discover', [TvShowsController, 'discover'])
+    router.get('/tvshows/preview', [TvShowsController, 'preview'])
     router.get('/tvshows/requested', [TvShowsController, 'requested'])
     router.get('/tvshows/preview-seasons', [TvShowsController, 'previewSeasons'])
     router.get('/tvshows/preview-episodes', [TvShowsController, 'previewEpisodes'])
@@ -338,4 +351,3 @@ router
   })
   .prefix('/api/v1')
   .use(middleware.auth())
-

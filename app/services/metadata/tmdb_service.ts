@@ -107,6 +107,14 @@ export interface TmdbEpisode {
   runtime: number | null
 }
 
+export interface TmdbCastMember {
+  id: number
+  name: string
+  character: string
+  profilePath: string | null
+  order: number
+}
+
 export class TmdbService {
   private apiKey: string | null = null
 
@@ -154,8 +162,10 @@ export class TmdbService {
 
   private mapMovie(m: any, imdbId?: string): TmdbMovie {
     // Map genre_ids to names using our mapping, or use full genre objects if available
-    const genres = m.genres?.map((g: any) => g.name) ||
-      m.genre_ids?.map((id: number) => MOVIE_GENRES[id]).filter(Boolean) || []
+    const genres =
+      m.genres?.map((g: any) => g.name) ||
+      m.genre_ids?.map((id: number) => MOVIE_GENRES[id]).filter(Boolean) ||
+      []
 
     return {
       id: m.id,
@@ -175,7 +185,28 @@ export class TmdbService {
     }
   }
 
+  async getMovieCredits(id: number, limit: number = 6): Promise<TmdbCastMember[]> {
+    const data = await this.fetch(`/movie/${id}/credits`)
+    return this.mapCast(data.cast, limit)
+  }
+
   // TV Shows
+
+  async getTvShowCredits(id: number, limit: number = 6): Promise<TmdbCastMember[]> {
+    const data = await this.fetch(`/tv/${id}/credits`)
+    return this.mapCast(data.cast, limit)
+  }
+
+  private mapCast(cast: any[], limit: number): TmdbCastMember[] {
+    if (!cast) return []
+    return cast.slice(0, limit).map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      character: c.character || '',
+      profilePath: c.profile_path ? `${TMDB_IMAGE_BASE}/w185${c.profile_path}` : null,
+      order: c.order,
+    }))
+  }
 
   async searchTvShows(query: string, year?: number): Promise<TmdbTvShow[]> {
     let endpoint = `/search/tv?query=${encodeURIComponent(query)}`
@@ -196,18 +227,23 @@ export class TmdbService {
   async getTvShowSeasons(id: number): Promise<TmdbSeason[]> {
     const show = await this.fetch(`/tv/${id}`)
 
-    return show.seasons?.map((s: any) => ({
-      id: s.id,
-      seasonNumber: s.season_number,
-      name: s.name,
-      overview: s.overview || '',
-      airDate: s.air_date || null,
-      posterPath: s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null,
-      episodeCount: s.episode_count || 0,
-    })) || []
+    return (
+      show.seasons?.map((s: any) => ({
+        id: s.id,
+        seasonNumber: s.season_number,
+        name: s.name,
+        overview: s.overview || '',
+        airDate: s.air_date || null,
+        posterPath: s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null,
+        episodeCount: s.episode_count || 0,
+      })) || []
+    )
   }
 
-  async getTvShowSeason(showId: number, seasonNumber: number): Promise<{ season: TmdbSeason; episodes: TmdbEpisode[] }> {
+  async getTvShowSeason(
+    showId: number,
+    seasonNumber: number
+  ): Promise<{ season: TmdbSeason; episodes: TmdbEpisode[] }> {
     const data = await this.fetch(`/tv/${showId}/season/${seasonNumber}`)
 
     const season: TmdbSeason = {
@@ -220,26 +256,29 @@ export class TmdbService {
       episodeCount: data.episodes?.length || 0,
     }
 
-    const episodes: TmdbEpisode[] = data.episodes?.map((e: any) => ({
-      id: e.id,
-      seasonNumber: e.season_number,
-      episodeNumber: e.episode_number,
-      name: e.name,
-      overview: e.overview || '',
-      airDate: e.air_date || null,
-      stillPath: e.still_path ? `${TMDB_IMAGE_BASE}/w300${e.still_path}` : null,
-      voteAverage: e.vote_average || 0,
-      voteCount: e.vote_count || 0,
-      runtime: e.runtime || null,
-    })) || []
+    const episodes: TmdbEpisode[] =
+      data.episodes?.map((e: any) => ({
+        id: e.id,
+        seasonNumber: e.season_number,
+        episodeNumber: e.episode_number,
+        name: e.name,
+        overview: e.overview || '',
+        airDate: e.air_date || null,
+        stillPath: e.still_path ? `${TMDB_IMAGE_BASE}/w300${e.still_path}` : null,
+        voteAverage: e.vote_average || 0,
+        voteCount: e.vote_count || 0,
+        runtime: e.runtime || null,
+      })) || []
 
     return { season, episodes }
   }
 
   private mapTvShow(s: any): TmdbTvShow {
     // Map genre_ids to names using our mapping, or use full genre objects if available
-    const genres = s.genres?.map((g: any) => g.name) ||
-      s.genre_ids?.map((id: number) => TV_GENRES[id]).filter(Boolean) || []
+    const genres =
+      s.genres?.map((g: any) => g.name) ||
+      s.genre_ids?.map((id: number) => TV_GENRES[id]).filter(Boolean) ||
+      []
 
     return {
       id: s.id,
@@ -260,7 +299,10 @@ export class TmdbService {
     }
   }
 
-  getImageUrl(path: string | null, size: 'w200' | 'w300' | 'w500' | 'original' = 'w500'): string | null {
+  getImageUrl(
+    path: string | null,
+    size: 'w200' | 'w300' | 'w500' | 'original' = 'w500'
+  ): string | null {
     if (!path) return null
     return `${TMDB_IMAGE_BASE}/${size}${path}`
   }

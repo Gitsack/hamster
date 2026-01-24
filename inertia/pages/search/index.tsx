@@ -61,11 +61,23 @@ import {
   ArrowRight01Icon,
   ArrowLeft01Icon,
   ViewIcon,
+  Cancel01Icon,
+  StarIcon,
+  Time01Icon,
+  Calendar03Icon,
+  InformationCircleIcon,
 } from '@hugeicons/core-free-icons'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useMemo, useCallback, useRef, Component, ErrorInfo, ReactNode } from 'react'
 import { toast } from 'sonner'
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
+import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dialog'
 
 // Error boundary to catch rendering errors
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -364,6 +376,50 @@ export default function SearchPage() {
   const [episodeSelection, setEpisodeSelection] = useState<SeasonEpisodeSelection | null>(null)
   const [addingTvShow, setAddingTvShow] = useState(false)
 
+  // Entity details sheet state
+  const [detailsSheetOpen, setDetailsSheetOpen] = useState(false)
+  const [detailsType, setDetailsType] = useState<'movie' | 'tv' | null>(null)
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [movieDetails, setMovieDetails] = useState<{
+    tmdbId: string
+    imdbId?: string
+    title: string
+    originalTitle?: string
+    year?: number
+    overview?: string
+    posterUrl?: string
+    backdropUrl?: string
+    releaseDate?: string
+    runtime?: number
+    status?: string
+    rating?: number
+    votes?: number
+    genres?: string[]
+    cast?: { id: number; name: string; character: string; profileUrl?: string }[]
+    inLibrary: boolean
+    libraryId?: string
+  } | null>(null)
+  const [tvShowDetails, setTvShowDetails] = useState<{
+    tmdbId: string
+    title: string
+    originalTitle?: string
+    year?: number
+    overview?: string
+    posterUrl?: string
+    backdropUrl?: string
+    firstAirDate?: string
+    status?: string
+    rating?: number
+    votes?: number
+    genres?: string[]
+    networks?: string[]
+    seasonCount?: number
+    episodeCount?: number
+    cast?: { id: number; name: string; character: string; profileUrl?: string }[]
+    inLibrary: boolean
+    libraryId?: string
+  } | null>(null)
+
   // Books add state
   const [selectedAuthor, setSelectedAuthor] = useState<AuthorSearchResult | null>(null)
   const [selectedBook, setSelectedBook] = useState<BookSearchResult | null>(null)
@@ -371,14 +427,13 @@ export default function SearchPage() {
   const [addBookDialogOpen, setAddBookDialogOpen] = useState(false)
   const [addingAuthor, setAddingAuthor] = useState(false)
   const [addingBook, setAddingBook] = useState(false)
-  const [addBooks, setAddBooks] = useState(true)
 
   // Common add state
   const [selectedQualityProfile, setSelectedQualityProfile] = useState<string>('')
   const [requested, setWanted] = useState(true)
-  const [searchOnAdd, setSearchOnAdd] = useState(true)
   const [addingArtist, setAddingArtist] = useState(false)
   const [addingAlbum, setAddingAlbum] = useState(false)
+  const [addBooks, setAddBooks] = useState(true)
 
   // Filtered quality profiles by media type
   const movieProfiles = useMemo(() => qualityProfiles.filter((p) => p.mediaType === 'movies'), [qualityProfiles])
@@ -410,6 +465,62 @@ export default function SearchPage() {
       setSelectedQualityProfile(bookProfiles[0].id)
     }
   }, [addAuthorDialogOpen, addBookDialogOpen, bookProfiles])
+
+  // Helper functions to handle add with/without dialog
+  // If only one quality profile exists, add directly; otherwise show dialog
+  const handleAddArtist = (artist: ArtistSearchResult) => {
+    setSelectedArtist(artist)
+    if (musicProfiles.length === 1) {
+      // Add directly with the only profile
+      addArtistWithProfile(artist, musicProfiles[0].id)
+    } else {
+      setAddArtistDialogOpen(true)
+    }
+  }
+
+  const handleAddAlbum = (album: AlbumSearchResult, trackName?: string | null) => {
+    setSelectedAlbum(album)
+    if (trackName) setSelectedTrackName(trackName)
+    else setSelectedTrackName(null)
+    if (musicProfiles.length === 1) {
+      addAlbumWithProfile(album, musicProfiles[0].id)
+    } else {
+      setAddAlbumDialogOpen(true)
+    }
+  }
+
+  const handleAddMovie = (movie: MovieSearchResult) => {
+    setSelectedMovie(movie)
+    if (movieProfiles.length === 1) {
+      addMovieWithProfile(movie, movieProfiles[0].id)
+    } else {
+      setAddMovieDialogOpen(true)
+    }
+  }
+
+  const handleAddTvShow = (show: TvShowSearchResult) => {
+    setSelectedTvShow(show)
+    // TV shows always need season picker first
+    setSeasonPickerOpen(true)
+  }
+
+  const handleAddAuthor = (author: AuthorSearchResult) => {
+    setSelectedAuthor(author)
+    if (bookProfiles.length === 1) {
+      addAuthorWithProfile(author, bookProfiles[0].id)
+    } else {
+      setAddAuthorDialogOpen(true)
+    }
+  }
+
+  const handleAddBook = (book: BookSearchResult) => {
+    setSelectedBook(book)
+    if (bookProfiles.length === 1) {
+      addBookWithProfile(book, bookProfiles[0].id)
+    } else {
+      setAddBookDialogOpen(true)
+    }
+  }
 
   // Music exploration state
   const [expandedArtistId, setExpandedArtistId] = useState<string | null>(null)
@@ -771,28 +882,26 @@ export default function SearchPage() {
     setSelectedResults(new Set())
   }
 
-  // Add functions
-  const addArtist = async () => {
-    if (!selectedArtist || !selectedQualityProfile) return
-
+  // Add functions - with profile parameter for direct add, or uses state for dialog-based add
+  const addArtistWithProfile = async (artist: ArtistSearchResult, qualityProfileId: string) => {
     setAddingArtist(true)
     try {
       const response = await fetch('/api/v1/artists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          musicbrainzId: selectedArtist.musicbrainzId,
-          qualityProfileId: selectedQualityProfile,
+          musicbrainzId: artist.musicbrainzId,
+          qualityProfileId,
           requested,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${selectedArtist.name} added to library`)
+        toast.success(`${artist.name} added to library`)
         setAddArtistDialogOpen(false)
         setArtistResults((prev) =>
-          prev.map((r) => r.musicbrainzId === selectedArtist.musicbrainzId ? { ...r, inLibrary: true } : r)
+          prev.map((r) => r.musicbrainzId === artist.musicbrainzId ? { ...r, inLibrary: true } : r)
         )
         router.visit(`/artist/${data.id}`)
       } else {
@@ -807,29 +916,32 @@ export default function SearchPage() {
     }
   }
 
-  const addAlbum = async () => {
-    if (!selectedAlbum || !selectedQualityProfile) return
+  const addArtist = () => {
+    if (!selectedArtist || !selectedQualityProfile) return
+    addArtistWithProfile(selectedArtist, selectedQualityProfile)
+  }
 
+  const addAlbumWithProfile = async (album: AlbumSearchResult, qualityProfileId: string) => {
     setAddingAlbum(true)
     try {
       const response = await fetch('/api/v1/albums', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          musicbrainzId: selectedAlbum.musicbrainzId,
-          artistMusicbrainzId: selectedAlbum.artistMusicbrainzId,
-          qualityProfileId: selectedQualityProfile,
+          musicbrainzId: album.musicbrainzId,
+          artistMusicbrainzId: album.artistMusicbrainzId,
+          qualityProfileId,
           requested,
-          searchOnAdd,
+          searchOnAdd: true, // Always search immediately
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${selectedAlbum.title} added to library`)
+        toast.success(`${album.title} added to library`)
         setAddAlbumDialogOpen(false)
         setAlbumResults((prev) =>
-          prev.map((r) => r.musicbrainzId === selectedAlbum.musicbrainzId ? { ...r, inLibrary: true } : r)
+          prev.map((r) => r.musicbrainzId === album.musicbrainzId ? { ...r, inLibrary: true } : r)
         )
         router.visit(`/album/${data.id}`)
       } else {
@@ -844,9 +956,12 @@ export default function SearchPage() {
     }
   }
 
-  const addMovie = async () => {
-    if (!selectedMovie || !selectedQualityProfile) return
+  const addAlbum = () => {
+    if (!selectedAlbum || !selectedQualityProfile) return
+    addAlbumWithProfile(selectedAlbum, selectedQualityProfile)
+  }
 
+  const addMovieWithProfile = async (movie: MovieSearchResult, qualityProfileId: string) => {
     const movieRootFolder = rootFolders.find((rf) => rf.mediaType === 'movies')
     if (!movieRootFolder) {
       toast.error('No root folder configured for movies. Please add one in Settings.')
@@ -859,22 +974,22 @@ export default function SearchPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tmdbId: selectedMovie.tmdbId,
-          title: selectedMovie.title,
-          year: selectedMovie.year,
-          qualityProfileId: selectedQualityProfile,
+          tmdbId: movie.tmdbId,
+          title: movie.title,
+          year: movie.year,
+          qualityProfileId,
           rootFolderId: movieRootFolder.id,
           requested,
-          searchOnAdd,
+          searchOnAdd: true, // Always search immediately
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${selectedMovie.title} added to library`)
+        toast.success(`${movie.title} added to library`)
         setAddMovieDialogOpen(false)
         setMovieResults((prev) =>
-          prev.map((r) => r.tmdbId === selectedMovie.tmdbId ? { ...r, inLibrary: true } : r)
+          prev.map((r) => r.tmdbId === movie.tmdbId ? { ...r, inLibrary: true } : r)
         )
         router.visit(`/movie/${data.id}`)
       } else {
@@ -889,9 +1004,12 @@ export default function SearchPage() {
     }
   }
 
-  const addTvShow = async () => {
-    if (!selectedTvShow || !selectedQualityProfile) return
+  const addMovie = () => {
+    if (!selectedMovie || !selectedQualityProfile) return
+    addMovieWithProfile(selectedMovie, selectedQualityProfile)
+  }
 
+  const addTvShowWithProfile = async (show: TvShowSearchResult, qualityProfileId: string, selection: SeasonEpisodeSelection | null) => {
     const tvRootFolder = rootFolders.find((rf) => rf.mediaType === 'tv')
     if (!tvRootFolder) {
       toast.error('No root folder configured for TV shows. Please add one in Settings.')
@@ -904,26 +1022,25 @@ export default function SearchPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tmdbId: selectedTvShow.tmdbId,
-          title: selectedTvShow.title,
-          year: selectedTvShow.year,
-          qualityProfileId: selectedQualityProfile,
+          tmdbId: show.tmdbId,
+          title: show.title,
+          year: show.year,
+          qualityProfileId,
           rootFolderId: tvRootFolder.id,
-          requested: true, // Always request when adding
-          searchOnAdd,
-          // Pass episode selection
-          selectedSeasons: episodeSelection?.selectedSeasons,
-          selectedEpisodes: episodeSelection?.selectedEpisodes,
+          requested: true,
+          searchOnAdd: true, // Always search immediately
+          selectedSeasons: selection?.selectedSeasons,
+          selectedEpisodes: selection?.selectedEpisodes,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${selectedTvShow.title} added to library`)
+        toast.success(`${show.title} added to library`)
         setAddTvShowDialogOpen(false)
         setEpisodeSelection(null)
         setTvShowResults((prev) =>
-          prev.map((r) => r.tmdbId === selectedTvShow.tmdbId ? { ...r, inLibrary: true } : r)
+          prev.map((r) => r.tmdbId === show.tmdbId ? { ...r, inLibrary: true } : r)
         )
         router.visit(`/tvshow/${data.id}`)
       } else {
@@ -938,9 +1055,62 @@ export default function SearchPage() {
     }
   }
 
-  const addAuthor = async () => {
-    if (!selectedAuthor || !selectedQualityProfile) return
+  const addTvShow = () => {
+    if (!selectedTvShow || !selectedQualityProfile) return
+    addTvShowWithProfile(selectedTvShow, selectedQualityProfile, episodeSelection)
+  }
 
+  // Open movie details sheet
+  const openMovieDetails = async (movie: MovieSearchResult) => {
+    setDetailsType('movie')
+    setDetailsSheetOpen(true)
+    setDetailsLoading(true)
+    setMovieDetails(null)
+
+    try {
+      const response = await fetch(`/api/v1/movies/preview?tmdbId=${movie.tmdbId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setMovieDetails(data)
+      } else {
+        toast.error('Failed to load movie details')
+        setDetailsSheetOpen(false)
+      }
+    } catch (error) {
+      console.error('Failed to fetch movie details:', error)
+      toast.error('Failed to load movie details')
+      setDetailsSheetOpen(false)
+    } finally {
+      setDetailsLoading(false)
+    }
+  }
+
+  // Open TV show details sheet
+  const openTvShowDetails = async (show: TvShowSearchResult) => {
+    setDetailsType('tv')
+    setDetailsSheetOpen(true)
+    setDetailsLoading(true)
+    setTvShowDetails(null)
+
+    try {
+      const response = await fetch(`/api/v1/tvshows/preview?tmdbId=${show.tmdbId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setTvShowDetails(data)
+      } else {
+        toast.error('Failed to load TV show details')
+        setDetailsSheetOpen(false)
+      }
+    } catch (error) {
+      console.error('Failed to fetch TV show details:', error)
+      toast.error('Failed to load TV show details')
+      setDetailsSheetOpen(false)
+    } finally {
+      setDetailsLoading(false)
+    }
+  }
+
+  const addAuthorWithProfile = async (author: AuthorSearchResult, qualityProfileId: string, shouldAddBooks: boolean = true) => {
     const booksRootFolder = rootFolders.find((rf) => rf.mediaType === 'books')
     if (!booksRootFolder) {
       toast.error('No root folder configured for books. Please add one in Settings.')
@@ -953,21 +1123,21 @@ export default function SearchPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          openlibraryId: selectedAuthor.openlibraryId,
-          name: selectedAuthor.name,
-          qualityProfileId: selectedQualityProfile,
+          openlibraryId: author.openlibraryId,
+          name: author.name,
+          qualityProfileId,
           rootFolderId: booksRootFolder.id,
           requested,
-          addBooks,
+          addBooks: shouldAddBooks,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${selectedAuthor.name} added to library`)
+        toast.success(`${author.name} added to library`)
         setAddAuthorDialogOpen(false)
         setAuthorResults((prev) =>
-          prev.map((r) => r.openlibraryId === selectedAuthor.openlibraryId ? { ...r, inLibrary: true } : r)
+          prev.map((r) => r.openlibraryId === author.openlibraryId ? { ...r, inLibrary: true } : r)
         )
         router.visit(`/author/${data.id}`)
       } else {
@@ -982,9 +1152,12 @@ export default function SearchPage() {
     }
   }
 
-  const addBook = async () => {
-    if (!selectedBook || !selectedQualityProfile) return
+  const addAuthor = () => {
+    if (!selectedAuthor || !selectedQualityProfile) return
+    addAuthorWithProfile(selectedAuthor, selectedQualityProfile, addBooks)
+  }
 
+  const addBookWithProfile = async (book: BookSearchResult, qualityProfileId: string) => {
     const booksRootFolder = rootFolders.find((rf) => rf.mediaType === 'books')
     if (!booksRootFolder) {
       toast.error('No root folder configured for books. Please add one in Settings.')
@@ -997,11 +1170,11 @@ export default function SearchPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          openlibraryId: selectedBook.openlibraryId,
-          title: selectedBook.title,
-          authorKey: selectedBook.authorKey,
-          authorName: selectedBook.authorName,
-          qualityProfileId: selectedQualityProfile,
+          openlibraryId: book.openlibraryId,
+          title: book.title,
+          authorKey: book.authorKey,
+          authorName: book.authorName,
+          qualityProfileId,
           rootFolderId: booksRootFolder.id,
           requested,
         }),
@@ -1009,10 +1182,10 @@ export default function SearchPage() {
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${selectedBook.title} added to library`)
+        toast.success(`${book.title} added to library`)
         setAddBookDialogOpen(false)
         setBookResults((prev) =>
-          prev.map((r) => r.openlibraryId === selectedBook.openlibraryId ? { ...r, inLibrary: true } : r)
+          prev.map((r) => r.openlibraryId === book.openlibraryId ? { ...r, inLibrary: true } : r)
         )
         router.visit(`/book/${data.id}`)
       } else {
@@ -1025,6 +1198,11 @@ export default function SearchPage() {
     } finally {
       setAddingBook(false)
     }
+  }
+
+  const addBook = () => {
+    if (!selectedBook || !selectedQualityProfile) return
+    addBookWithProfile(selectedBook, selectedQualityProfile)
   }
 
   // Fetch artist albums
@@ -1141,13 +1319,14 @@ export default function SearchPage() {
   const renderResultCard = (
     item: { id: string; name: string; subtitle?: string; extra?: string; imageUrl?: string; inLibrary: boolean },
     icon: typeof MusicNote01Icon,
+    onClick: () => void,
     onAdd: () => void
   ) => {
     const imageKey = `search-${item.id}`
     const showImage = item.imageUrl && !failedImages.has(imageKey)
 
     return (
-      <Card key={item.id} className={item.inLibrary ? 'opacity-60' : ''}>
+      <Card key={item.id} className={`${item.inLibrary ? 'opacity-60' : ''} cursor-pointer hover:bg-muted/50 transition-colors`} onClick={onClick}>
         <CardContent className="flex items-center gap-4 p-4">
           <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden">
             {showImage ? (
@@ -1182,7 +1361,7 @@ export default function SearchPage() {
                 In Library
               </Badge>
             ) : (
-              <Button size="sm" onClick={onAdd}>
+              <Button size="sm" onClick={(e) => { e.stopPropagation(); onAdd() }}>
                 <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
                 Add
               </Button>
@@ -1256,7 +1435,7 @@ export default function SearchPage() {
                           In Library
                         </Badge>
                       ) : (
-                        <Button size="sm" onClick={() => { setSelectedArtist(artist); setAddArtistDialogOpen(true) }}>
+                        <Button size="sm" onClick={() => handleAddArtist(artist)}>
                           <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
                           Add
                         </Button>
@@ -1322,7 +1501,7 @@ export default function SearchPage() {
                                         size="sm"
                                         variant="outline"
                                         className="h-7 text-xs"
-                                        onClick={() => { setSelectedTrackName(null); setSelectedAlbum(album); setAddAlbumDialogOpen(true) }}
+                                        onClick={() => { handleAddAlbum(album) }}
                                       >
                                         <HugeiconsIcon icon={Add01Icon} className="h-3 w-3 mr-1" />
                                         Add
@@ -1367,11 +1546,7 @@ export default function SearchPage() {
                                                 size="sm"
                                                 variant="ghost"
                                                 className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                                                onClick={() => {
-                                                  setSelectedTrackName(track.title)
-                                                  setSelectedAlbum(album)
-                                                  setAddAlbumDialogOpen(true)
-                                                }}
+                                                onClick={() => handleAddAlbum(album, track.title)}
                                               >
                                                 <HugeiconsIcon icon={Add01Icon} className="h-3 w-3" />
                                               </Button>
@@ -1437,7 +1612,7 @@ export default function SearchPage() {
                           In Library
                         </Badge>
                       ) : (
-                        <Button size="sm" onClick={() => { setSelectedTrackName(null); setSelectedAlbum(album); setAddAlbumDialogOpen(true) }}>
+                        <Button size="sm" onClick={() => { handleAddAlbum(album) }}>
                           <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
                           Add
                         </Button>
@@ -1547,9 +1722,7 @@ export default function SearchPage() {
                           artistMusicbrainzId: track.artistMusicbrainzId,
                           inLibrary: false,
                         }
-                        setSelectedTrackName(track.title)
-                        setSelectedAlbum(album)
-                        setAddAlbumDialogOpen(true)
+                        handleAddAlbum(album, track.title)
                       }}
                     >
                       <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
@@ -1578,12 +1751,14 @@ export default function SearchPage() {
     title,
     items,
     type,
-    onItemClick
+    onItemClick,
+    onAdd,
   }: {
     title: string
     items: (MovieSearchResult | TvShowSearchResult)[]
     type: 'movie' | 'tv'
     onItemClick: (item: MovieSearchResult | TvShowSearchResult) => void
+    onAdd: (item: MovieSearchResult | TvShowSearchResult) => void
   }) => {
     const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -1661,15 +1836,25 @@ export default function SearchPage() {
                       {item.genres[0].toUpperCase()}
                     </Badge>
                   )}
-                  {item.inLibrary && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                  {item.inLibrary ? (
                     <Badge
-                      className="absolute top-2 right-2 text-xs gap-1"
+                      className="absolute top-2 right-2 text-xs gap-1 z-10"
                       variant="default"
                     >
                       <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
                     </Badge>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 hover:bg-black/80 text-white border-0 z-10"
+                      onClick={(e) => { e.stopPropagation(); onAdd(item) }}
+                      title="Add to library"
+                    >
+                      <HugeiconsIcon icon={Add01Icon} className="h-3.5 w-3.5" />
+                    </Button>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <p className="text-white text-sm font-medium line-clamp-2">{item.title}</p>
                     {item.year && (
@@ -1717,7 +1902,8 @@ export default function SearchPage() {
                 inLibrary: movie.inLibrary,
               },
               Film01Icon,
-              () => { setSelectedMovie(movie); setAddMovieDialogOpen(true) }
+              () => openMovieDetails(movie),
+              () => handleAddMovie(movie)
             )
           )}
         </div>
@@ -1742,10 +1928,8 @@ export default function SearchPage() {
               title={cat.label}
               items={movieDiscoverLanes[cat.key] || []}
               type="movie"
-              onItemClick={(item) => {
-                setSelectedMovie(item as MovieSearchResult)
-                setAddMovieDialogOpen(true)
-              }}
+              onItemClick={(item) => openMovieDetails(item as MovieSearchResult)}
+              onAdd={(item) => handleAddMovie(item as MovieSearchResult)}
             />
           ))
         ) : (
@@ -1777,7 +1961,8 @@ export default function SearchPage() {
                 inLibrary: show.inLibrary,
               },
               Tv01Icon,
-              () => { setSelectedTvShow(show); setSeasonPickerOpen(true) }
+              () => openTvShowDetails(show),
+              () => handleAddTvShow(show)
             )
           )}
         </div>
@@ -1802,10 +1987,8 @@ export default function SearchPage() {
               title={cat.label}
               items={tvDiscoverLanes[cat.key] || []}
               type="tv"
-              onItemClick={(item) => {
-                setSelectedTvShow(item as TvShowSearchResult)
-                setSeasonPickerOpen(true)
-              }}
+              onItemClick={(item) => openTvShowDetails(item as TvShowSearchResult)}
+              onAdd={(item) => handleAddTvShow(item as TvShowSearchResult)}
             />
           ))
         ) : (
@@ -1834,7 +2017,7 @@ export default function SearchPage() {
                 inLibrary: author.inLibrary,
               },
               Book01Icon,
-              () => { setSelectedAuthor(author); setAddAuthorDialogOpen(true) }
+              () => handleAddAuthor(author)
             )
           )}
         </div>
@@ -1856,7 +2039,7 @@ export default function SearchPage() {
                 inLibrary: book.inLibrary,
               },
               Book01Icon,
-              () => { setSelectedBook(book); setAddBookDialogOpen(true) }
+              () => handleAddBook(book)
             )
           )}
         </div>
@@ -2220,6 +2403,321 @@ export default function SearchPage() {
           </Tabs>
         </div>
 
+        {/* Entity details sheet */}
+        <Sheet open={detailsSheetOpen} onOpenChange={setDetailsSheetOpen}>
+          <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+            {detailsLoading ? (
+              <div className="space-y-4 p-6">
+                <Skeleton className="h-8 w-3/4" />
+                <Skeleton className="aspect-video w-full rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              </div>
+            ) : detailsType === 'movie' && movieDetails ? (
+              <>
+                <SheetHeader className="pb-4">
+                  <SheetTitle className="text-xl pr-8">{movieDetails.title}</SheetTitle>
+                </SheetHeader>
+                <div className="space-y-4 px-6 pb-6 overflow-y-auto">
+                  {/* Backdrop/Poster */}
+                  {(movieDetails.backdropUrl || movieDetails.posterUrl) && (
+                    <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
+                      <img
+                        src={movieDetails.backdropUrl || movieDetails.posterUrl}
+                        alt={movieDetails.title}
+                        className="w-full h-full object-cover"
+                      />
+                      {movieDetails.inLibrary && (
+                        <Badge className="absolute top-3 right-3 gap-1" variant="default">
+                          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                          In Library
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Meta info */}
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    {movieDetails.year && (
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <HugeiconsIcon icon={Calendar03Icon} className="h-4 w-4" />
+                        <span>{movieDetails.year}</span>
+                      </div>
+                    )}
+                    {movieDetails.runtime && (
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <HugeiconsIcon icon={Time01Icon} className="h-4 w-4" />
+                        <span>{movieDetails.runtime} min</span>
+                      </div>
+                    )}
+                    {movieDetails.rating && (
+                      <div className="flex items-center gap-1.5 text-yellow-500">
+                        <HugeiconsIcon icon={StarIcon} className="h-4 w-4 fill-current" />
+                        <span className="font-medium">{movieDetails.rating.toFixed(1)}</span>
+                        {movieDetails.votes && (
+                          <span className="text-muted-foreground">({movieDetails.votes.toLocaleString()})</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Genres */}
+                  {movieDetails.genres && movieDetails.genres.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {movieDetails.genres.map((genre) => (
+                        <Badge key={genre} variant="secondary">{genre}</Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Cast */}
+                  {movieDetails.cast && movieDetails.cast.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-3">Cast</h4>
+                      <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent" style={{ scrollbarWidth: 'thin' }}>
+                        {movieDetails.cast.map((actor) => (
+                          <div key={actor.id} className="flex-shrink-0 w-16 text-center">
+                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted mb-1.5">
+                              {actor.profileUrl ? (
+                                <img
+                                  src={actor.profileUrl}
+                                  alt={actor.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-lg font-medium">
+                                  {actor.name.charAt(0)}
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-medium leading-tight line-clamp-2">{actor.name}</p>
+                            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">{actor.character}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Overview */}
+                  {movieDetails.overview && (
+                    <div>
+                      <h4 className="font-medium mb-2">Overview</h4>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{movieDetails.overview}</p>
+                    </div>
+                  )}
+
+                  {/* Status */}
+                  {movieDetails.status && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <HugeiconsIcon icon={InformationCircleIcon} className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Status:</span>
+                      <span>{movieDetails.status}</span>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-4">
+                    {movieDetails.inLibrary ? (
+                      <Button
+                        className="flex-1"
+                        onClick={() => {
+                          setDetailsSheetOpen(false)
+                          router.visit(`/movie/${movieDetails.libraryId}`)
+                        }}
+                      >
+                        <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-2" />
+                        View in Library
+                      </Button>
+                    ) : (
+                      <Button
+                        className="flex-1"
+                        disabled={addingMovie}
+                        onClick={() => {
+                          const movie: MovieSearchResult = {
+                            tmdbId: movieDetails.tmdbId,
+                            title: movieDetails.title,
+                            year: movieDetails.year,
+                            overview: movieDetails.overview,
+                            posterUrl: movieDetails.posterUrl,
+                            rating: movieDetails.rating,
+                            inLibrary: false,
+                          }
+                          setDetailsSheetOpen(false)
+                          handleAddMovie(movie)
+                        }}
+                      >
+                        {addingMovie ? (
+                          <Spinner className="h-4 w-4 mr-2" />
+                        ) : (
+                          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                        )}
+                        Add to Library
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : detailsType === 'tv' && tvShowDetails ? (
+              <>
+                <SheetHeader className="pb-4">
+                  <SheetTitle className="text-xl pr-8">{tvShowDetails.title}</SheetTitle>
+                </SheetHeader>
+                <div className="space-y-4 px-6 pb-6 overflow-y-auto">
+                  {/* Backdrop/Poster */}
+                  {(tvShowDetails.backdropUrl || tvShowDetails.posterUrl) && (
+                    <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
+                      <img
+                        src={tvShowDetails.backdropUrl || tvShowDetails.posterUrl}
+                        alt={tvShowDetails.title}
+                        className="w-full h-full object-cover"
+                      />
+                      {tvShowDetails.inLibrary && (
+                        <Badge className="absolute top-3 right-3 gap-1" variant="default">
+                          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                          In Library
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Meta info */}
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    {tvShowDetails.year && (
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <HugeiconsIcon icon={Calendar03Icon} className="h-4 w-4" />
+                        <span>{tvShowDetails.year}</span>
+                      </div>
+                    )}
+                    {tvShowDetails.seasonCount && (
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <HugeiconsIcon icon={Tv01Icon} className="h-4 w-4" />
+                        <span>{tvShowDetails.seasonCount} Season{tvShowDetails.seasonCount !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
+                    {tvShowDetails.rating && (
+                      <div className="flex items-center gap-1.5 text-yellow-500">
+                        <HugeiconsIcon icon={StarIcon} className="h-4 w-4 fill-current" />
+                        <span className="font-medium">{tvShowDetails.rating.toFixed(1)}</span>
+                        {tvShowDetails.votes && (
+                          <span className="text-muted-foreground">({tvShowDetails.votes.toLocaleString()})</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Genres */}
+                  {tvShowDetails.genres && tvShowDetails.genres.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {tvShowDetails.genres.map((genre) => (
+                        <Badge key={genre} variant="secondary">{genre}</Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Networks */}
+                  {tvShowDetails.networks && tvShowDetails.networks.length > 0 && (
+                    <div className="text-sm text-muted-foreground">
+                      Network: {tvShowDetails.networks.join(', ')}
+                    </div>
+                  )}
+
+                  {/* Cast */}
+                  {tvShowDetails.cast && tvShowDetails.cast.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-3">Cast</h4>
+                      <div className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent" style={{ scrollbarWidth: 'thin' }}>
+                        {tvShowDetails.cast.map((actor) => (
+                          <div key={actor.id} className="flex-shrink-0 w-16 text-center">
+                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted mb-1.5">
+                              {actor.profileUrl ? (
+                                <img
+                                  src={actor.profileUrl}
+                                  alt={actor.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-lg font-medium">
+                                  {actor.name.charAt(0)}
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-[11px] font-medium leading-tight line-clamp-2">{actor.name}</p>
+                            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">{actor.character}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Overview */}
+                  {tvShowDetails.overview && (
+                    <div>
+                      <h4 className="font-medium mb-2">Overview</h4>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{tvShowDetails.overview}</p>
+                    </div>
+                  )}
+
+                  {/* Status */}
+                  {tvShowDetails.status && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <HugeiconsIcon icon={InformationCircleIcon} className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Status:</span>
+                      <span>{tvShowDetails.status}</span>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-4">
+                    {tvShowDetails.inLibrary ? (
+                      <Button
+                        className="flex-1"
+                        onClick={() => {
+                          setDetailsSheetOpen(false)
+                          router.visit(`/tvshow/${tvShowDetails.libraryId}`)
+                        }}
+                      >
+                        <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-2" />
+                        View in Library
+                      </Button>
+                    ) : (
+                      <Button
+                        className="flex-1"
+                        disabled={addingTvShow}
+                        onClick={() => {
+                          const show: TvShowSearchResult = {
+                            tmdbId: tvShowDetails.tmdbId,
+                            title: tvShowDetails.title,
+                            year: tvShowDetails.year,
+                            overview: tvShowDetails.overview,
+                            posterUrl: tvShowDetails.posterUrl,
+                            status: tvShowDetails.status,
+                            rating: tvShowDetails.rating,
+                            seasonCount: tvShowDetails.seasonCount,
+                            episodeCount: tvShowDetails.episodeCount,
+                            inLibrary: false,
+                          }
+                          setDetailsSheetOpen(false)
+                          handleAddTvShow(show)
+                        }}
+                      >
+                        {addingTvShow ? (
+                          <Spinner className="h-4 w-4 mr-2" />
+                        ) : (
+                          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                        )}
+                        Add to Library
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </SheetContent>
+        </Sheet>
+
         {/* Download confirmation dialog */}
         <Dialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
           <DialogContent>
@@ -2259,145 +2757,6 @@ export default function SearchPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Add artist dialog */}
-        <Dialog open={addArtistDialogOpen} onOpenChange={setAddArtistDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add {selectedArtist?.name}</DialogTitle>
-              <DialogDescription>Configure how this artist will be added to your library.</DialogDescription>
-            </DialogHeader>
-            {loadingOptions ? (
-              <div className="space-y-4 py-4">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : (
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Quality Profile</Label>
-                  <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select profile">
-                        {(value: string) => musicProfiles.find((p) => p.id === value)?.name || 'Select profile'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {musicProfiles.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddArtistDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addArtist} disabled={addingArtist || !selectedQualityProfile}>
-                {addingArtist && <Spinner className="mr-2" />}
-                Add Artist
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Add album dialog */}
-        <Dialog open={addAlbumDialogOpen} onOpenChange={(open) => {
-          setAddAlbumDialogOpen(open)
-          if (!open) setSelectedTrackName(null)
-        }}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {selectedTrackName ? `Add "${selectedTrackName}"` : `Add ${selectedAlbum?.title}`}
-              </DialogTitle>
-              <DialogDescription>
-                {selectedTrackName
-                  ? `To get this track, the album "${selectedAlbum?.title}" by ${selectedAlbum?.artistName} will be added.`
-                  : `This will add ${selectedAlbum?.artistName} with this album.`
-                }
-              </DialogDescription>
-            </DialogHeader>
-            {loadingOptions ? (
-              <div className="space-y-4 py-4">
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : (
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Quality Profile</Label>
-                  <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select profile">
-                        {(value: string) => musicProfiles.find((p) => p.id === value)?.name || 'Select profile'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {musicProfiles.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="searchOnAdd" checked={searchOnAdd} onCheckedChange={(c) => setSearchOnAdd(c as boolean)} />
-                  <Label htmlFor="searchOnAdd" className="font-normal cursor-pointer">Search for album immediately</Label>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddAlbumDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addAlbum} disabled={addingAlbum || !selectedQualityProfile}>
-                {addingAlbum && <Spinner className="mr-2" />}
-                Add Album
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Add movie dialog */}
-        <Dialog open={addMovieDialogOpen} onOpenChange={setAddMovieDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add {selectedMovie?.title}</DialogTitle>
-              <DialogDescription>Configure how this movie will be added to your library.</DialogDescription>
-            </DialogHeader>
-            {loadingOptions ? (
-              <div className="space-y-4 py-4">
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : (
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Quality Profile</Label>
-                  <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select profile">
-                        {(value: string) => movieProfiles.find((p) => p.id === value)?.name || 'Select profile'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {movieProfiles.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="movieSearch" checked={searchOnAdd} onCheckedChange={(c) => setSearchOnAdd(c as boolean)} />
-                  <Label htmlFor="movieSearch" className="font-normal cursor-pointer">Search for movie immediately</Label>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddMovieDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addMovie} disabled={addingMovie || !selectedQualityProfile}>
-                {addingMovie && <Spinner className="mr-2" />}
-                Add Movie
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
         {/* Season picker dialog */}
         {selectedTvShow && (
           <SeasonPickerDialog
@@ -2408,161 +2767,107 @@ export default function SearchPage() {
             onConfirm={(selection) => {
               setEpisodeSelection(selection)
               setSeasonPickerOpen(false)
-              setAddTvShowDialogOpen(true)
+              // If only one TV profile, add directly; otherwise show dialog
+              if (tvProfiles.length === 1) {
+                addTvShowWithProfile(selectedTvShow, tvProfiles[0].id, selection)
+              } else {
+                setAddTvShowDialogOpen(true)
+              }
             }}
           />
         )}
 
-        {/* Add TV show dialog */}
-        <Dialog open={addTvShowDialogOpen} onOpenChange={setAddTvShowDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add {selectedTvShow?.title}</DialogTitle>
-              <DialogDescription>Configure how this TV show will be added to your library.</DialogDescription>
-            </DialogHeader>
-            {loadingOptions ? (
-              <div className="space-y-4 py-4">
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : (
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Quality Profile</Label>
-                  <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select profile">
-                        {(value: string) => tvProfiles.find((p) => p.id === value)?.name || 'Select profile'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {tvProfiles.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-                {episodeSelection && (
-                  <div className="text-sm text-muted-foreground border rounded-md p-3 bg-muted/50">
-                    {episodeSelection.selectedSeasons
-                      ? `${episodeSelection.selectedSeasons.length} season${episodeSelection.selectedSeasons.length !== 1 ? 's' : ''} selected`
-                      : episodeSelection.selectedEpisodes
-                        ? `${Object.values(episodeSelection.selectedEpisodes).reduce((sum, eps) => sum + eps.length, 0)} episodes selected`
-                        : 'All episodes selected'
-                    }
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="ml-2 h-auto p-0"
-                      onClick={() => {
-                        setAddTvShowDialogOpen(false)
-                        setSeasonPickerOpen(true)
-                      }}
-                    >
-                      Change
-                    </Button>
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <Checkbox id="tvSearch" checked={searchOnAdd} onCheckedChange={(c) => setSearchOnAdd(c as boolean)} />
-                  <Label htmlFor="tvSearch" className="font-normal cursor-pointer">Search for episodes immediately</Label>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddTvShowDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addTvShow} disabled={addingTvShow || !selectedQualityProfile}>
-                {addingTvShow && <Spinner className="mr-2" />}
-                Add TV Show
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Unified Add Media Dialogs */}
+        <AddMediaDialog
+          open={addArtistDialogOpen}
+          onOpenChange={setAddArtistDialogOpen}
+          mediaType="artist"
+          title={selectedArtist?.name || ''}
+          description="Configure how this artist will be added to your library."
+          qualityProfiles={musicProfiles}
+          loading={loadingOptions}
+          adding={addingArtist}
+          onAdd={(profileId) => selectedArtist && addArtistWithProfile(selectedArtist, profileId)}
+        />
 
-        {/* Add author dialog */}
-        <Dialog open={addAuthorDialogOpen} onOpenChange={setAddAuthorDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add {selectedAuthor?.name}</DialogTitle>
-              <DialogDescription>Configure how this author will be added to your library.</DialogDescription>
-            </DialogHeader>
-            {loadingOptions ? (
-              <div className="space-y-4 py-4">
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : (
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Quality Profile</Label>
-                  <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select profile">
-                        {(value: string) => bookProfiles.find((p) => p.id === value)?.name || 'Select profile'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {bookProfiles.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox id="addBooks" checked={addBooks} onCheckedChange={(c) => setAddBooks(c as boolean)} />
-                  <Label htmlFor="addBooks" className="font-normal cursor-pointer">Also add author's books</Label>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddAuthorDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addAuthor} disabled={addingAuthor || !selectedQualityProfile}>
-                {addingAuthor && <Spinner className="mr-2" />}
-                Add Author
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <AddMediaDialog
+          open={addAlbumDialogOpen}
+          onOpenChange={(open) => {
+            setAddAlbumDialogOpen(open)
+            if (!open) setSelectedTrackName(null)
+          }}
+          mediaType="album"
+          title={selectedTrackName ? `"${selectedTrackName}"` : selectedAlbum?.title || ''}
+          description={
+            selectedTrackName
+              ? `To get this track, the album "${selectedAlbum?.title}" by ${selectedAlbum?.artistName} will be added.`
+              : `This will add ${selectedAlbum?.artistName} with this album.`
+          }
+          qualityProfiles={musicProfiles}
+          loading={loadingOptions}
+          adding={addingAlbum}
+          onAdd={(profileId) => selectedAlbum && addAlbumWithProfile(selectedAlbum, profileId)}
+        />
 
-        {/* Add book dialog */}
-        <Dialog open={addBookDialogOpen} onOpenChange={setAddBookDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add {selectedBook?.title}</DialogTitle>
-              <DialogDescription>
-                By {selectedBook?.authorName}. This will also add the author if not already in your library.
-              </DialogDescription>
-            </DialogHeader>
-            {loadingOptions ? (
-              <div className="space-y-4 py-4">
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ) : (
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Quality Profile</Label>
-                  <Select value={selectedQualityProfile} onValueChange={setSelectedQualityProfile}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select profile">
-                        {(value: string) => bookProfiles.find((p) => p.id === value)?.name || 'Select profile'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {bookProfiles.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddBookDialogOpen(false)}>Cancel</Button>
-              <Button onClick={addBook} disabled={addingBook || !selectedQualityProfile}>
-                {addingBook && <Spinner className="mr-2" />}
-                Add Book
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <AddMediaDialog
+          open={addMovieDialogOpen}
+          onOpenChange={setAddMovieDialogOpen}
+          mediaType="movie"
+          title={selectedMovie?.title || ''}
+          description="Configure how this movie will be added to your library."
+          qualityProfiles={movieProfiles}
+          loading={loadingOptions}
+          adding={addingMovie}
+          onAdd={(profileId) => selectedMovie && addMovieWithProfile(selectedMovie, profileId)}
+        />
+
+        <AddMediaDialog
+          open={addTvShowDialogOpen}
+          onOpenChange={setAddTvShowDialogOpen}
+          mediaType="tvshow"
+          title={selectedTvShow?.title || ''}
+          description="Configure how this TV show will be added to your library."
+          qualityProfiles={tvProfiles}
+          loading={loadingOptions}
+          adding={addingTvShow}
+          onAdd={(profileId) => selectedTvShow && addTvShowWithProfile(selectedTvShow, profileId, episodeSelection)}
+          episodeSelectionSummary={episodeSelection && (
+            episodeSelection.selectedSeasons
+              ? `${episodeSelection.selectedSeasons.length} season${episodeSelection.selectedSeasons.length !== 1 ? 's' : ''} selected`
+              : episodeSelection.selectedEpisodes
+                ? `${Object.values(episodeSelection.selectedEpisodes).reduce((sum, eps) => sum + eps.length, 0)} episodes selected`
+                : 'All episodes selected'
+          )}
+          onChangeEpisodeSelection={() => {
+            setAddTvShowDialogOpen(false)
+            setSeasonPickerOpen(true)
+          }}
+        />
+
+        <AddMediaDialog
+          open={addAuthorDialogOpen}
+          onOpenChange={setAddAuthorDialogOpen}
+          mediaType="author"
+          title={selectedAuthor?.name || ''}
+          description="Configure how this author will be added to your library."
+          qualityProfiles={bookProfiles}
+          loading={loadingOptions}
+          adding={addingAuthor}
+          onAdd={(profileId, options) => selectedAuthor && addAuthorWithProfile(selectedAuthor, profileId, options?.addBooks ?? true)}
+          showAddBooksOption
+        />
+
+        <AddMediaDialog
+          open={addBookDialogOpen}
+          onOpenChange={setAddBookDialogOpen}
+          mediaType="book"
+          title={selectedBook?.title || ''}
+          description={`By ${selectedBook?.authorName}. This will also add the author if not already in your library.`}
+          qualityProfiles={bookProfiles}
+          loading={loadingOptions}
+          adding={addingBook}
+          onAdd={(profileId) => selectedBook && addBookWithProfile(selectedBook, profileId)}
+        />
       </AppLayout>
     </ErrorBoundary>
   )

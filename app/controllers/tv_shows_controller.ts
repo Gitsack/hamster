@@ -23,9 +23,7 @@ const tvShowValidator = vine.compile(
     searchOnAdd: vine.boolean().optional(),
     selectedSeasons: vine.array(vine.number()).optional(),
     // Episode-level selection: { seasonNumber: [episodeNumbers] }
-    selectedEpisodes: vine
-      .record(vine.array(vine.number()))
-      .optional(),
+    selectedEpisodes: vine.record(vine.array(vine.number())).optional(),
   })
 )
 
@@ -94,10 +92,64 @@ export default class TvShowsController {
   }
 
   /**
+   * Preview TV show details from TMDB (before adding to library)
+   */
+  async preview({ request, response }: HttpContext) {
+    const tmdbId = request.input('tmdbId')
+
+    if (!tmdbId) {
+      return response.badRequest({ error: 'tmdbId is required' })
+    }
+
+    try {
+      const [show, cast] = await Promise.all([
+        tmdbService.getTvShow(parseInt(tmdbId)),
+        tmdbService.getTvShowCredits(parseInt(tmdbId), 6),
+      ])
+
+      // Check if already in library
+      const existing = await TvShow.query().where('tmdbId', String(show.id)).first()
+
+      return response.json({
+        tmdbId: String(show.id),
+        title: show.name,
+        originalTitle: show.originalName,
+        year: show.year,
+        overview: show.overview,
+        posterUrl: show.posterPath,
+        backdropUrl: show.backdropPath,
+        firstAirDate: show.firstAirDate,
+        status: show.status,
+        rating: show.voteAverage,
+        votes: show.voteCount,
+        genres: show.genres,
+        networks: show.networks,
+        seasonCount: show.numberOfSeasons,
+        episodeCount: show.numberOfEpisodes,
+        cast: cast.map((c) => ({
+          id: c.id,
+          name: c.name,
+          character: c.character,
+          profileUrl: c.profilePath,
+        })),
+        inLibrary: !!existing,
+        libraryId: existing?.id,
+      })
+    } catch (error) {
+      console.error('TMDB preview error:', error)
+      return response.badRequest({ error: 'Failed to fetch TV show details' })
+    }
+  }
+
+  /**
    * Get discover/popular TV shows (for browsing when no search query)
    */
   async discover({ request, response }: HttpContext) {
-    const category = request.input('category', 'popular') as 'popular' | 'on_the_air' | 'top_rated' | 'trending'
+    const category = request.input('category', 'popular') as
+      | 'popular'
+      | 'on_the_air'
+      | 'top_rated'
+      | 'trending'
 
     try {
       let results
@@ -179,7 +231,10 @@ export default class TvShowsController {
           overview: tmdbData.overview,
           firstAired: tmdbData.firstAirDate ? DateTime.fromISO(tmdbData.firstAirDate) : null,
           year: tmdbData.year,
-          runtime: tmdbData.numberOfEpisodes > 0 ? Math.round(tmdbData.numberOfEpisodes / tmdbData.numberOfSeasons) : null,
+          runtime:
+            tmdbData.numberOfEpisodes > 0
+              ? Math.round(tmdbData.numberOfEpisodes / tmdbData.numberOfSeasons)
+              : null,
           status: tmdbData.status,
           network: tmdbData.networks[0] || null,
           posterUrl: tmdbData.posterPath,
@@ -206,9 +261,7 @@ export default class TvShowsController {
         // If selectedSeasons is provided, only those seasons are requested
         // If selectedSeasons is undefined, all seasons are requested (backward compatibility)
         // If selectedSeasons is empty array, no seasons are requested
-        const selectedSeasonNumbers = data.selectedSeasons
-          ? new Set(data.selectedSeasons)
-          : null // null means all seasons
+        const selectedSeasonNumbers = data.selectedSeasons ? new Set(data.selectedSeasons) : null // null means all seasons
 
         // Episode-level selection: { "1": [1, 2, 3], "2": [5, 6] }
         const selectedEpisodeMap = data.selectedEpisodes || null
@@ -256,7 +309,10 @@ export default class TvShowsController {
           })
 
           // Fetch episodes for this season
-          const { episodes } = await tmdbService.getTvShowSeason(parseInt(data.tmdbId), seasonData.seasonNumber)
+          const { episodes } = await tmdbService.getTvShowSeason(
+            parseInt(data.tmdbId),
+            seasonData.seasonNumber
+          )
 
           for (const episodeData of episodes) {
             // Determine if this episode should be requested
@@ -349,31 +405,37 @@ export default class TvShowsController {
       episodeCount: show.episodeCount,
       qualityProfile: show.qualityProfile,
       rootFolder: show.rootFolder,
-      seasons: await Promise.all(show.seasons.map(async (s) => {
-        const downloadedCount = s.episodes.filter((e) => e.hasFile).length
-        const downloadingCount = s.episodes.filter((e) => downloadingEpisodeIds.has(e.id)).length
-        const requestedCount = s.episodes.filter((e) => e.requested && !e.hasFile && !downloadingEpisodeIds.has(e.id)).length
+      seasons: await Promise.all(
+        show.seasons.map(async (s) => {
+          const downloadedCount = s.episodes.filter((e) => e.hasFile).length
+          const downloadingCount = s.episodes.filter((e) => downloadingEpisodeIds.has(e.id)).length
+          const requestedCount = s.episodes.filter(
+            (e) => e.requested && !e.hasFile && !downloadingEpisodeIds.has(e.id)
+          ).length
 
-        // Auto-sync season requested status if out of sync with episodes
-        // If season is marked requested but no episodes are actually requested, reset it
-        if (s.requested && requestedCount === 0 && downloadingCount === 0) {
-          s.requested = false
-          await s.save()
-          console.log(`[TvShowsController] Auto-synced season ${s.seasonNumber} requested=false (no requested episodes)`)
-        }
+          // Auto-sync season requested status if out of sync with episodes
+          // If season is marked requested but no episodes are actually requested, reset it
+          if (s.requested && requestedCount === 0 && downloadingCount === 0) {
+            s.requested = false
+            await s.save()
+            console.log(
+              `[TvShowsController] Auto-synced season ${s.seasonNumber} requested=false (no requested episodes)`
+            )
+          }
 
-        return {
-          id: s.id,
-          seasonNumber: s.seasonNumber,
-          title: s.title,
-          episodeCount: s.episodeCount,
-          requested: s.requested,
-          posterUrl: s.posterUrl,
-          downloadedCount,
-          downloadingCount,
-          requestedCount,
-        }
-      })),
+          return {
+            id: s.id,
+            seasonNumber: s.seasonNumber,
+            title: s.title,
+            episodeCount: s.episodeCount,
+            requested: s.requested,
+            posterUrl: s.posterUrl,
+            downloadedCount,
+            downloadingCount,
+            requestedCount,
+          }
+        })
+      ),
       addedAt: show.addedAt?.toISO(),
     })
   }
@@ -490,7 +552,10 @@ export default class TvShowsController {
         try {
           await downloadManager.cancel(activeDownload.id, true)
         } catch (error) {
-          console.error(`[TvShowsController] Failed to cancel download ${activeDownload.id}:`, error)
+          console.error(
+            `[TvShowsController] Failed to cancel download ${activeDownload.id}:`,
+            error
+          )
         }
       }
     }
@@ -527,9 +592,7 @@ export default class TvShowsController {
     await season.save()
 
     // Update all episodes in this season
-    await Episode.query()
-      .where('seasonId', season.id)
-      .update({ requested: newStatus })
+    await Episode.query().where('seasonId', season.id).update({ requested: newStatus })
 
     // If unrequesting, cancel all active downloads for episodes in this season
     if (!newStatus) {
@@ -653,7 +716,10 @@ export default class TvShowsController {
     }
 
     try {
-      const { episodes } = await tmdbService.getTvShowSeason(parseInt(tmdbId), parseInt(seasonNumber))
+      const { episodes } = await tmdbService.getTvShowSeason(
+        parseInt(tmdbId),
+        parseInt(seasonNumber)
+      )
 
       return response.json(
         episodes.map((episode) => ({
@@ -751,8 +817,8 @@ export default class TvShowsController {
 
     // Find best match (exact title match preferred, then year match)
     const exactMatch = results.find(
-      (r) => r.name.toLowerCase() === show.title.toLowerCase() &&
-             (!show.year || r.year === show.year)
+      (r) =>
+        r.name.toLowerCase() === show.title.toLowerCase() && (!show.year || r.year === show.year)
     )
     const best = exactMatch || results[0]
 
@@ -796,7 +862,10 @@ export default class TvShowsController {
           await season.save()
 
           // Enrich episodes and create missing ones
-          const { episodes: tmdbEpisodes } = await tmdbService.getTvShowSeason(best.id, season.seasonNumber)
+          const { episodes: tmdbEpisodes } = await tmdbService.getTvShowSeason(
+            best.id,
+            season.seasonNumber
+          )
 
           // Create a set of existing episode numbers for quick lookup
           const existingEpisodeNumbers = new Set(season.episodes.map((e) => e.episodeNumber))
@@ -937,7 +1006,10 @@ export default class TvShowsController {
         }
 
         // Fetch episodes for this season
-        const { episodes: tmdbEpisodes } = await tmdbService.getTvShowSeason(tmdbId, tmdbSeason.seasonNumber)
+        const { episodes: tmdbEpisodes } = await tmdbService.getTvShowSeason(
+          tmdbId,
+          tmdbSeason.seasonNumber
+        )
 
         // Get existing episodes for this season
         const existingEpisodes = season.episodes || []
@@ -951,7 +1023,9 @@ export default class TvShowsController {
               tmdbId: String(tmdbEpisode.id),
               title: tmdbEpisode.name || episode.title,
               overview: tmdbEpisode.overview || episode.overview,
-              airDate: tmdbEpisode.airDate ? DateTime.fromISO(tmdbEpisode.airDate) : episode.airDate,
+              airDate: tmdbEpisode.airDate
+                ? DateTime.fromISO(tmdbEpisode.airDate)
+                : episode.airDate,
               runtime: tmdbEpisode.runtime || episode.runtime,
               stillUrl: tmdbEpisode.stillPath || episode.stillUrl,
               rating: tmdbEpisode.voteAverage || episode.rating,
@@ -1020,7 +1094,9 @@ export default class TvShowsController {
       episode.hasFile = false
       episode.episodeFileId = null
       await episode.save()
-      console.log(`[TvShowsController] Reset hasFile flag for episode without file record: ${episode.id}`)
+      console.log(
+        `[TvShowsController] Reset hasFile flag for episode without file record: ${episode.id}`
+      )
       return response.json({
         message: 'Episode status reset (no file record found)',
         episodeId: episode.id,

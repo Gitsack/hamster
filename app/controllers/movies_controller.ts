@@ -81,10 +81,63 @@ export default class MoviesController {
   }
 
   /**
+   * Preview movie details from TMDB (before adding to library)
+   */
+  async preview({ request, response }: HttpContext) {
+    const tmdbId = request.input('tmdbId')
+
+    if (!tmdbId) {
+      return response.badRequest({ error: 'tmdbId is required' })
+    }
+
+    try {
+      const [movie, cast] = await Promise.all([
+        tmdbService.getMovie(parseInt(tmdbId)),
+        tmdbService.getMovieCredits(parseInt(tmdbId), 6),
+      ])
+
+      // Check if already in library
+      const existing = await Movie.query().where('tmdbId', String(movie.id)).first()
+
+      return response.json({
+        tmdbId: String(movie.id),
+        imdbId: movie.imdbId,
+        title: movie.title,
+        originalTitle: movie.originalTitle,
+        year: movie.year,
+        overview: movie.overview,
+        posterUrl: movie.posterPath,
+        backdropUrl: movie.backdropPath,
+        releaseDate: movie.releaseDate,
+        runtime: movie.runtime,
+        status: movie.status,
+        rating: movie.voteAverage,
+        votes: movie.voteCount,
+        genres: movie.genres,
+        cast: cast.map((c) => ({
+          id: c.id,
+          name: c.name,
+          character: c.character,
+          profileUrl: c.profilePath,
+        })),
+        inLibrary: !!existing,
+        libraryId: existing?.id,
+      })
+    } catch (error) {
+      console.error('TMDB preview error:', error)
+      return response.badRequest({ error: 'Failed to fetch movie details' })
+    }
+  }
+
+  /**
    * Get discover/popular movies (for browsing when no search query)
    */
   async discover({ request, response }: HttpContext) {
-    const category = request.input('category', 'popular') as 'popular' | 'now_playing' | 'upcoming' | 'trending'
+    const category = request.input('category', 'popular') as
+      | 'popular'
+      | 'now_playing'
+      | 'upcoming'
+      | 'trending'
 
     try {
       let results
@@ -440,8 +493,9 @@ export default class MoviesController {
 
     // Find best match (exact title match preferred, then year match)
     const exactMatch = results.find(
-      (r) => r.title.toLowerCase() === movie.title.toLowerCase() &&
-             (!movie.year || r.year === movie.year)
+      (r) =>
+        r.title.toLowerCase() === movie.title.toLowerCase() &&
+        (!movie.year || r.year === movie.year)
     )
     const best = exactMatch || results[0]
 
