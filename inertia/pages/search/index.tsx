@@ -78,6 +78,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Component, ErrorInfo
 import { toast } from 'sonner'
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
 import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dialog'
+import { MediaStatusBadge, CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 
 // Error boundary to catch rendering errors
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -177,6 +178,9 @@ interface MovieSearchResult {
   rating?: number
   genres?: string[]
   inLibrary: boolean
+  libraryId?: number
+  requested?: boolean
+  hasFile?: boolean
 }
 
 interface TvShowSearchResult {
@@ -192,6 +196,8 @@ interface TvShowSearchResult {
   episodeCount?: number
   genres?: string[]
   inLibrary: boolean
+  libraryId?: number
+  requested?: boolean
 }
 
 interface AuthorSearchResult {
@@ -368,6 +374,7 @@ export default function SearchPage() {
   const [selectedMovie, setSelectedMovie] = useState<MovieSearchResult | null>(null)
   const [addMovieDialogOpen, setAddMovieDialogOpen] = useState(false)
   const [addingMovie, setAddingMovie] = useState(false)
+  const [togglingMovies, setTogglingMovies] = useState<Set<string>>(new Set())
 
   // TV add state
   const [selectedTvShow, setSelectedTvShow] = useState<TvShowSearchResult | null>(null)
@@ -375,11 +382,16 @@ export default function SearchPage() {
   const [seasonPickerOpen, setSeasonPickerOpen] = useState(false)
   const [episodeSelection, setEpisodeSelection] = useState<SeasonEpisodeSelection | null>(null)
   const [addingTvShow, setAddingTvShow] = useState(false)
+  const [togglingTvShows, setTogglingTvShows] = useState<Set<string>>(new Set())
+
+  // Navigation control after adding
+  const [navigateAfterAdd, setNavigateAfterAdd] = useState(true)
 
   // Entity details sheet state
   const [detailsSheetOpen, setDetailsSheetOpen] = useState(false)
   const [detailsType, setDetailsType] = useState<'movie' | 'tv' | null>(null)
   const [detailsLoading, setDetailsLoading] = useState(false)
+  const [togglingDetails, setTogglingDetails] = useState(false)
   const [movieDetails, setMovieDetails] = useState<{
     tmdbId: string
     imdbId?: string
@@ -397,7 +409,9 @@ export default function SearchPage() {
     genres?: string[]
     cast?: { id: number; name: string; character: string; profileUrl?: string }[]
     inLibrary: boolean
-    libraryId?: string
+    libraryId?: number
+    requested?: boolean
+    hasFile?: boolean
   } | null>(null)
   const [tvShowDetails, setTvShowDetails] = useState<{
     tmdbId: string
@@ -417,7 +431,8 @@ export default function SearchPage() {
     episodeCount?: number
     cast?: { id: number; name: string; character: string; profileUrl?: string }[]
     inLibrary: boolean
-    libraryId?: string
+    libraryId?: number
+    requested?: boolean
   } | null>(null)
 
   // Books add state
@@ -489,17 +504,19 @@ export default function SearchPage() {
     }
   }
 
-  const handleAddMovie = (movie: MovieSearchResult) => {
+  const handleAddMovie = (movie: MovieSearchResult, navigate = true) => {
     setSelectedMovie(movie)
+    setNavigateAfterAdd(navigate)
     if (movieProfiles.length === 1) {
-      addMovieWithProfile(movie, movieProfiles[0].id)
+      addMovieWithProfile(movie, movieProfiles[0].id, navigate)
     } else {
       setAddMovieDialogOpen(true)
     }
   }
 
-  const handleAddTvShow = (show: TvShowSearchResult) => {
+  const handleAddTvShow = (show: TvShowSearchResult, navigate = true) => {
     setSelectedTvShow(show)
+    setNavigateAfterAdd(navigate)
     // TV shows always need season picker first
     setSeasonPickerOpen(true)
   }
@@ -961,7 +978,7 @@ export default function SearchPage() {
     addAlbumWithProfile(selectedAlbum, selectedQualityProfile)
   }
 
-  const addMovieWithProfile = async (movie: MovieSearchResult, qualityProfileId: string) => {
+  const addMovieWithProfile = async (movie: MovieSearchResult, qualityProfileId: string, navigate = true) => {
     const movieRootFolder = rootFolders.find((rf) => rf.mediaType === 'movies')
     if (!movieRootFolder) {
       toast.error('No root folder configured for movies. Please add one in Settings.')
@@ -988,10 +1005,21 @@ export default function SearchPage() {
         const data = await response.json()
         toast.success(`${movie.title} added to library`)
         setAddMovieDialogOpen(false)
+        // Update in search results
         setMovieResults((prev) =>
-          prev.map((r) => r.tmdbId === movie.tmdbId ? { ...r, inLibrary: true } : r)
+          prev.map((r) => r.tmdbId === movie.tmdbId ? { ...r, inLibrary: true, libraryId: data.id, requested: true } : r)
         )
-        router.visit(`/movie/${data.id}`)
+        // Update in discover lanes
+        setMovieDiscoverLanes((prev) => {
+          const updated: Record<string, MovieSearchResult[]> = {}
+          for (const [key, lane] of Object.entries(prev)) {
+            updated[key] = lane.map((m) => m.tmdbId === movie.tmdbId ? { ...m, inLibrary: true, libraryId: data.id, requested: true } : m)
+          }
+          return updated
+        })
+        if (navigate) {
+          router.visit(`/movie/${data.id}`)
+        }
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to add movie')
@@ -1009,7 +1037,7 @@ export default function SearchPage() {
     addMovieWithProfile(selectedMovie, selectedQualityProfile)
   }
 
-  const addTvShowWithProfile = async (show: TvShowSearchResult, qualityProfileId: string, selection: SeasonEpisodeSelection | null) => {
+  const addTvShowWithProfile = async (show: TvShowSearchResult, qualityProfileId: string, selection: SeasonEpisodeSelection | null, navigate = true) => {
     const tvRootFolder = rootFolders.find((rf) => rf.mediaType === 'tv')
     if (!tvRootFolder) {
       toast.error('No root folder configured for TV shows. Please add one in Settings.')
@@ -1039,10 +1067,21 @@ export default function SearchPage() {
         toast.success(`${show.title} added to library`)
         setAddTvShowDialogOpen(false)
         setEpisodeSelection(null)
+        // Update in search results
         setTvShowResults((prev) =>
-          prev.map((r) => r.tmdbId === show.tmdbId ? { ...r, inLibrary: true } : r)
+          prev.map((r) => r.tmdbId === show.tmdbId ? { ...r, inLibrary: true, libraryId: data.id, requested: true } : r)
         )
-        router.visit(`/tvshow/${data.id}`)
+        // Update in discover lanes
+        setTvDiscoverLanes((prev) => {
+          const updated: Record<string, TvShowSearchResult[]> = {}
+          for (const [key, lane] of Object.entries(prev)) {
+            updated[key] = lane.map((s) => s.tmdbId === show.tmdbId ? { ...s, inLibrary: true, libraryId: data.id, requested: true } : s)
+          }
+          return updated
+        })
+        if (navigate) {
+          router.visit(`/tvshow/${data.id}`)
+        }
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to add TV show')
@@ -1058,6 +1097,188 @@ export default function SearchPage() {
   const addTvShow = () => {
     if (!selectedTvShow || !selectedQualityProfile) return
     addTvShowWithProfile(selectedTvShow, selectedQualityProfile, episodeSelection)
+  }
+
+  // Toggle movie requested state
+  const toggleMovieRequested = async (movie: MovieSearchResult) => {
+    if (!movie.libraryId || !movie.inLibrary) return
+
+    const tmdbId = movie.tmdbId
+    setTogglingMovies((prev) => new Set(prev).add(tmdbId))
+
+    // Helper to update movie in all relevant state
+    const updateMovie = (updater: (m: MovieSearchResult) => MovieSearchResult) => {
+      setMovieResults((prev) => prev.map((m) => m.tmdbId === tmdbId ? updater(m) : m))
+      setMovieDiscoverLanes((prev) => {
+        const updated: Record<string, MovieSearchResult[]> = {}
+        for (const [key, lane] of Object.entries(prev)) {
+          updated[key] = lane.map((m) => m.tmdbId === tmdbId ? updater(m) : m)
+        }
+        return updated
+      })
+    }
+
+    const wasRequested = movie.requested
+    // Optimistic update
+    updateMovie((m) => ({ ...m, requested: !wasRequested }))
+
+    try {
+      const response = await fetch(`/api/v1/movies/${movie.libraryId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requested: !wasRequested }),
+      })
+      if (response.ok) {
+        toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
+      } else {
+        // Revert on error
+        updateMovie((m) => ({ ...m, requested: wasRequested }))
+        toast.error('Failed to update movie')
+      }
+    } catch (error) {
+      console.error('Failed to update movie:', error)
+      updateMovie((m) => ({ ...m, requested: wasRequested }))
+      toast.error('Failed to update movie')
+    } finally {
+      setTogglingMovies((prev) => {
+        const next = new Set(prev)
+        next.delete(tmdbId)
+        return next
+      })
+    }
+  }
+
+  // Toggle TV show requested state
+  const toggleTvShowRequested = async (show: TvShowSearchResult) => {
+    if (!show.libraryId || !show.inLibrary) return
+
+    const tmdbId = show.tmdbId
+    setTogglingTvShows((prev) => new Set(prev).add(tmdbId))
+
+    // Helper to update show in all relevant state
+    const updateShow = (updater: (s: TvShowSearchResult) => TvShowSearchResult) => {
+      setTvShowResults((prev) => prev.map((s) => s.tmdbId === tmdbId ? updater(s) : s))
+      setTvDiscoverLanes((prev) => {
+        const updated: Record<string, TvShowSearchResult[]> = {}
+        for (const [key, lane] of Object.entries(prev)) {
+          updated[key] = lane.map((s) => s.tmdbId === tmdbId ? updater(s) : s)
+        }
+        return updated
+      })
+    }
+
+    const wasRequested = show.requested
+    // Optimistic update
+    updateShow((s) => ({ ...s, requested: !wasRequested }))
+
+    try {
+      const response = await fetch(`/api/v1/tvshows/${show.libraryId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requested: !wasRequested }),
+      })
+      if (response.ok) {
+        toast.success(wasRequested ? 'TV show unrequested' : 'TV show requested')
+      } else {
+        // Revert on error
+        updateShow((s) => ({ ...s, requested: wasRequested }))
+        toast.error('Failed to update TV show')
+      }
+    } catch (error) {
+      console.error('Failed to update TV show:', error)
+      updateShow((s) => ({ ...s, requested: wasRequested }))
+      toast.error('Failed to update TV show')
+    } finally {
+      setTogglingTvShows((prev) => {
+        const next = new Set(prev)
+        next.delete(tmdbId)
+        return next
+      })
+    }
+  }
+
+  // Toggle movie requested state from details sheet
+  const toggleMovieDetailsRequested = async () => {
+    if (!movieDetails?.libraryId || !movieDetails?.inLibrary) return
+
+    setTogglingDetails(true)
+    const wasRequested = movieDetails.requested
+
+    // Optimistic update
+    setMovieDetails({ ...movieDetails, requested: !wasRequested })
+
+    try {
+      const response = await fetch(`/api/v1/movies/${movieDetails.libraryId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requested: !wasRequested }),
+      })
+      if (response.ok) {
+        toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
+        // Also update in the search results/discover lanes
+        const tmdbId = movieDetails.tmdbId
+        setMovieResults((prev) => prev.map((m) => m.tmdbId === tmdbId ? { ...m, requested: !wasRequested } : m))
+        setMovieDiscoverLanes((prev) => {
+          const updated: Record<string, MovieSearchResult[]> = {}
+          for (const [key, lane] of Object.entries(prev)) {
+            updated[key] = lane.map((m) => m.tmdbId === tmdbId ? { ...m, requested: !wasRequested } : m)
+          }
+          return updated
+        })
+      } else {
+        // Revert on error
+        setMovieDetails({ ...movieDetails, requested: wasRequested })
+        toast.error('Failed to update movie')
+      }
+    } catch (error) {
+      console.error('Failed to update movie:', error)
+      setMovieDetails({ ...movieDetails, requested: wasRequested })
+      toast.error('Failed to update movie')
+    } finally {
+      setTogglingDetails(false)
+    }
+  }
+
+  // Toggle TV show requested state from details sheet
+  const toggleTvShowDetailsRequested = async () => {
+    if (!tvShowDetails?.libraryId || !tvShowDetails?.inLibrary) return
+
+    setTogglingDetails(true)
+    const wasRequested = tvShowDetails.requested
+
+    // Optimistic update
+    setTvShowDetails({ ...tvShowDetails, requested: !wasRequested })
+
+    try {
+      const response = await fetch(`/api/v1/tvshows/${tvShowDetails.libraryId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requested: !wasRequested }),
+      })
+      if (response.ok) {
+        toast.success(wasRequested ? 'TV show unrequested' : 'TV show requested')
+        // Also update in the search results/discover lanes
+        const tmdbId = tvShowDetails.tmdbId
+        setTvShowResults((prev) => prev.map((s) => s.tmdbId === tmdbId ? { ...s, requested: !wasRequested } : s))
+        setTvDiscoverLanes((prev) => {
+          const updated: Record<string, TvShowSearchResult[]> = {}
+          for (const [key, lane] of Object.entries(prev)) {
+            updated[key] = lane.map((s) => s.tmdbId === tmdbId ? { ...s, requested: !wasRequested } : s)
+          }
+          return updated
+        })
+      } else {
+        // Revert on error
+        setTvShowDetails({ ...tvShowDetails, requested: wasRequested })
+        toast.error('Failed to update TV show')
+      }
+    } catch (error) {
+      console.error('Failed to update TV show:', error)
+      setTvShowDetails({ ...tvShowDetails, requested: wasRequested })
+      toast.error('Failed to update TV show')
+    } finally {
+      setTogglingDetails(false)
+    }
   }
 
   // Open movie details sheet
@@ -1753,12 +1974,16 @@ export default function SearchPage() {
     type,
     onItemClick,
     onAdd,
+    onToggle,
+    togglingItems,
   }: {
     title: string
     items: (MovieSearchResult | TvShowSearchResult)[]
     type: 'movie' | 'tv'
     onItemClick: (item: MovieSearchResult | TvShowSearchResult) => void
     onAdd: (item: MovieSearchResult | TvShowSearchResult) => void
+    onToggle: (item: MovieSearchResult | TvShowSearchResult) => void
+    togglingItems: Set<string>
   }) => {
     const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -1837,24 +2062,39 @@ export default function SearchPage() {
                     </Badge>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                  {item.inLibrary ? (
-                    <Badge
-                      className="absolute top-2 right-2 text-xs gap-1 z-10"
-                      variant="default"
-                    >
-                      <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
-                    </Badge>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      size="icon"
-                      className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 hover:bg-black/80 text-white border-0 z-10"
-                      onClick={(e) => { e.stopPropagation(); onAdd(item) }}
-                      title="Add to library"
-                    >
-                      <HugeiconsIcon icon={Add01Icon} className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
+                  {(() => {
+                    // Determine media status for the badge
+                    let status: MediaItemStatus = 'none'
+                    if (item.inLibrary) {
+                      if (type === 'movie') {
+                        const movie = item as MovieSearchResult
+                        status = movie.hasFile ? 'downloaded' : movie.requested ? 'requested' : 'downloaded'
+                      } else {
+                        const show = item as TvShowSearchResult
+                        status = show.requested ? 'requested' : 'downloaded'
+                      }
+                    }
+                    const isToggling = togglingItems.has(item.tmdbId)
+                    // For 'none' status: add to library
+                    // For 'requested' status: toggle requested state
+                    // For 'downloaded' status: no action (can't unrequest downloaded items)
+                    const handleToggle = status === 'none'
+                      ? () => onAdd(item)
+                      : status === 'requested'
+                        ? () => onToggle(item)
+                        : undefined
+                    return (
+                      <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
+                        <CardStatusBadge
+                          status={status}
+                          size="tiny"
+                          showOnHover={status === 'none'}
+                          isToggling={isToggling}
+                          onToggleRequest={handleToggle}
+                        />
+                      </div>
+                    )
+                  })()}
                   <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <p className="text-white text-sm font-medium line-clamp-2">{item.title}</p>
                     {item.year && (
@@ -1929,7 +2169,9 @@ export default function SearchPage() {
               items={movieDiscoverLanes[cat.key] || []}
               type="movie"
               onItemClick={(item) => openMovieDetails(item as MovieSearchResult)}
-              onAdd={(item) => handleAddMovie(item as MovieSearchResult)}
+              onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
+              onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
+              togglingItems={togglingMovies}
             />
           ))
         ) : (
@@ -1988,7 +2230,9 @@ export default function SearchPage() {
               items={tvDiscoverLanes[cat.key] || []}
               type="tv"
               onItemClick={(item) => openTvShowDetails(item as TvShowSearchResult)}
-              onAdd={(item) => handleAddTvShow(item as TvShowSearchResult)}
+              onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
+              onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
+              togglingItems={togglingTvShows}
             />
           ))
         ) : (
@@ -2431,10 +2675,14 @@ export default function SearchPage() {
                         className="w-full h-full object-cover"
                       />
                       {movieDetails.inLibrary && (
-                        <Badge className="absolute top-3 right-3 gap-1" variant="default">
-                          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
-                          In Library
-                        </Badge>
+                        <div className="absolute top-3 right-3">
+                          <MediaStatusBadge
+                            status={movieDetails.hasFile ? 'downloaded' : movieDetails.requested ? 'requested' : 'downloaded'}
+                            size="sm"
+                            isToggling={togglingDetails}
+                            onToggleRequest={!movieDetails.hasFile && movieDetails.requested ? toggleMovieDetailsRequested : undefined}
+                          />
+                        </div>
                       )}
                     </div>
                   )}
@@ -2575,10 +2823,14 @@ export default function SearchPage() {
                         className="w-full h-full object-cover"
                       />
                       {tvShowDetails.inLibrary && (
-                        <Badge className="absolute top-3 right-3 gap-1" variant="default">
-                          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
-                          In Library
-                        </Badge>
+                        <div className="absolute top-3 right-3">
+                          <MediaStatusBadge
+                            status={tvShowDetails.requested ? 'requested' : 'downloaded'}
+                            size="sm"
+                            isToggling={togglingDetails}
+                            onToggleRequest={tvShowDetails.requested ? toggleTvShowDetailsRequested : undefined}
+                          />
+                        </div>
                       )}
                     </div>
                   )}
@@ -2818,7 +3070,7 @@ export default function SearchPage() {
           qualityProfiles={movieProfiles}
           loading={loadingOptions}
           adding={addingMovie}
-          onAdd={(profileId) => selectedMovie && addMovieWithProfile(selectedMovie, profileId)}
+          onAdd={(profileId) => selectedMovie && addMovieWithProfile(selectedMovie, profileId, navigateAfterAdd)}
         />
 
         <AddMediaDialog
@@ -2830,7 +3082,7 @@ export default function SearchPage() {
           qualityProfiles={tvProfiles}
           loading={loadingOptions}
           adding={addingTvShow}
-          onAdd={(profileId) => selectedTvShow && addTvShowWithProfile(selectedTvShow, profileId, episodeSelection)}
+          onAdd={(profileId) => selectedTvShow && addTvShowWithProfile(selectedTvShow, profileId, episodeSelection, navigateAfterAdd)}
           episodeSelectionSummary={episodeSelection && (
             episodeSelection.selectedSeasons
               ? `${episodeSelection.selectedSeasons.length} season${episodeSelection.selectedSeasons.length !== 1 ? 's' : ''} selected`

@@ -26,8 +26,8 @@ interface MediaStatusBadgeProps {
   isToggling?: boolean
   onToggleRequest?: () => void
   className?: string
-  /** Size variant - 'default' for detail pages, 'sm' for cards/grids */
-  size?: 'default' | 'sm'
+  /** Size variant - 'default' for detail pages, 'sm' for cards/grids, 'tiny' for poster overlays */
+  size?: 'default' | 'sm' | 'tiny'
   /** Show the request button when status is 'none' */
   showRequestButton?: boolean
 }
@@ -51,12 +51,17 @@ export function MediaStatusBadge({
   size = 'default',
   showRequestButton = true,
 }: MediaStatusBadgeProps) {
-  const sizeClasses = size === 'sm'
-    ? 'h-6 text-xs'
-    : 'h-7 text-sm'
+  const sizeClasses =
+    size === 'tiny'
+      ? 'h-5 text-[10px] px-1.5'
+      : size === 'sm'
+        ? 'h-6 text-xs'
+        : 'h-7 text-sm'
 
-  const iconSize = size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'
-  const buttonIconSize = size === 'sm' ? 'h-3 w-3' : 'h-4 w-4'
+  const iconSize =
+    size === 'tiny' ? 'h-2.5 w-2.5' : size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'
+  const buttonIconSize = size === 'tiny' ? 'h-2.5 w-2.5' : size === 'sm' ? 'h-3 w-3' : 'h-4 w-4'
+  const showText = size !== 'tiny'
 
   // Loading state while toggling
   if (isToggling) {
@@ -66,7 +71,7 @@ export function MediaStatusBadge({
         className={cn('bg-muted text-muted-foreground gap-1', sizeClasses, className)}
       >
         <Spinner className={iconSize} />
-        <span>{status === 'none' ? 'Requesting...' : 'Unrequesting...'}</span>
+        {showText && <span>{status === 'none' ? 'Requesting...' : 'Unrequesting...'}</span>}
       </Badge>
     )
   }
@@ -79,7 +84,7 @@ export function MediaStatusBadge({
         className={cn('bg-green-600 hover:bg-green-600 text-white gap-1', sizeClasses, className)}
       >
         <HugeiconsIcon icon={CheckmarkCircle01Icon} className={iconSize} />
-        <span>Downloaded</span>
+        {showText && <span>Downloaded</span>}
       </Badge>
     )
   }
@@ -97,12 +102,19 @@ export function MediaStatusBadge({
                 sizeClasses,
                 className
               )}
-              onClick={onToggleRequest}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleRequest?.()
+              }}
             >
               <HugeiconsIcon icon={Download01Icon} className={cn(iconSize, 'group-hover:hidden')} />
               <HugeiconsIcon icon={Cancel01Icon} className={cn(iconSize, 'hidden group-hover:block')} />
-              <span className="group-hover:hidden">{Math.round(progress)}%</span>
-              <span className="hidden group-hover:inline">Cancel</span>
+              {showText && (
+                <>
+                  <span className="group-hover:hidden">{Math.round(progress)}%</span>
+                  <span className="hidden group-hover:inline">Cancel</span>
+                </>
+              )}
             </Badge>
           </TooltipTrigger>
           <TooltipContent>Click to cancel download</TooltipContent>
@@ -124,12 +136,19 @@ export function MediaStatusBadge({
                 sizeClasses,
                 className
               )}
-              onClick={onToggleRequest}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleRequest?.()
+              }}
             >
               <HugeiconsIcon icon={PackageMovingIcon} className={cn(iconSize, 'group-hover:hidden animate-pulse')} />
               <HugeiconsIcon icon={Cancel01Icon} className={cn(iconSize, 'hidden group-hover:block')} />
-              <span className="group-hover:hidden">Importing</span>
-              <span className="hidden group-hover:inline">Cancel</span>
+              {showText && (
+                <>
+                  <span className="group-hover:hidden">Importing</span>
+                  <span className="hidden group-hover:inline">Cancel</span>
+                </>
+              )}
             </Badge>
           </TooltipTrigger>
           <TooltipContent>Processing download, click to cancel</TooltipContent>
@@ -151,12 +170,19 @@ export function MediaStatusBadge({
                 sizeClasses,
                 className
               )}
-              onClick={onToggleRequest}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleRequest?.()
+              }}
             >
               <HugeiconsIcon icon={Clock01Icon} className={cn(iconSize, 'group-hover:hidden')} />
               <HugeiconsIcon icon={Cancel01Icon} className={cn(iconSize, 'hidden group-hover:block')} />
-              <span className="group-hover:hidden">Requested</span>
-              <span className="hidden group-hover:inline">Unrequest</span>
+              {showText && (
+                <>
+                  <span className="group-hover:hidden">Requested</span>
+                  <span className="hidden group-hover:inline">Unrequest</span>
+                </>
+              )}
             </Badge>
           </TooltipTrigger>
           <TooltipContent>Click to unrequest</TooltipContent>
@@ -167,12 +193,39 @@ export function MediaStatusBadge({
 
   // None - Show Request button
   if (status === 'none' && showRequestButton) {
+    // Tiny size: icon-only button
+    if (size === 'tiny') {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="secondary"
+                size="icon"
+                className={cn('h-5 w-5', className)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleRequest?.()
+                }}
+              >
+                <HugeiconsIcon icon={Add01Icon} className={buttonIconSize} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add to library</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )
+    }
+
     return (
       <Button
         variant="outline"
         size="sm"
         className={cn('h-7 px-2 text-xs', size === 'sm' && 'h-6', className)}
-        onClick={onToggleRequest}
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleRequest?.()
+        }}
       >
         <HugeiconsIcon icon={Add01Icon} className={cn(buttonIconSize, 'mr-1')} />
         Request
@@ -224,6 +277,7 @@ export function CardStatusBadge({
   isToggling = false,
   onToggleRequest,
   className,
+  size = 'sm',
   showOnHover = false,
 }: CardStatusBadgeProps) {
   // For non-none statuses, use the regular badge
@@ -235,37 +289,78 @@ export function CardStatusBadge({
         isToggling={isToggling}
         onToggleRequest={onToggleRequest}
         className={className}
-        size="sm"
+        size={size}
       />
     )
   }
+
+  const sizeClasses =
+    size === 'tiny'
+      ? 'h-5 text-[10px] px-1.5'
+      : size === 'sm'
+        ? 'h-6 text-xs'
+        : 'h-7 text-sm'
+  const iconSize = size === 'tiny' ? 'h-2.5 w-2.5' : size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'
+  const showText = size !== 'tiny'
 
   // Loading state
   if (isToggling) {
     return (
       <Badge
         variant="secondary"
-        className={cn('bg-muted text-muted-foreground gap-1 h-6 text-xs', className)}
+        className={cn('bg-muted text-muted-foreground gap-1', sizeClasses, className)}
       >
-        <Spinner className="h-3 w-3" />
-        <span>Requesting...</span>
+        <Spinner className={iconSize} />
+        {showText && <span>Requesting...</span>}
       </Badge>
     )
   }
 
   // None - Show Request button (with optional hover effect)
+  // Tiny size: icon-only button
+  if (size === 'tiny') {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="secondary"
+              size="icon"
+              className={cn(
+                'h-5 w-5',
+                showOnHover && 'opacity-0 group-hover:opacity-100 transition-opacity',
+                className
+              )}
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleRequest?.()
+              }}
+            >
+              <HugeiconsIcon icon={Add01Icon} className={iconSize} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Add to library</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
   return (
     <Button
       variant="secondary"
       size="sm"
       className={cn(
         'h-7 px-2 text-xs',
+        size === 'sm' && 'h-6',
         showOnHover && 'opacity-0 group-hover:opacity-100 transition-opacity',
         className
       )}
-      onClick={onToggleRequest}
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggleRequest?.()
+      }}
     >
-      <HugeiconsIcon icon={Add01Icon} className="h-3 w-3 mr-1" />
+      <HugeiconsIcon icon={Add01Icon} className={cn(iconSize, 'mr-1')} />
       Request
     </Button>
   )

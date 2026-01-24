@@ -57,22 +57,28 @@ export default class MoviesController {
     try {
       const results = await tmdbService.searchMovies(query, year ? parseInt(year) : undefined)
 
-      // Check which movies are already in library
+      // Check which movies are already in library with their status
       const tmdbIds = results.map((r) => String(r.id))
       const existing = await Movie.query().whereIn('tmdbId', tmdbIds)
-      const existingIds = new Set(existing.map((m) => m.tmdbId))
+      const existingMap = new Map(existing.map((m) => [m.tmdbId, m]))
 
       return response.json(
-        results.map((movie) => ({
-          tmdbId: String(movie.id),
-          title: movie.title,
-          year: movie.year,
-          overview: movie.overview,
-          posterUrl: movie.posterPath,
-          releaseDate: movie.releaseDate,
-          rating: movie.voteAverage,
-          inLibrary: existingIds.has(String(movie.id)),
-        }))
+        results.map((movie) => {
+          const libraryMovie = existingMap.get(String(movie.id))
+          return {
+            tmdbId: String(movie.id),
+            title: movie.title,
+            year: movie.year,
+            overview: movie.overview,
+            posterUrl: movie.posterPath,
+            releaseDate: movie.releaseDate,
+            rating: movie.voteAverage,
+            inLibrary: !!libraryMovie,
+            libraryId: libraryMovie?.id,
+            requested: libraryMovie?.requested ?? false,
+            hasFile: libraryMovie?.hasFile ?? false,
+          }
+        })
       )
     } catch (error) {
       console.error('TMDB search error:', error)
@@ -122,6 +128,8 @@ export default class MoviesController {
         })),
         inLibrary: !!existing,
         libraryId: existing?.id,
+        requested: existing?.requested ?? false,
+        hasFile: existing?.hasFile ?? false,
       })
     } catch (error) {
       console.error('TMDB preview error:', error)
@@ -156,24 +164,30 @@ export default class MoviesController {
           results = await tmdbService.getPopularMovies()
       }
 
-      // Check which movies are already in library
+      // Check which movies are already in library with their status
       const tmdbIds = results.map((r) => String(r.id))
       const existing = await Movie.query().whereIn('tmdbId', tmdbIds)
-      const existingIds = new Set(existing.map((m) => m.tmdbId))
+      const existingMap = new Map(existing.map((m) => [m.tmdbId, m]))
 
       return response.json({
         category,
-        results: results.map((movie) => ({
-          tmdbId: String(movie.id),
-          title: movie.title,
-          year: movie.year,
-          overview: movie.overview,
-          posterUrl: movie.posterPath,
-          releaseDate: movie.releaseDate,
-          rating: movie.voteAverage,
-          genres: movie.genres,
-          inLibrary: existingIds.has(String(movie.id)),
-        })),
+        results: results.map((movie) => {
+          const libraryMovie = existingMap.get(String(movie.id))
+          return {
+            tmdbId: String(movie.id),
+            title: movie.title,
+            year: movie.year,
+            overview: movie.overview,
+            posterUrl: movie.posterPath,
+            releaseDate: movie.releaseDate,
+            rating: movie.voteAverage,
+            genres: movie.genres,
+            inLibrary: !!libraryMovie,
+            libraryId: libraryMovie?.id,
+            requested: libraryMovie?.requested ?? false,
+            hasFile: libraryMovie?.hasFile ?? false,
+          }
+        }),
       })
     } catch (error) {
       console.error('TMDB discover error:', error)

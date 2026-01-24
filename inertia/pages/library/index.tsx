@@ -45,7 +45,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
-import { StatusBadge as SharedStatusBadge, type ItemStatus } from '@/components/library/status-badge'
+import { MediaStatusBadge, getMediaItemStatus, type MediaItemStatus } from '@/components/library/media-status-badge'
 
 interface Artist {
   id: number
@@ -192,6 +192,9 @@ export default function Library() {
 
   // Enriching state
   const [enrichingItems, setEnrichingItems] = useState<Set<string>>(new Set())
+
+  // Toggling request state
+  const [togglingItems, setTogglingItems] = useState<Set<string>>(new Set())
 
   // Fetch enabled media types from settings
   useEffect(() => {
@@ -530,12 +533,67 @@ export default function Library() {
     }
   }
 
+  // Handle toggling request status
+  const handleToggleRequest = async (mediaType: MediaType, id: number, currentlyRequested: boolean, e?: React.MouseEvent) => {
+    e?.preventDefault()
+    e?.stopPropagation()
+
+    const itemKey = `${mediaType}-${id}`
+    setTogglingItems((prev) => new Set(prev).add(itemKey))
+
+    const endpoints: Record<MediaType, string> = {
+      music: 'artists',
+      movies: 'movies',
+      tv: 'tvshows',
+      books: 'authors',
+      missing: '',
+    }
+
+    try {
+      const response = await fetch(`/api/v1/${endpoints[mediaType]}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requested: !currentlyRequested }),
+      })
+
+      if (response.ok) {
+        toast.success(currentlyRequested ? 'Item unrequested' : 'Item requested')
+        // Update local state
+        switch (mediaType) {
+          case 'movies':
+            setMovies((prev) => prev.map((m) => m.id === id ? { ...m, requested: !currentlyRequested } : m))
+            break
+          case 'music':
+            setArtists((prev) => prev.map((a) => a.id === id ? { ...a, requested: !currentlyRequested } : a))
+            break
+          case 'tv':
+            setTvShows((prev) => prev.map((t) => t.id === id ? { ...t, requested: !currentlyRequested } : t))
+            break
+          case 'books':
+            setAuthors((prev) => prev.map((a) => a.id === id ? { ...a, requested: !currentlyRequested } : a))
+            break
+        }
+      } else {
+        toast.error('Failed to update request status')
+      }
+    } catch (error) {
+      console.error('Failed to toggle request:', error)
+      toast.error('Failed to update request status')
+    } finally {
+      setTogglingItems((prev) => {
+        const next = new Set(prev)
+        next.delete(itemKey)
+        return next
+      })
+    }
+  }
+
   // Get status for items
-  const getItemStatus = (item: { requested?: boolean; hasFile?: boolean }, isDownloading: boolean): ItemStatus | null => {
-    if (isDownloading) return 'downloading'
-    if (item.hasFile) return 'downloaded'
-    if (item.requested) return 'requested'
-    return null
+  const getItemStatusInfo = (item: { requested?: boolean; hasFile?: boolean }, downloadProgress?: number, downloadStatus?: string): { status: MediaItemStatus; progress: number } => {
+    return getMediaItemStatus(
+      item,
+      downloadProgress !== undefined ? { progress: downloadProgress, status: downloadStatus || 'downloading' } : null
+    )
   }
 
   // Filter and sort functions for each media type
@@ -655,7 +713,7 @@ export default function Library() {
     const config = MEDIA_TYPE_CONFIG[item.mediaType]
     const imageKey = `${item.mediaType}-${item.id}`
     const showImage = item.imageUrl && !failedImages.has(imageKey)
-    const isDownloading = queue.some(q => {
+    const queueItem = queue.find(q => {
       switch (item.mediaType) {
         case 'music': return q.artistId === item.id
         case 'movies': return q.movieId === item.id
@@ -663,7 +721,16 @@ export default function Library() {
         case 'books': return q.bookId === item.id
       }
     })
+    const isDownloading = !!queueItem
     const isNotRequested = !item.requested && !item.hasFile && !isDownloading
+    const isToggling = togglingItems.has(imageKey)
+
+    // Get status info
+    const { status, progress } = getItemStatusInfo(
+      item,
+      queueItem?.progress,
+      queueItem?.status
+    )
 
     return (
       <Card key={imageKey} className="py-0 overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group relative">
@@ -686,15 +753,6 @@ export default function Library() {
                 <HugeiconsIcon icon={config.icon} className="h-16 w-16 text-muted-foreground/50" />
               </div>
             )}
-            {/* Status indicator */}
-            {(() => {
-              const status = getItemStatus(item, isDownloading)
-              return status ? (
-                <div className="absolute top-2 left-2">
-                  <SharedStatusBadge status={status} />
-                </div>
-              ) : null
-            })()}
           </div>
           <CardContent className={`p-3 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}>
             <h3 className="font-medium truncate group-hover:text-primary transition-colors">
@@ -705,6 +763,19 @@ export default function Library() {
             )}
           </CardContent>
         </Link>
+        {/* Status indicator - outside Link to prevent navigation on click */}
+        {status !== 'none' && (
+          <div className="absolute top-2 left-2 z-10">
+            <MediaStatusBadge
+              status={status}
+              progress={progress}
+              size="sm"
+              isToggling={isToggling}
+              onToggleRequest={() => handleToggleRequest(item.mediaType, item.id, item.requested ?? false)}
+              showRequestButton={false}
+            />
+          </div>
+        )}
         {/* More menu */}
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
           <DropdownMenu>
@@ -773,7 +844,7 @@ export default function Library() {
     const config = MEDIA_TYPE_CONFIG[item.mediaType]
     const imageKey = `${item.mediaType}-${item.id}`
     const showImage = item.imageUrl && !failedImages.has(imageKey)
-    const isDownloading = queue.some(q => {
+    const queueItem = queue.find(q => {
       switch (item.mediaType) {
         case 'music': return q.artistId === item.id
         case 'movies': return q.movieId === item.id
@@ -781,7 +852,16 @@ export default function Library() {
         case 'books': return q.bookId === item.id
       }
     })
+    const isDownloading = !!queueItem
     const isNotRequested = !item.requested && !item.hasFile && !isDownloading
+    const isToggling = togglingItems.has(imageKey)
+
+    // Get status info
+    const { status, progress } = getItemStatusInfo(
+      item,
+      queueItem?.progress,
+      queueItem?.status
+    )
 
     return (
       <Card key={imageKey} className="hover:ring-2 hover:ring-primary transition-all cursor-pointer group">
@@ -814,10 +894,16 @@ export default function Library() {
             </div>
           </Link>
           <div className="flex items-center gap-2">
-            {(() => {
-              const status = getItemStatus(item, isDownloading)
-              return status ? <SharedStatusBadge status={status} /> : null
-            })()}
+            {status !== 'none' && (
+              <MediaStatusBadge
+                status={status}
+                progress={progress}
+                size="sm"
+                isToggling={isToggling}
+                onToggleRequest={() => handleToggleRequest(item.mediaType, item.id, item.requested ?? false)}
+                showRequestButton={false}
+              />
+            )}
             {item.badges?.map((badge, i) => (
               <Badge key={i} variant="outline">{badge}</Badge>
             ))}

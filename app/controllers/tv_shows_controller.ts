@@ -65,25 +65,30 @@ export default class TvShowsController {
     try {
       const results = await tmdbService.searchTvShows(query, year ? parseInt(year) : undefined)
 
-      // Check which shows are already in library
+      // Check which shows are already in library with their status
       const tmdbIds = results.map((r) => String(r.id))
       const existing = await TvShow.query().whereIn('tmdbId', tmdbIds)
-      const existingIds = new Set(existing.map((s) => s.tmdbId))
+      const existingMap = new Map(existing.map((s) => [s.tmdbId, s]))
 
       return response.json(
-        results.map((show) => ({
-          tmdbId: String(show.id),
-          title: show.name,
-          year: show.year,
-          overview: show.overview,
-          posterUrl: show.posterPath,
-          firstAirDate: show.firstAirDate,
-          status: show.status,
-          rating: show.voteAverage,
-          seasonCount: show.numberOfSeasons,
-          episodeCount: show.numberOfEpisodes,
-          inLibrary: existingIds.has(String(show.id)),
-        }))
+        results.map((show) => {
+          const libraryShow = existingMap.get(String(show.id))
+          return {
+            tmdbId: String(show.id),
+            title: show.name,
+            year: show.year,
+            overview: show.overview,
+            posterUrl: show.posterPath,
+            firstAirDate: show.firstAirDate,
+            status: show.status,
+            rating: show.voteAverage,
+            seasonCount: show.numberOfSeasons,
+            episodeCount: show.numberOfEpisodes,
+            inLibrary: !!libraryShow,
+            libraryId: libraryShow?.id,
+            requested: libraryShow?.requested ?? false,
+          }
+        })
       )
     } catch (error) {
       console.error('TMDB search error:', error)
@@ -134,6 +139,7 @@ export default class TvShowsController {
         })),
         inLibrary: !!existing,
         libraryId: existing?.id,
+        requested: existing?.requested ?? false,
       })
     } catch (error) {
       console.error('TMDB preview error:', error)
@@ -168,27 +174,32 @@ export default class TvShowsController {
           results = await tmdbService.getPopularTvShows()
       }
 
-      // Check which shows are already in library
+      // Check which shows are already in library with their status
       const tmdbIds = results.map((r) => String(r.id))
       const existing = await TvShow.query().whereIn('tmdbId', tmdbIds)
-      const existingIds = new Set(existing.map((s) => s.tmdbId))
+      const existingMap = new Map(existing.map((s) => [s.tmdbId, s]))
 
       return response.json({
         category,
-        results: results.map((show) => ({
-          tmdbId: String(show.id),
-          title: show.name,
-          year: show.year,
-          overview: show.overview,
-          posterUrl: show.posterPath,
-          firstAirDate: show.firstAirDate,
-          status: show.status,
-          rating: show.voteAverage,
-          seasonCount: show.numberOfSeasons,
-          episodeCount: show.numberOfEpisodes,
-          genres: show.genres,
-          inLibrary: existingIds.has(String(show.id)),
-        })),
+        results: results.map((show) => {
+          const libraryShow = existingMap.get(String(show.id))
+          return {
+            tmdbId: String(show.id),
+            title: show.name,
+            year: show.year,
+            overview: show.overview,
+            posterUrl: show.posterPath,
+            firstAirDate: show.firstAirDate,
+            status: show.status,
+            rating: show.voteAverage,
+            seasonCount: show.numberOfSeasons,
+            episodeCount: show.numberOfEpisodes,
+            genres: show.genres,
+            inLibrary: !!libraryShow,
+            libraryId: libraryShow?.id,
+            requested: libraryShow?.requested ?? false,
+          }
+        }),
       })
     } catch (error) {
       console.error('TMDB discover error:', error)
