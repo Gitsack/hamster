@@ -28,16 +28,43 @@ export default class AppSettingsController {
     const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['music'])
     const enabledMediaTypes = ensureArray(rawMediaTypes, ['music'])
     const tmdbApiKey = await AppSetting.get<string>('tmdbApiKey', '')
+    const traktClientId = await AppSetting.get<string>('traktClientId', '')
+    const recommendationSettings = await AppSetting.get('recommendationSettings', {
+      traktEnabled: false,
+      personalizedEnabled: false,
+      maxPersonalizedLanes: 3,
+      justwatchEnabled: false,
+    })
+    const justwatchEnabled = await AppSetting.get<boolean>('justwatchEnabled', false)
+    const justwatchLocale = await AppSetting.get<string>('justwatchLocale', 'en_US')
 
     return response.json({
       enabledMediaTypes,
       tmdbApiKey: tmdbApiKey ? '********' : '', // Don't expose full key
       hasTmdbApiKey: !!tmdbApiKey,
+      hasTraktClientId: !!traktClientId,
+      recommendationSettings,
+      justwatchEnabled,
+      justwatchLocale,
     })
   }
 
   async update({ request, response }: HttpContext) {
-    const { enabledMediaTypes, tmdbApiKey } = request.only(['enabledMediaTypes', 'tmdbApiKey'])
+    const {
+      enabledMediaTypes,
+      tmdbApiKey,
+      traktClientId,
+      recommendationSettings,
+      justwatchEnabled,
+      justwatchLocale,
+    } = request.only([
+      'enabledMediaTypes',
+      'tmdbApiKey',
+      'traktClientId',
+      'recommendationSettings',
+      'justwatchEnabled',
+      'justwatchLocale',
+    ])
 
     if (enabledMediaTypes !== undefined) {
       await AppSetting.set('enabledMediaTypes', enabledMediaTypes)
@@ -50,13 +77,50 @@ export default class AppSettingsController {
       tmdbService.setApiKey(tmdbApiKey)
     }
 
+    if (traktClientId !== undefined && traktClientId !== '********') {
+      await AppSetting.set('traktClientId', traktClientId)
+      // Update the Trakt service with the new client ID
+      const { traktService } = await import('#services/metadata/trakt_service')
+      traktService.setClientId(traktClientId)
+    }
+
+    if (recommendationSettings !== undefined) {
+      await AppSetting.set('recommendationSettings', recommendationSettings)
+      // Clear recommendation cache so new settings take effect immediately
+      const { recommendationService } = await import('#services/metadata/recommendation_service')
+      recommendationService.clearCache()
+    }
+
+    if (justwatchEnabled !== undefined) {
+      await AppSetting.set('justwatchEnabled', justwatchEnabled)
+    }
+
+    if (justwatchLocale !== undefined) {
+      await AppSetting.set('justwatchLocale', justwatchLocale)
+      const { justwatchService } = await import('#services/metadata/justwatch_service')
+      justwatchService.setLocale(justwatchLocale)
+    }
+
     const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['music'])
     const storedTmdbKey = await AppSetting.get<string>('tmdbApiKey', '')
+    const storedTraktId = await AppSetting.get<string>('traktClientId', '')
+    const storedRecommendationSettings = await AppSetting.get('recommendationSettings', {
+      traktEnabled: false,
+      personalizedEnabled: false,
+      maxPersonalizedLanes: 3,
+      justwatchEnabled: false,
+    })
+    const storedJustwatchEnabled = await AppSetting.get<boolean>('justwatchEnabled', false)
+    const storedJustwatchLocale = await AppSetting.get<string>('justwatchLocale', 'en_US')
 
     return response.json({
       enabledMediaTypes: ensureArray(rawMediaTypes, ['music']),
       tmdbApiKey: storedTmdbKey ? '********' : '',
       hasTmdbApiKey: !!storedTmdbKey,
+      hasTraktClientId: !!storedTraktId,
+      recommendationSettings: storedRecommendationSettings,
+      justwatchEnabled: storedJustwatchEnabled,
+      justwatchLocale: storedJustwatchLocale,
     })
   }
 

@@ -13,6 +13,8 @@ import { completedDownloadsScanner } from '#services/tasks/completed_downloads_s
 import { blacklistService } from '#services/blacklist/blacklist_service'
 import AppSetting from '#models/app_setting'
 import { tmdbService } from '#services/metadata/tmdb_service'
+import { traktService } from '#services/metadata/trakt_service'
+import { justwatchService } from '#services/metadata/justwatch_service'
 
 // Initialize API keys from database on startup
 setTimeout(async () => {
@@ -22,8 +24,21 @@ setTimeout(async () => {
       tmdbService.setApiKey(tmdbApiKey)
       console.log('[Startup] TMDB API key loaded from database')
     }
+
+    const traktClientId = await AppSetting.get<string>('traktClientId', '')
+    if (traktClientId) {
+      traktService.setClientId(traktClientId)
+      console.log('[Startup] Trakt client ID loaded from database')
+    }
+
+    const justwatchLocale = await AppSetting.get<string>('justwatchLocale', 'en_US')
+    justwatchService.setLocale(justwatchLocale || 'en_US')
+    const justwatchEnabled = await AppSetting.get<boolean>('justwatchEnabled', false)
+    if (justwatchEnabled) {
+      console.log('[Startup] JustWatch enabled with locale:', justwatchLocale || 'en_US')
+    }
   } catch (error) {
-    console.error('[Startup] Failed to load TMDB API key:', error)
+    console.error('[Startup] Failed to load API keys:', error)
   }
 }, 2000)
 

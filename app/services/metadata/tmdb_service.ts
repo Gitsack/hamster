@@ -46,8 +46,8 @@ const TV_GENRES: Record<number, string> = {
   37: 'Western',
 }
 
-// Rate limit: 40 requests per 10 seconds
-const queue = new PQueue({ interval: 250, intervalCap: 1 })
+// Rate limit: 40 requests per 10 seconds (TMDB allows ~50/10s)
+const queue = new PQueue({ interval: 250, intervalCap: 1, concurrency: 8 })
 
 export interface TmdbMovie {
   id: number
@@ -346,6 +346,28 @@ export class TmdbService {
 
   async getTrendingTvShows(timeWindow: 'day' | 'week' = 'week'): Promise<TmdbTvShow[]> {
     const data = await this.fetch(`/trending/tv/${timeWindow}`)
+    return data.results.map((s: any) => this.mapTvShow(s))
+  }
+
+  // Recommendations & Similar
+
+  async getMovieRecommendations(movieId: number): Promise<TmdbMovie[]> {
+    const data = await this.fetch(`/movie/${movieId}/recommendations`)
+    return data.results.map((m: any) => this.mapMovie(m))
+  }
+
+  async getSimilarMovies(movieId: number): Promise<TmdbMovie[]> {
+    const data = await this.fetch(`/movie/${movieId}/similar`)
+    return data.results.map((m: any) => this.mapMovie(m))
+  }
+
+  async getTvShowRecommendations(showId: number): Promise<TmdbTvShow[]> {
+    const data = await this.fetch(`/tv/${showId}/recommendations`)
+    return data.results.map((s: any) => this.mapTvShow(s))
+  }
+
+  async getSimilarTvShows(showId: number): Promise<TmdbTvShow[]> {
+    const data = await this.fetch(`/tv/${showId}/similar`)
     return data.results.map((s: any) => this.mapTvShow(s))
   }
 }

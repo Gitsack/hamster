@@ -241,6 +241,24 @@ interface QualityProfile {
   mediaType?: string
 }
 
+interface StreamingOffer {
+  monetizationType: string
+  providerId: number
+  providerName: string
+  providerIconUrl: string
+  presentationType: string
+  url: string
+  retailPrice?: number
+  currency?: string
+}
+
+interface RecommendationLane {
+  key: string
+  label: string
+  source: 'tmdb' | 'trakt' | 'justwatch'
+  items: (MovieSearchResult | TvShowSearchResult)[]
+}
+
 type SortField = 'age' | 'title' | 'size' | 'indexer' | 'grabs' | 'category'
 type SortDirection = 'asc' | 'desc'
 
@@ -341,6 +359,12 @@ export default function SearchPage() {
   const [tvDiscoverLanes, setTvDiscoverLanes] = useState<Record<string, TvShowSearchResult[]>>({})
   const [loadingTvDiscover, setLoadingTvDiscover] = useState(false)
 
+  // Recommendation lanes
+  const [movieRecommendationLanes, setMovieRecommendationLanes] = useState<RecommendationLane[]>([])
+  const [tvRecommendationLanes, setTvRecommendationLanes] = useState<RecommendationLane[]>([])
+  const [loadingMovieRecs, setLoadingMovieRecs] = useState(false)
+  const [loadingTvRecs, setLoadingTvRecs] = useState(false)
+
   // Books search results
   const [authorResults, setAuthorResults] = useState<AuthorSearchResult[]>([])
   const [bookResults, setBookResults] = useState<BookSearchResult[]>([])
@@ -420,6 +444,7 @@ export default function SearchPage() {
     votes?: number
     genres?: string[]
     cast?: { id: number; name: string; character: string; profileUrl?: string }[]
+    streamingOffers?: StreamingOffer[]
     inLibrary: boolean
     libraryId?: number
     requested?: boolean
@@ -442,6 +467,7 @@ export default function SearchPage() {
     seasonCount?: number
     episodeCount?: number
     cast?: { id: number; name: string; character: string; profileUrl?: string }[]
+    streamingOffers?: StreamingOffer[]
     inLibrary: boolean
     libraryId?: number
     requested?: boolean
@@ -802,22 +828,54 @@ export default function SearchPage() {
     }
   }, [tvDiscoverCategories])
 
-  // Load discover content when switching to movies/tv tab with no search query
+  // Fetch movie recommendation lanes
+  const fetchMovieRecommendations = useCallback(async () => {
+    setLoadingMovieRecs(true)
+    try {
+      const response = await fetch('/api/v1/recommendations/movies')
+      if (response.ok) {
+        const data = await response.json()
+        setMovieRecommendationLanes(data.lanes)
+      }
+    } catch (error) {
+      console.error('Failed to fetch movie recommendations:', error)
+    } finally {
+      setLoadingMovieRecs(false)
+    }
+  }, [])
+
+  // Fetch TV recommendation lanes
+  const fetchTvRecommendations = useCallback(async () => {
+    setLoadingTvRecs(true)
+    try {
+      const response = await fetch('/api/v1/recommendations/tv')
+      if (response.ok) {
+        const data = await response.json()
+        setTvRecommendationLanes(data.lanes)
+      }
+    } catch (error) {
+      console.error('Failed to fetch TV recommendations:', error)
+    } finally {
+      setLoadingTvRecs(false)
+    }
+  }, [])
+
+  // Load discover content and recommendations when switching to movies/tv tab with no search query
   useEffect(() => {
-    if (
-      searchMode === 'movies' &&
-      !searchQuery &&
-      Object.keys(movieDiscoverLanes).length === 0 &&
-      !loadingMovieDiscover
-    ) {
-      fetchAllMovieDiscoverLanes()
-    } else if (
-      searchMode === 'tv' &&
-      !searchQuery &&
-      Object.keys(tvDiscoverLanes).length === 0 &&
-      !loadingTvDiscover
-    ) {
-      fetchAllTvDiscoverLanes()
+    if (searchMode === 'movies' && !searchQuery) {
+      if (Object.keys(movieDiscoverLanes).length === 0 && !loadingMovieDiscover) {
+        fetchAllMovieDiscoverLanes()
+      }
+      if (movieRecommendationLanes.length === 0 && !loadingMovieRecs) {
+        fetchMovieRecommendations()
+      }
+    } else if (searchMode === 'tv' && !searchQuery) {
+      if (Object.keys(tvDiscoverLanes).length === 0 && !loadingTvDiscover) {
+        fetchAllTvDiscoverLanes()
+      }
+      if (tvRecommendationLanes.length === 0 && !loadingTvRecs) {
+        fetchTvRecommendations()
+      }
     }
   }, [
     searchMode,
@@ -828,6 +886,12 @@ export default function SearchPage() {
     loadingTvDiscover,
     fetchAllMovieDiscoverLanes,
     fetchAllTvDiscoverLanes,
+    movieRecommendationLanes,
+    tvRecommendationLanes,
+    loadingMovieRecs,
+    loadingTvRecs,
+    fetchMovieRecommendations,
+    fetchTvRecommendations,
   ])
 
   // Direct search functions
@@ -2210,6 +2274,7 @@ export default function SearchPage() {
     title,
     items,
     type,
+    source,
     onItemClick,
     onAdd,
     onToggle,
@@ -2218,6 +2283,7 @@ export default function SearchPage() {
     title: string
     items: (MovieSearchResult | TvShowSearchResult)[]
     type: 'movie' | 'tv'
+    source?: 'tmdb' | 'trakt' | 'justwatch'
     onItemClick: (item: MovieSearchResult | TvShowSearchResult) => void
     onAdd: (item: MovieSearchResult | TvShowSearchResult) => void
     onToggle: (item: MovieSearchResult | TvShowSearchResult) => void
@@ -2240,7 +2306,14 @@ export default function SearchPage() {
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">{title}</h3>
+          <h3 className="text-lg font-semibold">
+            {title}
+            {source && (
+              <Badge variant="outline" className="ml-2 text-xs font-normal">
+                {source === 'trakt' ? 'Trakt' : source === 'justwatch' ? 'JustWatch' : 'For You'}
+              </Badge>
+            )}
+          </h3>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => scroll('left')}>
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
@@ -2389,8 +2462,32 @@ export default function SearchPage() {
     if (hasSearched) return <NoResults />
 
     // Show discover lanes when no search has been performed
+    const externalMovieLanes = movieRecommendationLanes.filter(
+      (l) => l.source === 'trakt' || l.source === 'justwatch'
+    )
+    const personalizedMovieLanes = movieRecommendationLanes.filter((l) => l.source === 'tmdb')
+
     return (
       <div className="space-y-8">
+        {loadingMovieRecs && externalMovieLanes.length === 0 && (
+          <>
+            <DiscoverLaneSkeleton />
+            <DiscoverLaneSkeleton />
+          </>
+        )}
+        {externalMovieLanes.map((lane) => (
+          <DiscoverLane
+            key={lane.key}
+            title={lane.label}
+            source={lane.source}
+            items={lane.items}
+            type="movie"
+            onItemClick={(item) => openMovieDetails(item as MovieSearchResult)}
+            onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
+            onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
+            togglingItems={togglingMovies}
+          />
+        ))}
         {loadingMovieDiscover ? (
           <>
             <DiscoverLaneSkeleton />
@@ -2415,6 +2512,22 @@ export default function SearchPage() {
             <p>Enter a search term to find movies</p>
           </div>
         )}
+        {loadingMovieRecs && personalizedMovieLanes.length === 0 && (
+          <DiscoverLaneSkeleton />
+        )}
+        {personalizedMovieLanes.map((lane) => (
+          <DiscoverLane
+            key={lane.key}
+            title={lane.label}
+            source={lane.source}
+            items={lane.items}
+            type="movie"
+            onItemClick={(item) => openMovieDetails(item as MovieSearchResult)}
+            onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
+            onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
+            togglingItems={togglingMovies}
+          />
+        ))}
       </div>
     )
   }
@@ -2452,8 +2565,32 @@ export default function SearchPage() {
     if (hasSearched) return <NoResults />
 
     // Show discover lanes when no search has been performed
+    const externalTvLanes = tvRecommendationLanes.filter(
+      (l) => l.source === 'trakt' || l.source === 'justwatch'
+    )
+    const personalizedTvLanes = tvRecommendationLanes.filter((l) => l.source === 'tmdb')
+
     return (
       <div className="space-y-8">
+        {loadingTvRecs && externalTvLanes.length === 0 && (
+          <>
+            <DiscoverLaneSkeleton />
+            <DiscoverLaneSkeleton />
+          </>
+        )}
+        {externalTvLanes.map((lane) => (
+          <DiscoverLane
+            key={lane.key}
+            title={lane.label}
+            source={lane.source}
+            items={lane.items}
+            type="tv"
+            onItemClick={(item) => openTvShowDetails(item as TvShowSearchResult)}
+            onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
+            onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
+            togglingItems={togglingTvShows}
+          />
+        ))}
         {loadingTvDiscover ? (
           <>
             <DiscoverLaneSkeleton />
@@ -2478,6 +2615,22 @@ export default function SearchPage() {
             <p>Enter a search term to find TV shows</p>
           </div>
         )}
+        {loadingTvRecs && personalizedTvLanes.length === 0 && (
+          <DiscoverLaneSkeleton />
+        )}
+        {personalizedTvLanes.map((lane) => (
+          <DiscoverLane
+            key={lane.key}
+            title={lane.label}
+            source={lane.source}
+            items={lane.items}
+            type="tv"
+            onItemClick={(item) => openTvShowDetails(item as TvShowSearchResult)}
+            onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
+            onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
+            togglingItems={togglingTvShows}
+          />
+        ))}
       </div>
     )
   }
@@ -3047,6 +3200,80 @@ export default function SearchPage() {
                     </div>
                   )}
 
+                  {/* Where to Watch - Streaming Providers */}
+                  {movieDetails.streamingOffers && movieDetails.streamingOffers.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-3">Where to Watch</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {movieDetails.streamingOffers
+                          .filter((o) => o.monetizationType === 'flatrate')
+                          .map((offer) => (
+                            <a
+                              key={`${offer.providerId}-${offer.presentationType}`}
+                              href={offer.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted transition-colors"
+                            >
+                              {offer.providerIconUrl && (
+                                <img
+                                  src={offer.providerIconUrl}
+                                  alt={offer.providerName}
+                                  className="w-6 h-6 rounded"
+                                />
+                              )}
+                              <span className="text-sm font-medium">{offer.providerName}</span>
+                              {offer.presentationType && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                  {offer.presentationType.toUpperCase()}
+                                </Badge>
+                              )}
+                            </a>
+                          ))}
+                      </div>
+                      {movieDetails.streamingOffers.some(
+                        (o) => o.monetizationType === 'rent' || o.monetizationType === 'buy'
+                      ) && (
+                        <div className="mt-3">
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Also available to rent or buy:
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {movieDetails.streamingOffers
+                              .filter(
+                                (o) =>
+                                  o.monetizationType === 'rent' || o.monetizationType === 'buy'
+                              )
+                              .map((offer) => (
+                                <a
+                                  key={`${offer.providerId}-${offer.monetizationType}-${offer.presentationType}`}
+                                  href={offer.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 hover:bg-muted transition-colors text-xs"
+                                >
+                                  {offer.providerIconUrl && (
+                                    <img
+                                      src={offer.providerIconUrl}
+                                      alt={offer.providerName}
+                                      className="w-4 h-4 rounded"
+                                    />
+                                  )}
+                                  <span>{offer.providerName}</span>
+                                  <span className="text-muted-foreground">
+                                    {offer.monetizationType === 'rent' ? 'Rent' : 'Buy'}
+                                    {offer.retailPrice
+                                      ? ` ${offer.currency || 'EUR'} ${offer.retailPrice.toFixed(2)}`
+                                      : ''}
+                                  </span>
+                                </a>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Cast */}
                   {movieDetails.cast && movieDetails.cast.length > 0 && (
                     <div>
@@ -3220,6 +3447,80 @@ export default function SearchPage() {
                   {tvShowDetails.networks && tvShowDetails.networks.length > 0 && (
                     <div className="text-sm text-muted-foreground">
                       Network: {tvShowDetails.networks.join(', ')}
+                    </div>
+                  )}
+
+                  {/* Where to Watch - Streaming Providers */}
+                  {tvShowDetails.streamingOffers && tvShowDetails.streamingOffers.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-3">Where to Watch</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {tvShowDetails.streamingOffers
+                          .filter((o) => o.monetizationType === 'flatrate')
+                          .map((offer) => (
+                            <a
+                              key={`${offer.providerId}-${offer.presentationType}`}
+                              href={offer.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted transition-colors"
+                            >
+                              {offer.providerIconUrl && (
+                                <img
+                                  src={offer.providerIconUrl}
+                                  alt={offer.providerName}
+                                  className="w-6 h-6 rounded"
+                                />
+                              )}
+                              <span className="text-sm font-medium">{offer.providerName}</span>
+                              {offer.presentationType && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                  {offer.presentationType.toUpperCase()}
+                                </Badge>
+                              )}
+                            </a>
+                          ))}
+                      </div>
+                      {tvShowDetails.streamingOffers.some(
+                        (o) => o.monetizationType === 'rent' || o.monetizationType === 'buy'
+                      ) && (
+                        <div className="mt-3">
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Also available to rent or buy:
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {tvShowDetails.streamingOffers
+                              .filter(
+                                (o) =>
+                                  o.monetizationType === 'rent' || o.monetizationType === 'buy'
+                              )
+                              .map((offer) => (
+                                <a
+                                  key={`${offer.providerId}-${offer.monetizationType}-${offer.presentationType}`}
+                                  href={offer.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 hover:bg-muted transition-colors text-xs"
+                                >
+                                  {offer.providerIconUrl && (
+                                    <img
+                                      src={offer.providerIconUrl}
+                                      alt={offer.providerName}
+                                      className="w-4 h-4 rounded"
+                                    />
+                                  )}
+                                  <span>{offer.providerName}</span>
+                                  <span className="text-muted-foreground">
+                                    {offer.monetizationType === 'rent' ? 'Rent' : 'Buy'}
+                                    {offer.retailPrice
+                                      ? ` ${offer.currency || 'EUR'} ${offer.retailPrice.toFixed(2)}`
+                                      : ''}
+                                  </span>
+                                </a>
+                              ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

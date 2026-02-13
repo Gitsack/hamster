@@ -4,7 +4,9 @@ import MovieFile from '#models/movie_file'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
+import { justwatchService } from '#services/metadata/justwatch_service'
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
+import AppSetting from '#models/app_setting'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 
@@ -102,6 +104,15 @@ export default class MoviesController {
         tmdbService.getMovieCredits(parseInt(tmdbId), 6),
       ])
 
+      // Fetch JustWatch streaming availability using TMDB data (non-blocking)
+      let offers: any[] = []
+      const justwatchEnabled = await AppSetting.get<boolean>('justwatchEnabled', false)
+      if (justwatchEnabled && movie.title && movie.year) {
+        offers = await justwatchService
+          .getStreamingAvailability(movie.title, movie.year, 'movie')
+          .catch(() => [])
+      }
+
       // Check if already in library
       const existing = await Movie.query().where('tmdbId', String(movie.id)).first()
 
@@ -126,6 +137,7 @@ export default class MoviesController {
           character: c.character,
           profileUrl: c.profilePath,
         })),
+        streamingOffers: offers,
         inLibrary: !!existing,
         libraryId: existing?.id,
         requested: existing?.requested ?? false,

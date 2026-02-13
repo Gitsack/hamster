@@ -35,6 +35,8 @@ const WebhooksController = () => import('#controllers/webhooks_controller')
 const NotificationsController = () => import('#controllers/notifications_controller')
 const SystemController = () => import('#controllers/system_controller')
 const CalendarController = () => import('#controllers/calendar_controller')
+const RecommendationsController = () => import('#controllers/recommendations_controller')
+const JustWatchController = () => import('#controllers/justwatch_controller')
 
 // Health check endpoint (enhanced for Docker/load balancers)
 router.get('/health', [SystemController, 'health'])
@@ -342,6 +344,13 @@ router
     router.put('/notifications/:id', [NotificationsController, 'update'])
     router.delete('/notifications/:id', [NotificationsController, 'destroy'])
     router.post('/notifications/:id/test', [NotificationsController, 'test'])
+
+    // Recommendations
+    router.get('/recommendations/movies', [RecommendationsController, 'movies'])
+    router.get('/recommendations/tv', [RecommendationsController, 'tv'])
+
+    // JustWatch
+    router.get('/justwatch/streaming', [JustWatchController, 'streamingAvailability'])
 
     // Calendar
     router.get('/calendar', [CalendarController, 'index'])

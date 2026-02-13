@@ -7,7 +7,9 @@ import Download from '#models/download'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
+import { justwatchService } from '#services/metadata/justwatch_service'
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
+import AppSetting from '#models/app_setting'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { libraryCleanupService } from '#services/library/library_cleanup_service'
 import * as fs from 'node:fs/promises'
@@ -113,6 +115,15 @@ export default class TvShowsController {
         tmdbService.getTvShowCredits(parseInt(tmdbId), 6),
       ])
 
+      // Fetch JustWatch streaming availability using TMDB data (non-blocking)
+      let offers: any[] = []
+      const justwatchEnabled = await AppSetting.get<boolean>('justwatchEnabled', false)
+      if (justwatchEnabled && show.name && show.year) {
+        offers = await justwatchService
+          .getStreamingAvailability(show.name, show.year, 'show')
+          .catch(() => [])
+      }
+
       // Check if already in library
       const existing = await TvShow.query().where('tmdbId', String(show.id)).first()
 
@@ -138,6 +149,7 @@ export default class TvShowsController {
           character: c.character,
           profileUrl: c.profilePath,
         })),
+        streamingOffers: offers,
         inLibrary: !!existing,
         libraryId: existing?.id,
         requested: existing?.requested ?? false,

@@ -13,6 +13,13 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectPopup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +40,8 @@ import {
   ViewOffIcon,
   Delete02Icon,
   Settings01Icon,
+  Globe02Icon,
+  StarIcon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 import { FolderBrowser } from '@/components/folder-browser'
@@ -49,9 +58,20 @@ interface RootFolder {
   totalSpace: number | null
 }
 
+interface RecommendationSettings {
+  traktEnabled: boolean
+  personalizedEnabled: boolean
+  maxPersonalizedLanes: number
+  justwatchEnabled: boolean
+}
+
 interface AppSettings {
   enabledMediaTypes: MediaType[]
   hasTmdbApiKey: boolean
+  hasTraktClientId: boolean
+  recommendationSettings: RecommendationSettings
+  justwatchEnabled: boolean
+  justwatchLocale: string
 }
 
 const mediaTypeInfo: Record<
@@ -80,6 +100,43 @@ const mediaTypeInfo: Record<
     icon: Book01Icon,
     description: 'Ebook library with OpenLibrary metadata',
   },
+}
+
+const LOCALE_DISPLAY_NAMES: Record<string, string> = {
+  en_US: 'United States',
+  en_GB: 'United Kingdom',
+  en_CA: 'Canada',
+  en_AU: 'Australia',
+  en_IN: 'India',
+  de_DE: 'Germany',
+  de_AT: 'Austria',
+  de_CH: 'Switzerland',
+  fr_FR: 'France',
+  fr_BE: 'Belgium',
+  es_ES: 'Spain',
+  es_MX: 'Mexico',
+  es_AR: 'Argentina',
+  it_IT: 'Italy',
+  nl_NL: 'Netherlands',
+  pt_BR: 'Brazil',
+  pt_PT: 'Portugal',
+  sv_SE: 'Sweden',
+  da_DK: 'Denmark',
+  nb_NO: 'Norway',
+  fi_FI: 'Finland',
+  pl_PL: 'Poland',
+  cs_CZ: 'Czech Republic',
+  hu_HU: 'Hungary',
+  ro_RO: 'Romania',
+  el_GR: 'Greece',
+  tr_TR: 'Turkey',
+  ja_JP: 'Japan',
+  ko_KR: 'South Korea',
+  zh_TW: 'Taiwan',
+  zh_HK: 'Hong Kong',
+  th_TH: 'Thailand',
+  en_NZ: 'New Zealand',
+  en_ZA: 'South Africa',
 }
 
 interface TemplateVariable {
@@ -173,6 +230,15 @@ export default function MediaManagement() {
   const [settings, setSettings] = useState<AppSettings>({
     enabledMediaTypes: ['music'],
     hasTmdbApiKey: false,
+    hasTraktClientId: false,
+    recommendationSettings: {
+      traktEnabled: false,
+      personalizedEnabled: false,
+      maxPersonalizedLanes: 3,
+      justwatchEnabled: false,
+    },
+    justwatchEnabled: false,
+    justwatchLocale: 'en_US',
   })
   const [rootFolders, setRootFolders] = useState<RootFolder[]>([])
   const [loading, setLoading] = useState(true)
@@ -198,6 +264,12 @@ export default function MediaManagement() {
   const [tmdbApiKey, setTmdbApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [savingApiKey, setSavingApiKey] = useState(false)
+
+  // Trakt Client ID dialog state
+  const [traktDialogOpen, setTraktDialogOpen] = useState(false)
+  const [traktClientId, setTraktClientId] = useState('')
+  const [showTraktKey, setShowTraktKey] = useState(false)
+  const [savingTraktKey, setSavingTraktKey] = useState(false)
 
   // Quality profile state
   const [qualityProfiles, setQualityProfiles] = useState<QualityProfile[]>([])
@@ -225,7 +297,11 @@ export default function MediaManagement() {
 
       if (settingsRes.ok) {
         const data = await settingsRes.json()
-        setSettings(data)
+        setSettings((prev) => ({
+          ...prev,
+          ...data,
+          recommendationSettings: data.recommendationSettings ?? prev.recommendationSettings,
+        }))
       }
       if (foldersRes.ok) {
         const data = await foldersRes.json()
@@ -379,6 +455,99 @@ export default function MediaManagement() {
       toast.error('Failed to save API key')
     } finally {
       setSavingApiKey(false)
+    }
+  }
+
+  const handleSaveTraktKey = async () => {
+    if (!traktClientId.trim()) {
+      toast.error('Client ID is required')
+      return
+    }
+
+    setSavingTraktKey(true)
+    try {
+      const response = await fetch('/api/v1/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ traktClientId }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSettings((prev) => ({ ...prev, hasTraktClientId: data.hasTraktClientId }))
+        toast.success('Trakt client ID saved')
+        setTraktDialogOpen(false)
+        setTraktClientId('')
+      } else {
+        toast.error('Failed to save Trakt client ID')
+      }
+    } catch (error) {
+      toast.error('Failed to save Trakt client ID')
+    } finally {
+      setSavingTraktKey(false)
+    }
+  }
+
+  const handleSaveRecommendationSettings = async (updated: RecommendationSettings) => {
+    setSettings((prev) => ({ ...prev, recommendationSettings: updated }))
+    try {
+      const response = await fetch('/api/v1/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recommendationSettings: updated }),
+      })
+
+      if (!response.ok) {
+        toast.error('Failed to save recommendation settings')
+        fetchData()
+      }
+    } catch (error) {
+      toast.error('Failed to save recommendation settings')
+      fetchData()
+    }
+  }
+
+  const handleJustWatchToggle = async (enabled: boolean) => {
+    const updatedRecSettings = { ...settings.recommendationSettings, justwatchEnabled: enabled }
+    setSettings((prev) => ({
+      ...prev,
+      justwatchEnabled: enabled,
+      recommendationSettings: updatedRecSettings,
+    }))
+    try {
+      const response = await fetch('/api/v1/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          justwatchEnabled: enabled,
+          recommendationSettings: updatedRecSettings,
+        }),
+      })
+      if (!response.ok) {
+        toast.error('Failed to save settings')
+        fetchData()
+      }
+    } catch {
+      toast.error('Failed to save settings')
+      fetchData()
+    }
+  }
+
+  const handleJustWatchLocaleChange = async (locale: string) => {
+    setSettings((prev) => ({ ...prev, justwatchLocale: locale }))
+    try {
+      const response = await fetch('/api/v1/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ justwatchLocale: locale }),
+      })
+      if (!response.ok) {
+        toast.error('Failed to save locale')
+        fetchData()
+      }
+    } catch {
+      toast.error('Failed to save locale')
+      fetchData()
     }
   }
 
@@ -606,6 +775,183 @@ export default function MediaManagement() {
                 <Button variant="outline" size="sm" onClick={() => setApiKeyDialogOpen(true)}>
                   {settings.hasTmdbApiKey ? 'Change' : 'Add'}
                 </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recommendations */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recommendations</CardTitle>
+            <CardDescription>
+              Configure recommendation sources for the search page discover lanes
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Trakt.tv row */}
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                  <HugeiconsIcon icon={Globe02Icon} className="size-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <span className="font-medium">Trakt.tv</span>
+                  <p className="text-sm text-muted-foreground">
+                    Community-powered trending, anticipated, and recommended lists.{' '}
+                    <a
+                      href="https://trakt.tv/oauth/applications"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Get a free client ID
+                    </a>
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {settings.hasTraktClientId ? (
+                  <span className="text-sm text-green-600 flex items-center gap-1">
+                    <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-4" />
+                    Configured
+                  </span>
+                ) : (
+                  <span className="text-sm text-orange-500 flex items-center gap-1">
+                    <HugeiconsIcon icon={Alert02Icon} className="size-4" />
+                    Not configured
+                  </span>
+                )}
+                <Switch
+                  checked={settings.recommendationSettings.traktEnabled}
+                  onCheckedChange={(checked) =>
+                    handleSaveRecommendationSettings({
+                      ...settings.recommendationSettings,
+                      traktEnabled: checked,
+                    })
+                  }
+                  disabled={!settings.hasTraktClientId}
+                />
+                <Button variant="outline" size="sm" onClick={() => setTraktDialogOpen(true)}>
+                  {settings.hasTraktClientId ? 'Change' : 'Set Client ID'}
+                </Button>
+              </div>
+            </div>
+
+            {/* JustWatch row */}
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                  <HugeiconsIcon icon={Tv01Icon} className="size-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <span className="font-medium">JustWatch</span>
+                  <p className="text-sm text-muted-foreground">
+                    Show streaming availability and popular streaming content.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {settings.justwatchEnabled && (
+                  <Select
+                    value={settings.justwatchLocale}
+                    onValueChange={(value) => handleJustWatchLocaleChange(value)}
+                  >
+                    <SelectTrigger className="w-36">
+                      <span className="truncate">
+                        {LOCALE_DISPLAY_NAMES[settings.justwatchLocale] ||
+                          settings.justwatchLocale}
+                      </span>
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value="en_US">United States</SelectItem>
+                      <SelectItem value="en_GB">United Kingdom</SelectItem>
+                      <SelectItem value="en_CA">Canada</SelectItem>
+                      <SelectItem value="en_AU">Australia</SelectItem>
+                      <SelectItem value="en_IN">India</SelectItem>
+                      <SelectItem value="de_DE">Germany</SelectItem>
+                      <SelectItem value="de_AT">Austria</SelectItem>
+                      <SelectItem value="de_CH">Switzerland</SelectItem>
+                      <SelectItem value="fr_FR">France</SelectItem>
+                      <SelectItem value="fr_BE">Belgium</SelectItem>
+                      <SelectItem value="es_ES">Spain</SelectItem>
+                      <SelectItem value="es_MX">Mexico</SelectItem>
+                      <SelectItem value="es_AR">Argentina</SelectItem>
+                      <SelectItem value="it_IT">Italy</SelectItem>
+                      <SelectItem value="nl_NL">Netherlands</SelectItem>
+                      <SelectItem value="pt_BR">Brazil</SelectItem>
+                      <SelectItem value="pt_PT">Portugal</SelectItem>
+                      <SelectItem value="sv_SE">Sweden</SelectItem>
+                      <SelectItem value="da_DK">Denmark</SelectItem>
+                      <SelectItem value="nb_NO">Norway</SelectItem>
+                      <SelectItem value="fi_FI">Finland</SelectItem>
+                      <SelectItem value="pl_PL">Poland</SelectItem>
+                      <SelectItem value="cs_CZ">Czech Republic</SelectItem>
+                      <SelectItem value="hu_HU">Hungary</SelectItem>
+                      <SelectItem value="ro_RO">Romania</SelectItem>
+                      <SelectItem value="el_GR">Greece</SelectItem>
+                      <SelectItem value="tr_TR">Turkey</SelectItem>
+                      <SelectItem value="ja_JP">Japan</SelectItem>
+                      <SelectItem value="ko_KR">South Korea</SelectItem>
+                      <SelectItem value="zh_TW">Taiwan</SelectItem>
+                      <SelectItem value="zh_HK">Hong Kong</SelectItem>
+                      <SelectItem value="th_TH">Thailand</SelectItem>
+                      <SelectItem value="en_NZ">New Zealand</SelectItem>
+                      <SelectItem value="en_ZA">South Africa</SelectItem>
+                    </SelectPopup>
+                  </Select>
+                )}
+                <Switch
+                  checked={settings.justwatchEnabled}
+                  onCheckedChange={handleJustWatchToggle}
+                />
+              </div>
+            </div>
+
+            {/* Personalized Recommendations row */}
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                  <HugeiconsIcon icon={StarIcon} className="size-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <span className="font-medium">Personalized Recommendations</span>
+                  <p className="text-sm text-muted-foreground">
+                    "Because you have..." lanes based on your library. Uses TMDB recommendations API.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {settings.recommendationSettings.personalizedEnabled && (
+                  <Select
+                    value={settings.recommendationSettings.maxPersonalizedLanes.toString()}
+                    onValueChange={(value) =>
+                      handleSaveRecommendationSettings({
+                        ...settings.recommendationSettings,
+                        maxPersonalizedLanes: Number.parseInt(value, 10),
+                      })
+                    }
+                  >
+                    <SelectTrigger className="w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value="1">1 lane</SelectItem>
+                      <SelectItem value="2">2 lanes</SelectItem>
+                      <SelectItem value="3">3 lanes</SelectItem>
+                      <SelectItem value="5">5 lanes</SelectItem>
+                    </SelectPopup>
+                  </Select>
+                )}
+                <Switch
+                  checked={settings.recommendationSettings.personalizedEnabled}
+                  onCheckedChange={(checked) =>
+                    handleSaveRecommendationSettings({
+                      ...settings.recommendationSettings,
+                      personalizedEnabled: checked,
+                    })
+                  }
+                />
               </div>
             </div>
           </CardContent>
@@ -941,6 +1287,62 @@ export default function MediaManagement() {
             </Button>
             <Button onClick={handleSaveApiKey} disabled={savingApiKey || !tmdbApiKey.trim()}>
               {savingApiKey ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Trakt Client ID Dialog */}
+      <Dialog open={traktDialogOpen} onOpenChange={setTraktDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Trakt Client ID</DialogTitle>
+            <DialogDescription>
+              Enter your Trakt client ID to enable community-powered recommendations. You can get a
+              free client ID at{' '}
+              <a
+                href="https://trakt.tv/oauth/applications"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                trakt.tv
+              </a>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="traktClientId">Client ID</Label>
+              <div className="relative">
+                <Input
+                  id="traktClientId"
+                  type={showTraktKey ? 'text' : 'password'}
+                  placeholder="Enter your Trakt client ID"
+                  value={traktClientId}
+                  onChange={(e) => setTraktClientId(e.target.value)}
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowTraktKey(!showTraktKey)}
+                >
+                  <HugeiconsIcon icon={showTraktKey ? ViewOffIcon : EyeIcon} className="size-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTraktDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveTraktKey}
+              disabled={savingTraktKey || !traktClientId.trim()}
+            >
+              {savingTraktKey ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
