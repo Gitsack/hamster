@@ -1,7 +1,5 @@
 import { DateTime } from 'luxon'
-import { BaseModel, belongsTo, column } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import Movie from './movie.js'
+import { BaseModel, column } from '@adonisjs/lucid/orm'
 
 export interface VideoMediaInfo {
   codec?: string
@@ -43,6 +41,4 @@ export default class MovieFile extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
 
-  @belongsTo(() => Movie)
-  declare movie: BelongsTo<typeof Movie>
 }

@@ -1,8 +1,5 @@
 import { DateTime } from 'luxon'
-import { BaseModel, belongsTo, column } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import Episode from './episode.js'
-import TvShow from './tv_show.js'
+import { BaseModel, column } from '@adonisjs/lucid/orm'
 import type { VideoMediaInfo } from './movie_file.js'
 
 export default class EpisodeFile extends BaseModel {
@@ -38,10 +35,4 @@ export default class EpisodeFile extends BaseModel {
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
-
-  @belongsTo(() => Episode)
-  declare episode: BelongsTo<typeof Episode>
-
-  @belongsTo(() => TvShow)
-  declare tvShow: BelongsTo<typeof TvShow>
 }

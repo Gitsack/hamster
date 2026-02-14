@@ -7,7 +7,6 @@ import vine from '@vinejs/vine'
 import { musicBrainzService } from '#services/metadata/musicbrainz_service'
 import { coverArtService } from '#services/metadata/cover_art_service'
 import { DateTime } from 'luxon'
-import { requestedSearchTask } from '#services/tasks/requested_search_task'
 import { libraryCleanupService } from '#services/library/library_cleanup_service'
 
 const addAlbumValidator = vine.compile(
@@ -711,6 +710,7 @@ export default class AlbumsController {
     }
 
     try {
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
       const result = await requestedSearchTask.searchSingleAlbum(album.id)
       return response.json({
         found: result.found,

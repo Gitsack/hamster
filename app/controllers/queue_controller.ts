@@ -7,7 +7,6 @@ import { bookImportService } from '#services/media/book_import_service'
 import { movieImportService } from '#services/media/movie_import_service'
 import { episodeImportService } from '#services/media/episode_import_service'
 import { sabnzbdService, type SabnzbdConfig } from '#services/download_clients/sabnzbd_service'
-import { requestedSearchTask } from '#services/tasks/requested_search_task'
 
 export default class QueueController {
   private static lastRefresh: Date | null = null
@@ -484,6 +483,8 @@ export default class QueueController {
    * Search for all requested items and grab releases
    */
   async searchRequested({ response }: HttpContext) {
+    const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
+
     if (requestedSearchTask.running) {
       return response.json({
         status: 'running',
@@ -504,6 +505,8 @@ export default class QueueController {
    * Get requested search task status
    */
   async requestedStatus({ response }: HttpContext) {
+    const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
+
     return response.json({
       running: requestedSearchTask.running,
       intervalMinutes: requestedSearchTask.interval,

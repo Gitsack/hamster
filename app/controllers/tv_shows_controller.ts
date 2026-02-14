@@ -8,7 +8,6 @@ import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import { justwatchService } from '#services/metadata/justwatch_service'
-import { requestedSearchTask } from '#services/tasks/requested_search_task'
 import AppSetting from '#models/app_setting'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { libraryCleanupService } from '#services/library/library_cleanup_service'
@@ -388,8 +387,10 @@ export default class TvShowsController {
 
     // Trigger immediate search if requested and searchOnAdd is enabled
     if ((data.requested ?? true) && data.searchOnAdd !== false) {
-      requestedSearchTask.searchTvShowEpisodes(show.id).catch((error) => {
-        console.error('Failed to trigger search for TV show:', error)
+      import('#services/tasks/requested_search_task').then(({ requestedSearchTask }) => {
+        requestedSearchTask.searchTvShowEpisodes(show.id).catch((error) => {
+          console.error('Failed to trigger search for TV show:', error)
+        })
       })
     }
 
@@ -637,8 +638,10 @@ export default class TvShowsController {
 
     // Trigger search if marking as requested and episode doesn't have file
     if (!episode.hasFile) {
-      requestedSearchTask.searchSingleEpisode(episode.id).catch((error) => {
-        console.error('Failed to trigger search for episode:', error)
+      import('#services/tasks/requested_search_task').then(({ requestedSearchTask }) => {
+        requestedSearchTask.searchSingleEpisode(episode.id).catch((error) => {
+          console.error('Failed to trigger search for episode:', error)
+        })
       })
     }
 
@@ -732,8 +735,10 @@ export default class TvShowsController {
     // Trigger search if marking as requested
     const show = await TvShow.find(params.id)
     if (show) {
-      requestedSearchTask.searchTvShowEpisodes(show.id).catch((error) => {
-        console.error('Failed to trigger search for season:', error)
+      import('#services/tasks/requested_search_task').then(({ requestedSearchTask }) => {
+        requestedSearchTask.searchTvShowEpisodes(show.id).catch((error) => {
+          console.error('Failed to trigger search for season:', error)
+        })
       })
     }
 
@@ -850,6 +855,7 @@ export default class TvShowsController {
     }
 
     try {
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
       const result = await requestedSearchTask.searchTvShowEpisodes(show.id)
       return response.json({
         message: 'Search completed',
@@ -875,6 +881,7 @@ export default class TvShowsController {
     }
 
     try {
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
       const result = await requestedSearchTask.searchSingleEpisode(episode.id)
       return response.json({
         found: result.found,

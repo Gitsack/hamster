@@ -5,7 +5,6 @@ import Author from '#models/author'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { openLibraryService } from '#services/metadata/openlibrary_service'
-import { requestedSearchTask } from '#services/tasks/requested_search_task'
 import { libraryCleanupService } from '#services/library/library_cleanup_service'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
@@ -198,8 +197,10 @@ export default class BooksController {
 
     // Trigger immediate search if requested
     if (data.requested ?? true) {
-      requestedSearchTask.searchSingleBook(book.id).catch((error) => {
-        console.error('Failed to trigger search for book:', error)
+      import('#services/tasks/requested_search_task').then(({ requestedSearchTask }) => {
+        requestedSearchTask.searchSingleBook(book.id).catch((error) => {
+          console.error('Failed to trigger search for book:', error)
+        })
       })
     }
 
@@ -358,8 +359,10 @@ export default class BooksController {
 
     // Trigger immediate search if marking as requested
     if (!book.hasFile) {
-      requestedSearchTask.searchSingleBook(book.id).catch((error) => {
-        console.error('Failed to trigger search for book:', error)
+      import('#services/tasks/requested_search_task').then(({ requestedSearchTask }) => {
+        requestedSearchTask.searchSingleBook(book.id).catch((error) => {
+          console.error('Failed to trigger search for book:', error)
+        })
       })
     }
 
@@ -477,6 +480,7 @@ export default class BooksController {
     }
 
     try {
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
       const result = await requestedSearchTask.searchSingleBook(book.id)
       return response.json({
         found: result.found,

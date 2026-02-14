@@ -5,7 +5,6 @@ import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import { justwatchService } from '#services/metadata/justwatch_service'
-import { requestedSearchTask } from '#services/tasks/requested_search_task'
 import AppSetting from '#models/app_setting'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
@@ -213,7 +212,14 @@ export default class MoviesController {
   }
 
   async store({ request, response }: HttpContext) {
-    const data = await request.validateUsing(movieValidator)
+    let data
+    try {
+      data = await request.validateUsing(movieValidator)
+    } catch (validationError: any) {
+      console.error('Movie validation failed:', JSON.stringify(validationError.messages ?? validationError.message))
+      console.error('Request body:', JSON.stringify(request.body()))
+      return response.unprocessableEntity({ error: 'Validation failure', details: validationError.messages })
+    }
 
     // Check if already exists
     if (data.tmdbId) {
@@ -272,8 +278,10 @@ export default class MoviesController {
 
     // Trigger immediate search if requested and searchOnAdd is enabled
     if ((data.requested ?? true) && data.searchOnAdd !== false) {
-      requestedSearchTask.searchSingleMovie(movie.id).catch((error) => {
-        console.error('Failed to trigger search for movie:', error)
+      import('#services/tasks/requested_search_task').then(({ requestedSearchTask }) => {
+        requestedSearchTask.searchSingleMovie(movie.id).catch((error) => {
+          console.error('Failed to trigger search for movie:', error)
+        })
       })
     }
 
@@ -435,8 +443,10 @@ export default class MoviesController {
 
     // Trigger immediate search if marking as requested
     if (!movie.hasFile) {
-      requestedSearchTask.searchSingleMovie(movie.id).catch((error) => {
-        console.error('Failed to trigger search for movie:', error)
+      import('#services/tasks/requested_search_task').then(({ requestedSearchTask }) => {
+        requestedSearchTask.searchSingleMovie(movie.id).catch((error) => {
+          console.error('Failed to trigger search for movie:', error)
+        })
       })
     }
 
@@ -552,6 +562,7 @@ export default class MoviesController {
     }
 
     try {
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
       const result = await requestedSearchTask.searchSingleMovie(movie.id)
       return response.json({
         found: result.found,

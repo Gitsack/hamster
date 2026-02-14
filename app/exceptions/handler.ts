@@ -32,9 +32,14 @@ export default class HttpExceptionHandler extends ExceptionHandler {
   async handle(error: unknown, ctx: HttpContext) {
     // Return JSON for API routes instead of rendering Inertia error pages
     if (ctx.request.url().startsWith('/api/')) {
-      const status = (error as any)?.status || 500
-      const message = (error as any)?.message || 'Internal server error'
-      ctx.response.status(status).send({ error: message })
+      const err = error as any
+      const status = err?.status || 500
+      const message = err?.message || 'Internal server error'
+      const body: Record<string, any> = { error: message }
+      if (err?.messages) {
+        body.details = err.messages
+      }
+      ctx.response.status(status).send(body)
       return
     }
 

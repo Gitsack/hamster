@@ -1,7 +1,5 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column, hasMany } from '@adonisjs/lucid/orm'
-import type { HasMany } from '@adonisjs/lucid/types/relations'
-import Download from './download.js'
+import { BaseModel, column } from '@adonisjs/lucid/orm'
 
 export type DownloadClientType =
   | 'sabnzbd'
@@ -83,6 +81,4 @@ export default class DownloadClient extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
 
-  @hasMany(() => Download)
-  declare downloads: HasMany<typeof Download>
 }

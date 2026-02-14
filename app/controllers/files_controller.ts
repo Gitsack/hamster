@@ -16,13 +16,13 @@ export default class FilesController {
    * Download a movie file
    */
   async downloadMovie({ params, response }: HttpContext) {
-    const movieFile = await MovieFile.query().where('id', params.id).preload('movie').first()
+    const movieFile = await MovieFile.query().where('id', params.id).first()
 
     if (!movieFile) {
       return response.notFound({ error: 'Movie file not found' })
     }
 
-    const movie = movieFile.movie
+    const movie = await Movie.find(movieFile.movieId)
     if (!movie) {
       return response.notFound({ error: 'Movie not found' })
     }
@@ -49,13 +49,14 @@ export default class FilesController {
    * Download an episode file
    */
   async downloadEpisode({ params, response }: HttpContext) {
-    const episodeFile = await EpisodeFile.query().where('id', params.id).preload('tvShow').first()
+    const episodeFile = await EpisodeFile.query().where('id', params.id).first()
 
     if (!episodeFile) {
       return response.notFound({ error: 'Episode file not found' })
     }
 
-    const tvShow = episodeFile.tvShow
+    const { default: TvShow } = await import('#models/tv_show')
+    const tvShow = await TvShow.find(episodeFile.tvShowId)
     if (!tvShow) {
       return response.notFound({ error: 'TV show not found' })
     }
@@ -82,13 +83,14 @@ export default class FilesController {
    * Download a book file
    */
   async downloadBook({ params, response }: HttpContext) {
-    const bookFile = await BookFile.query().where('id', params.id).preload('book').first()
+    const bookFile = await BookFile.query().where('id', params.id).first()
 
     if (!bookFile) {
       return response.notFound({ error: 'Book file not found' })
     }
 
-    const book = bookFile.book
+    const { default: Book } = await import('#models/book')
+    const book = await Book.find(bookFile.bookId)
     if (!book) {
       return response.notFound({ error: 'Book not found' })
     }
