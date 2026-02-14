@@ -13,6 +13,15 @@ export default class AuthController {
 
     try {
       const user = await User.verifyCredentials(email, password)
+
+      if (!user.isAdmin) {
+        const userCount = await User.query().count('* as total')
+        if (Number(userCount[0].$extras.total) === 1) {
+          user.isAdmin = true
+          await user.save()
+        }
+      }
+
       await auth.use('web').login(user)
       return response.redirect('/library')
     } catch {
