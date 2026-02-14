@@ -298,21 +298,21 @@ export default function BookDetail() {
     <AppLayout
       title={book.title}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" asChild>
             <Link href={book.author ? `/author/${book.author.id}` : '/library'}>
-              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
-              Back
+              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Back</span>
             </Link>
           </Button>
           {!book.hasFile && (
             <Button onClick={downloadBook} disabled={downloading}>
               {downloading ? (
-                <Spinner className="mr-2" />
+                <Spinner className="md:mr-2" />
               ) : (
-                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
+                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
               )}
-              Search releases
+              <span className="hidden md:inline">Search releases</span>
             </Button>
           )}
           <DropdownMenu>
@@ -447,27 +447,27 @@ export default function BookDetail() {
           <Card>
             <CardContent className="pt-6">
               <h2 className="font-semibold mb-4">File</h2>
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="flex items-center gap-3">
-                  <HugeiconsIcon icon={Book01Icon} className="h-8 w-8 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium truncate max-w-md">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-3 min-w-0">
+                  <HugeiconsIcon icon={Book01Icon} className="h-8 w-8 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">
                       {book.bookFile.path.split('/').pop()}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {book.bookFile.format && `${book.bookFile.format.toUpperCase()} • `}
                       {formatFileSize(book.bookFile.size)}
                     </p>
-                    <p className="text-xs text-muted-foreground/70 truncate max-w-md">
+                    <p className="text-xs text-muted-foreground/70 truncate">
                       {book.bookFile.path}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <Button variant="outline" size="sm" asChild>
                     <a href={book.bookFile.downloadUrl} download>
-                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 mr-2" />
-                      Download
+                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Download</span>
                     </a>
                   </Button>
                   <Button
@@ -476,8 +476,8 @@ export default function BookDetail() {
                     className="text-destructive hover:text-destructive"
                     onClick={() => setDeleteFileDialogOpen(true)}
                   >
-                    <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
-                    Delete
+                    <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Delete</span>
                   </Button>
                 </div>
               </div>

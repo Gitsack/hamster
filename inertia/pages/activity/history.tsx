@@ -137,10 +137,10 @@ export default function History() {
 
       <div className="space-y-6">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <CardTitle>Download History</CardTitle>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectPopup>
@@ -226,7 +226,7 @@ export default function History() {
 
                 {/* Pagination */}
                 {meta && meta.lastPage > 1 && (
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mt-4 pt-4 border-t">
                     <div className="text-sm text-muted-foreground">
                       Showing {(meta.currentPage - 1) * meta.perPage + 1} to{' '}
                       {Math.min(meta.currentPage * meta.perPage, meta.total)} of {meta.total}{' '}

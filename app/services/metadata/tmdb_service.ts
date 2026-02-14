@@ -375,6 +375,33 @@ export class TmdbService {
     }
   }
 
+  // Genre Discovery
+
+  async discoverMoviesByGenre(
+    genreId: number,
+    sortBy: string = 'popularity.desc',
+    page: number = 1
+  ): Promise<{ results: TmdbMovie[]; totalPages: number }> {
+    const data = await this.fetch(
+      `/discover/movie?with_genres=${genreId}&sort_by=${sortBy}&page=${page}`
+    )
+    return { results: data.results.map((m: any) => this.mapMovie(m)), totalPages: data.total_pages }
+  }
+
+  async discoverTvShowsByGenre(
+    genreId: number,
+    sortBy: string = 'popularity.desc',
+    page: number = 1
+  ): Promise<{ results: TmdbTvShow[]; totalPages: number }> {
+    const data = await this.fetch(
+      `/discover/tv?with_genres=${genreId}&sort_by=${sortBy}&page=${page}`
+    )
+    return {
+      results: data.results.map((s: any) => this.mapTvShow(s)),
+      totalPages: data.total_pages,
+    }
+  }
+
   // Recommendations & Similar
 
   async getMovieRecommendations(movieId: number): Promise<TmdbMovie[]> {

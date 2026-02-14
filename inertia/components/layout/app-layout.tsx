@@ -17,11 +17,11 @@ export function AppLayout({ children, title, actions }: AppLayoutProps) {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        <header className="flex min-h-14 shrink-0 items-center gap-2 border-b px-4 py-2 flex-wrap">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
-          {title && <h1 className="text-lg font-semibold">{title}</h1>}
-          {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+          {title && <h1 className="text-lg font-semibold truncate">{title}</h1>}
+          {actions && <div className="ml-auto flex items-center gap-2 flex-wrap">{actions}</div>}
         </header>
         <main
           className={`flex-1 overflow-y-auto overflow-x-hidden p-4 min-w-0 ${hasPlayer ? 'pb-24' : ''}`}

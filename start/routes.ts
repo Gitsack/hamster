@@ -210,6 +210,7 @@ router
     router.get('/movies/discover', [MoviesController, 'discover'])
     router.get('/movies/preview', [MoviesController, 'preview'])
     router.get('/movies/requested', [MoviesController, 'requested'])
+    router.get('/movies/similar', [MoviesController, 'similar'])
     router.get('/movies/:id', [MoviesController, 'show'])
     router.put('/movies/:id', [MoviesController, 'update'])
     router.delete('/movies/:id', [MoviesController, 'destroy'])
@@ -218,6 +219,7 @@ router
     router.post('/movies/:id/download', [MoviesController, 'download'])
     router.post('/movies/:id/search', [MoviesController, 'searchNow'])
     router.post('/movies/:id/enrich', [MoviesController, 'enrich'])
+    router.get('/movies/:id/similar', [MoviesController, 'similar'])
 
     // TV Shows
     router.get('/tvshows', [TvShowsController, 'index'])
@@ -228,6 +230,7 @@ router
     router.get('/tvshows/requested', [TvShowsController, 'requested'])
     router.get('/tvshows/preview-seasons', [TvShowsController, 'previewSeasons'])
     router.get('/tvshows/preview-episodes', [TvShowsController, 'previewEpisodes'])
+    router.get('/tvshows/similar', [TvShowsController, 'similar'])
     router.get('/tvshows/:id', [TvShowsController, 'show'])
     router.put('/tvshows/:id', [TvShowsController, 'update'])
     router.delete('/tvshows/:id', [TvShowsController, 'destroy'])
@@ -240,6 +243,7 @@ router
     router.post('/tvshows/:id/episodes/:episodeId/search', [TvShowsController, 'searchEpisodeNow'])
     router.post('/tvshows/:id/enrich', [TvShowsController, 'enrich'])
     router.post('/tvshows/:id/refresh', [TvShowsController, 'refresh'])
+    router.get('/tvshows/:id/similar', [TvShowsController, 'similar'])
 
     // Authors
     router.get('/authors', [AuthorsController, 'index'])

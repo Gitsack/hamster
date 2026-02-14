@@ -1554,12 +1554,12 @@ export default function Library() {
             </TabsList>
 
             {/* Toolbar */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <HugeiconsIcon icon={SortingIcon} className="h-4 w-4 mr-2" />
-                    Sort
+                    <HugeiconsIcon icon={SortingIcon} className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Sort</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -1597,11 +1597,11 @@ export default function Library() {
               {activeTab !== 'missing' && (
                 <Button variant="outline" size="sm" onClick={handleScanLibrary} disabled={scanning}>
                   {scanning ? (
-                    <Spinner className="h-4 w-4 mr-2" />
+                    <Spinner className="h-4 w-4 sm:mr-2" />
                   ) : (
-                    <HugeiconsIcon icon={FolderSearchIcon} className="h-4 w-4 mr-2" />
+                    <HugeiconsIcon icon={FolderSearchIcon} className="h-4 w-4 sm:mr-2" />
                   )}
-                  {scanning ? 'Scanning...' : 'Scan Library'}
+                  <span className="hidden sm:inline">{scanning ? 'Scanning...' : 'Scan Library'}</span>
                 </Button>
               )}
             </div>

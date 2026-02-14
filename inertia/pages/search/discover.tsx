@@ -4,6 +4,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
+import {
+  Select,
+  SelectPopup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Film01Icon, Tv01Icon, ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
@@ -68,6 +75,47 @@ const CATEGORY_LABELS: Record<string, Record<string, string>> = {
   },
 }
 
+const MOVIE_GENRE_NAMES: Record<string, string> = {
+  '28': 'Action',
+  '12': 'Adventure',
+  '16': 'Animation',
+  '35': 'Comedy',
+  '80': 'Crime',
+  '99': 'Documentary',
+  '18': 'Drama',
+  '10751': 'Family',
+  '14': 'Fantasy',
+  '36': 'History',
+  '27': 'Horror',
+  '10402': 'Music',
+  '9648': 'Mystery',
+  '10749': 'Romance',
+  '878': 'Sci-Fi',
+  '10770': 'TV Movie',
+  '53': 'Thriller',
+  '10752': 'War',
+  '37': 'Western',
+}
+
+const TV_GENRE_NAMES: Record<string, string> = {
+  '10759': 'Action',
+  '16': 'Animation',
+  '35': 'Comedy',
+  '80': 'Crime',
+  '99': 'Documentary',
+  '18': 'Drama',
+  '10751': 'Family',
+  '10762': 'Kids',
+  '9648': 'Mystery',
+  '10763': 'News',
+  '10764': 'Reality',
+  '10765': 'Sci-Fi',
+  '10766': 'Soap',
+  '10767': 'Talk',
+  '10768': 'Politics',
+  '37': 'Western',
+}
+
 // Map recommendation lane keys to API source params
 const RECOMMENDATION_SOURCES: Record<string, string> = {
   'trakt-trending': 'trakt',
@@ -100,7 +148,22 @@ export default function DiscoverPage() {
   const type = segments[discoverIdx + 1] || 'movies'
   const category = segments[discoverIdx + 2] || 'popular'
   const mediaType = type as 'movies' | 'tv'
-  const pageTitle = CATEGORY_LABELS[mediaType]?.[category] || 'Discover'
+
+  // Parse query params for genre discovery
+  const urlParams = new URLSearchParams(url.split('?')[1] || '')
+  const genreId = urlParams.get('genreId')
+  const initialSortBy = urlParams.get('sortBy') || 'popularity.desc'
+
+  const isGenre = category === 'genre' && !!genreId
+  const genreNames = mediaType === 'movies' ? MOVIE_GENRE_NAMES : TV_GENRE_NAMES
+  const genreName = isGenre ? genreNames[genreId!] || 'Genre' : ''
+  const genreTitle = isGenre
+    ? `${genreName} ${mediaType === 'movies' ? 'Movies' : 'Shows'}`
+    : ''
+
+  const pageTitle = isGenre
+    ? genreTitle
+    : CATEGORY_LABELS[mediaType]?.[category] || 'Discover'
   const isRecommendation = category in RECOMMENDATION_SOURCES
   const apiBase = mediaType === 'movies' ? '/api/v1/movies/discover' : '/api/v1/tvshows/discover'
   const recApiBase =
@@ -113,6 +176,7 @@ export default function DiscoverPage() {
   const [initialLoading, setInitialLoading] = useState(true)
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
   const [togglingItems, setTogglingItems] = useState<Set<string>>(new Set())
+  const [sortBy, setSortBy] = useState(initialSortBy)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   // Add dialog state
@@ -131,6 +195,17 @@ export default function DiscoverPage() {
     (p) => p.mediaType === (mediaType === 'movies' ? 'movies' : 'tv')
   )
 
+  // Sort options
+  const sortOptions = [
+    { value: 'popularity.desc', label: 'Popular' },
+    {
+      value: mediaType === 'movies' ? 'primary_release_date.desc' : 'first_air_date.desc',
+      label: 'Newest',
+    },
+    { value: 'vote_average.desc', label: 'Top Rated' },
+    ...(mediaType === 'movies' ? [{ value: 'revenue.desc', label: 'Revenue' }] : []),
+  ]
+
   // Fetch config on mount
   useEffect(() => {
     Promise.all([
@@ -148,7 +223,11 @@ export default function DiscoverPage() {
       if (loading || pageNum > totalPages) return
       setLoading(true)
       try {
-        const response = await fetch(`${apiBase}?category=${category}&page=${pageNum}`)
+        let fetchUrl = `${apiBase}?category=${category}&page=${pageNum}`
+        if (isGenre && genreId) {
+          fetchUrl += `&genreId=${genreId}&sortBy=${sortBy}`
+        }
+        const response = await fetch(fetchUrl)
         if (response.ok) {
           const data = await response.json()
           setItems((prev) => {
@@ -166,7 +245,7 @@ export default function DiscoverPage() {
         setInitialLoading(false)
       }
     },
-    [apiBase, category, loading, totalPages]
+    [apiBase, category, loading, totalPages, isGenre, genreId, sortBy]
   )
 
   // Fetch recommendation lane (single page, no pagination)
@@ -201,6 +280,22 @@ export default function DiscoverPage() {
       fetchPage(1)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle sort change for genre pages
+  const handleSortChange = (newSortBy: string) => {
+    setSortBy(newSortBy)
+    setItems([])
+    setPage(0)
+    setTotalPages(1)
+    setInitialLoading(true)
+  }
+
+  // Re-fetch when sort changes (for genre pages)
+  useEffect(() => {
+    if (isGenre && sortBy !== initialSortBy) {
+      fetchPage(1)
+    }
+  }, [sortBy]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Intersection observer for infinite scroll (only for TMDB discover)
   useEffect(() => {
@@ -438,6 +533,24 @@ export default function DiscoverPage() {
             <HugeiconsIcon icon={ArrowLeft01Icon} className="h-5 w-5" />
           </Button>
           <h1 className="text-2xl font-bold">{pageTitle}</h1>
+          {isGenre && (
+            <div className="ml-auto">
+              <Select value={sortBy} onValueChange={handleSortChange}>
+                <SelectTrigger className="w-[150px] h-9">
+                  <SelectValue placeholder={sortOptions.find((o) => o.value === sortBy)?.label ?? 'Sort by'}>
+                    {sortOptions.find((o) => o.value === sortBy)?.label ?? 'Sort by'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {sortOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            </div>
+          )}
         </div>
 
         {/* Grid */}

@@ -333,26 +333,26 @@ export default function AlbumDetail() {
     <AppLayout
       title={album.title}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" asChild>
             <Link href={`/artist/${album.artistId}`}>
-              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
-              Back to Artist
+              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Back to Artist</span>
             </Link>
           </Button>
           {tracksWithFiles > 0 && (
             <Button variant="outline" onClick={playAlbum}>
-              <HugeiconsIcon icon={PlayIcon} className="h-4 w-4 mr-2" />
-              Play
+              <HugeiconsIcon icon={PlayIcon} className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Play</span>
             </Button>
           )}
           <Button onClick={searchAndDownload} disabled={downloading || percentComplete === 100}>
             {downloading ? (
-              <Spinner className="mr-2" />
+              <Spinner className="md:mr-2" />
             ) : (
-              <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
+              <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
             )}
-            {downloading ? 'Searching...' : 'Search releases'}
+            <span className="hidden md:inline">{downloading ? 'Searching...' : 'Search releases'}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -471,6 +471,7 @@ export default function AlbumDetail() {
               </Card>
             ) : (
               <Card>
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -554,6 +555,7 @@ export default function AlbumDetail() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               </Card>
             )}
           </TabsContent>
@@ -567,6 +569,7 @@ export default function AlbumDetail() {
               </Card>
             ) : (
               <Card>
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -580,7 +583,7 @@ export default function AlbumDetail() {
                   <TableBody>
                     {album.trackFiles.map((file) => (
                       <TableRow key={file.id}>
-                        <TableCell className="font-mono text-sm truncate max-w-xs">
+                        <TableCell className="font-mono text-sm truncate max-w-[200px] sm:max-w-xs">
                           {file.path}
                         </TableCell>
                         <TableCell>
@@ -603,6 +606,7 @@ export default function AlbumDetail() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </Card>
             )}
           </TabsContent>
@@ -610,6 +614,7 @@ export default function AlbumDetail() {
           {searchResults.length > 0 && (
             <TabsContent value="search">
               <Card>
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -655,6 +660,7 @@ export default function AlbumDetail() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </Card>
             </TabsContent>
           )}

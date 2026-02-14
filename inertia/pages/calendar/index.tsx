@@ -207,7 +207,7 @@ export default function Calendar() {
 
       <div className="space-y-4">
         {/* Controls */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={goToPrevMonth}>
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
@@ -237,7 +237,7 @@ export default function Calendar() {
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex items-center gap-4 text-sm flex-wrap">
           {Object.entries(MEDIA_LABELS).map(([type, label]) => (
             <div key={type} className="flex items-center gap-1.5">
               <div className={`h-3 w-3 rounded-full ${MEDIA_COLORS[type]}`} />
@@ -258,7 +258,7 @@ export default function Calendar() {
               </div>
             ))}
             {Array.from({ length: 35 }).map((_, i) => (
-              <div key={i} className="bg-card p-2 min-h-[100px]">
+              <div key={i} className="bg-card p-2 min-h-[60px] sm:min-h-[100px]">
                 <Skeleton className="h-4 w-6 mb-2" />
                 <Skeleton className="h-3 w-full" />
               </div>
@@ -288,7 +288,7 @@ export default function Calendar() {
                   key={index}
                   type="button"
                   onClick={() => setSelectedDay(isSelected ? null : dateKey)}
-                  className={`bg-card p-1.5 min-h-[100px] text-left transition-colors hover:bg-accent/50 ${
+                  className={`bg-card p-1.5 min-h-[60px] sm:min-h-[100px] text-left transition-colors hover:bg-accent/50 ${
                     !isCurrentMonth ? 'opacity-40' : ''
                   } ${isSelected ? 'ring-2 ring-primary ring-inset' : ''}`}
                 >

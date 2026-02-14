@@ -217,27 +217,27 @@ export default function Queue() {
     <AppLayout
       title="Queue"
       actions={
-        <div className="flex gap-2">
-          <Button onClick={searchRequested} disabled={searchingRequested} variant="outline">
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={searchRequested} disabled={searchingRequested} variant="outline" size="sm">
             <HugeiconsIcon
               icon={Search01Icon}
-              className={`h-4 w-4 mr-2 ${searchingRequested ? 'animate-pulse' : ''}`}
+              className={`h-4 w-4 md:mr-2 ${searchingRequested ? 'animate-pulse' : ''}`}
             />
-            {searchingRequested ? 'Searching...' : 'Search Requested'}
+            <span className="hidden md:inline">{searchingRequested ? 'Searching...' : 'Search Requested'}</span>
           </Button>
-          <Button onClick={scanCompleted} disabled={scanning} variant="outline">
+          <Button onClick={scanCompleted} disabled={scanning} variant="outline" size="sm">
             <HugeiconsIcon
               icon={FolderSearchIcon}
-              className={`h-4 w-4 mr-2 ${scanning ? 'animate-pulse' : ''}`}
+              className={`h-4 w-4 md:mr-2 ${scanning ? 'animate-pulse' : ''}`}
             />
-            {scanning ? 'Scanning...' : 'Import Completed'}
+            <span className="hidden md:inline">{scanning ? 'Scanning...' : 'Import Completed'}</span>
           </Button>
-          <Button onClick={refreshQueue} disabled={refreshing}>
+          <Button onClick={refreshQueue} disabled={refreshing} size="sm">
             <HugeiconsIcon
               icon={RefreshIcon}
-              className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
+              className={`h-4 w-4 md:mr-2 ${refreshing ? 'animate-spin' : ''}`}
             />
-            Refresh
+            <span className="hidden md:inline">Refresh</span>
           </Button>
         </div>
       }

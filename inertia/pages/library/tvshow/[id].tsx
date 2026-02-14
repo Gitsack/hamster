@@ -44,6 +44,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
+import { SimilarLane } from '@/components/library/similar-lane'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { VideoPlayer } from '@/components/player/video_player'
 
@@ -749,19 +750,19 @@ export default function TvShowDetail() {
     <AppLayout
       title={show.title}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" asChild>
             <Link href="/library?tab=tv">
-              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
-              Back
+              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Back</span>
             </Link>
           </Button>
           <Button variant="outline" size="sm" onClick={toggleMonitored}>
             <HugeiconsIcon
               icon={show.monitored ? Notification01Icon : NotificationOff01Icon}
-              className="h-4 w-4 mr-2"
+              className="h-4 w-4 md:mr-2"
             />
-            {show.monitored ? 'Monitored' : 'Monitor'}
+            <span className="hidden md:inline">{show.monitored ? 'Monitored' : 'Monitor'}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -957,12 +958,12 @@ export default function TvShowDetail() {
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium">{season.title}</p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
                           <span>{season.episodeCount} episodes</span>
                           {(season.downloadedCount > 0 ||
                             season.downloadingCount > 0 ||
                             season.requestedCount > 0) && (
-                            <span className="text-muted-foreground/50">•</span>
+                            <span className="text-muted-foreground/50 hidden sm:inline">•</span>
                           )}
                           {season.downloadedCount > 0 && (
                             <span className="text-green-600 font-medium">
@@ -1033,19 +1034,19 @@ export default function TvShowDetail() {
                             {seasonDetails[season.seasonNumber].episodes.map((episode) => (
                               <div
                                 key={episode.id}
-                                className="flex items-center gap-4 p-3 rounded-lg bg-muted/50"
+                                className="flex items-center gap-2 sm:gap-4 p-3 rounded-lg bg-muted/50"
                               >
-                                <div className="w-8 text-center font-mono text-muted-foreground">
+                                <div className="w-6 sm:w-8 text-center font-mono text-muted-foreground text-sm sm:text-base flex-shrink-0">
                                   {episode.episodeNumber}
                                 </div>
                                 {episode.stillUrl ? (
                                   <img
                                     src={episode.stillUrl}
                                     alt={episode.title}
-                                    className="h-12 w-20 rounded object-cover"
+                                    className="h-12 w-20 rounded object-cover hidden sm:block"
                                   />
                                 ) : (
-                                  <div className="h-12 w-20 rounded bg-muted" />
+                                  <div className="h-12 w-20 rounded bg-muted hidden sm:block" />
                                 )}
                                 <div className="flex-1 min-w-0">
                                   <p className="font-medium truncate">{episode.title}</p>
@@ -1059,7 +1060,7 @@ export default function TvShowDetail() {
                                     </p>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                                   {(() => {
                                     const { status, progress } = getEpisodeStatus(episode)
 
@@ -1157,6 +1158,10 @@ export default function TvShowDetail() {
             )}
           </CardContent>
         </Card>
+
+        {show.tmdbId && (
+          <SimilarLane mediaType="tv" mediaId={show.id} tmdbId={show.tmdbId} />
+        )}
       </div>
 
       {/* Delete confirmation dialog */}

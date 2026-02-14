@@ -157,21 +157,32 @@ export default class MoviesController {
    * Get discover/popular movies (for browsing when no search query)
    */
   async discover({ request, response }: HttpContext) {
-    const category = request.input('category', 'popular') as 'popular' | 'now_playing' | 'trending'
+    const category = request.input('category', 'popular')
     const page = Number.parseInt(request.input('page', '1')) || 1
+    const genreId = request.input('genreId')
+    const sortBy = request.input('sortBy', 'popularity.desc')
 
     try {
       let data: { results: any[]; totalPages: number }
-      switch (category) {
-        case 'now_playing':
-          data = await tmdbService.getNowPlayingMovies(page)
-          break
-        case 'trending':
-          data = await tmdbService.getTrendingMovies('week', page)
-          break
-        case 'popular':
-        default:
-          data = await tmdbService.getPopularMovies(page)
+
+      if (category === 'genre' && genreId) {
+        data = await tmdbService.discoverMoviesByGenre(
+          Number.parseInt(genreId),
+          sortBy,
+          page
+        )
+      } else {
+        switch (category) {
+          case 'now_playing':
+            data = await tmdbService.getNowPlayingMovies(page)
+            break
+          case 'trending':
+            data = await tmdbService.getTrendingMovies('week', page)
+            break
+          case 'popular':
+          default:
+            data = await tmdbService.getPopularMovies(page)
+        }
       }
 
       // Check which movies are already in library with their status
@@ -650,6 +661,52 @@ export default class MoviesController {
       return response.internalServerError({
         error: 'Failed to fetch movie details from TMDB',
       })
+    }
+  }
+
+  async similar({ params, request, response }: HttpContext) {
+    let tmdbIdStr: string | null = request.input('tmdbId') || null
+
+    if (!tmdbIdStr) {
+      const movie = await Movie.find(params.id)
+      if (!movie) {
+        return response.notFound({ error: 'Movie not found' })
+      }
+      tmdbIdStr = movie.tmdbId
+    }
+
+    if (!tmdbIdStr) {
+      return response.json({ results: [] })
+    }
+
+    try {
+      const results = await tmdbService.getSimilarMovies(Number.parseInt(tmdbIdStr))
+
+      // Check library status
+      const tmdbIds = results.map((r) => String(r.id))
+      const existing = await Movie.query().whereIn('tmdbId', tmdbIds)
+      const existingMap = new Map(existing.map((m) => [m.tmdbId, m]))
+
+      return response.json({
+        results: results.slice(0, 20).map((m) => {
+          const libraryMovie = existingMap.get(String(m.id))
+          return {
+            tmdbId: String(m.id),
+            title: m.title,
+            year: m.year,
+            posterUrl: m.posterPath,
+            rating: m.voteAverage,
+            genres: m.genres,
+            inLibrary: !!libraryMovie,
+            libraryId: libraryMovie?.id,
+            requested: libraryMovie?.requested ?? false,
+            hasFile: libraryMovie?.hasFile ?? false,
+          }
+        }),
+      })
+    } catch (error) {
+      console.error('Failed to fetch similar movies:', error)
+      return response.json({ results: [] })
     }
   }
 

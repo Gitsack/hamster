@@ -469,19 +469,19 @@ export default function ArtistDetail() {
     <AppLayout
       title={artist.name}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" asChild>
             <Link href="/library?tab=music">
-              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
-              Back
+              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Back</span>
             </Link>
           </Button>
           <Button variant="outline" size="sm" onClick={toggleMonitored}>
             <HugeiconsIcon
               icon={artist.monitored ? Notification01Icon : NotificationOff01Icon}
-              className="h-4 w-4 mr-2"
+              className="h-4 w-4 md:mr-2"
             />
-            {artist.monitored ? 'Monitored' : 'Monitor'}
+            <span className="hidden md:inline">{artist.monitored ? 'Monitored' : 'Monitor'}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

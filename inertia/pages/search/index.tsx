@@ -81,6 +81,7 @@ import {
   CardStatusBadge,
   type MediaItemStatus,
 } from '@/components/library/media-status-badge'
+import { SimilarLane } from '@/components/library/similar-lane'
 
 // Error boundary to catch rendering errors
 class ErrorBoundary extends Component<
@@ -2494,8 +2495,41 @@ export default function SearchPage() {
     )
     const personalizedMovieLanes = movieRecommendationLanes.filter((l) => l.source === 'tmdb')
 
+    const movieGenres = [
+      { id: 28, name: 'Action' },
+      { id: 35, name: 'Comedy' },
+      { id: 18, name: 'Drama' },
+      { id: 27, name: 'Horror' },
+      { id: 878, name: 'Sci-Fi' },
+      { id: 53, name: 'Thriller' },
+      { id: 10749, name: 'Romance' },
+      { id: 16, name: 'Animation' },
+      { id: 12, name: 'Adventure' },
+      { id: 80, name: 'Crime' },
+      { id: 14, name: 'Fantasy' },
+      { id: 99, name: 'Documentary' },
+    ]
+
     return (
       <div className="space-y-8">
+        {/* Browse by Genre */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-muted-foreground">Browse by Genre</h3>
+          <div className="flex flex-wrap gap-2">
+            {movieGenres.map((genre) => (
+              <Button
+                key={genre.id}
+                variant="outline"
+                size="sm"
+                className="rounded-full h-8 text-xs"
+                onClick={() => router.visit(`/discover/movies/genre?genreId=${genre.id}`)}
+              >
+                {genre.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+
         {loadingMovieRecs && externalMovieLanes.length === 0 && (
           <>
             <DiscoverLaneSkeleton />
@@ -2594,8 +2628,39 @@ export default function SearchPage() {
     )
     const personalizedTvLanes = tvRecommendationLanes.filter((l) => l.source === 'tmdb')
 
+    const tvGenres = [
+      { id: 10759, name: 'Action' },
+      { id: 35, name: 'Comedy' },
+      { id: 18, name: 'Drama' },
+      { id: 80, name: 'Crime' },
+      { id: 10765, name: 'Sci-Fi' },
+      { id: 16, name: 'Animation' },
+      { id: 99, name: 'Documentary' },
+      { id: 9648, name: 'Mystery' },
+      { id: 10764, name: 'Reality' },
+      { id: 10751, name: 'Family' },
+    ]
+
     return (
       <div className="space-y-8">
+        {/* Browse by Genre */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-muted-foreground">Browse by Genre</h3>
+          <div className="flex flex-wrap gap-2">
+            {tvGenres.map((genre) => (
+              <Button
+                key={genre.id}
+                variant="outline"
+                size="sm"
+                className="rounded-full h-8 text-xs"
+                onClick={() => router.visit(`/discover/tv/genre?genreId=${genre.id}`)}
+              >
+                {genre.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+
         {loadingTvRecs && externalTvLanes.length === 0 && (
           <>
             <DiscoverLaneSkeleton />
@@ -3351,6 +3416,9 @@ export default function SearchPage() {
                     </div>
                   )}
 
+                  {/* Similar Movies */}
+                  <SimilarLane mediaType="movies" tmdbId={movieDetails.tmdbId} />
+
                   {/* Actions */}
                   <div className="flex gap-2 pt-4">
                     {movieDetails.inLibrary ? (
@@ -3599,6 +3667,9 @@ export default function SearchPage() {
                       <span>{tvShowDetails.status}</span>
                     </div>
                   )}
+
+                  {/* Similar Shows */}
+                  <SimilarLane mediaType="tv" tmdbId={tvShowDetails.tmdbId} />
 
                   {/* Actions */}
                   <div className="flex gap-2 pt-4">

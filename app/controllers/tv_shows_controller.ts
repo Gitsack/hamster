@@ -167,28 +167,35 @@ export default class TvShowsController {
    * Get discover/popular TV shows (for browsing when no search query)
    */
   async discover({ request, response }: HttpContext) {
-    const category = request.input('category', 'popular') as
-      | 'popular'
-      | 'on_the_air'
-      | 'top_rated'
-      | 'trending'
+    const category = request.input('category', 'popular')
     const page = Number.parseInt(request.input('page', '1')) || 1
+    const genreId = request.input('genreId')
+    const sortBy = request.input('sortBy', 'popularity.desc')
 
     try {
       let data: { results: any[]; totalPages: number }
-      switch (category) {
-        case 'on_the_air':
-          data = await tmdbService.getOnTheAirTvShows(page)
-          break
-        case 'top_rated':
-          data = await tmdbService.getTopRatedTvShows(page)
-          break
-        case 'trending':
-          data = await tmdbService.getTrendingTvShows('week', page)
-          break
-        case 'popular':
-        default:
-          data = await tmdbService.getPopularTvShows(page)
+
+      if (category === 'genre' && genreId) {
+        data = await tmdbService.discoverTvShowsByGenre(
+          Number.parseInt(genreId),
+          sortBy,
+          page
+        )
+      } else {
+        switch (category) {
+          case 'on_the_air':
+            data = await tmdbService.getOnTheAirTvShows(page)
+            break
+          case 'top_rated':
+            data = await tmdbService.getTopRatedTvShows(page)
+            break
+          case 'trending':
+            data = await tmdbService.getTrendingTvShows('week', page)
+            break
+          case 'popular':
+          default:
+            data = await tmdbService.getPopularTvShows(page)
+        }
       }
 
       // Check which shows are already in library with their status
@@ -1189,6 +1196,51 @@ export default class TvShowsController {
       return response.internalServerError({
         error: 'Failed to refresh TV show from TMDB',
       })
+    }
+  }
+
+  async similar({ params, request, response }: HttpContext) {
+    let tmdbIdStr: string | null = request.input('tmdbId') || null
+
+    if (!tmdbIdStr) {
+      const show = await TvShow.find(params.id)
+      if (!show) {
+        return response.notFound({ error: 'TV show not found' })
+      }
+      tmdbIdStr = show.tmdbId
+    }
+
+    if (!tmdbIdStr) {
+      return response.json({ results: [] })
+    }
+
+    try {
+      const results = await tmdbService.getSimilarTvShows(Number.parseInt(tmdbIdStr))
+
+      // Check library status
+      const tmdbIds = results.map((r) => String(r.id))
+      const existing = await TvShow.query().whereIn('tmdbId', tmdbIds)
+      const existingMap = new Map(existing.map((s) => [s.tmdbId, s]))
+
+      return response.json({
+        results: results.slice(0, 20).map((s) => {
+          const libraryShow = existingMap.get(String(s.id))
+          return {
+            tmdbId: String(s.id),
+            title: s.name,
+            year: s.year,
+            posterUrl: s.posterPath,
+            rating: s.voteAverage,
+            genres: s.genres,
+            inLibrary: !!libraryShow,
+            libraryId: libraryShow?.id,
+            requested: libraryShow?.requested ?? false,
+          }
+        }),
+      })
+    } catch (error) {
+      console.error('Failed to fetch similar TV shows:', error)
+      return response.json({ results: [] })
     }
   }
 
