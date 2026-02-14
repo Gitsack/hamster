@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.16.0](https://github.com/Gitsack/hamster/compare/hamster-v1.15.4...hamster-v1.16.0) (2026-02-14)
+
+
+### Features
+
+* added trailers and more pictures to entry details ([7c110d7](https://github.com/Gitsack/hamster/commit/7c110d791dc2341b86f4262c42385cf5cb1b39cc))
+* different media types sorting ([5ecf6fb](https://github.com/Gitsack/hamster/commit/5ecf6fb925f55345625cbe54f0b32f5953510ad3))
+* more teasers open in sidebar ([de086b7](https://github.com/Gitsack/hamster/commit/de086b740580f49b0bfa9bf99791dd8659fecafc))
+* show more on discover lanes, media type query params ([b8a6939](https://github.com/Gitsack/hamster/commit/b8a6939f113277cc5b8513b16432bac8ec510550))
+* similar lane, discover improvements ([9ff81cf](https://github.com/Gitsack/hamster/commit/9ff81cfe5600629512c320029d99e861a598840f))
+
+
+### Bug Fixes
+
+* dont link to library entry after requesting from details ([6f30bca](https://github.com/Gitsack/hamster/commit/6f30bca07f76111ef14c0dd7ab881e53118849a1))
+
 ## [1.15.4](https://github.com/Gitsack/hamster/compare/hamster-v1.15.3...hamster-v1.15.4) (2026-02-14)
 
 
