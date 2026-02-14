@@ -172,32 +172,35 @@ export default class TvShowsController {
       | 'on_the_air'
       | 'top_rated'
       | 'trending'
+    const page = Number.parseInt(request.input('page', '1')) || 1
 
     try {
-      let results
+      let data: { results: any[]; totalPages: number }
       switch (category) {
         case 'on_the_air':
-          results = await tmdbService.getOnTheAirTvShows()
+          data = await tmdbService.getOnTheAirTvShows(page)
           break
         case 'top_rated':
-          results = await tmdbService.getTopRatedTvShows()
+          data = await tmdbService.getTopRatedTvShows(page)
           break
         case 'trending':
-          results = await tmdbService.getTrendingTvShows('week')
+          data = await tmdbService.getTrendingTvShows('week', page)
           break
         case 'popular':
         default:
-          results = await tmdbService.getPopularTvShows()
+          data = await tmdbService.getPopularTvShows(page)
       }
 
       // Check which shows are already in library with their status
-      const tmdbIds = results.map((r) => String(r.id))
+      const tmdbIds = data.results.map((r) => String(r.id))
       const existing = await TvShow.query().whereIn('tmdbId', tmdbIds)
       const existingMap = new Map(existing.map((s) => [s.tmdbId, s]))
 
       return response.json({
         category,
-        results: results.map((show) => {
+        page,
+        totalPages: data.totalPages,
+        results: data.results.map((show) => {
           const libraryShow = existingMap.get(String(show.id))
           return {
             tmdbId: String(show.id),
@@ -556,7 +559,12 @@ export default class TvShowsController {
       }
     }
 
-    return response.json({ id: show.id, title: show.title, requested: show.requested, monitored: show.monitored })
+    return response.json({
+      id: show.id,
+      title: show.title,
+      requested: show.requested,
+      monitored: show.monitored,
+    })
   }
 
   async destroy({ params, response }: HttpContext) {

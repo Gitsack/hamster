@@ -117,7 +117,7 @@ export default function MovieDetail() {
         setMovie(data)
       } else if (response.status === 404) {
         toast.error('Movie not found')
-        router.visit('/library')
+        router.visit('/library?tab=movies')
       }
     } catch (error) {
       console.error('Failed to fetch movie:', error)
@@ -205,7 +205,7 @@ export default function MovieDetail() {
         if (data.deleted) {
           // Movie was deleted (no file, unrequested)
           toast.success('Removed from library')
-          router.visit('/library')
+          router.visit('/library?tab=movies')
         } else {
           toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
         }
@@ -240,7 +240,7 @@ export default function MovieDetail() {
       })
       if (response.ok) {
         toast.success(withFile ? 'Movie and files deleted' : 'Movie deleted')
-        router.visit('/library')
+        router.visit('/library?tab=movies')
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to delete')
@@ -377,7 +377,7 @@ export default function MovieDetail() {
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-            <Link href="/library">
+            <Link href="/library?tab=movies">
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
               Back
             </Link>

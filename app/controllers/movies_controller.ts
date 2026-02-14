@@ -157,37 +157,33 @@ export default class MoviesController {
    * Get discover/popular movies (for browsing when no search query)
    */
   async discover({ request, response }: HttpContext) {
-    const category = request.input('category', 'popular') as
-      | 'popular'
-      | 'now_playing'
-      | 'upcoming'
-      | 'trending'
+    const category = request.input('category', 'popular') as 'popular' | 'now_playing' | 'trending'
+    const page = Number.parseInt(request.input('page', '1')) || 1
 
     try {
-      let results
+      let data: { results: any[]; totalPages: number }
       switch (category) {
         case 'now_playing':
-          results = await tmdbService.getNowPlayingMovies()
-          break
-        case 'upcoming':
-          results = await tmdbService.getUpcomingMovies()
+          data = await tmdbService.getNowPlayingMovies(page)
           break
         case 'trending':
-          results = await tmdbService.getTrendingMovies('week')
+          data = await tmdbService.getTrendingMovies('week', page)
           break
         case 'popular':
         default:
-          results = await tmdbService.getPopularMovies()
+          data = await tmdbService.getPopularMovies(page)
       }
 
       // Check which movies are already in library with their status
-      const tmdbIds = results.map((r) => String(r.id))
+      const tmdbIds = data.results.map((r) => String(r.id))
       const existing = await Movie.query().whereIn('tmdbId', tmdbIds)
       const existingMap = new Map(existing.map((m) => [m.tmdbId, m]))
 
       return response.json({
         category,
-        results: results.map((movie) => {
+        page,
+        totalPages: data.totalPages,
+        results: data.results.map((movie) => {
           const libraryMovie = existingMap.get(String(movie.id))
           return {
             tmdbId: String(movie.id),
@@ -216,9 +212,15 @@ export default class MoviesController {
     try {
       data = await request.validateUsing(movieValidator)
     } catch (validationError: any) {
-      console.error('Movie validation failed:', JSON.stringify(validationError.messages ?? validationError.message))
+      console.error(
+        'Movie validation failed:',
+        JSON.stringify(validationError.messages ?? validationError.message)
+      )
       console.error('Request body:', JSON.stringify(request.body()))
-      return response.unprocessableEntity({ error: 'Validation failure', details: validationError.messages })
+      return response.unprocessableEntity({
+        error: 'Validation failure',
+        details: validationError.messages,
+      })
     }
 
     // Check if already exists
@@ -357,7 +359,12 @@ export default class MoviesController {
 
     await movie.save()
 
-    return response.json({ id: movie.id, title: movie.title, requested: movie.requested, monitored: movie.monitored })
+    return response.json({
+      id: movie.id,
+      title: movie.title,
+      requested: movie.requested,
+      monitored: movie.monitored,
+    })
   }
 
   async destroy({ params, request, response }: HttpContext) {

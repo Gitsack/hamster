@@ -191,7 +191,20 @@ export default function Library() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('name')
-  const [activeTab, setActiveTab] = useState<MediaType>('music')
+  // Read initial tab from URL
+  const initialTab =
+    typeof window !== 'undefined'
+      ? (new URLSearchParams(window.location.search).get('tab') as MediaType) || 'music'
+      : 'music'
+  const [activeTab, setActiveTabState] = useState<MediaType>(initialTab)
+
+  // Sync active tab to URL
+  const setActiveTab = useCallback((tab: MediaType) => {
+    setActiveTabState(tab)
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tab)
+    window.history.replaceState({}, '', url.toString())
+  }, [])
 
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -233,7 +246,10 @@ export default function Library() {
             // Add 'missing' tab as a special always-available option
             const types = [...data.enabledMediaTypes, 'missing'] as MediaType[]
             setEnabledMediaTypes(types)
-            setActiveTab(data.enabledMediaTypes[0])
+            // Only override tab if no valid tab was provided via URL
+            if (!types.includes(initialTab)) {
+              setActiveTab(data.enabledMediaTypes[0])
+            }
           }
         }
       } catch (error) {

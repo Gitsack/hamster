@@ -314,44 +314,65 @@ export class TmdbService {
 
   // Discovery / Popular / Trending
 
-  async getPopularMovies(): Promise<TmdbMovie[]> {
-    const data = await this.fetch('/movie/popular')
-    return data.results.map((m: any) => this.mapMovie(m))
+  async getPopularMovies(page: number = 1): Promise<{ results: TmdbMovie[]; totalPages: number }> {
+    const data = await this.fetch(`/movie/popular?page=${page}`)
+    return { results: data.results.map((m: any) => this.mapMovie(m)), totalPages: data.total_pages }
   }
 
-  async getNowPlayingMovies(): Promise<TmdbMovie[]> {
-    const data = await this.fetch('/movie/now_playing')
-    return data.results.map((m: any) => this.mapMovie(m))
+  async getNowPlayingMovies(
+    page: number = 1
+  ): Promise<{ results: TmdbMovie[]; totalPages: number }> {
+    const data = await this.fetch(`/movie/now_playing?page=${page}`)
+    return { results: data.results.map((m: any) => this.mapMovie(m)), totalPages: data.total_pages }
   }
 
-  async getUpcomingMovies(): Promise<TmdbMovie[]> {
-    const data = await this.fetch('/movie/upcoming')
-    return data.results.map((m: any) => this.mapMovie(m))
+  async getTrendingMovies(
+    timeWindow: 'day' | 'week' = 'week',
+    page: number = 1
+  ): Promise<{ results: TmdbMovie[]; totalPages: number }> {
+    const data = await this.fetch(`/trending/movie/${timeWindow}?page=${page}`)
+    return { results: data.results.map((m: any) => this.mapMovie(m)), totalPages: data.total_pages }
   }
 
-  async getTrendingMovies(timeWindow: 'day' | 'week' = 'week'): Promise<TmdbMovie[]> {
-    const data = await this.fetch(`/trending/movie/${timeWindow}`)
-    return data.results.map((m: any) => this.mapMovie(m))
+  async getPopularTvShows(
+    page: number = 1
+  ): Promise<{ results: TmdbTvShow[]; totalPages: number }> {
+    const data = await this.fetch(`/tv/popular?page=${page}`)
+    return {
+      results: data.results.map((s: any) => this.mapTvShow(s)),
+      totalPages: data.total_pages,
+    }
   }
 
-  async getPopularTvShows(): Promise<TmdbTvShow[]> {
-    const data = await this.fetch('/tv/popular')
-    return data.results.map((s: any) => this.mapTvShow(s))
+  async getTopRatedTvShows(
+    page: number = 1
+  ): Promise<{ results: TmdbTvShow[]; totalPages: number }> {
+    const data = await this.fetch(`/tv/top_rated?page=${page}`)
+    return {
+      results: data.results.map((s: any) => this.mapTvShow(s)),
+      totalPages: data.total_pages,
+    }
   }
 
-  async getTopRatedTvShows(): Promise<TmdbTvShow[]> {
-    const data = await this.fetch('/tv/top_rated')
-    return data.results.map((s: any) => this.mapTvShow(s))
+  async getOnTheAirTvShows(
+    page: number = 1
+  ): Promise<{ results: TmdbTvShow[]; totalPages: number }> {
+    const data = await this.fetch(`/tv/on_the_air?page=${page}`)
+    return {
+      results: data.results.map((s: any) => this.mapTvShow(s)),
+      totalPages: data.total_pages,
+    }
   }
 
-  async getOnTheAirTvShows(): Promise<TmdbTvShow[]> {
-    const data = await this.fetch('/tv/on_the_air')
-    return data.results.map((s: any) => this.mapTvShow(s))
-  }
-
-  async getTrendingTvShows(timeWindow: 'day' | 'week' = 'week'): Promise<TmdbTvShow[]> {
-    const data = await this.fetch(`/trending/tv/${timeWindow}`)
-    return data.results.map((s: any) => this.mapTvShow(s))
+  async getTrendingTvShows(
+    timeWindow: 'day' | 'week' = 'week',
+    page: number = 1
+  ): Promise<{ results: TmdbTvShow[]; totalPages: number }> {
+    const data = await this.fetch(`/trending/tv/${timeWindow}?page=${page}`)
+    return {
+      results: data.results.map((s: any) => this.mapTvShow(s)),
+      totalPages: data.total_pages,
+    }
   }
 
   // Recommendations & Similar

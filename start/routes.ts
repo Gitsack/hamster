@@ -99,8 +99,9 @@ router
     router.on('/author/:id').renderInertia('library/author/[id]').as('author')
     router.on('/book/:id').renderInertia('library/book/[id]').as('book')
 
-    // Search
+    // Search & Discover
     router.on('/search').renderInertia('search/index').as('search')
+    router.on('/discover/:type/:category').renderInertia('search/discover')
 
     // Requests - redirect to library missing tab
     router.get('/requests', async ({ response }) => response.redirect('/library?tab=missing'))

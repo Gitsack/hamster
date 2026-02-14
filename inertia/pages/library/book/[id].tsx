@@ -100,7 +100,7 @@ export default function BookDetail() {
         setBook(data)
       } else if (response.status === 404) {
         toast.error('Book not found')
-        router.visit('/library')
+        router.visit('/library?tab=books')
       }
     } catch (error) {
       console.error('Failed to fetch book:', error)
@@ -163,7 +163,7 @@ export default function BookDetail() {
         if (data.deleted) {
           // Book was deleted (no file, unrequested)
           toast.success('Removed from library')
-          router.visit('/library')
+          router.visit('/library?tab=books')
         } else {
           toast.success(wasRequested ? 'Book unrequested' : 'Book requested')
         }
@@ -197,7 +197,7 @@ export default function BookDetail() {
       if (response.ok) {
         toast.success(withFile ? 'Book and files deleted' : 'Book deleted')
         // Author may have been deleted too - navigate to library
-        router.visit('/library')
+        router.visit('/library?tab=books')
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to delete')

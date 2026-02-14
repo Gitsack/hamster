@@ -189,7 +189,7 @@ export default function TvShowDetail() {
         setShow(data)
       } else if (response.status === 404) {
         toast.error('TV show not found')
-        router.visit('/library')
+        router.visit('/library?tab=tv')
       }
     } catch (error) {
       console.error('Failed to fetch show:', error)
@@ -310,7 +310,7 @@ export default function TvShowDetail() {
       })
       if (response.ok) {
         toast.success('TV show deleted')
-        router.visit('/library')
+        router.visit('/library?tab=tv')
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to delete')
@@ -751,7 +751,7 @@ export default function TvShowDetail() {
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-            <Link href="/library">
+            <Link href="/library?tab=tv">
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
               Back
             </Link>

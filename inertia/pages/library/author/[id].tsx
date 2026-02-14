@@ -141,7 +141,7 @@ export default function AuthorDetail() {
         setAuthor(data)
       } else if (response.status === 404) {
         toast.error('Author not found')
-        router.visit('/library')
+        router.visit('/library?tab=books')
       }
     } catch (error) {
       console.error('Failed to fetch author:', error)
@@ -245,7 +245,7 @@ export default function AuthorDetail() {
       })
       if (response.ok) {
         toast.success('Author deleted')
-        router.visit('/library')
+        router.visit('/library?tab=books')
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to delete')
@@ -496,7 +496,7 @@ export default function AuthorDetail() {
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-            <Link href="/library">
+            <Link href="/library?tab=books">
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
               Back
             </Link>

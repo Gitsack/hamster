@@ -332,8 +332,16 @@ export default function SearchPage() {
   const [enabledMediaTypes, setEnabledMediaTypes] = useState<MediaType[]>(['music'])
 
   // Main state
-  const [searchMode, setSearchMode] = useState<MediaType | 'direct'>(initialMode)
+  const [searchMode, setSearchModeState] = useState<MediaType | 'direct'>(initialMode)
   const [musicSearchType, setMusicSearchType] = useState<MusicSearchType>(initialType)
+
+  // Sync search mode to URL
+  const setSearchMode = useCallback((mode: MediaType | 'direct') => {
+    setSearchModeState(mode)
+    const url = new URL(window.location.href)
+    url.searchParams.set('mode', mode)
+    window.history.replaceState({}, '', url.toString())
+  }, [])
   const [searchQuery, setSearchQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
@@ -766,7 +774,6 @@ export default function SearchPage() {
       [
         { key: 'popular', label: 'Popular Movies' },
         { key: 'now_playing', label: 'Now in Cinemas' },
-        { key: 'upcoming', label: 'Upcoming Movies' },
         { key: 'trending', label: 'Trending This Week' },
       ] as const,
     []
@@ -2283,6 +2290,7 @@ export default function SearchPage() {
     items,
     type,
     source,
+    moreHref,
     onItemClick,
     onAdd,
     onToggle,
@@ -2292,6 +2300,7 @@ export default function SearchPage() {
     items: (MovieSearchResult | TvShowSearchResult)[]
     type: 'movie' | 'tv'
     source?: 'tmdb' | 'trakt' | 'justwatch'
+    moreHref?: string
     onItemClick: (item: MovieSearchResult | TvShowSearchResult) => void
     onAdd: (item: MovieSearchResult | TvShowSearchResult) => void
     onToggle: (item: MovieSearchResult | TvShowSearchResult) => void
@@ -2314,14 +2323,24 @@ export default function SearchPage() {
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">
-            {title}
-            {source && (
-              <Badge variant="outline" className="ml-2 text-xs font-normal">
-                {source === 'trakt' ? 'Trakt' : source === 'justwatch' ? 'JustWatch' : 'For You'}
-              </Badge>
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold">
+              {title}
+              {source && (
+                <Badge variant="outline" className="ml-2 text-xs font-normal">
+                  {source === 'trakt' ? 'Trakt' : source === 'justwatch' ? 'JustWatch' : 'For You'}
+                </Badge>
+              )}
+            </h3>
+            {moreHref && (
+              <button
+                onClick={() => router.visit(moreHref)}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Show more
+              </button>
             )}
-          </h3>
+          </div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => scroll('left')}>
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
@@ -2490,6 +2509,7 @@ export default function SearchPage() {
             source={lane.source}
             items={lane.items}
             type="movie"
+            moreHref={`/discover/movies/${lane.key.replace(/-movies$/, '')}`}
             onItemClick={(item) => openMovieDetails(item as MovieSearchResult)}
             onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
             onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
@@ -2503,6 +2523,7 @@ export default function SearchPage() {
               title={cat.label}
               items={movieDiscoverLanes[cat.key]}
               type="movie"
+              moreHref={`/discover/movies/${cat.key}`}
               onItemClick={(item) => openMovieDetails(item as MovieSearchResult)}
               onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
               onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
@@ -2588,6 +2609,7 @@ export default function SearchPage() {
             source={lane.source}
             items={lane.items}
             type="tv"
+            moreHref={`/discover/tv/${lane.key.replace(/-shows$/, '')}`}
             onItemClick={(item) => openTvShowDetails(item as TvShowSearchResult)}
             onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
             onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
@@ -2601,6 +2623,7 @@ export default function SearchPage() {
               title={cat.label}
               items={tvDiscoverLanes[cat.key]}
               type="tv"
+              moreHref={`/discover/tv/${cat.key}`}
               onItemClick={(item) => openTvShowDetails(item as TvShowSearchResult)}
               onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
               onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}

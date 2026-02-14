@@ -118,7 +118,7 @@ export default function AlbumDetail() {
         setAlbum(data)
       } else if (response.status === 404) {
         toast.error('Album not found')
-        router.visit('/library')
+        router.visit('/library?tab=music')
       }
     } catch (error) {
       console.error('Failed to fetch album:', error)
@@ -152,7 +152,7 @@ export default function AlbumDetail() {
         if (data.deleted) {
           // Album was deleted - navigate back
           toast.success('Removed from library')
-          router.visit('/library')
+          router.visit('/library?tab=music')
         } else {
           setAlbum({ ...album, requested: !wasRequested })
           toast.success(wasRequested ? 'Album unrequested' : 'Album requested')

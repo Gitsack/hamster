@@ -153,7 +153,7 @@ export default function ArtistDetail() {
         setArtist(data)
       } else if (response.status === 404) {
         toast.error('Artist not found')
-        router.visit('/library')
+        router.visit('/library?tab=music')
       }
     } catch (error) {
       console.error('Failed to fetch artist:', error)
@@ -283,7 +283,7 @@ export default function ArtistDetail() {
       })
       if (response.ok) {
         toast.success('Artist deleted')
-        router.visit('/library')
+        router.visit('/library?tab=music')
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to delete')
@@ -471,7 +471,7 @@ export default function ArtistDetail() {
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-            <Link href="/library">
+            <Link href="/library?tab=music">
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
               Back
             </Link>
