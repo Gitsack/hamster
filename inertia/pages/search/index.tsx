@@ -1057,7 +1057,6 @@ export default function SearchPage() {
             r.musicbrainzId === artist.musicbrainzId ? { ...r, inLibrary: true } : r
           )
         )
-        router.visit(`/artist/${data.id}`)
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to add artist')
@@ -1097,7 +1096,6 @@ export default function SearchPage() {
         setAlbumResults((prev) =>
           prev.map((r) => (r.musicbrainzId === album.musicbrainzId ? { ...r, inLibrary: true } : r))
         )
-        router.visit(`/album/${data.id}`)
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to add album')
@@ -1604,7 +1602,6 @@ export default function SearchPage() {
             r.openlibraryId === author.openlibraryId ? { ...r, inLibrary: true } : r
           )
         )
-        router.visit(`/author/${data.id}`)
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to add author')
@@ -1652,7 +1649,6 @@ export default function SearchPage() {
         setBookResults((prev) =>
           prev.map((r) => (r.openlibraryId === book.openlibraryId ? { ...r, inLibrary: true } : r))
         )
-        router.visit(`/book/${data.id}`)
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to add book')
@@ -2464,7 +2460,7 @@ export default function SearchPage() {
               },
               Film01Icon,
               () => openMovieDetails(movie),
-              () => handleAddMovie(movie)
+              () => handleAddMovie(movie, false)
             )
           )}
         </div>
@@ -2562,7 +2558,7 @@ export default function SearchPage() {
               },
               Tv01Icon,
               () => openTvShowDetails(show),
-              () => handleAddTvShow(show)
+              () => handleAddTvShow(show, false)
             )
           )}
         </div>
@@ -3360,7 +3356,7 @@ export default function SearchPage() {
                             inLibrary: false,
                           }
                           setDetailsSheetOpen(false)
-                          handleAddMovie(movie)
+                          handleAddMovie(movie, false)
                         }}
                       >
                         {addingMovie ? (
@@ -3612,7 +3608,7 @@ export default function SearchPage() {
                             inLibrary: false,
                           }
                           setDetailsSheetOpen(false)
-                          handleAddTvShow(show)
+                          handleAddTvShow(show, false)
                         }}
                       >
                         {addingTvShow ? (
