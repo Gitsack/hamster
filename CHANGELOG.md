@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.3](https://github.com/Gitsack/hamster/compare/hamster-v1.15.2...hamster-v1.15.3) (2026-02-14)
+
+
+### Bug Fixes
+
+* error handling ([dad7edf](https://github.com/Gitsack/hamster/commit/dad7edf1a55099238aa6a3139b6965a3d9f165fe))
+
 ## [1.15.2](https://github.com/Gitsack/hamster/compare/hamster-v1.15.1...hamster-v1.15.2) (2026-02-14)
 
 
