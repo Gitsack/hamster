@@ -115,9 +115,12 @@ export default class TvShowsController {
     }
 
     try {
-      const [show, cast] = await Promise.all([
-        tmdbService.getTvShow(Number.parseInt(tmdbId)),
-        tmdbService.getTvShowCredits(Number.parseInt(tmdbId), 6),
+      const tmdbIdNum = Number.parseInt(tmdbId)
+      const [show, cast, trailerUrl, backdropImages] = await Promise.all([
+        tmdbService.getTvShow(tmdbIdNum),
+        tmdbService.getTvShowCredits(tmdbIdNum, 6),
+        tmdbService.getTvShowTrailerUrl(tmdbIdNum),
+        tmdbService.getTvShowImages(tmdbIdNum),
       ])
 
       // Fetch JustWatch streaming availability using TMDB data (non-blocking)
@@ -154,6 +157,8 @@ export default class TvShowsController {
           character: c.character,
           profileUrl: c.profilePath,
         })),
+        trailerUrl,
+        backdropImages,
         streamingOffers: offers,
         inLibrary: !!existing,
         libraryId: existing?.id,
@@ -427,6 +432,16 @@ export default class TvShowsController {
       return response.notFound({ error: 'TV show not found' })
     }
 
+    let trailerUrl: string | null = null
+    let backdropImages: string[] = []
+    if (show.tmdbId) {
+      const tmdbIdNum = Number.parseInt(show.tmdbId)
+      ;[trailerUrl, backdropImages] = await Promise.all([
+        tmdbService.getTvShowTrailerUrl(tmdbIdNum).catch(() => null),
+        tmdbService.getTvShowImages(tmdbIdNum).catch(() => [] as string[]),
+      ])
+    }
+
     // Get active downloads for this show
     const activeDownloads = await Download.query()
       .where('tvShowId', show.id)
@@ -448,6 +463,8 @@ export default class TvShowsController {
       backdropUrl: show.backdropUrl,
       rating: show.rating,
       genres: show.genres,
+      trailerUrl,
+      backdropImages,
       requested: show.requested,
       monitored: show.monitored,
       seasonCount: show.seasonCount,

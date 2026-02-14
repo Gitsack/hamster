@@ -108,6 +108,13 @@ export interface TmdbEpisode {
   runtime: number | null
 }
 
+export interface TmdbVideo {
+  key: string
+  site: string
+  type: string
+  name: string
+}
+
 export interface TmdbCastMember {
   id: number
   name: string
@@ -188,16 +195,44 @@ export class TmdbService {
     }
   }
 
+  async getMovieImages(id: number, limit: number = 6): Promise<string[]> {
+    return cache.getOrSet(`tmdb:movie:${id}:images`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/movie/${id}/images`)
+      return this.pickBackdrops(data.backdrops, limit)
+    })
+  }
+
   async getMovieCredits(id: number, limit: number = 6): Promise<TmdbCastMember[]> {
     const data = await this.fetch(`/movie/${id}/credits`)
     return this.mapCast(data.cast, limit)
   }
 
+  async getMovieTrailerUrl(id: number): Promise<string | null> {
+    return cache.getOrSet(`tmdb:movie:${id}:trailer`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/movie/${id}/videos`)
+      return this.pickTrailerUrl(data.results)
+    })
+  }
+
   // TV Shows
+
+  async getTvShowImages(id: number, limit: number = 6): Promise<string[]> {
+    return cache.getOrSet(`tmdb:tv:${id}:images`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/tv/${id}/images`)
+      return this.pickBackdrops(data.backdrops, limit)
+    })
+  }
 
   async getTvShowCredits(id: number, limit: number = 6): Promise<TmdbCastMember[]> {
     const data = await this.fetch(`/tv/${id}/credits`)
     return this.mapCast(data.cast, limit)
+  }
+
+  async getTvShowTrailerUrl(id: number): Promise<string | null> {
+    return cache.getOrSet(`tmdb:tv:${id}:trailer`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/tv/${id}/videos`)
+      return this.pickTrailerUrl(data.results)
+    })
   }
 
   private mapCast(cast: any[], limit: number): TmdbCastMember[] {
@@ -209,6 +244,31 @@ export class TmdbService {
       profilePath: c.profile_path ? `${TMDB_IMAGE_BASE}/w185${c.profile_path}` : null,
       order: c.order,
     }))
+  }
+
+  private pickBackdrops(backdrops: any[], limit: number): string[] {
+    if (!backdrops || backdrops.length === 0) return []
+
+    // Prefer text-free backdrops (iso_639_1 === null), then sort by vote_average
+    const sorted = [...backdrops].sort((a, b) => {
+      if (a.iso_639_1 === null && b.iso_639_1 !== null) return -1
+      if (a.iso_639_1 !== null && b.iso_639_1 === null) return 1
+      return (b.vote_average || 0) - (a.vote_average || 0)
+    })
+
+    return sorted.slice(0, limit).map((b: any) => `${TMDB_IMAGE_BASE}/original${b.file_path}`)
+  }
+
+  private pickTrailerUrl(videos: any[]): string | null {
+    if (!videos || videos.length === 0) return null
+
+    const youtubeVideos = videos.filter((v: any) => v.site === 'YouTube')
+    const trailer =
+      youtubeVideos.find((v: any) => v.type === 'Trailer') ||
+      youtubeVideos.find((v: any) => v.type === 'Teaser') ||
+      youtubeVideos[0]
+
+    return trailer ? `https://www.youtube.com/embed/${trailer.key}` : null
   }
 
   async searchTvShows(query: string, year?: number): Promise<TmdbTvShow[]> {

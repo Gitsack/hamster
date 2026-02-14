@@ -44,6 +44,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
+import { MediaGallery } from '@/components/media-gallery'
 import { SimilarLane } from '@/components/library/similar-lane'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { VideoPlayer } from '@/components/player/video_player'
@@ -105,6 +106,8 @@ interface TvShow {
   backdropUrl: string | null
   rating: number | null
   genres: string[]
+  trailerUrl: string | null
+  backdropImages: string[]
   requested: boolean
   monitored: boolean
   seasonCount: number
@@ -805,13 +808,15 @@ export default function TvShowDetail() {
       <Head title={show.title} />
 
       <div className="space-y-6">
-        {/* Backdrop */}
-        {show.backdropUrl && (
-          <div className="relative h-48 md:h-64 -mx-4 -mt-4 mb-6 overflow-hidden">
-            <img src={show.backdropUrl} alt={show.title} className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
-          </div>
-        )}
+        {/* Gallery: Trailer + Backdrop Images */}
+        <div className="-mx-4 -mt-4 mb-6">
+          <MediaGallery
+            trailerUrl={show.trailerUrl}
+            images={show.backdropImages?.length ? show.backdropImages : show.backdropUrl ? [show.backdropUrl] : undefined}
+            title={show.title}
+            className="h-48 md:h-64"
+          />
+        </div>
 
         {/* Show header */}
         <div className="flex flex-col md:flex-row gap-6">

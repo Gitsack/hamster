@@ -20,6 +20,7 @@ import {
   MediaStatusBadge,
   type MediaItemStatus,
 } from '@/components/library/media-status-badge'
+import { MediaGallery } from '@/components/media-gallery'
 import { SimilarLane } from '@/components/library/similar-lane'
 import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dialog'
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
@@ -51,6 +52,8 @@ interface MovieDetails {
   votes?: number
   genres?: string[]
   cast?: { id: number; name: string; character: string; profileUrl?: string }[]
+  trailerUrl?: string
+  backdropImages?: string[]
   streamingOffers?: StreamingOffer[]
   inLibrary: boolean
   libraryId?: number
@@ -75,6 +78,8 @@ interface TvShowDetails {
   seasonCount?: number
   episodeCount?: number
   cast?: { id: number; name: string; character: string; profileUrl?: string }[]
+  trailerUrl?: string
+  backdropImages?: string[]
   streamingOffers?: StreamingOffer[]
   inLibrary: boolean
   libraryId?: number
@@ -409,36 +414,33 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                 <SheetTitle className="text-xl pr-8">{movieDetails.title}</SheetTitle>
               </SheetHeader>
               <div className="space-y-4 px-6 pb-6 overflow-y-auto">
-                {/* Backdrop/Poster */}
-                {(movieDetails.backdropUrl || movieDetails.posterUrl) && (
-                  <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
-                    <img
-                      src={movieDetails.backdropUrl || movieDetails.posterUrl}
-                      alt={movieDetails.title}
-                      className="w-full h-full object-cover"
-                    />
-                    {movieDetails.inLibrary && (
-                      <div className="absolute top-3 right-3">
-                        <MediaStatusBadge
-                          status={
-                            movieDetails.hasFile
-                              ? 'downloaded'
-                              : movieDetails.requested
-                                ? 'requested'
-                                : 'downloaded'
-                          }
-                          size="sm"
-                          isToggling={togglingDetails}
-                          onToggleRequest={
-                            !movieDetails.hasFile && movieDetails.requested
-                              ? toggleMovieDetailsRequested
-                              : undefined
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* Gallery: Trailer + Backdrop Images */}
+                <MediaGallery
+                  trailerUrl={movieDetails.trailerUrl}
+                  images={movieDetails.backdropImages?.length ? movieDetails.backdropImages : movieDetails.backdropUrl ? [movieDetails.backdropUrl] : undefined}
+                  title={movieDetails.title}
+                >
+                  {movieDetails.inLibrary && (
+                    <div className="absolute top-3 right-3">
+                      <MediaStatusBadge
+                        status={
+                          movieDetails.hasFile
+                            ? 'downloaded'
+                            : movieDetails.requested
+                              ? 'requested'
+                              : 'downloaded'
+                        }
+                        size="sm"
+                        isToggling={togglingDetails}
+                        onToggleRequest={
+                          !movieDetails.hasFile && movieDetails.requested
+                            ? toggleMovieDetailsRequested
+                            : undefined
+                        }
+                      />
+                    </div>
+                  )}
+                </MediaGallery>
 
                 {/* Meta info */}
                 <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -545,28 +547,25 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                 <SheetTitle className="text-xl pr-8">{tvShowDetails.title}</SheetTitle>
               </SheetHeader>
               <div className="space-y-4 px-6 pb-6 overflow-y-auto">
-                {/* Backdrop/Poster */}
-                {(tvShowDetails.backdropUrl || tvShowDetails.posterUrl) && (
-                  <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
-                    <img
-                      src={tvShowDetails.backdropUrl || tvShowDetails.posterUrl}
-                      alt={tvShowDetails.title}
-                      className="w-full h-full object-cover"
-                    />
-                    {tvShowDetails.inLibrary && (
-                      <div className="absolute top-3 right-3">
-                        <MediaStatusBadge
-                          status={tvShowDetails.requested ? 'requested' : 'downloaded'}
-                          size="sm"
-                          isToggling={togglingDetails}
-                          onToggleRequest={
-                            tvShowDetails.requested ? toggleTvShowDetailsRequested : undefined
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* Gallery: Trailer + Backdrop Images */}
+                <MediaGallery
+                  trailerUrl={tvShowDetails.trailerUrl}
+                  images={tvShowDetails.backdropImages?.length ? tvShowDetails.backdropImages : tvShowDetails.backdropUrl ? [tvShowDetails.backdropUrl] : undefined}
+                  title={tvShowDetails.title}
+                >
+                  {tvShowDetails.inLibrary && (
+                    <div className="absolute top-3 right-3">
+                      <MediaStatusBadge
+                        status={tvShowDetails.requested ? 'requested' : 'downloaded'}
+                        size="sm"
+                        isToggling={togglingDetails}
+                        onToggleRequest={
+                          tvShowDetails.requested ? toggleTvShowDetailsRequested : undefined
+                        }
+                      />
+                    </div>
+                  )}
+                </MediaGallery>
 
                 {/* Meta info */}
                 <div className="flex flex-wrap items-center gap-3 text-sm">

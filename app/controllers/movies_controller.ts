@@ -103,9 +103,12 @@ export default class MoviesController {
     }
 
     try {
-      const [movie, cast] = await Promise.all([
-        tmdbService.getMovie(Number.parseInt(tmdbId)),
-        tmdbService.getMovieCredits(Number.parseInt(tmdbId), 6),
+      const tmdbIdNum = Number.parseInt(tmdbId)
+      const [movie, cast, trailerUrl, backdropImages] = await Promise.all([
+        tmdbService.getMovie(tmdbIdNum),
+        tmdbService.getMovieCredits(tmdbIdNum, 6),
+        tmdbService.getMovieTrailerUrl(tmdbIdNum),
+        tmdbService.getMovieImages(tmdbIdNum),
       ])
 
       // Fetch JustWatch streaming availability using TMDB data (non-blocking)
@@ -141,6 +144,8 @@ export default class MoviesController {
           character: c.character,
           profileUrl: c.profilePath,
         })),
+        trailerUrl,
+        backdropImages,
         streamingOffers: offers,
         inLibrary: !!existing,
         libraryId: existing?.id,
@@ -317,6 +322,16 @@ export default class MoviesController {
       return response.notFound({ error: 'Movie not found' })
     }
 
+    let trailerUrl: string | null = null
+    let backdropImages: string[] = []
+    if (movie.tmdbId) {
+      const tmdbIdNum = Number.parseInt(movie.tmdbId)
+      ;[trailerUrl, backdropImages] = await Promise.all([
+        tmdbService.getMovieTrailerUrl(tmdbIdNum).catch(() => null),
+        tmdbService.getMovieImages(tmdbIdNum).catch(() => [] as string[]),
+      ])
+    }
+
     return response.json({
       id: movie.id,
       tmdbId: movie.tmdbId,
@@ -332,6 +347,8 @@ export default class MoviesController {
       backdropUrl: movie.backdropUrl,
       rating: movie.rating,
       genres: movie.genres,
+      trailerUrl,
+      backdropImages,
       requested: movie.requested,
       monitored: movie.monitored,
       hasFile: movie.hasFile,
