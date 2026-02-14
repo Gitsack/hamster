@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.4](https://github.com/Gitsack/hamster/compare/hamster-v1.15.3...hamster-v1.15.4) (2026-02-14)
+
+
+### Bug Fixes
+
+* dynamic imports ([ae19bb4](https://github.com/Gitsack/hamster/commit/ae19bb45233fbbd3a47b6a2e2adf33cd00978c3c))
+
 ## [1.15.3](https://github.com/Gitsack/hamster/compare/hamster-v1.15.2...hamster-v1.15.3) (2026-02-14)
 
 
