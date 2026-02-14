@@ -262,7 +262,13 @@ export default class MoviesController {
       }
     }
 
-    const movie = await Movie.create(movieData)
+    let movie: Movie
+    try {
+      movie = await Movie.create(movieData)
+    } catch (error) {
+      console.error('Failed to create movie in database:', error)
+      return response.internalServerError({ error: 'Failed to add movie' })
+    }
 
     // Trigger immediate search if requested and searchOnAdd is enabled
     if ((data.requested ?? true) && data.searchOnAdd !== false) {

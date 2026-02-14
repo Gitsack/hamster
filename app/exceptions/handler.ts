@@ -30,6 +30,14 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    * response to the client
    */
   async handle(error: unknown, ctx: HttpContext) {
+    // Return JSON for API routes instead of rendering Inertia error pages
+    if (ctx.request.url().startsWith('/api/')) {
+      const status = (error as any)?.status || 500
+      const message = (error as any)?.message || 'Internal server error'
+      ctx.response.status(status).send({ error: message })
+      return
+    }
+
     return super.handle(error, ctx)
   }
 
@@ -40,6 +48,12 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    * @note You should not attempt to send a response from this method.
    */
   async report(error: unknown, ctx: HttpContext) {
+    // Log API errors to stdout so they appear in docker logs
+    if (ctx.request.url().startsWith('/api/')) {
+      const err = error as any
+      console.error(`[API Error] ${ctx.request.method()} ${ctx.request.url()}:`, err?.message || err)
+    }
+
     return super.report(error, ctx)
   }
 }

@@ -279,7 +279,13 @@ export default class TvShowsController {
       }
     }
 
-    const show = await TvShow.create(showData)
+    let show: TvShow
+    try {
+      show = await TvShow.create(showData)
+    } catch (error) {
+      console.error('Failed to create TV show in database:', error)
+      return response.internalServerError({ error: 'Failed to add TV show' })
+    }
 
     // Fetch and create seasons/episodes
     if (data.tmdbId) {

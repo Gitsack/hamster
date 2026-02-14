@@ -109,7 +109,13 @@ export default class AuthorsController {
       }
     }
 
-    const author = await Author.create(authorData)
+    let author: Author
+    try {
+      author = await Author.create(authorData)
+    } catch (error) {
+      console.error('Failed to create author in database:', error)
+      return response.internalServerError({ error: 'Failed to add author' })
+    }
 
     // Fetch and add books if requested
     if (data.addBooks && data.openlibraryId) {
