@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.1](https://github.com/Gitsack/hamster/compare/hamster-v1.15.0...hamster-v1.15.1) (2026-02-14)
+
+
+### Bug Fixes
+
+* promote a regular user to admin if last one ([85d79d0](https://github.com/Gitsack/hamster/commit/85d79d0188037cfc5eeb6dcd8ffca950beb03d57))
+
 ## [1.15.0](https://github.com/Gitsack/hamster/compare/hamster-v1.14.0...hamster-v1.15.0) (2026-02-14)
 
 
