@@ -525,39 +525,40 @@ export default function DiscoverPage() {
   const IconComponent = isMovie ? Film01Icon : Tv01Icon
 
   return (
-    <AppLayout>
+    <AppLayout
+      title={pageTitle}
+      headerPrefix={
+        <Button
+          variant="ghost"
+          size="icon"
+          className="-ml-1"
+          onClick={() => router.visit(`/search?mode=${mediaType === 'movies' ? 'movies' : 'tv'}`)}
+        >
+          <HugeiconsIcon icon={ArrowLeft01Icon} className="h-5 w-5" />
+        </Button>
+      }
+      actions={
+        isGenre ? (
+          <Select value={sortBy} onValueChange={handleSortChange}>
+            <SelectTrigger className="w-[150px] h-9">
+              <SelectValue placeholder={sortOptions.find((o) => o.value === sortBy)?.label ?? 'Sort by'}>
+                {sortOptions.find((o) => o.value === sortBy)?.label ?? 'Sort by'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectPopup>
+              {sortOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        ) : undefined
+      }
+    >
       <Head title={pageTitle} />
 
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.visit(`/search?mode=${mediaType === 'movies' ? 'movies' : 'tv'}`)}
-          >
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-bold">{pageTitle}</h1>
-          {isGenre && (
-            <div className="ml-auto">
-              <Select value={sortBy} onValueChange={handleSortChange}>
-                <SelectTrigger className="w-[150px] h-9">
-                  <SelectValue placeholder={sortOptions.find((o) => o.value === sortBy)?.label ?? 'Sort by'}>
-                    {sortOptions.find((o) => o.value === sortBy)?.label ?? 'Sort by'}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup>
-                  {sortOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            </div>
-          )}
-        </div>
 
         {/* Grid */}
         {initialLoading ? (

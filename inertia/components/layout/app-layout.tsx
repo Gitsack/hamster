@@ -6,10 +6,11 @@ import { useAudioPlayer } from '@/contexts/audio_player_context'
 
 interface AppLayoutProps extends PropsWithChildren {
   title?: string
+  headerPrefix?: ReactNode
   actions?: ReactNode
 }
 
-export function AppLayout({ children, title, actions }: AppLayoutProps) {
+export function AppLayout({ children, title, headerPrefix, actions }: AppLayoutProps) {
   const { currentTrack } = useAudioPlayer()
   const hasPlayer = !!currentTrack
 
@@ -20,6 +21,7 @@ export function AppLayout({ children, title, actions }: AppLayoutProps) {
         <header className="flex min-h-14 shrink-0 items-center gap-2 border-b px-4 py-2 flex-wrap">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
+          {headerPrefix}
           {title && <h1 className="text-lg font-semibold truncate">{title}</h1>}
           {actions && <div className="ml-auto flex items-center gap-2 flex-wrap">{actions}</div>}
         </header>

@@ -127,6 +127,8 @@ interface MissingItem {
   airDate?: string | null
 }
 
+const MEDIA_TYPE_ORDER: MediaType[] = ['movies', 'tv', 'music', 'books', 'missing']
+
 const MEDIA_TYPE_CONFIG: Record<
   MediaType,
   {
@@ -137,13 +139,6 @@ const MEDIA_TYPE_CONFIG: Record<
     countLabel: string
   }
 > = {
-  music: {
-    label: 'Music',
-    icon: MusicNote01Icon,
-    addUrl: '/search?mode=music&type=artist',
-    itemLabel: 'artist',
-    countLabel: 'albums',
-  },
   movies: {
     label: 'Movies',
     icon: Film01Icon,
@@ -157,6 +152,13 @@ const MEDIA_TYPE_CONFIG: Record<
     addUrl: '/search?mode=tv',
     itemLabel: 'show',
     countLabel: 'shows',
+  },
+  music: {
+    label: 'Music',
+    icon: MusicNote01Icon,
+    addUrl: '/search?mode=music&type=artist',
+    itemLabel: 'artist',
+    countLabel: 'albums',
   },
   books: {
     label: 'Books',
@@ -175,7 +177,7 @@ const MEDIA_TYPE_CONFIG: Record<
 }
 
 export default function Library() {
-  const [enabledMediaTypes, setEnabledMediaTypes] = useState<MediaType[]>(['music'])
+  const [enabledMediaTypes, setEnabledMediaTypes] = useState<MediaType[]>(['movies'])
   const [artists, setArtists] = useState<Artist[]>([])
   const [movies, setMovies] = useState<Movie[]>([])
   const [tvShows, setTvShows] = useState<TvShow[]>([])
@@ -195,8 +197,8 @@ export default function Library() {
   // Read initial tab from URL
   const initialTab =
     typeof window !== 'undefined'
-      ? (new URLSearchParams(window.location.search).get('tab') as MediaType) || 'music'
-      : 'music'
+      ? (new URLSearchParams(window.location.search).get('tab') as MediaType) || 'movies'
+      : 'movies'
   const [activeTab, setActiveTabState] = useState<MediaType>(initialTab)
 
   // Sync active tab to URL
@@ -244,8 +246,10 @@ export default function Library() {
         if (response.ok) {
           const data = await response.json()
           if (data.enabledMediaTypes?.length > 0) {
-            // Add 'missing' tab as a special always-available option
-            const types = [...data.enabledMediaTypes, 'missing'] as MediaType[]
+            // Add 'missing' tab as a special always-available option, sorted by canonical order
+            const types = [...data.enabledMediaTypes, 'missing'].sort(
+              (a: MediaType, b: MediaType) => MEDIA_TYPE_ORDER.indexOf(a) - MEDIA_TYPE_ORDER.indexOf(b)
+            ) as MediaType[]
             setEnabledMediaTypes(types)
             // Only override tab if no valid tab was provided via URL
             if (!types.includes(initialTab)) {

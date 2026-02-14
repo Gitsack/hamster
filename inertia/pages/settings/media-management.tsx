@@ -72,11 +72,6 @@ const mediaTypeInfo: Record<
   MediaType,
   { label: string; icon: any; description: string; needsApiKey?: boolean }
 > = {
-  music: {
-    label: 'Music',
-    icon: MusicNote01Icon,
-    description: 'Artist and album organization with MusicBrainz metadata',
-  },
   movies: {
     label: 'Movies',
     icon: Video01Icon,
@@ -88,6 +83,11 @@ const mediaTypeInfo: Record<
     icon: Tv01Icon,
     description: 'Series with seasons and episodes from TMDB',
     needsApiKey: true,
+  },
+  music: {
+    label: 'Music',
+    icon: MusicNote01Icon,
+    description: 'Artist and album organization with MusicBrainz metadata',
   },
   books: {
     label: 'Books',
@@ -177,17 +177,6 @@ interface QualityProfile {
 
 // Quality options per media type
 const QUALITY_OPTIONS: Record<MediaType, { id: number; name: string }[]> = {
-  music: [
-    { id: 1, name: 'FLAC' },
-    { id: 2, name: 'ALAC' },
-    { id: 3, name: 'WAV' },
-    { id: 4, name: 'MP3 320' },
-    { id: 5, name: 'MP3 V0' },
-    { id: 6, name: 'MP3 256' },
-    { id: 7, name: 'MP3 192' },
-    { id: 8, name: 'AAC 256' },
-    { id: 9, name: 'OGG Vorbis' },
-  ],
   movies: [
     { id: 1, name: 'Bluray 2160p' },
     { id: 2, name: 'Bluray 1080p' },
@@ -210,6 +199,17 @@ const QUALITY_OPTIONS: Record<MediaType, { id: number; name: string }[]> = {
     { id: 8, name: 'HDTV 720p' },
     { id: 9, name: 'DVD' },
   ],
+  music: [
+    { id: 1, name: 'FLAC' },
+    { id: 2, name: 'ALAC' },
+    { id: 3, name: 'WAV' },
+    { id: 4, name: 'MP3 320' },
+    { id: 5, name: 'MP3 V0' },
+    { id: 6, name: 'MP3 256' },
+    { id: 7, name: 'MP3 192' },
+    { id: 8, name: 'AAC 256' },
+    { id: 9, name: 'OGG Vorbis' },
+  ],
   books: [
     { id: 1, name: 'EPUB' },
     { id: 2, name: 'PDF' },
@@ -222,7 +222,7 @@ const QUALITY_OPTIONS: Record<MediaType, { id: number; name: string }[]> = {
 
 export default function MediaManagement() {
   const [settings, setSettings] = useState<AppSettings>({
-    enabledMediaTypes: ['music'],
+    enabledMediaTypes: ['movies'],
     hasTmdbApiKey: false,
     hasTraktClientId: false,
     recommendationSettings: {

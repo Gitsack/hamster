@@ -25,8 +25,8 @@ function ensureArray<T>(value: T[] | string | undefined, defaultValue: T[]): T[]
 
 export default class AppSettingsController {
   async index({ response }: HttpContext) {
-    const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['music'])
-    const enabledMediaTypes = ensureArray(rawMediaTypes, ['music'])
+    const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['movies'])
+    const enabledMediaTypes = ensureArray(rawMediaTypes, ['movies'])
     const tmdbApiKey = await AppSetting.get<string>('tmdbApiKey', '')
     const traktClientId = await AppSetting.get<string>('traktClientId', '')
     const recommendationSettings = await AppSetting.get('recommendationSettings', {
@@ -101,7 +101,7 @@ export default class AppSettingsController {
       justwatchService.setLocale(justwatchLocale)
     }
 
-    const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['music'])
+    const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['movies'])
     const storedTmdbKey = await AppSetting.get<string>('tmdbApiKey', '')
     const storedTraktId = await AppSetting.get<string>('traktClientId', '')
     const storedRecommendationSettings = await AppSetting.get('recommendationSettings', {
@@ -114,7 +114,7 @@ export default class AppSettingsController {
     const storedJustwatchLocale = await AppSetting.get<string>('justwatchLocale', 'en_US')
 
     return response.json({
-      enabledMediaTypes: ensureArray(rawMediaTypes, ['music']),
+      enabledMediaTypes: ensureArray(rawMediaTypes, ['movies']),
       tmdbApiKey: storedTmdbKey ? '********' : '',
       hasTmdbApiKey: !!storedTmdbKey,
       hasTraktClientId: !!storedTraktId,
@@ -131,8 +131,8 @@ export default class AppSettingsController {
       return response.badRequest({ error: 'Invalid media type' })
     }
 
-    const rawValue = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['music'])
-    const enabledTypes = ensureArray(rawValue, ['music'])
+    const rawValue = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['movies'])
+    const enabledTypes = ensureArray(rawValue, ['movies'])
 
     if (enabled && !enabledTypes.includes(mediaType)) {
       enabledTypes.push(mediaType)

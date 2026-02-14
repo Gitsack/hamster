@@ -264,10 +264,12 @@ const defaultColumns: ColumnConfig[] = [
   { id: 'actions', label: 'Actions', visible: true },
 ]
 
+const MEDIA_TYPE_ORDER: MediaType[] = ['movies', 'tv', 'music', 'books']
+
 const MEDIA_TYPE_CONFIG: Record<MediaType, { label: string; icon: typeof MusicNote01Icon }> = {
-  music: { label: 'Music', icon: MusicNote01Icon },
   movies: { label: 'Movies', icon: Film01Icon },
   tv: { label: 'TV Shows', icon: Tv01Icon },
+  music: { label: 'Music', icon: MusicNote01Icon },
   books: { label: 'Books', icon: Book01Icon },
 }
 
@@ -309,11 +311,11 @@ export default function SearchPage() {
   // Get initial mode from URL params
   const urlParams =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
-  const initialMode = (urlParams?.get('mode') as MediaType | 'direct') || 'music'
+  const initialMode = (urlParams?.get('mode') as MediaType | 'direct') || 'movies'
   const initialType = (urlParams?.get('type') as MusicSearchType) || 'artist'
 
   // Enabled media types from settings
-  const [enabledMediaTypes, setEnabledMediaTypes] = useState<MediaType[]>(['music'])
+  const [enabledMediaTypes, setEnabledMediaTypes] = useState<MediaType[]>(['movies'])
 
   // Main state
   const [searchMode, setSearchModeState] = useState<MediaType | 'direct'>(initialMode)
@@ -549,10 +551,13 @@ export default function SearchPage() {
       .then((r) => r.json())
       .then((data) => {
         if (data.enabledMediaTypes?.length > 0) {
-          setEnabledMediaTypes(data.enabledMediaTypes)
+          const sorted = [...data.enabledMediaTypes].sort(
+            (a: MediaType, b: MediaType) => MEDIA_TYPE_ORDER.indexOf(a) - MEDIA_TYPE_ORDER.indexOf(b)
+          )
+          setEnabledMediaTypes(sorted)
           // If current mode isn't enabled, switch to first enabled
           if (!data.enabledMediaTypes.includes(searchMode) && searchMode !== 'direct') {
-            setSearchMode(data.enabledMediaTypes[0])
+            setSearchMode(sorted[0])
           }
         }
       })
