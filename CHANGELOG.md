@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.15.0](https://github.com/Gitsack/hamster/compare/hamster-v1.14.0...hamster-v1.15.0) (2026-02-14)
+
+
+### Features
+
+* structural changes ([3907a72](https://github.com/Gitsack/hamster/commit/3907a72b0892a421d77f3d8b64e74e7e45927eb1))
+* trakt and justwatch integrations ([ebf06a8](https://github.com/Gitsack/hamster/commit/ebf06a81aec10c498410f4c93d40b797ffecef2c))
+
 ## [1.14.0](https://github.com/Gitsack/hamster/compare/hamster-v1.13.0...hamster-v1.14.0) (2026-01-27)
 
 ### Features
