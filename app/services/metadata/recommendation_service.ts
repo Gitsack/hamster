@@ -82,24 +82,25 @@ class RecommendationService {
 
   // Movie recommendation lanes
 
-  async getMovieRecommendationLanes(): Promise<RecommendationLane[]> {
-    const cached = this.getCached('movie-lanes')
+  async getMovieRecommendationLanes(source?: string): Promise<RecommendationLane[]> {
+    const cacheKey = source ? `movie-lanes-${source}` : 'movie-lanes'
+    const cached = this.getCached(cacheKey)
     if (cached) return cached
 
     const settings = await this.getSettings()
     const lanePromises: Promise<RecommendationLane | null>[] = []
 
-    if (settings.traktEnabled) {
+    if ((!source || source === 'trakt') && settings.traktEnabled) {
       lanePromises.push(this.getTraktTrendingMovies())
       lanePromises.push(this.getTraktAnticipatedMovies())
       lanePromises.push(this.getTraktRecommendedMovies())
     }
 
-    if (settings.justwatchEnabled) {
+    if ((!source || source === 'justwatch') && settings.justwatchEnabled) {
       lanePromises.push(this.getJustWatchPopularMovies())
     }
 
-    if (settings.personalizedEnabled) {
+    if ((!source || source === 'tmdb') && settings.personalizedEnabled) {
       const personalizedLanes = await this.buildPersonalizedMovieLanes(
         settings.maxPersonalizedLanes
       )
@@ -115,30 +116,31 @@ class RecommendationService {
       .filter((lane): lane is RecommendationLane => lane !== null && lane.items.length > 0)
 
     const deduplicated = this.deduplicateAcrossLanes(lanes)
-    this.setCache('movie-lanes', deduplicated)
+    this.setCache(cacheKey, deduplicated)
     return deduplicated
   }
 
   // TV recommendation lanes
 
-  async getTvRecommendationLanes(): Promise<RecommendationLane[]> {
-    const cached = this.getCached('tv-lanes')
+  async getTvRecommendationLanes(source?: string): Promise<RecommendationLane[]> {
+    const cacheKey = source ? `tv-lanes-${source}` : 'tv-lanes'
+    const cached = this.getCached(cacheKey)
     if (cached) return cached
 
     const settings = await this.getSettings()
     const lanePromises: Promise<RecommendationLane | null>[] = []
 
-    if (settings.traktEnabled) {
+    if ((!source || source === 'trakt') && settings.traktEnabled) {
       lanePromises.push(this.getTraktTrendingShows())
       lanePromises.push(this.getTraktAnticipatedShows())
       lanePromises.push(this.getTraktRecommendedShows())
     }
 
-    if (settings.justwatchEnabled) {
+    if ((!source || source === 'justwatch') && settings.justwatchEnabled) {
       lanePromises.push(this.getJustWatchPopularShows())
     }
 
-    if (settings.personalizedEnabled) {
+    if ((!source || source === 'tmdb') && settings.personalizedEnabled) {
       const personalizedLanes = await this.buildPersonalizedTvLanes(settings.maxPersonalizedLanes)
       lanePromises.push(...personalizedLanes)
     }
@@ -152,7 +154,7 @@ class RecommendationService {
       .filter((lane): lane is RecommendationLane => lane !== null && lane.items.length > 0)
 
     const deduplicated = this.deduplicateAcrossLanes(lanes)
-    this.setCache('tv-lanes', deduplicated)
+    this.setCache(cacheKey, deduplicated)
     return deduplicated
   }
 

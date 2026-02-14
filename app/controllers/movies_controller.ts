@@ -18,6 +18,7 @@ const movieValidator = vine.compile(
     qualityProfileId: vine.string().optional(),
     rootFolderId: vine.string(),
     requested: vine.boolean().optional(),
+    monitored: vine.boolean().optional(),
     searchOnAdd: vine.boolean().optional(),
   })
 )
@@ -40,6 +41,7 @@ export default class MoviesController {
         posterUrl: movie.posterUrl,
         status: movie.status,
         requested: movie.requested,
+        monitored: movie.monitored,
         hasFile: movie.hasFile,
         qualityProfile: movie.qualityProfile?.name,
         rootFolder: movie.rootFolder?.path,
@@ -57,7 +59,10 @@ export default class MoviesController {
     }
 
     try {
-      const results = await tmdbService.searchMovies(query, year ? parseInt(year) : undefined)
+      const results = await tmdbService.searchMovies(
+        query,
+        year ? Number.parseInt(year) : undefined
+      )
 
       // Check which movies are already in library with their status
       const tmdbIds = results.map((r) => String(r.id))
@@ -100,8 +105,8 @@ export default class MoviesController {
 
     try {
       const [movie, cast] = await Promise.all([
-        tmdbService.getMovie(parseInt(tmdbId)),
-        tmdbService.getMovieCredits(parseInt(tmdbId), 6),
+        tmdbService.getMovie(Number.parseInt(tmdbId)),
+        tmdbService.getMovieCredits(Number.parseInt(tmdbId), 6),
       ])
 
       // Fetch JustWatch streaming availability using TMDB data (non-blocking)
@@ -224,6 +229,7 @@ export default class MoviesController {
       sortTitle: data.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
       year: data.year,
       requested: data.requested ?? true,
+      monitored: data.monitored ?? false,
       hasFile: false,
       qualityProfileId: data.qualityProfileId,
       rootFolderId: data.rootFolderId,
@@ -232,7 +238,7 @@ export default class MoviesController {
 
     if (data.tmdbId) {
       try {
-        const tmdbData = await tmdbService.getMovie(parseInt(data.tmdbId))
+        const tmdbData = await tmdbService.getMovie(Number.parseInt(data.tmdbId))
         movieData = {
           ...movieData,
           tmdbId: String(tmdbData.id),
@@ -300,6 +306,7 @@ export default class MoviesController {
       rating: movie.rating,
       genres: movie.genres,
       requested: movie.requested,
+      monitored: movie.monitored,
       hasFile: movie.hasFile,
       qualityProfile: movie.qualityProfile,
       rootFolder: movie.rootFolder,
@@ -322,19 +329,21 @@ export default class MoviesController {
       return response.notFound({ error: 'Movie not found' })
     }
 
-    const { requested, qualityProfileId, rootFolderId } = request.only([
+    const { requested, monitored, qualityProfileId, rootFolderId } = request.only([
       'requested',
+      'monitored',
       'qualityProfileId',
       'rootFolderId',
     ])
 
     if (requested !== undefined) movie.requested = requested
+    if (monitored !== undefined) movie.monitored = monitored
     if (qualityProfileId !== undefined) movie.qualityProfileId = qualityProfileId
     if (rootFolderId !== undefined) movie.rootFolderId = rootFolderId
 
     await movie.save()
 
-    return response.json({ id: movie.id, title: movie.title, requested: movie.requested })
+    return response.json({ id: movie.id, title: movie.title, requested: movie.requested, monitored: movie.monitored })
   }
 
   async destroy({ params, request, response }: HttpContext) {

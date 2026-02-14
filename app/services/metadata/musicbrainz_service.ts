@@ -1,4 +1,5 @@
 import PQueue from 'p-queue'
+import { cache, CACHE_TTL } from '#services/cache/cache_service'
 
 const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2'
 const USER_AGENT = 'Hamster/1.0.0 (https://github.com/hamster)'
@@ -98,13 +99,17 @@ export class MusicBrainzService {
    * Get artist details by MusicBrainz ID
    */
   async getArtist(mbid: string): Promise<MusicBrainzArtist | null> {
+    const cacheKey = `mb:artist:${mbid}`
+    const cached = cache.get<MusicBrainzArtist | null>(cacheKey)
+    if (cached !== undefined) return cached
+
     const url = `${MUSICBRAINZ_API}/artist/${mbid}?inc=tags&fmt=json`
 
     try {
       const response = await fetchWithRateLimit(url)
       const artist = (await response.json()) as any
 
-      return {
+      const result: MusicBrainzArtist = {
         id: artist.id,
         name: artist.name,
         sortName: artist['sort-name'],
@@ -115,6 +120,8 @@ export class MusicBrainzService {
         endDate: artist['life-span']?.end,
         tags: artist.tags?.map((t: any) => t.name) || [],
       }
+      cache.set(cacheKey, result, CACHE_TTL.METADATA)
+      return result
     } catch (error) {
       console.error(`Failed to get artist ${mbid}:`, error)
       return null
@@ -162,32 +169,34 @@ export class MusicBrainzService {
    * Get releases for a release group (album)
    */
   async getAlbumReleases(releaseGroupMbid: string): Promise<MusicBrainzRelease[]> {
-    const url = `${MUSICBRAINZ_API}/release?release-group=${releaseGroupMbid}&inc=recordings+media&fmt=json`
-    const response = await fetchWithRateLimit(url)
-    const data = (await response.json()) as { releases?: any[] }
+    return cache.getOrSet(`mb:releases:${releaseGroupMbid}`, CACHE_TTL.METADATA, async () => {
+      const url = `${MUSICBRAINZ_API}/release?release-group=${releaseGroupMbid}&inc=recordings+media&fmt=json`
+      const response = await fetchWithRateLimit(url)
+      const data = (await response.json()) as { releases?: any[] }
 
-    return (data.releases || []).map((release: any) => ({
-      id: release.id,
-      title: release.title,
-      status: release.status,
-      country: release.country,
-      date: release.date,
-      format: release.media?.[0]?.format,
-      trackCount:
-        release.media?.reduce((sum: number, m: any) => sum + (m['track-count'] || 0), 0) || 0,
-      media: (release.media || []).map((medium: any) => ({
-        format: medium.format,
-        trackCount: medium['track-count'] || 0,
-        tracks: (medium.tracks || []).map((track: any) => ({
-          id: track.id,
-          title: track.title,
-          position: track.position,
-          length: track.length,
-          artistId: track['artist-credit']?.[0]?.artist?.id,
-          artistName: track['artist-credit']?.[0]?.name,
+      return (data.releases || []).map((release: any) => ({
+        id: release.id,
+        title: release.title,
+        status: release.status,
+        country: release.country,
+        date: release.date,
+        format: release.media?.[0]?.format,
+        trackCount:
+          release.media?.reduce((sum: number, m: any) => sum + (m['track-count'] || 0), 0) || 0,
+        media: (release.media || []).map((medium: any) => ({
+          format: medium.format,
+          trackCount: medium['track-count'] || 0,
+          tracks: (medium.tracks || []).map((track: any) => ({
+            id: track.id,
+            title: track.title,
+            position: track.position,
+            length: track.length,
+            artistId: track['artist-credit']?.[0]?.artist?.id,
+            artistName: track['artist-credit']?.[0]?.name,
+          })),
         })),
-      })),
-    }))
+      }))
+    })
   }
 
   /**

@@ -12,6 +12,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -57,6 +67,9 @@ export default function Indexers() {
   const [indexers, setIndexers] = useState<Indexer[]>([])
   const [prowlarr, setProwlarr] = useState<ProwlarrConfig | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // Delete confirmation state
+  const [deleteIndexerId, setDeleteIndexerId] = useState<number | null>(null)
 
   // Indexer dialog state
   const [indexerDialogOpen, setIndexerDialogOpen] = useState(false)
@@ -492,7 +505,7 @@ export default function Indexers() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDeleteIndexer(indexer.id)}
+                            onClick={() => setDeleteIndexerId(indexer.id)}
                           >
                             <HugeiconsIcon
                               icon={Delete02Icon}
@@ -509,6 +522,32 @@ export default function Indexers() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteIndexerId !== null} onOpenChange={() => setDeleteIndexerId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete indexer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the indexer. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteIndexerId) {
+                  handleDeleteIndexer(deleteIndexerId)
+                  setDeleteIndexerId(null)
+                }
+              }}
+              className="bg-destructive text-destructive-foreground"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   )
 }

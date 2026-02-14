@@ -98,16 +98,18 @@ export async function probeFile(filePath: string): Promise<MediaAnalysis> {
         const audioStream = streams.find((s: any) => s.codec_type === 'audio')
 
         const analysis: MediaAnalysis = {
-          duration: parseFloat(format.duration) || 0,
+          duration: Number.parseFloat(format.duration) || 0,
           container: format.format_name || 'unknown',
           videoCodec: videoStream?.codec_name || null,
           videoWidth: videoStream?.width || null,
           videoHeight: videoStream?.height || null,
-          videoBitrate: videoStream?.bit_rate ? parseInt(videoStream.bit_rate) : null,
+          videoBitrate: videoStream?.bit_rate ? Number.parseInt(videoStream.bit_rate) : null,
           audioCodec: audioStream?.codec_name || null,
           audioChannels: audioStream?.channels || null,
-          audioBitrate: audioStream?.bit_rate ? parseInt(audioStream.bit_rate) : null,
-          audioSampleRate: audioStream?.sample_rate ? parseInt(audioStream.sample_rate) : null,
+          audioBitrate: audioStream?.bit_rate ? Number.parseInt(audioStream.bit_rate) : null,
+          audioSampleRate: audioStream?.sample_rate
+            ? Number.parseInt(audioStream.sample_rate)
+            : null,
         }
 
         resolve(analysis)

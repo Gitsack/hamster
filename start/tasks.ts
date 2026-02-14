@@ -4,13 +4,18 @@
 |--------------------------------------------------------------------------
 |
 | This file starts background tasks when the application boots.
+| Tasks are managed by the TaskScheduler which reads configuration
+| from the scheduled_tasks database table.
 |
 */
 
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
 import { downloadMonitorTask } from '#services/tasks/download_monitor_task'
 import { completedDownloadsScanner } from '#services/tasks/completed_downloads_scanner'
+import { rssSyncTask } from '#services/tasks/rss_sync_task'
+import { backupService } from '#services/backup/backup_service'
 import { blacklistService } from '#services/blacklist/blacklist_service'
+import { taskScheduler } from '#services/tasks/task_scheduler'
 import AppSetting from '#models/app_setting'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import { traktService } from '#services/metadata/trakt_service'
@@ -42,43 +47,41 @@ setTimeout(async () => {
   }
 }, 2000)
 
-// Start the download monitor task (runs every 15 seconds)
-// Delay start by 10 seconds to let the app initialize
-setTimeout(() => {
-  downloadMonitorTask.start(15)
-}, 10000)
+// Register task runners with the scheduler
+taskScheduler.register('download_monitor', downloadMonitorTask)
+taskScheduler.register('completed_scanner', {
+  start(interval: number) {
+    completedDownloadsScanner.start(interval)
+  },
+  stop() {
+    completedDownloadsScanner.stop()
+  },
+  async run() {
+    await completedDownloadsScanner.scan()
+  },
+  get running() {
+    return false
+  },
+})
+taskScheduler.register('requested_search', requestedSearchTask)
+taskScheduler.register('rss_sync', rssSyncTask)
+taskScheduler.register('backup', backupService)
+taskScheduler.register('cleanup', {
+  start() {},
+  stop() {},
+  async run() {
+    await blacklistService.cleanupExpired()
+  },
+  get running() {
+    return false
+  },
+})
 
-// Start the completed downloads scanner (runs every 5 minutes)
-// This catches orphaned downloads that completed while the app was down
-// Delay start by 15 seconds to let the app initialize and check immediately
-setTimeout(() => {
-  completedDownloadsScanner.start(5)
-}, 15000)
-
-// Start the requested items search task (runs every 60 minutes)
-// Searches for albums, movies, and books
-// Delay start by 30 seconds to let the app fully initialize
-setTimeout(() => {
-  requestedSearchTask.start(60)
-}, 30000)
-
-// Run blacklist cleanup once on startup and then every 24 hours
-// Removes expired blacklist entries (30 days old)
+// Start the task scheduler after a brief delay to let the app initialize
 setTimeout(async () => {
   try {
-    await blacklistService.cleanupExpired()
+    await taskScheduler.start()
   } catch (error) {
-    console.error('[Blacklist] Failed to cleanup expired entries:', error)
+    console.error('[TaskScheduler] Failed to start:', error)
   }
-}, 60000) // 1 minute after startup
-
-setInterval(
-  async () => {
-    try {
-      await blacklistService.cleanupExpired()
-    } catch (error) {
-      console.error('[Blacklist] Failed to cleanup expired entries:', error)
-    }
-  },
-  24 * 60 * 60 * 1000
-) // Every 24 hours
+}, 5000)

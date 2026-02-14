@@ -7,8 +7,29 @@ const shieldConfig = defineConfig({
    * to learn more
    */
   csp: {
-    enabled: false,
-    directives: {},
+    enabled: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: [
+        "'self'",
+        'data:',
+        'blob:',
+        'https://image.tmdb.org',
+        'https://coverartarchive.org',
+        'https://covers.openlibrary.org',
+        'https://upload.wikimedia.org',
+        'https://images.justwatch.com',
+      ],
+      fontSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+      mediaSrc: ["'self'", 'blob:'],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
     reportOnly: false,
   },
 

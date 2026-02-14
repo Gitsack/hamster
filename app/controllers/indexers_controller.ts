@@ -14,6 +14,13 @@ const indexerValidator = vine.compile(
   })
 )
 
+const indexerTestValidator = vine.compile(
+  vine.object({
+    url: vine.string().url(),
+    apiKey: vine.string().minLength(1),
+  })
+)
+
 export default class IndexersController {
   async index({ response }: HttpContext) {
     const indexers = await Indexer.query().orderBy('priority', 'asc').orderBy('name', 'asc')
@@ -120,13 +127,9 @@ export default class IndexersController {
   }
 
   async test({ request, response }: HttpContext) {
-    const { url, apiKey } = request.only(['url', 'apiKey'])
+    const data = await request.validateUsing(indexerTestValidator)
 
-    if (!url || !apiKey) {
-      return response.badRequest({ error: 'URL and API key are required' })
-    }
-
-    const result = await indexerManager.testIndexer(url, apiKey)
+    const result = await indexerManager.testIndexer(data.url, data.apiKey)
 
     if (result.success) {
       return response.json({
@@ -152,9 +155,9 @@ export default class IndexersController {
         query,
         artist,
         album,
-        year: year ? parseInt(year, 10) : undefined,
+        year: year ? Number.parseInt(year, 10) : undefined,
         indexerIds: indexerIds ? indexerIds.split(',').map(Number) : undefined,
-        limit: limit ? parseInt(limit, 10) : 100,
+        limit: limit ? Number.parseInt(limit, 10) : 100,
         generalSearch: isGeneralSearch,
         skipDedup: isGeneralSearch, // Also skip dedup for general search
       })

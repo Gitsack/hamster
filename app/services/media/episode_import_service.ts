@@ -1,6 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import db from '@adonisjs/lucid/services/db'
+import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
+import { eventEmitter } from '#services/events/event_emitter'
 import Download from '#models/download'
 import TvShow from '#models/tv_show'
 import Episode from '#models/episode'
@@ -58,7 +61,8 @@ export class EpisodeImportService {
       // Apply remote path mapping if configured
       let outputPath = download.outputPath
       if (download.downloadClientId) {
-        const DownloadClient = (await import('#models/download_client')).default
+        const downloadClientModule = await import('#models/download_client')
+        const DownloadClient = downloadClientModule.default
         const client = await DownloadClient.find(download.downloadClientId)
         if (client?.settings?.remotePath && client?.settings?.localPath) {
           outputPath = outputPath.replace(client.settings.remotePath, client.settings.localPath)
@@ -153,11 +157,67 @@ export class EpisodeImportService {
         result.success = true
         onProgress?.({ phase: 'cleaning', total: 1, current: 0 })
         await this.cleanupDownloadFolder(outputPath)
+
+        // Emit import completed event
+        eventEmitter
+          .emitImportCompleted({
+            media: {
+              id: tvShow.id,
+              title: tvShow.title,
+              year: tvShow.year ?? undefined,
+              mediaType: 'tv',
+              posterUrl: tvShow.posterUrl ?? undefined,
+              overview: tvShow.overview ?? undefined,
+            },
+            files: result.importedPaths.map((p) => ({
+              path: p,
+              relativePath: path.basename(p),
+              size: 0,
+            })),
+            isUpgrade: false,
+          })
+          .catch((err) =>
+            logger.error({ err }, 'EpisodeImportService: Failed to emit import completed event')
+          )
+      } else {
+        // Emit import failed event
+        eventEmitter
+          .emitImportFailed({
+            media: {
+              id: tvShow.id,
+              title: tvShow.title,
+              year: tvShow.year ?? undefined,
+              mediaType: 'tv',
+              posterUrl: tvShow.posterUrl ?? undefined,
+            },
+            errorMessage: result.errors.join('; ') || 'No files imported',
+            downloadId: download.id,
+          })
+          .catch((err) =>
+            logger.error({ err }, 'EpisodeImportService: Failed to emit import failed event')
+          )
       }
 
       onProgress?.({ phase: 'complete', total: videoFiles.length, current: videoFiles.length })
     } catch (error) {
       result.errors.push(error instanceof Error ? error.message : 'Import failed')
+
+      // Emit import failed event for unexpected errors
+      if (download.tvShowId) {
+        eventEmitter
+          .emitImportFailed({
+            media: {
+              id: download.tvShowId,
+              title: download.title,
+              mediaType: 'tv',
+            },
+            errorMessage: error instanceof Error ? error.message : 'Import failed',
+            downloadId: download.id,
+          })
+          .catch((err) =>
+            logger.error({ err }, 'EpisodeImportService: Failed to emit import failed event')
+          )
+      }
     }
 
     return result
@@ -224,32 +284,41 @@ export class EpisodeImportService {
     // Get file stats
     const stats = await fs.stat(absolutePath)
 
-    // Create or update episode file record
-    let episodeFile = await EpisodeFile.query().where('episodeId', episode.id).first()
+    // Create or update episode file record and update episode in a transaction
+    await db.transaction(async (trx) => {
+      let episodeFile = await EpisodeFile.query({ client: trx })
+        .where('episodeId', episode.id)
+        .first()
 
-    if (episodeFile) {
-      episodeFile.merge({
-        relativePath,
-        sizeBytes: stats.size,
-        quality: quality || null,
-        dateAdded: DateTime.now(),
-      })
-      await episodeFile.save()
-    } else {
-      episodeFile = await EpisodeFile.create({
-        episodeId: episode.id,
-        tvShowId: tvShow.id,
-        relativePath,
-        sizeBytes: stats.size,
-        quality: quality || null,
-        dateAdded: DateTime.now(),
-      })
-    }
+      if (episodeFile) {
+        episodeFile.useTransaction(trx)
+        episodeFile.merge({
+          relativePath,
+          sizeBytes: stats.size,
+          quality: quality || null,
+          dateAdded: DateTime.now(),
+        })
+        await episodeFile.save()
+      } else {
+        episodeFile = await EpisodeFile.create(
+          {
+            episodeId: episode.id,
+            tvShowId: tvShow.id,
+            relativePath,
+            sizeBytes: stats.size,
+            quality: quality || null,
+            dateAdded: DateTime.now(),
+          },
+          { client: trx }
+        )
+      }
 
-    // Update episode to indicate it has a file
-    episode.hasFile = true
-    episode.episodeFileId = episodeFile.id
-    await episode.save()
+      // Update episode to indicate it has a file
+      episode.useTransaction(trx)
+      episode.hasFile = true
+      episode.episodeFileId = episodeFile.id
+      await episode.save()
+    })
 
     return { success: true, destinationPath: absolutePath }
   }
@@ -290,7 +359,7 @@ export class EpisodeImportService {
         }
       }
     } catch (error) {
-      console.error(`Error scanning directory ${dir}:`, error)
+      logger.error({ dir, err: error }, 'Error scanning directory')
     }
 
     return results
@@ -363,7 +432,7 @@ export class EpisodeImportService {
         // Folder not empty, that's fine
       }
     } catch (error) {
-      console.error('Error cleaning up download folder:', error)
+      logger.error({ err: error }, 'Error cleaning up download folder')
     }
   }
 

@@ -4,8 +4,9 @@ import Movie from '#models/movie'
 import TvShow from '#models/tv_show'
 
 export default class RecommendationsController {
-  async movies({ response }: HttpContext) {
-    const lanes = await recommendationService.getMovieRecommendationLanes()
+  async movies({ request, response }: HttpContext) {
+    const source = request.qs().source as string | undefined
+    const lanes = await recommendationService.getMovieRecommendationLanes(source)
 
     // Collect all tmdbIds across lanes and batch-query library status
     const allTmdbIds = lanes.flatMap((lane) => lane.items.map((item) => String(item.tmdbId)))
@@ -30,8 +31,9 @@ export default class RecommendationsController {
     return response.json({ lanes: enrichedLanes })
   }
 
-  async tv({ response }: HttpContext) {
-    const lanes = await recommendationService.getTvRecommendationLanes()
+  async tv({ request, response }: HttpContext) {
+    const source = request.qs().source as string | undefined
+    const lanes = await recommendationService.getTvRecommendationLanes(source)
 
     // Collect all tmdbIds across lanes and batch-query library status
     const allTmdbIds = lanes.flatMap((lane) => lane.items.map((item) => String(item.tmdbId)))

@@ -1,4 +1,5 @@
 import PQueue from 'p-queue'
+import { cache, CACHE_TTL } from '#services/cache/cache_service'
 
 const OPENLIBRARY_API = 'https://openlibrary.org'
 const OPENLIBRARY_COVERS = 'https://covers.openlibrary.org'
@@ -90,12 +91,16 @@ export class OpenLibraryService {
   // Get details
 
   async getAuthor(key: string): Promise<OpenLibraryAuthor | null> {
+    const cacheKey = `ol:author:${key}`
+    const cached = cache.get<OpenLibraryAuthor | null>(cacheKey)
+    if (cached !== undefined) return cached
+
     try {
       const cleanKey = key.startsWith('/authors/') ? key : `/authors/${key}`
       const url = `${OPENLIBRARY_API}${cleanKey}.json`
       const data = await this.fetch(url)
 
-      return {
+      const result: OpenLibraryAuthor = {
         key: data.key,
         name: data.name,
         birthDate: data.birth_date,
@@ -103,6 +108,8 @@ export class OpenLibraryService {
         bio: typeof data.bio === 'string' ? data.bio : data.bio?.value,
         photoId: data.photos?.[0],
       }
+      cache.set(cacheKey, result, CACHE_TTL.METADATA)
+      return result
     } catch {
       return null
     }
@@ -129,12 +136,16 @@ export class OpenLibraryService {
   }
 
   async getBook(key: string): Promise<OpenLibraryBook | null> {
+    const cacheKey = `ol:book:${key}`
+    const cached = cache.get<OpenLibraryBook | null>(cacheKey)
+    if (cached !== undefined) return cached
+
     try {
       const cleanKey = key.startsWith('/works/') ? key : `/works/${key}`
       const url = `${OPENLIBRARY_API}${cleanKey}.json`
       const data = await this.fetch(url)
 
-      return {
+      const result: OpenLibraryBook = {
         key: data.key,
         title: data.title,
         authorKey: data.authors?.[0]?.author?.key,
@@ -143,6 +154,8 @@ export class OpenLibraryService {
         coverId: data.covers?.[0],
         subjects: data.subjects?.slice(0, 10),
       }
+      cache.set(cacheKey, result, CACHE_TTL.METADATA)
+      return result
     } catch {
       return null
     }

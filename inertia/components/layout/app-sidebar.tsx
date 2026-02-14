@@ -13,6 +13,9 @@ import {
   Video01Icon,
   Notification01Icon,
   Link01Icon,
+  Calendar03Icon,
+  Settings02Icon,
+  UserMultipleIcon,
 } from '@hugeicons/core-free-icons'
 import { HamsterIcon } from '@/components/icons/hamster-icon'
 import {
@@ -47,6 +50,11 @@ const mainNavItems: NavItem[] = [
     title: 'Library',
     url: '/library',
     icon: MusicNote01Icon,
+  },
+  {
+    title: 'Calendar',
+    url: '/calendar',
+    icon: Calendar03Icon,
   },
   {
     title: 'Search',
@@ -99,10 +107,31 @@ const settingsNavItems: NavItem[] = [
     url: '/settings/playback',
     icon: Video01Icon,
   },
+  {
+    title: 'Users',
+    url: '/settings/users',
+    icon: UserMultipleIcon,
+  },
+]
+
+const systemNavItems: NavItem[] = [
+  {
+    title: 'Status',
+    url: '/system/status',
+    icon: Settings02Icon,
+  },
+  {
+    title: 'Events',
+    url: '/system/events',
+    icon: Notification01Icon,
+  },
 ]
 
 export function AppSidebar() {
-  const { url, props } = usePage<{ user?: { fullName?: string; email: string }; version: string }>()
+  const { url, props } = usePage<{
+    user?: { fullName?: string; email: string; isAdmin?: boolean }
+    version: string
+  }>()
   const { user, version } = props
   const [mounted, setMounted] = useState(false)
 
@@ -168,23 +197,44 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Settings</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {settingsNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url}>
-                      <HugeiconsIcon icon={item.icon} className="size-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {user?.isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Settings</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {settingsNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <Link href={item.url}>
+                        <HugeiconsIcon icon={item.icon} className="size-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+        {user?.isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>System</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {systemNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <Link href={item.url}>
+                        <HugeiconsIcon icon={item.icon} className="size-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <div className="px-2 text-xs text-muted-foreground/50">v{version}</div>
@@ -217,7 +267,7 @@ export function AppSidebar() {
                   sideOffset={4}
                 >
                   <DropdownMenuItem asChild>
-                    <Link href="/settings/ui">
+                    <Link href="/settings/profile">
                       <HugeiconsIcon icon={UserIcon} className="mr-2 size-4" />
                       Profile Settings
                     </Link>

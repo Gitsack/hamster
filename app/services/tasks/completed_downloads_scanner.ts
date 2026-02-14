@@ -396,9 +396,7 @@ class CompletedDownloadsScanner {
   /**
    * Try to match a download folder name to a library item
    */
-  private async matchToLibrary(
-    folderName: string
-  ): Promise<{
+  private async matchToLibrary(folderName: string): Promise<{
     type: 'movie' | 'episode' | 'album' | 'book'
     id: string
     title: string
@@ -480,15 +478,15 @@ class CompletedDownloadsScanner {
     // Try to extract year (4 digits, usually 1900-2099)
     const yearMatch = cleaned.match(/\b(19\d{2}|20\d{2})\b/)
     if (yearMatch) {
-      result.year = parseInt(yearMatch[1])
+      result.year = Number.parseInt(yearMatch[1])
     }
 
     // Try to match TV show pattern (S01E01 or 1x01)
     const tvMatch = cleaned.match(/(.+?)\s*(?:S(\d{1,2})E(\d{1,2})|(\d{1,2})x(\d{1,2}))/i)
     if (tvMatch) {
       result.title = tvMatch[1].trim()
-      result.season = parseInt(tvMatch[2] || tvMatch[4])
-      result.episode = parseInt(tvMatch[3] || tvMatch[5])
+      result.season = Number.parseInt(tvMatch[2] || tvMatch[4])
+      result.episode = Number.parseInt(tvMatch[3] || tvMatch[5])
       return result
     }
 

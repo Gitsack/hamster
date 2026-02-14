@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Episode from '#models/episode'
 import Movie from '#models/movie'
 import Album from '#models/album'
+import Book from '#models/book'
 import { DateTime } from 'luxon'
 
 interface CalendarEvent {
@@ -36,8 +37,8 @@ export default class CalendarController {
   async ical({ request, response }: HttpContext) {
     const { futureDays = '30', pastDays = '7', unmonitored = 'false' } = request.qs()
 
-    const startDate = DateTime.now().minus({ days: parseInt(pastDays, 10) })
-    const endDate = DateTime.now().plus({ days: parseInt(futureDays, 10) })
+    const startDate = DateTime.now().minus({ days: Number.parseInt(pastDays, 10) })
+    const endDate = DateTime.now().plus({ days: Number.parseInt(futureDays, 10) })
     const includeUnmonitored = unmonitored === 'true'
 
     const events = await this.getCalendarEvents(startDate, endDate, includeUnmonitored)
@@ -134,6 +135,32 @@ export default class CalendarController {
           startDate: album.releaseDate,
           mediaType: 'album',
           hasFile: hasFiles,
+        })
+      }
+    }
+
+    // Get books with release dates
+    const bookQuery = Book.query()
+      .whereNotNull('releaseDate')
+      .where('releaseDate', '>=', startDate.toISODate()!)
+      .where('releaseDate', '<=', endDate.toISODate()!)
+      .preload('author')
+
+    if (!includeUnmonitored) {
+      bookQuery.where('requested', true)
+    }
+
+    const books = await bookQuery
+
+    for (const book of books) {
+      if (book.releaseDate) {
+        events.push({
+          uid: `book-${book.id}@hamster`,
+          title: `${book.author?.name || 'Unknown Author'} - ${book.title}`,
+          description: book.overview || undefined,
+          startDate: book.releaseDate,
+          mediaType: 'book',
+          hasFile: book.hasFile,
         })
       }
     }

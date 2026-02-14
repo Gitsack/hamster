@@ -23,6 +23,7 @@ const tvShowValidator = vine.compile(
     qualityProfileId: vine.string().optional(),
     rootFolderId: vine.string(),
     requested: vine.boolean().optional(),
+    monitored: vine.boolean().optional(),
     searchOnAdd: vine.boolean().optional(),
     selectedSeasons: vine.array(vine.number()).optional(),
     // Episode-level selection: { seasonNumber: [episodeNumbers] }
@@ -66,7 +67,10 @@ export default class TvShowsController {
     }
 
     try {
-      const results = await tmdbService.searchTvShows(query, year ? parseInt(year) : undefined)
+      const results = await tmdbService.searchTvShows(
+        query,
+        year ? Number.parseInt(year) : undefined
+      )
 
       // Check which shows are already in library with their status
       const tmdbIds = results.map((r) => String(r.id))
@@ -111,8 +115,8 @@ export default class TvShowsController {
 
     try {
       const [show, cast] = await Promise.all([
-        tmdbService.getTvShow(parseInt(tmdbId)),
-        tmdbService.getTvShowCredits(parseInt(tmdbId), 6),
+        tmdbService.getTvShow(Number.parseInt(tmdbId)),
+        tmdbService.getTvShowCredits(Number.parseInt(tmdbId), 6),
       ])
 
       // Fetch JustWatch streaming availability using TMDB data (non-blocking)
@@ -236,6 +240,7 @@ export default class TvShowsController {
       sortTitle: data.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
       year: data.year,
       requested: data.requested ?? true,
+      monitored: data.monitored ?? true,
       seasonCount: 0,
       episodeCount: 0,
       qualityProfileId: data.qualityProfileId,
@@ -245,7 +250,7 @@ export default class TvShowsController {
 
     if (data.tmdbId) {
       try {
-        const tmdbData = await tmdbService.getTvShow(parseInt(data.tmdbId))
+        const tmdbData = await tmdbService.getTvShow(Number.parseInt(data.tmdbId))
         showData = {
           ...showData,
           tmdbId: String(tmdbData.id),
@@ -279,7 +284,7 @@ export default class TvShowsController {
     // Fetch and create seasons/episodes
     if (data.tmdbId) {
       try {
-        const seasons = await tmdbService.getTvShowSeasons(parseInt(data.tmdbId))
+        const seasons = await tmdbService.getTvShowSeasons(Number.parseInt(data.tmdbId))
 
         // Determine which seasons should be requested
         // If selectedSeasons is provided, only those seasons are requested
@@ -334,7 +339,7 @@ export default class TvShowsController {
 
           // Fetch episodes for this season
           const { episodes } = await tmdbService.getTvShowSeason(
-            parseInt(data.tmdbId),
+            Number.parseInt(data.tmdbId),
             seasonData.seasonNumber
           )
 
@@ -425,6 +430,7 @@ export default class TvShowsController {
       rating: show.rating,
       genres: show.genres,
       requested: show.requested,
+      monitored: show.monitored,
       seasonCount: show.seasonCount,
       episodeCount: show.episodeCount,
       qualityProfile: show.qualityProfile,
@@ -514,13 +520,15 @@ export default class TvShowsController {
       return response.notFound({ error: 'TV show not found' })
     }
 
-    const { requested, qualityProfileId, rootFolderId } = request.only([
+    const { requested, monitored, qualityProfileId, rootFolderId } = request.only([
       'requested',
+      'monitored',
       'qualityProfileId',
       'rootFolderId',
     ])
 
     if (requested !== undefined) show.requested = requested
+    if (monitored !== undefined) show.monitored = monitored
     if (qualityProfileId !== undefined) show.qualityProfileId = qualityProfileId
     if (rootFolderId !== undefined) show.rootFolderId = rootFolderId
 
@@ -541,7 +549,7 @@ export default class TvShowsController {
       }
     }
 
-    return response.json({ id: show.id, title: show.title, requested: show.requested })
+    return response.json({ id: show.id, title: show.title, requested: show.requested, monitored: show.monitored })
   }
 
   async destroy({ params, response }: HttpContext) {
@@ -774,7 +782,7 @@ export default class TvShowsController {
     }
 
     try {
-      const seasons = await tmdbService.getTvShowSeasons(parseInt(tmdbId))
+      const seasons = await tmdbService.getTvShowSeasons(Number.parseInt(tmdbId))
 
       return response.json(
         seasons
@@ -806,8 +814,8 @@ export default class TvShowsController {
 
     try {
       const { episodes } = await tmdbService.getTvShowSeason(
-        parseInt(tmdbId),
-        parseInt(seasonNumber)
+        Number.parseInt(tmdbId),
+        Number.parseInt(seasonNumber)
       )
 
       return response.json(
@@ -993,7 +1001,7 @@ export default class TvShowsController {
                 stillUrl: tmdbEpisode.stillPath || null,
                 rating: tmdbEpisode.voteAverage || null,
                 votes: tmdbEpisode.voteCount || null,
-                requested: false,
+                requested: show.monitored,
                 hasFile: false,
               })
             }
@@ -1036,7 +1044,7 @@ export default class TvShowsController {
     }
 
     try {
-      const tmdbId = parseInt(show.tmdbId)
+      const tmdbId = Number.parseInt(show.tmdbId)
 
       // Fetch updated show data
       const tmdbData = await tmdbService.getTvShow(tmdbId)
@@ -1077,7 +1085,7 @@ export default class TvShowsController {
             airDate: tmdbSeason.airDate ? DateTime.fromISO(tmdbSeason.airDate) : null,
             posterUrl: tmdbSeason.posterPath || null,
             episodeCount: tmdbSeason.episodeCount,
-            requested: false,
+            requested: show.monitored,
           })
           seasonsCreated++
           existingSeasons.set(tmdbSeason.seasonNumber, season)
@@ -1140,7 +1148,7 @@ export default class TvShowsController {
               stillUrl: tmdbEpisode.stillPath || null,
               rating: tmdbEpisode.voteAverage || null,
               votes: tmdbEpisode.voteCount || null,
-              requested: false,
+              requested: show.monitored,
               hasFile: false,
             })
             episodesCreated++

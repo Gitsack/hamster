@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
+import RootFolder from '#models/root_folder'
 import { accessWithTimeout, statWithTimeout } from '../utils/fs_utils.js'
 
 interface DirectoryEntry {
@@ -38,8 +39,13 @@ export default class FilesystemController {
       browsePath = requestedPath
     }
 
-    // Normalize the path
-    browsePath = path.normalize(browsePath)
+    // Normalize and resolve the path to prevent traversal attacks
+    browsePath = path.resolve(path.normalize(browsePath))
+
+    // Validate against path traversal
+    if (browsePath.includes('\0')) {
+      return response.forbidden({ error: 'Invalid path' })
+    }
 
     try {
       // Check if path exists and is accessible (with timeout for network paths)
@@ -83,11 +89,20 @@ export default class FilesystemController {
   }
 
   async quickPaths({ response }: HttpContext) {
-    // Return common quick access paths
-    const homeDir = os.homedir()
     const paths: DirectoryEntry[] = []
 
+    // Add configured root folders as quick paths
+    const rootFolders = await RootFolder.all()
+    for (const folder of rootFolders) {
+      paths.push({
+        name: `${folder.name} (${folder.mediaType})`,
+        path: folder.path,
+        isDirectory: true,
+      })
+    }
+
     // Add home directory
+    const homeDir = os.homedir()
     paths.push({
       name: 'Home',
       path: homeDir,
@@ -136,18 +151,25 @@ export default class FilesystemController {
       return response.badRequest({ error: 'Path is required' })
     }
 
+    // Resolve to prevent traversal
+    const resolvedPath = path.resolve(path.normalize(requestedPath))
+
+    if (resolvedPath.includes('\0')) {
+      return response.forbidden({ error: 'Invalid path' })
+    }
+
     try {
-      const stats = await statWithTimeout(requestedPath)
+      const stats = await statWithTimeout(resolvedPath)
       return response.json({
         exists: true,
         isDirectory: stats.isDirectory(),
-        path: requestedPath,
+        path: resolvedPath,
       })
     } catch {
       return response.json({
         exists: false,
         isDirectory: false,
-        path: requestedPath,
+        path: resolvedPath,
       })
     }
   }

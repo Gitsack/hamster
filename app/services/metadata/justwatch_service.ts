@@ -137,13 +137,16 @@ export class JustWatchService {
 
   private buildPosterUrl(posterTemplate: string | null | undefined): string | null {
     if (!posterTemplate || typeof posterTemplate !== 'string') return null
-    const path = posterTemplate.replace('{profile}', 's332')
+    const path = posterTemplate.replace('{profile}', 's332').replace('{format}', 'webp')
+    if (path.startsWith('http')) return path
     return `${JUSTWATCH_IMAGE_BASE}${path.startsWith('/') ? '' : '/'}${path}`
   }
 
   private buildIconUrl(iconPath: string | null | undefined): string {
     if (!iconPath || typeof iconPath !== 'string') return ''
-    return `${JUSTWATCH_IMAGE_BASE}${iconPath.startsWith('/') ? '' : '/'}${iconPath}`
+    const resolved = iconPath.replace('{format}', 'png')
+    if (resolved.startsWith('http')) return resolved
+    return `${JUSTWATCH_IMAGE_BASE}${resolved.startsWith('/') ? '' : '/'}${resolved}`
   }
 
   private mapPresentationType(pt: string | null | undefined): string {

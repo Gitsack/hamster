@@ -123,6 +123,7 @@ export default class BooksController {
               rootFolderId: data.rootFolderId,
               qualityProfileId: data.qualityProfileId,
               requested: data.requested ?? true,
+              monitored: false,
               addedAt: DateTime.now(),
             })
           }
@@ -139,6 +140,7 @@ export default class BooksController {
             rootFolderId: data.rootFolderId,
             qualityProfileId: data.qualityProfileId,
             requested: data.requested ?? true,
+            monitored: false,
             addedAt: DateTime.now(),
           })
         }
@@ -180,7 +182,7 @@ export default class BooksController {
             bookData.pageCount = edition.numberOfPages
             bookData.publisher = edition.publishers?.[0]
             if (edition.publishDate) {
-              const year = parseInt(edition.publishDate.match(/\d{4}/)?.[0] || '0')
+              const year = Number.parseInt(edition.publishDate.match(/\d{4}/)?.[0] || '0')
               if (year > 0) {
                 bookData.releaseDate = DateTime.fromObject({ year })
               }

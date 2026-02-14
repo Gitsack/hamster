@@ -86,29 +86,13 @@ export function VideoPlayer({ mediaType, mediaFileId, title, onError }: VideoPla
             }
           })
 
-          // Log fragment loading for debugging
-          hls.on(Hls.Events.FRAG_LOADING, (_, data) => {
-            console.log(`Loading fragment ${data.frag.sn}...`)
-          })
-
-          hls.on(Hls.Events.FRAG_LOADED, (_, data) => {
-            console.log(`Fragment ${data.frag.sn} loaded`)
-          })
-
           hls.on(Hls.Events.ERROR, (_, data) => {
-            console.error('HLS error:', data.type, data.details, data.fatal)
-
             if (data.fatal) {
-              console.error('HLS fatal error:', data)
               switch (data.type) {
                 case Hls.ErrorTypes.NETWORK_ERROR:
-                  // Try to recover from network error
-                  console.log('Attempting to recover from network error...')
                   hls.startLoad()
                   break
                 case Hls.ErrorTypes.MEDIA_ERROR:
-                  // Try to recover from media error
-                  console.log('Attempting to recover from media error...')
                   hls.recoverMediaError()
                   break
                 default:

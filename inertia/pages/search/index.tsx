@@ -103,12 +103,12 @@ class ErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="p-4 border border-red-500 rounded bg-red-50 text-red-900">
+        <div className="p-4 border border-destructive rounded bg-destructive/10 text-destructive">
           <h2 className="font-bold">Something went wrong</h2>
           <pre className="text-sm mt-2 whitespace-pre-wrap">{this.state.error?.message}</pre>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="mt-2 px-3 py-1 bg-red-500 text-white rounded"
+            className="mt-2 px-3 py-1 bg-destructive text-destructive-foreground rounded"
           >
             Try again
           </button>
@@ -784,112 +784,124 @@ export default function SearchPage() {
     []
   )
 
-  // Fetch all movie discover lanes
+  // Fetch all movie discover lanes (incrementally, each lane renders as it arrives)
   const fetchAllMovieDiscoverLanes = useCallback(async () => {
     setLoadingMovieDiscover(true)
-    try {
-      const results: Record<string, MovieSearchResult[]> = {}
-      await Promise.all(
-        movieDiscoverCategories.map(async (cat) => {
-          const response = await fetch(`/api/v1/movies/discover?category=${cat.key}`)
-          if (response.ok) {
-            const data = await response.json()
-            results[cat.key] = data.results
-          }
-        })
-      )
-      setMovieDiscoverLanes(results)
-    } catch (error) {
-      console.error('Failed to fetch movie discover:', error)
-    } finally {
-      setLoadingMovieDiscover(false)
-    }
+    let remaining = movieDiscoverCategories.length
+    movieDiscoverCategories.forEach(async (cat) => {
+      try {
+        const response = await fetch(`/api/v1/movies/discover?category=${cat.key}`)
+        if (response.ok) {
+          const data = await response.json()
+          setMovieDiscoverLanes((prev) => ({ ...prev, [cat.key]: data.results }))
+        }
+      } catch (error) {
+        console.error(`Failed to fetch movie discover ${cat.key}:`, error)
+      } finally {
+        remaining--
+        if (remaining === 0) setLoadingMovieDiscover(false)
+      }
+    })
   }, [movieDiscoverCategories])
 
-  // Fetch all TV discover lanes
+  // Fetch all TV discover lanes (incrementally, each lane renders as it arrives)
   const fetchAllTvDiscoverLanes = useCallback(async () => {
     setLoadingTvDiscover(true)
-    try {
-      const results: Record<string, TvShowSearchResult[]> = {}
-      await Promise.all(
-        tvDiscoverCategories.map(async (cat) => {
-          const response = await fetch(`/api/v1/tvshows/discover?category=${cat.key}`)
-          if (response.ok) {
-            const data = await response.json()
-            results[cat.key] = data.results
-          }
-        })
-      )
-      setTvDiscoverLanes(results)
-    } catch (error) {
-      console.error('Failed to fetch TV discover:', error)
-    } finally {
-      setLoadingTvDiscover(false)
-    }
+    let remaining = tvDiscoverCategories.length
+    tvDiscoverCategories.forEach(async (cat) => {
+      try {
+        const response = await fetch(`/api/v1/tvshows/discover?category=${cat.key}`)
+        if (response.ok) {
+          const data = await response.json()
+          setTvDiscoverLanes((prev) => ({ ...prev, [cat.key]: data.results }))
+        }
+      } catch (error) {
+        console.error(`Failed to fetch TV discover ${cat.key}:`, error)
+      } finally {
+        remaining--
+        if (remaining === 0) setLoadingTvDiscover(false)
+      }
+    })
   }, [tvDiscoverCategories])
 
-  // Fetch movie recommendation lanes
+  // Fetch movie recommendation lanes (per-source for incremental rendering)
   const fetchMovieRecommendations = useCallback(async () => {
     setLoadingMovieRecs(true)
-    try {
-      const response = await fetch('/api/v1/recommendations/movies')
-      if (response.ok) {
-        const data = await response.json()
-        setMovieRecommendationLanes(data.lanes)
+    const sources = ['justwatch', 'trakt', 'tmdb']
+    let remaining = sources.length
+    sources.forEach(async (source) => {
+      try {
+        const response = await fetch(`/api/v1/recommendations/movies?source=${source}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.lanes?.length > 0) {
+            setMovieRecommendationLanes((prev) => [...prev, ...data.lanes])
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to fetch movie recommendations (${source}):`, error)
+      } finally {
+        remaining--
+        if (remaining === 0) setLoadingMovieRecs(false)
       }
-    } catch (error) {
-      console.error('Failed to fetch movie recommendations:', error)
-    } finally {
-      setLoadingMovieRecs(false)
-    }
+    })
   }, [])
 
-  // Fetch TV recommendation lanes
+  // Fetch TV recommendation lanes (per-source for incremental rendering)
   const fetchTvRecommendations = useCallback(async () => {
     setLoadingTvRecs(true)
-    try {
-      const response = await fetch('/api/v1/recommendations/tv')
-      if (response.ok) {
-        const data = await response.json()
-        setTvRecommendationLanes(data.lanes)
+    const sources = ['justwatch', 'trakt', 'tmdb']
+    let remaining = sources.length
+    sources.forEach(async (source) => {
+      try {
+        const response = await fetch(`/api/v1/recommendations/tv?source=${source}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.lanes?.length > 0) {
+            setTvRecommendationLanes((prev) => [...prev, ...data.lanes])
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to fetch TV recommendations (${source}):`, error)
+      } finally {
+        remaining--
+        if (remaining === 0) setLoadingTvRecs(false)
       }
-    } catch (error) {
-      console.error('Failed to fetch TV recommendations:', error)
-    } finally {
-      setLoadingTvRecs(false)
-    }
+    })
   }, [])
+
+  // Track whether discover/rec fetches have been initiated to avoid duplicate calls
+  const movieDiscoverFetched = useRef(false)
+  const tvDiscoverFetched = useRef(false)
+  const movieRecsFetched = useRef(false)
+  const tvRecsFetched = useRef(false)
 
   // Load discover content and recommendations when switching to movies/tv tab with no search query
   useEffect(() => {
     if (searchMode === 'movies' && !searchQuery) {
-      if (Object.keys(movieDiscoverLanes).length === 0 && !loadingMovieDiscover) {
+      if (!movieDiscoverFetched.current) {
+        movieDiscoverFetched.current = true
         fetchAllMovieDiscoverLanes()
       }
-      if (movieRecommendationLanes.length === 0 && !loadingMovieRecs) {
+      if (!movieRecsFetched.current) {
+        movieRecsFetched.current = true
         fetchMovieRecommendations()
       }
     } else if (searchMode === 'tv' && !searchQuery) {
-      if (Object.keys(tvDiscoverLanes).length === 0 && !loadingTvDiscover) {
+      if (!tvDiscoverFetched.current) {
+        tvDiscoverFetched.current = true
         fetchAllTvDiscoverLanes()
       }
-      if (tvRecommendationLanes.length === 0 && !loadingTvRecs) {
+      if (!tvRecsFetched.current) {
+        tvRecsFetched.current = true
         fetchTvRecommendations()
       }
     }
   }, [
     searchMode,
     searchQuery,
-    movieDiscoverLanes,
-    tvDiscoverLanes,
-    loadingMovieDiscover,
-    loadingTvDiscover,
     fetchAllMovieDiscoverLanes,
     fetchAllTvDiscoverLanes,
-    movieRecommendationLanes,
-    tvRecommendationLanes,
-    loadingMovieRecs,
-    loadingTvRecs,
     fetchMovieRecommendations,
     fetchTvRecommendations,
   ])
@@ -2488,33 +2500,28 @@ export default function SearchPage() {
             togglingItems={togglingMovies}
           />
         ))}
-        {loadingMovieDiscover ? (
-          <>
-            <DiscoverLaneSkeleton />
-            <DiscoverLaneSkeleton />
-            <DiscoverLaneSkeleton />
-          </>
-        ) : Object.keys(movieDiscoverLanes).length > 0 ? (
-          movieDiscoverCategories.map((cat) => (
+        {movieDiscoverCategories.map((cat) =>
+          movieDiscoverLanes[cat.key] ? (
             <DiscoverLane
               key={cat.key}
               title={cat.label}
-              items={movieDiscoverLanes[cat.key] || []}
+              items={movieDiscoverLanes[cat.key]}
               type="movie"
               onItemClick={(item) => openMovieDetails(item as MovieSearchResult)}
               onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
               onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
               togglingItems={togglingMovies}
             />
-          ))
-        ) : (
+          ) : loadingMovieDiscover ? (
+            <DiscoverLaneSkeleton key={cat.key} />
+          ) : null
+        )}
+        {!loadingMovieDiscover && Object.keys(movieDiscoverLanes).length === 0 && (
           <div className="text-center py-8 text-muted-foreground">
             <p>Enter a search term to find movies</p>
           </div>
         )}
-        {loadingMovieRecs && personalizedMovieLanes.length === 0 && (
-          <DiscoverLaneSkeleton />
-        )}
+        {loadingMovieRecs && personalizedMovieLanes.length === 0 && <DiscoverLaneSkeleton />}
         {personalizedMovieLanes.map((lane) => (
           <DiscoverLane
             key={lane.key}
@@ -2591,33 +2598,28 @@ export default function SearchPage() {
             togglingItems={togglingTvShows}
           />
         ))}
-        {loadingTvDiscover ? (
-          <>
-            <DiscoverLaneSkeleton />
-            <DiscoverLaneSkeleton />
-            <DiscoverLaneSkeleton />
-          </>
-        ) : Object.keys(tvDiscoverLanes).length > 0 ? (
-          tvDiscoverCategories.map((cat) => (
+        {tvDiscoverCategories.map((cat) =>
+          tvDiscoverLanes[cat.key] ? (
             <DiscoverLane
               key={cat.key}
               title={cat.label}
-              items={tvDiscoverLanes[cat.key] || []}
+              items={tvDiscoverLanes[cat.key]}
               type="tv"
               onItemClick={(item) => openTvShowDetails(item as TvShowSearchResult)}
               onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
               onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
               togglingItems={togglingTvShows}
             />
-          ))
-        ) : (
+          ) : loadingTvDiscover ? (
+            <DiscoverLaneSkeleton key={cat.key} />
+          ) : null
+        )}
+        {!loadingTvDiscover && Object.keys(tvDiscoverLanes).length === 0 && (
           <div className="text-center py-8 text-muted-foreground">
             <p>Enter a search term to find TV shows</p>
           </div>
         )}
-        {loadingTvRecs && personalizedTvLanes.length === 0 && (
-          <DiscoverLaneSkeleton />
-        )}
+        {loadingTvRecs && personalizedTvLanes.length === 0 && <DiscoverLaneSkeleton />}
         {personalizedTvLanes.map((lane) => (
           <DiscoverLane
             key={lane.key}
@@ -3241,8 +3243,7 @@ export default function SearchPage() {
                           <div className="flex flex-wrap gap-2">
                             {movieDetails.streamingOffers
                               .filter(
-                                (o) =>
-                                  o.monetizationType === 'rent' || o.monetizationType === 'buy'
+                                (o) => o.monetizationType === 'rent' || o.monetizationType === 'buy'
                               )
                               .map((offer) => (
                                 <a
@@ -3491,8 +3492,7 @@ export default function SearchPage() {
                           <div className="flex flex-wrap gap-2">
                             {tvShowDetails.streamingOffers
                               .filter(
-                                (o) =>
-                                  o.monetizationType === 'rent' || o.monetizationType === 'buy'
+                                (o) => o.monetizationType === 'rent' || o.monetizationType === 'buy'
                               )
                               .map((offer) => (
                                 <a

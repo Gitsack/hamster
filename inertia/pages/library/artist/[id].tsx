@@ -46,6 +46,8 @@ import {
   Add01Icon,
   CheckmarkCircle01Icon,
   Clock01Icon,
+  Notification01Icon,
+  NotificationOff01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useMemo } from 'react'
@@ -98,6 +100,7 @@ interface Artist {
   endedAt: string | null
   imageUrl: string | null
   requested: boolean
+  monitored: boolean
   qualityProfile: { id: number; name: string } | null
   metadataProfile: { id: number; name: string } | null
   rootFolder: { id: number; path: string } | null
@@ -225,6 +228,31 @@ export default function ArtistDetail() {
       toast.error('Failed to enrich artist')
     } finally {
       setEnriching(false)
+    }
+  }
+
+  const toggleMonitored = async () => {
+    if (!artist) return
+
+    const wasMonitored = artist.monitored
+    setArtist({ ...artist, monitored: !wasMonitored })
+
+    try {
+      const response = await fetch(`/api/v1/artists/${artistId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monitored: !wasMonitored }),
+      })
+      if (response.ok) {
+        toast.success(wasMonitored ? 'Monitoring disabled' : 'Monitoring enabled')
+      } else {
+        setArtist({ ...artist, monitored: wasMonitored })
+        toast.error('Failed to update monitoring')
+      }
+    } catch (error) {
+      console.error('Failed to update monitoring:', error)
+      setArtist({ ...artist, monitored: wasMonitored })
+      toast.error('Failed to update monitoring')
     }
   }
 
@@ -447,6 +475,13 @@ export default function ArtistDetail() {
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
               Back
             </Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={toggleMonitored}>
+            <HugeiconsIcon
+              icon={artist.monitored ? Notification01Icon : NotificationOff01Icon}
+              className="h-4 w-4 mr-2"
+            />
+            {artist.monitored ? 'Monitored' : 'Monitor'}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

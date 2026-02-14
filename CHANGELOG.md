@@ -2,14 +2,13 @@
 
 ## [1.14.0](https://github.com/Gitsack/hamster/compare/hamster-v1.13.0...hamster-v1.14.0) (2026-01-27)
 
-
 ### Features
 
-* added different downloaders to UI ([4c89c8c](https://github.com/Gitsack/hamster/commit/4c89c8c4a9c22b27bdcd1eb53208509fd53d1566))
-* added genre tags for movie/show search ([4188a37](https://github.com/Gitsack/hamster/commit/4188a37e5e408531230167ab5a9bbfe9a2b61afb))
-* new library system and cleanups ([913a749](https://github.com/Gitsack/hamster/commit/913a74922976a3f25d5449541c75289301b3535c))
-* unified download dialog, search details sheet for movie and show ([d9cd167](https://github.com/Gitsack/hamster/commit/d9cd167d7f1eeb99dc3f3ef45b0160cf1047b9b9))
-* use unified badges, click event fixes ([3d181fe](https://github.com/Gitsack/hamster/commit/3d181fedf9f8a24d5d846240925e01bd71c16164))
+- added different downloaders to UI ([4c89c8c](https://github.com/Gitsack/hamster/commit/4c89c8c4a9c22b27bdcd1eb53208509fd53d1566))
+- added genre tags for movie/show search ([4188a37](https://github.com/Gitsack/hamster/commit/4188a37e5e408531230167ab5a9bbfe9a2b61afb))
+- new library system and cleanups ([913a749](https://github.com/Gitsack/hamster/commit/913a74922976a3f25d5449541c75289301b3535c))
+- unified download dialog, search details sheet for movie and show ([d9cd167](https://github.com/Gitsack/hamster/commit/d9cd167d7f1eeb99dc3f3ef45b0160cf1047b9b9))
+- use unified badges, click event fixes ([3d181fe](https://github.com/Gitsack/hamster/commit/3d181fedf9f8a24d5d846240925e01bd71c16164))
 
 ## [1.13.0](https://github.com/Gitsack/hamster/compare/hamster-v1.12.0...hamster-v1.13.0) (2026-01-12)
 

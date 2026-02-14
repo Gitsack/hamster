@@ -143,8 +143,8 @@ export default class WebhooksController {
 
     const history = await webhookService.getHistory({
       webhookId: params.id,
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
+      limit: Number.parseInt(limit, 10),
+      offset: Number.parseInt(offset, 10),
     })
 
     return response.json(history)

@@ -10,7 +10,7 @@ export type NotificationProviderType =
   | 'pushover'
   | 'slack'
   | 'gotify'
-  | 'apprise'
+  | 'ntfy'
 
 export type NotificationEvent =
   | 'grab'
@@ -64,9 +64,12 @@ export interface GotifySettings {
   priority?: number
 }
 
-export interface AppriseSettings {
-  serverUrl: string
-  urls: string[]
+export interface NtfySettings {
+  serverUrl?: string
+  topic: string
+  username?: string
+  password?: string
+  priority?: number
 }
 
 export type NotificationSettings =
@@ -76,7 +79,7 @@ export type NotificationSettings =
   | PushoverSettings
   | SlackSettings
   | GotifySettings
-  | AppriseSettings
+  | NtfySettings
 
 export default class NotificationProvider extends BaseModel {
   static table = 'notification_providers'

@@ -107,6 +107,7 @@ export default class AlbumsController {
         formedAt: mbArtist.beginDate ? DateTime.fromISO(mbArtist.beginDate) : null,
         endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
         requested: false, // Artist not requested - only specific albums
+        monitored: false, // Not monitoring artist - only specific albums were added
         qualityProfileId: data.qualityProfileId,
         rootFolderId: data.rootFolderId,
         addedAt: DateTime.now(),
@@ -544,7 +545,7 @@ export default class AlbumsController {
 
     // Check if searching for a specific track
     const trackIdParam = request.qs().trackId
-    const trackId = trackIdParam ? parseInt(String(trackIdParam), 10) : null
+    const trackId = trackIdParam ? Number.parseInt(String(trackIdParam), 10) : null
     let searchQuery: {
       artist?: string
       album?: string

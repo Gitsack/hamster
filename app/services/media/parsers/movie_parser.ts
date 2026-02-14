@@ -132,7 +132,7 @@ export class MovieParser {
     for (const pattern of patterns) {
       const match = name.match(pattern)
       if (match) {
-        const year = parseInt(match[1], 10)
+        const year = Number.parseInt(match[1], 10)
         // Validate year is reasonable (1900-2099)
         if (year >= 1900 && year <= 2099) {
           const remaining = name.replace(match[0], ' ')

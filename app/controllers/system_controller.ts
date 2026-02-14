@@ -1,3 +1,4 @@
+import os from 'node:os'
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
 import RootFolder from '#models/root_folder'
@@ -7,6 +8,8 @@ import { sabnzbdService } from '#services/download_clients/sabnzbd_service'
 import { nzbgetService } from '#services/download_clients/nzbget_service'
 import { qbittorrentService } from '#services/download_clients/qbittorrent_service'
 import { transmissionService } from '#services/download_clients/transmission_service'
+import { delugeService } from '#services/download_clients/deluge_service'
+import { eventEmitter } from '#services/events/event_emitter'
 import fs from 'node:fs/promises'
 
 interface HealthCheck {
@@ -24,7 +27,8 @@ interface HealthResponse {
 }
 
 export default class SystemController {
-  private startTime = Date.now()
+
+  private previousHealthStatus: Map<string, 'ok' | 'warning' | 'error'> = new Map()
 
   /**
    * Enhanced health check endpoint
@@ -71,10 +75,41 @@ export default class SystemController {
     else if (downloadClientCheck.status === 'warning' && overallStatus !== 'error')
       overallStatus = 'warning'
 
+    // Emit health events based on status changes
+    for (const check of checks) {
+      const previousStatus = this.previousHealthStatus.get(check.name)
+
+      if (
+        (check.status === 'error' || check.status === 'warning') &&
+        previousStatus !== check.status
+      ) {
+        eventEmitter
+          .emitHealthIssue({
+            level: check.status === 'error' ? 'error' : 'warning',
+            source: check.name,
+            message: check.message || `${check.name} check failed`,
+          })
+          .catch((err) =>
+            console.error('[SystemController] Failed to emit health issue event:', err)
+          )
+      } else if (check.status === 'ok' && previousStatus && previousStatus !== 'ok') {
+        eventEmitter
+          .emitHealthRestored({
+            source: check.name,
+            message: check.message || `${check.name} check restored`,
+          })
+          .catch((err) =>
+            console.error('[SystemController] Failed to emit health restored event:', err)
+          )
+      }
+
+      this.previousHealthStatus.set(check.name, check.status)
+    }
+
     const healthResponse: HealthResponse = {
       status: overallStatus,
       version: process.env.npm_package_version || '1.0.0',
-      uptime: Math.floor((Date.now() - this.startTime) / 1000),
+      uptime: Math.floor(process.uptime()),
       checks,
       timestamp: new Date().toISOString(),
     }
@@ -204,6 +239,13 @@ export default class SystemController {
               return qbittorrentService.testConnection(config)
             case 'transmission':
               return transmissionService.testConnection(config)
+            case 'deluge':
+              return delugeService.testConnection({
+                host: config.host,
+                port: config.port || 8112,
+                password: config.password || '',
+                useSsl: config.useSsl,
+              })
             default:
               return { success: false, error: 'Unknown client type' }
           }
@@ -248,7 +290,7 @@ export default class SystemController {
    * Get system info
    */
   async info({ response }: HttpContext) {
-    const uptime = Math.floor((Date.now() - this.startTime) / 1000)
+    const uptime = Math.floor(process.uptime())
 
     return response.json({
       version: process.env.npm_package_version || '1.0.0',
@@ -257,8 +299,8 @@ export default class SystemController {
       arch: process.arch,
       uptime,
       memory: {
-        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        used: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        total: Math.round(os.totalmem() / 1024 / 1024),
       },
     })
   }

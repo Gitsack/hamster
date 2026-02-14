@@ -1,4 +1,5 @@
 import PQueue from 'p-queue'
+import { cache, CACHE_TTL } from '#services/cache/cache_service'
 
 // TMDB API - requires free API key from https://www.themoviedb.org/settings/api
 const TMDB_API = 'https://api.themoviedb.org/3'
@@ -156,8 +157,10 @@ export class TmdbService {
   }
 
   async getMovie(id: number): Promise<TmdbMovie> {
-    const data = await this.fetch(`/movie/${id}?append_to_response=external_ids`)
-    return this.mapMovie(data, data.external_ids?.imdb_id)
+    return cache.getOrSet(`tmdb:movie:${id}`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/movie/${id}?append_to_response=external_ids`)
+      return this.mapMovie(data, data.external_ids?.imdb_id)
+    })
   }
 
   private mapMovie(m: any, imdbId?: string): TmdbMovie {
@@ -173,7 +176,7 @@ export class TmdbService {
       originalTitle: m.original_title,
       overview: m.overview || '',
       releaseDate: m.release_date || '',
-      year: m.release_date ? parseInt(m.release_date.substring(0, 4)) : 0,
+      year: m.release_date ? Number.parseInt(m.release_date.substring(0, 4)) : 0,
       runtime: m.runtime || null,
       status: m.status || '',
       posterPath: m.poster_path ? `${TMDB_IMAGE_BASE}/w500${m.poster_path}` : null,
@@ -220,8 +223,10 @@ export class TmdbService {
   }
 
   async getTvShow(id: number): Promise<TmdbTvShow> {
-    const data = await this.fetch(`/tv/${id}`)
-    return this.mapTvShow(data)
+    return cache.getOrSet(`tmdb:tv:${id}`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/tv/${id}`)
+      return this.mapTvShow(data)
+    })
   }
 
   async getTvShowSeasons(id: number): Promise<TmdbSeason[]> {
@@ -286,7 +291,7 @@ export class TmdbService {
       originalName: s.original_name,
       overview: s.overview || '',
       firstAirDate: s.first_air_date || '',
-      year: s.first_air_date ? parseInt(s.first_air_date.substring(0, 4)) : 0,
+      year: s.first_air_date ? Number.parseInt(s.first_air_date.substring(0, 4)) : 0,
       status: s.status || '',
       posterPath: s.poster_path ? `${TMDB_IMAGE_BASE}/w500${s.poster_path}` : null,
       backdropPath: s.backdrop_path ? `${TMDB_IMAGE_BASE}/original${s.backdrop_path}` : null,

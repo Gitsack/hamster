@@ -13,12 +13,14 @@ const addArtistValidator = vine.compile(
     rootFolderId: vine.string().optional(),
     qualityProfileId: vine.string(),
     requested: vine.boolean().optional(),
+    monitored: vine.boolean().optional(),
   })
 )
 
 const updateArtistValidator = vine.compile(
   vine.object({
     requested: vine.boolean().optional(),
+    monitored: vine.boolean().optional(),
     qualityProfileId: vine.string().optional(),
     rootFolderId: vine.string().optional(),
   })
@@ -50,6 +52,7 @@ export default class ArtistsController {
         // Use artist image if available, otherwise use first album cover
         imageUrl: artist.imageUrl || artist.albums[0]?.imageUrl || null,
         requested: artist.requested,
+        monitored: artist.monitored,
         albumCount: (artist.$extras as { albums_count?: string }).albums_count || 0,
         qualityProfile: artist.qualityProfile
           ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
@@ -115,6 +118,7 @@ export default class ArtistsController {
       endedAt: artist.endedAt?.toISODate(),
       imageUrl: artist.imageUrl,
       requested: artist.requested,
+      monitored: artist.monitored,
       qualityProfile: artist.qualityProfile
         ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
         : null,
@@ -155,6 +159,7 @@ export default class ArtistsController {
       formedAt: mbArtist.beginDate ? DateTime.fromISO(mbArtist.beginDate) : null,
       endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
       requested: data.requested ?? true,
+      monitored: data.monitored ?? true,
       qualityProfileId: data.qualityProfileId,
       rootFolderId: data.rootFolderId,
       addedAt: DateTime.now(),
@@ -185,6 +190,7 @@ export default class ArtistsController {
 
     artist.merge({
       requested: data.requested ?? artist.requested,
+      monitored: data.monitored ?? artist.monitored,
       qualityProfileId: data.qualityProfileId ?? artist.qualityProfileId,
       rootFolderId: data.rootFolderId ?? artist.rootFolderId,
     })
@@ -194,6 +200,7 @@ export default class ArtistsController {
       id: artist.id,
       name: artist.name,
       requested: artist.requested,
+      monitored: artist.monitored,
     })
   }
 
@@ -562,7 +569,7 @@ export default class ArtistsController {
           secondaryTypes: mbAlbum.secondaryTypes || [],
           releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
           imageUrl: coverUrl,
-          requested: false, // Albums are not requested by default - user must explicitly select them
+          requested: artist.monitored, // Auto-request new albums if artist is monitored
           anyReleaseOk: true,
         })
       }

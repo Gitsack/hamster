@@ -1,11 +1,16 @@
+import logger from '@adonisjs/core/services/logger'
 import Album from '#models/album'
 import Movie from '#models/movie'
 import Book from '#models/book'
 import Episode from '#models/episode'
 import Download from '#models/download'
+import QualityProfile from '#models/quality_profile'
+import type { QualityItem } from '#models/quality_profile'
 import { indexerManager, type UnifiedSearchResult } from '#services/indexers/indexer_manager'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { blacklistService } from '#services/blacklist/blacklist_service'
+import { scoreAndRankReleases } from '#services/quality/quality_scorer'
+import type { MediaType } from '#services/quality/quality_parser'
 
 /**
  * Normalize a title for comparison by:
@@ -123,6 +128,41 @@ function filterMovieResultsByTitle(
   return results.filter((result) => doesMovieReleaseTitleMatch(result.title, expectedTitle))
 }
 
+/**
+ * Select the best release from search results using quality profile scoring.
+ * Falls back to size-based sorting when no quality profile is available.
+ */
+function selectBestRelease(
+  results: UnifiedSearchResult[],
+  mediaType: MediaType,
+  profileItems: QualityItem[] | null,
+  cutoff: number | null
+): UnifiedSearchResult | null {
+  if (results.length === 0) return null
+
+  // If we have a quality profile, use quality-based scoring
+  if (profileItems && profileItems.length > 0 && cutoff !== null) {
+    const scored = scoreAndRankReleases(results, mediaType, profileItems, cutoff)
+    if (scored.length > 0) {
+      return scored[0].release
+    }
+    // All releases were rejected by quality filter -- fall back to size-based
+    // so we still grab something rather than nothing
+  }
+
+  // Fallback: sort by size descending
+  const sorted = [...results].sort((a, b) => b.size - a.size)
+  return sorted[0]
+}
+
+/**
+ * Load a quality profile by ID. Returns null if not found.
+ */
+async function loadQualityProfile(profileId: string | null): Promise<QualityProfile | null> {
+  if (!profileId) return null
+  return QualityProfile.find(profileId)
+}
+
 export interface RequestedSearchResult {
   albums: { searched: number; found: number; grabbed: number }
   movies: { searched: number; found: number; grabbed: number }
@@ -145,14 +185,15 @@ class RequestedSearchTask {
     }
 
     this.intervalMinutes = intervalMinutes
-    console.log(`[RequestedSearch] Starting periodic search every ${intervalMinutes} minutes`)
+    logger.info({ intervalMinutes }, 'RequestedSearch: Starting periodic search')
 
     // Run immediately on start
-    this.run().catch(console.error)
+    this.run().catch((err) => logger.error({ err }, 'RequestedSearch: Initial run failed'))
 
     // Then run periodically
     this.intervalId = setInterval(
-      () => this.run().catch(console.error),
+      () =>
+        this.run().catch((err) => logger.error({ err }, 'RequestedSearch: Periodic run failed')),
       intervalMinutes * 60 * 1000
     )
   }
@@ -164,7 +205,7 @@ class RequestedSearchTask {
     if (this.intervalId) {
       clearInterval(this.intervalId)
       this.intervalId = null
-      console.log('[RequestedSearch] Stopped periodic search')
+      logger.info('RequestedSearch: Stopped periodic search')
     }
   }
 
@@ -173,7 +214,7 @@ class RequestedSearchTask {
    */
   async run(): Promise<RequestedSearchResult> {
     if (this.isRunning) {
-      console.log('[RequestedSearch] Already running, skipping')
+      logger.debug('RequestedSearch: Already running, skipping')
       return {
         albums: { searched: 0, found: 0, grabbed: 0 },
         movies: { searched: 0, found: 0, grabbed: 0 },
@@ -193,7 +234,7 @@ class RequestedSearchTask {
     }
 
     try {
-      console.log('[RequestedSearch] Starting search for requested items...')
+      logger.info('RequestedSearch: Starting search for requested items')
 
       // Search for albums
       await this.searchAlbums(result)
@@ -207,8 +248,14 @@ class RequestedSearchTask {
       // Search for TV episodes
       await this.searchEpisodes(result)
 
-      console.log(
-        `[RequestedSearch] Complete: albums=${result.albums.grabbed}, movies=${result.movies.grabbed}, books=${result.books.grabbed}, episodes=${result.episodes.grabbed}`
+      logger.info(
+        {
+          albums: result.albums.grabbed,
+          movies: result.movies.grabbed,
+          books: result.books.grabbed,
+          episodes: result.episodes.grabbed,
+        },
+        'RequestedSearch: Complete'
       )
     } finally {
       this.isRunning = false
@@ -221,7 +268,7 @@ class RequestedSearchTask {
    * Search for requested albums
    */
   private async searchAlbums(result: RequestedSearchResult) {
-    console.log('[RequestedSearch] Searching for requested albums...')
+    logger.info('RequestedSearch: Searching for requested albums')
 
     // Find all requested albums that don't have files
     const requestedAlbums = await Album.query()
@@ -236,7 +283,7 @@ class RequestedSearchTask {
       return trackCount === 0 || fileCount < trackCount
     })
 
-    console.log(`[RequestedSearch] Found ${albumsToSearch.length} requested albums`)
+    logger.info({ count: albumsToSearch.length }, 'RequestedSearch: Found requested albums')
 
     // Get albums that already have active downloads
     const activeDownloads = await Download.query()
@@ -247,14 +294,17 @@ class RequestedSearchTask {
 
     for (const album of albumsToSearch) {
       if (albumsWithActiveDownloads.has(album.id)) {
-        console.log(`[RequestedSearch] Skipping album ${album.title} - already has active download`)
+        logger.debug({ album: album.title }, 'RequestedSearch: Skipping album - active download')
         continue
       }
 
       // Re-check if album is still requested
       const currentAlbum = await Album.find(album.id)
       if (!currentAlbum || !currentAlbum.requested) {
-        console.log(`[RequestedSearch] Skipping album ${album.title} - no longer requested`)
+        logger.debug(
+          { album: album.title },
+          'RequestedSearch: Skipping album - no longer requested'
+        )
         continue
       }
 
@@ -272,16 +322,31 @@ class RequestedSearchTask {
         const availableResults = await blacklistService.filterBlacklisted(searchResults)
 
         if (availableResults.length === 0) {
-          console.log(
-            `[RequestedSearch] No results for album: ${album.artist?.name} - ${album.title}`
+          logger.debug(
+            { artist: album.artist?.name, album: album.title },
+            'RequestedSearch: No results for album'
           )
           continue
         }
 
         result.albums.found++
 
-        const sorted = availableResults.sort((a, b) => b.size - a.size)
-        const bestResult = sorted[0]
+        // Load quality profile from the artist
+        const profile = await loadQualityProfile(album.artist?.qualityProfileId ?? null)
+        const bestResult = selectBestRelease(
+          availableResults,
+          'music',
+          profile?.items ?? null,
+          profile?.cutoff ?? null
+        )
+
+        if (!bestResult) {
+          logger.debug(
+            { artist: album.artist?.name, album: album.title },
+            'RequestedSearch: No acceptable quality results for album'
+          )
+          continue
+        }
 
         // Final check before grabbing
         const stillRequested = await Album.query()
@@ -289,13 +354,14 @@ class RequestedSearchTask {
           .where('requested', true)
           .first()
         if (!stillRequested) {
-          console.log(
-            `[RequestedSearch] Skipping grab for album ${album.title} - unrequested during search`
+          logger.debug(
+            { album: album.title },
+            'RequestedSearch: Skipping grab for album - unrequested during search'
           )
           continue
         }
 
-        console.log(`[RequestedSearch] Grabbing album: ${bestResult.title}`)
+        logger.info({ release: bestResult.title }, 'RequestedSearch: Grabbing album')
 
         await downloadManager.grab({
           title: bestResult.title,
@@ -311,7 +377,10 @@ class RequestedSearchTask {
         await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
         const errorMsg = `Failed to search/grab album ${album.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
-        console.error(`[RequestedSearch] ${errorMsg}`)
+        logger.error(
+          { album: album.title, err: error },
+          'RequestedSearch: Failed to search/grab album'
+        )
         result.errors.push(errorMsg)
       }
     }
@@ -321,11 +390,11 @@ class RequestedSearchTask {
    * Search for requested movies
    */
   private async searchMovies(result: RequestedSearchResult) {
-    console.log('[RequestedSearch] Searching for requested movies...')
+    logger.info('RequestedSearch: Searching for requested movies')
 
     const requestedMovies = await Movie.query().where('requested', true).where('hasFile', false)
 
-    console.log(`[RequestedSearch] Found ${requestedMovies.length} requested movies`)
+    logger.info({ count: requestedMovies.length }, 'RequestedSearch: Found requested movies')
 
     // Get movies that already have active downloads
     const activeDownloads = await Download.query()
@@ -336,14 +405,17 @@ class RequestedSearchTask {
 
     for (const movie of requestedMovies) {
       if (moviesWithActiveDownloads.has(movie.id)) {
-        console.log(`[RequestedSearch] Skipping movie ${movie.title} - already has active download`)
+        logger.debug({ movie: movie.title }, 'RequestedSearch: Skipping movie - active download')
         continue
       }
 
       // Re-check if movie is still requested
       const currentMovie = await Movie.find(movie.id)
       if (!currentMovie || !currentMovie.requested) {
-        console.log(`[RequestedSearch] Skipping movie ${movie.title} - no longer requested`)
+        logger.debug(
+          { movie: movie.title },
+          'RequestedSearch: Skipping movie - no longer requested'
+        )
         continue
       }
 
@@ -364,16 +436,31 @@ class RequestedSearchTask {
         const availableResults = await blacklistService.filterBlacklisted(matchingResults)
 
         if (availableResults.length === 0) {
-          console.log(
-            `[RequestedSearch] No matching results for movie: ${movie.title} (${movie.year}) (${searchResults.length} results didn't match title or were blacklisted)`
+          logger.debug(
+            { movie: movie.title, year: movie.year, totalResults: searchResults.length },
+            'RequestedSearch: No matching results for movie'
           )
           continue
         }
 
         result.movies.found++
 
-        // Prefer higher quality and larger size
-        const bestResult = availableResults[0] // Already sorted by size
+        // Load quality profile and rank by quality
+        const profile = await loadQualityProfile(movie.qualityProfileId)
+        const bestResult = selectBestRelease(
+          availableResults,
+          'movies',
+          profile?.items ?? null,
+          profile?.cutoff ?? null
+        )
+
+        if (!bestResult) {
+          logger.debug(
+            { movie: movie.title },
+            'RequestedSearch: No acceptable quality results for movie'
+          )
+          continue
+        }
 
         // Final check before grabbing
         const stillRequested = await Movie.query()
@@ -381,13 +468,14 @@ class RequestedSearchTask {
           .where('requested', true)
           .first()
         if (!stillRequested) {
-          console.log(
-            `[RequestedSearch] Skipping grab for movie ${movie.title} - unrequested during search`
+          logger.debug(
+            { movie: movie.title },
+            'RequestedSearch: Skipping grab for movie - unrequested during search'
           )
           continue
         }
 
-        console.log(`[RequestedSearch] Grabbing movie: ${bestResult.title}`)
+        logger.info({ release: bestResult.title }, 'RequestedSearch: Grabbing movie')
 
         await downloadManager.grab({
           title: bestResult.title,
@@ -403,7 +491,10 @@ class RequestedSearchTask {
         await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
         const errorMsg = `Failed to search/grab movie ${movie.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
-        console.error(`[RequestedSearch] ${errorMsg}`)
+        logger.error(
+          { movie: movie.title, err: error },
+          'RequestedSearch: Failed to search/grab movie'
+        )
         result.errors.push(errorMsg)
       }
     }
@@ -413,14 +504,14 @@ class RequestedSearchTask {
    * Search for requested books
    */
   private async searchBooks(result: RequestedSearchResult) {
-    console.log('[RequestedSearch] Searching for requested books...')
+    logger.info('RequestedSearch: Searching for requested books')
 
     const requestedBooks = await Book.query()
       .where('requested', true)
       .where('hasFile', false)
       .preload('author')
 
-    console.log(`[RequestedSearch] Found ${requestedBooks.length} requested books`)
+    logger.info({ count: requestedBooks.length }, 'RequestedSearch: Found requested books')
 
     // Get books that already have active downloads
     const activeDownloads = await Download.query()
@@ -431,14 +522,14 @@ class RequestedSearchTask {
 
     for (const book of requestedBooks) {
       if (booksWithActiveDownloads.has(book.id)) {
-        console.log(`[RequestedSearch] Skipping book ${book.title} - already has active download`)
+        logger.debug({ book: book.title }, 'RequestedSearch: Skipping book - active download')
         continue
       }
 
       // Re-check if book is still requested
       const currentBook = await Book.find(book.id)
       if (!currentBook || !currentBook.requested) {
-        console.log(`[RequestedSearch] Skipping book ${book.title} - no longer requested`)
+        logger.debug({ book: book.title }, 'RequestedSearch: Skipping book - no longer requested')
         continue
       }
 
@@ -455,17 +546,31 @@ class RequestedSearchTask {
         const availableResults = await blacklistService.filterBlacklisted(searchResults)
 
         if (availableResults.length === 0) {
-          console.log(
-            `[RequestedSearch] No results for book: ${book.title} by ${book.author?.name}`
+          logger.debug(
+            { book: book.title, author: book.author?.name },
+            'RequestedSearch: No results for book'
           )
           continue
         }
 
         result.books.found++
 
-        // Prefer larger files (more likely to be complete/better quality)
-        const sorted = availableResults.sort((a, b) => b.size - a.size)
-        const bestResult = sorted[0]
+        // Load quality profile from the author and rank by quality
+        const profile = await loadQualityProfile(book.author?.qualityProfileId ?? null)
+        const bestResult = selectBestRelease(
+          availableResults,
+          'books',
+          profile?.items ?? null,
+          profile?.cutoff ?? null
+        )
+
+        if (!bestResult) {
+          logger.debug(
+            { book: book.title },
+            'RequestedSearch: No acceptable quality results for book'
+          )
+          continue
+        }
 
         // Final check before grabbing
         const stillRequested = await Book.query()
@@ -473,13 +578,14 @@ class RequestedSearchTask {
           .where('requested', true)
           .first()
         if (!stillRequested) {
-          console.log(
-            `[RequestedSearch] Skipping grab for book ${book.title} - unrequested during search`
+          logger.debug(
+            { book: book.title },
+            'RequestedSearch: Skipping grab for book - unrequested during search'
           )
           continue
         }
 
-        console.log(`[RequestedSearch] Grabbing book: ${bestResult.title}`)
+        logger.info({ release: bestResult.title }, 'RequestedSearch: Grabbing book')
 
         await downloadManager.grab({
           title: bestResult.title,
@@ -495,7 +601,10 @@ class RequestedSearchTask {
         await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
         const errorMsg = `Failed to search/grab book ${book.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
-        console.error(`[RequestedSearch] ${errorMsg}`)
+        logger.error(
+          { book: book.title, err: error },
+          'RequestedSearch: Failed to search/grab book'
+        )
         result.errors.push(errorMsg)
       }
     }
@@ -505,7 +614,7 @@ class RequestedSearchTask {
    * Search for requested TV episodes
    */
   private async searchEpisodes(result: RequestedSearchResult) {
-    console.log('[RequestedSearch] Searching for requested episodes...')
+    logger.info('RequestedSearch: Searching for requested episodes')
 
     // Limit episodes per run to prevent blocking the server for too long
     const MAX_EPISODES_PER_RUN = 10
@@ -516,8 +625,9 @@ class RequestedSearchTask {
       .preload('tvShow')
       .limit(MAX_EPISODES_PER_RUN * 3) // Fetch a few more in case some are skipped
 
-    console.log(
-      `[RequestedSearch] Found ${requestedEpisodes.length} requested episodes (processing max ${MAX_EPISODES_PER_RUN})`
+    logger.info(
+      { count: requestedEpisodes.length, max: MAX_EPISODES_PER_RUN },
+      'RequestedSearch: Found requested episodes'
     )
 
     // Get episodes that already have active downloads
@@ -532,31 +642,42 @@ class RequestedSearchTask {
     for (const episode of requestedEpisodes) {
       // Stop after processing max episodes
       if (processedCount >= MAX_EPISODES_PER_RUN) {
-        console.log(
-          `[RequestedSearch] Reached max episodes per run (${MAX_EPISODES_PER_RUN}), stopping`
-        )
+        logger.debug({ max: MAX_EPISODES_PER_RUN }, 'RequestedSearch: Reached max episodes per run')
         break
       }
 
       // Yield to event loop to allow HTTP requests to be processed
       await new Promise((resolve) => setImmediate(resolve))
       if (episodesWithActiveDownloads.has(episode.id)) {
-        console.log(
-          `[RequestedSearch] Skipping episode ${episode.tvShow?.title} S${episode.seasonNumber}E${episode.episodeNumber} - already has active download`
+        logger.debug(
+          {
+            show: episode.tvShow?.title,
+            season: episode.seasonNumber,
+            episode: episode.episodeNumber,
+          },
+          'RequestedSearch: Skipping episode - active download'
         )
         continue
       }
 
       if (!episode.tvShow) {
-        console.log(`[RequestedSearch] Skipping episode ${episode.id} - no TV show loaded`)
+        logger.debug(
+          { episodeId: episode.id },
+          'RequestedSearch: Skipping episode - no TV show loaded'
+        )
         continue
       }
 
       // Re-check if episode is still requested (user may have unrequested during search)
       const currentEpisode = await Episode.find(episode.id)
       if (!currentEpisode || !currentEpisode.requested) {
-        console.log(
-          `[RequestedSearch] Skipping episode ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - no longer requested`
+        logger.debug(
+          {
+            show: episode.tvShow.title,
+            season: episode.seasonNumber,
+            episode: episode.episodeNumber,
+          },
+          'RequestedSearch: Skipping episode - no longer requested'
         )
         continue
       }
@@ -581,16 +702,40 @@ class RequestedSearchTask {
         const availableResults = await blacklistService.filterBlacklisted(matchingResults)
 
         if (availableResults.length === 0) {
-          console.log(
-            `[RequestedSearch] No matching results for episode: ${episode.tvShow.title} S${String(episode.seasonNumber).padStart(2, '0')}E${String(episode.episodeNumber).padStart(2, '0')} (${searchResults.length} results didn't match title or were blacklisted)`
+          logger.debug(
+            {
+              show: episode.tvShow.title,
+              season: episode.seasonNumber,
+              episode: episode.episodeNumber,
+              totalResults: searchResults.length,
+            },
+            'RequestedSearch: No matching results for episode'
           )
           continue
         }
 
         result.episodes.found++
 
-        // Best result is already sorted by size (larger = better quality)
-        const bestResult = availableResults[0]
+        // Load quality profile from the TV show and rank by quality
+        const profile = await loadQualityProfile(episode.tvShow.qualityProfileId)
+        const bestResult = selectBestRelease(
+          availableResults,
+          'tv',
+          profile?.items ?? null,
+          profile?.cutoff ?? null
+        )
+
+        if (!bestResult) {
+          logger.debug(
+            {
+              show: episode.tvShow.title,
+              season: episode.seasonNumber,
+              episode: episode.episodeNumber,
+            },
+            'RequestedSearch: No acceptable quality results for episode'
+          )
+          continue
+        }
 
         // Final check before grabbing - episode might have been unrequested while searching
         const stillRequested = await Episode.query()
@@ -599,13 +744,18 @@ class RequestedSearchTask {
           .first()
 
         if (!stillRequested) {
-          console.log(
-            `[RequestedSearch] Skipping grab for ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - unrequested during search`
+          logger.debug(
+            {
+              show: episode.tvShow.title,
+              season: episode.seasonNumber,
+              episode: episode.episodeNumber,
+            },
+            'RequestedSearch: Skipping grab for episode - unrequested during search'
           )
           continue
         }
 
-        console.log(`[RequestedSearch] Grabbing episode: ${bestResult.title}`)
+        logger.info({ release: bestResult.title }, 'RequestedSearch: Grabbing episode')
 
         await downloadManager.grab({
           title: bestResult.title,
@@ -622,7 +772,15 @@ class RequestedSearchTask {
         await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
         const errorMsg = `Failed to search/grab episode ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`
-        console.error(`[RequestedSearch] ${errorMsg}`)
+        logger.error(
+          {
+            show: episode.tvShow.title,
+            season: episode.seasonNumber,
+            episode: episode.episodeNumber,
+            err: error,
+          },
+          'RequestedSearch: Failed to search/grab episode'
+        )
         result.errors.push(errorMsg)
       }
     }
@@ -673,8 +831,18 @@ class RequestedSearchTask {
         return { found: false, grabbed: false }
       }
 
-      const sorted = availableResults.sort((a, b) => b.size - a.size)
-      const bestResult = sorted[0]
+      // Load quality profile from the artist and rank by quality
+      const profile = await loadQualityProfile(album.artist?.qualityProfileId ?? null)
+      const bestResult = selectBestRelease(
+        availableResults,
+        'music',
+        profile?.items ?? null,
+        profile?.cutoff ?? null
+      )
+
+      if (!bestResult) {
+        return { found: true, grabbed: false, error: 'No results matching quality profile' }
+      }
 
       await downloadManager.grab({
         title: bestResult.title,
@@ -741,7 +909,18 @@ class RequestedSearchTask {
         return { found: false, grabbed: false }
       }
 
-      const bestResult = availableResults[0] // Already sorted by size
+      // Load quality profile and rank by quality
+      const profile = await loadQualityProfile(movie.qualityProfileId)
+      const bestResult = selectBestRelease(
+        availableResults,
+        'movies',
+        profile?.items ?? null,
+        profile?.cutoff ?? null
+      )
+
+      if (!bestResult) {
+        return { found: true, grabbed: false, error: 'No results matching quality profile' }
+      }
 
       await downloadManager.grab({
         title: bestResult.title,
@@ -810,7 +989,18 @@ class RequestedSearchTask {
         return { found: false, grabbed: false }
       }
 
-      const bestResult = availableResults[0] // Already sorted by size
+      // Load quality profile from the TV show and rank by quality
+      const profile = await loadQualityProfile(episode.tvShow.qualityProfileId)
+      const bestResult = selectBestRelease(
+        availableResults,
+        'tv',
+        profile?.items ?? null,
+        profile?.cutoff ?? null
+      )
+
+      if (!bestResult) {
+        return { found: true, grabbed: false, error: 'No results matching quality profile' }
+      }
 
       await downloadManager.grab({
         title: bestResult.title,
@@ -874,8 +1064,18 @@ class RequestedSearchTask {
         return { found: false, grabbed: false }
       }
 
-      const sorted = availableResults.sort((a, b) => b.size - a.size)
-      const bestResult = sorted[0]
+      // Load quality profile from the author and rank by quality
+      const profile = await loadQualityProfile(book.author?.qualityProfileId ?? null)
+      const bestResult = selectBestRelease(
+        availableResults,
+        'books',
+        profile?.items ?? null,
+        profile?.cutoff ?? null
+      )
+
+      if (!bestResult) {
+        return { found: true, grabbed: false, error: 'No results matching quality profile' }
+      }
 
       await downloadManager.grab({
         title: bestResult.title,
@@ -929,8 +1129,9 @@ class RequestedSearchTask {
         // Re-check if episode is still requested (user may have unrequested during search)
         const currentEpisode = await Episode.find(episode.id)
         if (!currentEpisode || !currentEpisode.requested) {
-          console.log(
-            `[RequestedSearch] Skipping episode ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - no longer requested`
+          logger.debug(
+            { show: episode.tvShow.title, season: episode.seasonNumber, ep: episode.episodeNumber },
+            'RequestedSearch: Skipping episode - no longer requested'
           )
           continue
         }
@@ -956,7 +1157,16 @@ class RequestedSearchTask {
 
           result.found++
 
-          const bestResult = matchingResults[0]
+          // Load quality profile from the TV show and rank by quality
+          const profile = await loadQualityProfile(episode.tvShow.qualityProfileId)
+          const bestResult = selectBestRelease(
+            matchingResults,
+            'tv',
+            profile?.items ?? null,
+            profile?.cutoff ?? null
+          )
+
+          if (!bestResult) continue
 
           // Final check before grabbing - episode might have been unrequested while searching
           const stillRequested = await Episode.query()
@@ -965,8 +1175,13 @@ class RequestedSearchTask {
             .first()
 
           if (!stillRequested) {
-            console.log(
-              `[RequestedSearch] Skipping grab for ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber} - unrequested during search`
+            logger.debug(
+              {
+                show: episode.tvShow.title,
+                season: episode.seasonNumber,
+                ep: episode.episodeNumber,
+              },
+              'RequestedSearch: Skipping grab - unrequested during search'
             )
             continue
           }

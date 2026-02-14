@@ -270,14 +270,14 @@ export class FileNamingService {
         if (match.length === 4) {
           // Multi-disc pattern
           return {
-            discNumber: parseInt(match[1], 10),
-            trackNumber: parseInt(match[2], 10),
+            discNumber: Number.parseInt(match[1], 10),
+            trackNumber: Number.parseInt(match[2], 10),
             title: match[3].trim(),
             extension,
           }
         } else if (match.length === 3) {
           return {
-            trackNumber: parseInt(match[1], 10),
+            trackNumber: Number.parseInt(match[1], 10),
             title: match[2].trim(),
             extension,
           }
@@ -498,8 +498,8 @@ export class FileNamingService {
       const match = name.match(pattern)
       if (match) {
         return {
-          seasonNumber: parseInt(match[1], 10),
-          episodeNumber: parseInt(match[2], 10),
+          seasonNumber: Number.parseInt(match[1], 10),
+          episodeNumber: Number.parseInt(match[2], 10),
           title: match[3]?.trim(),
           extension,
         }

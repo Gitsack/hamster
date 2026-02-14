@@ -31,6 +31,8 @@ import {
   StarIcon,
   FileDownloadIcon,
   PlayIcon,
+  Notification01Icon,
+  NotificationOff01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
@@ -73,6 +75,7 @@ interface Movie {
   rating: number | null
   genres: string[]
   requested: boolean
+  monitored: boolean
   hasFile: boolean
   qualityProfile: QualityProfile | null
   rootFolder: RootFolder | null
@@ -147,6 +150,31 @@ export default function MovieDetail() {
   const getMovieStatus = () => {
     if (!movie) return { status: 'none' as const, progress: 0 }
     return getMediaItemStatus(movie, activeDownload)
+  }
+
+  const toggleMonitored = async () => {
+    if (!movie) return
+
+    const wasMonitored = movie.monitored
+    setMovie({ ...movie, monitored: !wasMonitored })
+
+    try {
+      const response = await fetch(`/api/v1/movies/${movieId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monitored: !wasMonitored }),
+      })
+      if (response.ok) {
+        toast.success(wasMonitored ? 'Monitoring disabled' : 'Monitoring enabled')
+      } else {
+        setMovie({ ...movie, monitored: wasMonitored })
+        toast.error('Failed to update monitoring')
+      }
+    } catch (error) {
+      console.error('Failed to update monitoring:', error)
+      setMovie({ ...movie, monitored: wasMonitored })
+      toast.error('Failed to update monitoring')
+    }
   }
 
   const toggleWanted = async () => {
@@ -353,6 +381,13 @@ export default function MovieDetail() {
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
               Back
             </Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={toggleMonitored}>
+            <HugeiconsIcon
+              icon={movie.monitored ? Notification01Icon : NotificationOff01Icon}
+              className="h-4 w-4 mr-2"
+            />
+            {movie.monitored ? 'Monitored' : 'Monitor'}
           </Button>
           {!movie.hasFile && (
             <Button onClick={downloadMovie} disabled={downloading}>

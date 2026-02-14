@@ -12,6 +12,13 @@ const prowlarrValidator = vine.compile(
   })
 )
 
+const prowlarrTestValidator = vine.compile(
+  vine.object({
+    url: vine.string().url(),
+    apiKey: vine.string().minLength(1),
+  })
+)
+
 export default class ProwlarrController {
   async show({ response }: HttpContext) {
     const config = await ProwlarrConfigModel.query().first()
@@ -69,13 +76,9 @@ export default class ProwlarrController {
   }
 
   async test({ request, response }: HttpContext) {
-    const { url, apiKey } = request.only(['url', 'apiKey'])
+    const data = await request.validateUsing(prowlarrTestValidator)
 
-    if (!url || !apiKey) {
-      return response.badRequest({ error: 'URL and API key are required' })
-    }
-
-    const result = await prowlarrService.testConnection({ url, apiKey })
+    const result = await prowlarrService.testConnection({ url: data.url, apiKey: data.apiKey })
 
     return response.json(result)
   }

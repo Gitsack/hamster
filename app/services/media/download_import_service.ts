@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileNamingService } from './file_naming_service.js'
 import { mediaInfoService } from './media_info_service.js'
+import { eventEmitter } from '#services/events/event_emitter'
 import Download from '#models/download'
 import Album from '#models/album'
 import Artist from '#models/artist'
@@ -67,7 +68,8 @@ export class DownloadImportService {
       // Apply remote path mapping if configured
       let outputPath = download.outputPath
       if (download.downloadClientId) {
-        const DownloadClient = (await import('#models/download_client')).default
+        const downloadClientModule = await import('#models/download_client')
+        const DownloadClient = downloadClientModule.default
         const client = await DownloadClient.find(download.downloadClientId)
         if (client?.settings?.remotePath && client?.settings?.localPath) {
           outputPath = outputPath.replace(client.settings.remotePath, client.settings.localPath)
@@ -175,11 +177,65 @@ export class DownloadImportService {
         download.status = 'completed'
         await download.save()
         result.success = true
+
+        // Emit import completed event
+        eventEmitter
+          .emitImportCompleted({
+            media: {
+              id: album.id,
+              title: `${artist.name} - ${album.title}`,
+              year: album.releaseDate?.year ?? undefined,
+              mediaType: 'music',
+              posterUrl: album.imageUrl ?? undefined,
+            },
+            files: result.importedPaths.map((p) => ({
+              path: p,
+              relativePath: path.basename(p),
+              size: 0,
+            })),
+            isUpgrade: false,
+          })
+          .catch((err) =>
+            console.error('[DownloadImportService] Failed to emit import completed event:', err)
+          )
+      } else {
+        // Emit import failed event
+        eventEmitter
+          .emitImportFailed({
+            media: {
+              id: album.id,
+              title: `${artist.name} - ${album.title}`,
+              mediaType: 'music',
+              posterUrl: album.imageUrl ?? undefined,
+            },
+            errorMessage: result.errors.join('; ') || 'No files imported',
+            downloadId: download.id,
+          })
+          .catch((err) =>
+            console.error('[DownloadImportService] Failed to emit import failed event:', err)
+          )
       }
 
       onProgress?.({ phase: 'complete', total: audioFiles.length, current: audioFiles.length })
     } catch (error) {
       result.errors.push(error instanceof Error ? error.message : 'Import failed')
+
+      // Emit import failed event for unexpected errors
+      if (download.albumId) {
+        eventEmitter
+          .emitImportFailed({
+            media: {
+              id: download.albumId,
+              title: download.title,
+              mediaType: 'music',
+            },
+            errorMessage: error instanceof Error ? error.message : 'Import failed',
+            downloadId: download.id,
+          })
+          .catch((err) =>
+            console.error('[DownloadImportService] Failed to emit import failed event:', err)
+          )
+      }
     }
 
     return result

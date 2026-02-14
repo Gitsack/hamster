@@ -98,8 +98,8 @@ export default class PlaybackController {
     if (rangeHeader) {
       // Parse range header
       const parts = rangeHeader.replace(/bytes=/, '').split('-')
-      const start = parseInt(parts[0], 10)
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+      const start = Number.parseInt(parts[0], 10)
+      const end = parts[1] ? Number.parseInt(parts[1], 10) : fileSize - 1
       const chunkSize = end - start + 1
 
       // Create read stream for the range
@@ -333,8 +333,8 @@ export default class PlaybackController {
     if (rangeHeader) {
       // Parse range header
       const parts = rangeHeader.replace(/bytes=/, '').split('-')
-      const start = parseInt(parts[0], 10)
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+      const start = Number.parseInt(parts[0], 10)
+      const end = parts[1] ? Number.parseInt(parts[1], 10) : fileSize - 1
       const chunkSize = end - start + 1
 
       // Create read stream for the range
@@ -407,8 +407,8 @@ export default class PlaybackController {
     if (rangeHeader) {
       // Parse range header
       const parts = rangeHeader.replace(/bytes=/, '').split('-')
-      const start = parseInt(parts[0], 10)
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+      const start = Number.parseInt(parts[0], 10)
+      const end = parts[1] ? Number.parseInt(parts[1], 10) : fileSize - 1
       const chunkSize = end - start + 1
 
       // Create read stream for the range
@@ -566,7 +566,7 @@ export default class PlaybackController {
    */
   async hlsSegment({ params, response }: HttpContext) {
     const sessionId = params.sessionId
-    const segmentIndex = parseInt(params.index, 10)
+    const segmentIndex = Number.parseInt(params.index, 10)
 
     if (!sessionId) {
       return response.badRequest({ error: 'Invalid session ID' })

@@ -13,7 +13,7 @@ const notificationProviderValidator = vine.compile(
       'pushover',
       'slack',
       'gotify',
-      'apprise',
+      'ntfy',
     ] as const),
     enabled: vine.boolean().optional(),
     settings: vine.record(vine.any()),
@@ -175,8 +175,8 @@ export default class NotificationsController {
 
     const history = await notificationService.getHistory({
       providerId,
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
+      limit: Number.parseInt(limit, 10),
+      offset: Number.parseInt(offset, 10),
     })
 
     return response.json(history)
@@ -245,6 +245,23 @@ export default class NotificationsController {
           { name: 'to', label: 'To Address', type: 'email', required: true },
         ],
       },
+      {
+        type: 'ntfy',
+        name: 'Ntfy',
+        fields: [
+          {
+            name: 'serverUrl',
+            label: 'Server URL',
+            type: 'url',
+            required: false,
+            placeholder: 'https://ntfy.sh',
+          },
+          { name: 'topic', label: 'Topic', type: 'text', required: true },
+          { name: 'username', label: 'Username', type: 'text', required: false },
+          { name: 'password', label: 'Password', type: 'password', required: false },
+          { name: 'priority', label: 'Priority (1-5)', type: 'number', required: false },
+        ],
+      },
     ])
   }
 
@@ -260,6 +277,7 @@ export default class NotificationsController {
       slack: ['webhookUrl'],
       gotify: ['appToken'],
       email: ['password'],
+      ntfy: ['password'],
     }
 
     const fieldsToMask = sensitiveFields[type] || []

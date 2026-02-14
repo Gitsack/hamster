@@ -1,3 +1,4 @@
+import logger from '@adonisjs/core/services/logger'
 import DownloadClient from '#models/download_client'
 import Download from '#models/download'
 import Movie from '#models/movie'
@@ -7,12 +8,14 @@ import { sabnzbdService, type SabnzbdConfig } from './sabnzbd_service.js'
 import { nzbgetService, type NzbgetConfig } from './nzbget_service.js'
 import { qbittorrentService, type QBittorrentConfig } from './qbittorrent_service.js'
 import { transmissionService, type TransmissionConfig } from './transmission_service.js'
+import { delugeService, type DelugeConfig } from './deluge_service.js'
 import { downloadImportService } from '#services/media/download_import_service'
 import { movieImportService } from '#services/media/movie_import_service'
 import { episodeImportService } from '#services/media/episode_import_service'
 import { bookImportService } from '#services/media/book_import_service'
 import { fileNamingService } from '#services/media/file_naming_service'
 import { blacklistService } from '#services/blacklist/blacklist_service'
+import { eventEmitter } from '#services/events/event_emitter'
 import { DateTime } from 'luxon'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
@@ -73,7 +76,7 @@ export class DownloadManager {
       // For albums/music, we don't have a simple single-file check
       return false
     } catch (error) {
-      console.error('[DownloadManager] Error checking if file exists in library:', error)
+      logger.error({ err: error }, 'DownloadManager: Error checking if file exists in library')
       return false
     }
   }
@@ -100,8 +103,9 @@ export class DownloadManager {
       for (const file of files) {
         const ext = path.extname(file).toLowerCase()
         if (videoExtensions.includes(ext)) {
-          console.log(
-            `[DownloadManager] Movie file already exists: ${path.join(expectedFolderPath, file)}`
+          logger.info(
+            { movie: movie.title, path: path.join(expectedFolderPath, file) },
+            'DownloadManager: Movie file already exists'
           )
 
           // Update hasFile flag if not already set
@@ -109,7 +113,7 @@ export class DownloadManager {
             movie.hasFile = true
             movie.requested = false
             await movie.save()
-            console.log(`[DownloadManager] Updated movie hasFile=true for: ${movie.title}`)
+            logger.info({ movie: movie.title }, 'DownloadManager: Updated movie hasFile=true')
           }
 
           return true
@@ -166,8 +170,9 @@ export class DownloadManager {
             nameWithoutExt === episodeFileName ||
             nameWithoutExt.toUpperCase().includes(episodePattern)
           ) {
-            console.log(
-              `[DownloadManager] Episode file already exists: ${path.join(expectedFolderPath, file)}`
+            logger.info(
+              { episode: `S${seasonNum}E${episodeNum}`, path: path.join(expectedFolderPath, file) },
+              'DownloadManager: Episode file already exists'
             )
 
             // Update hasFile flag if not already set
@@ -175,8 +180,9 @@ export class DownloadManager {
               episode.hasFile = true
               episode.requested = false
               await episode.save()
-              console.log(
-                `[DownloadManager] Updated episode hasFile=true for: S${seasonNum}E${episodeNum}`
+              logger.info(
+                { episode: `S${seasonNum}E${episodeNum}` },
+                'DownloadManager: Updated episode hasFile=true'
               )
             }
 
@@ -221,8 +227,9 @@ export class DownloadManager {
         const nameWithoutExt = path.basename(file, ext)
 
         if (bookExtensions.includes(ext) && nameWithoutExt === bookFileName) {
-          console.log(
-            `[DownloadManager] Book file already exists: ${path.join(expectedFolderPath, file)}`
+          logger.info(
+            { book: book.title, path: path.join(expectedFolderPath, file) },
+            'DownloadManager: Book file already exists'
           )
 
           // Update hasFile flag if not already set
@@ -230,7 +237,7 @@ export class DownloadManager {
             book.hasFile = true
             book.requested = false
             await book.save()
-            console.log(`[DownloadManager] Updated book hasFile=true for: ${book.title}`)
+            logger.info({ book: book.title }, 'DownloadManager: Updated book hasFile=true')
           }
 
           return true
@@ -268,8 +275,9 @@ export class DownloadManager {
 
     const existingDownload = await existingDownloadQuery.first()
     if (existingDownload) {
-      console.log(
-        `[DownloadManager] Skipping duplicate download for: ${request.title} (existing download: ${existingDownload.id})`
+      logger.info(
+        { title: request.title, existingId: existingDownload.id },
+        'DownloadManager: Skipping duplicate download'
       )
       return existingDownload
     }
@@ -292,8 +300,9 @@ export class DownloadManager {
 
     const recentlyCompleted = await recentlyCompletedQuery.first()
     if (recentlyCompleted) {
-      console.log(
-        `[DownloadManager] Skipping duplicate download for: ${request.title} (recently completed: ${recentlyCompleted.id})`
+      logger.info(
+        { title: request.title, completedId: recentlyCompleted.id },
+        'DownloadManager: Skipping recently completed download'
       )
       throw new Error('A download for this item completed recently')
     }
@@ -302,24 +311,27 @@ export class DownloadManager {
     if (request.episodeId) {
       const episode = await Episode.find(request.episodeId)
       if (episode?.hasFile) {
-        console.log(
-          `[DownloadManager] Skipping download for: ${request.title} (episode already has file)`
+        logger.info(
+          { title: request.title },
+          'DownloadManager: Skipping download, episode already has file'
         )
         throw new Error('Episode already has a file')
       }
     } else if (request.movieId) {
       const movie = await Movie.find(request.movieId)
       if (movie?.hasFile) {
-        console.log(
-          `[DownloadManager] Skipping download for: ${request.title} (movie already has file)`
+        logger.info(
+          { title: request.title },
+          'DownloadManager: Skipping download, movie already has file'
         )
         throw new Error('Movie already has a file')
       }
     } else if (request.bookId) {
       const book = await Book.find(request.bookId)
       if (book?.hasFile) {
-        console.log(
-          `[DownloadManager] Skipping download for: ${request.title} (book already has file)`
+        logger.info(
+          { title: request.title },
+          'DownloadManager: Skipping download, book already has file'
         )
         throw new Error('Book already has a file')
       }
@@ -328,8 +340,9 @@ export class DownloadManager {
     // Check if file already exists in the library (based on expected path from naming settings)
     const fileAlreadyExists = await this.checkFileExistsInLibrary(request)
     if (fileAlreadyExists) {
-      console.log(
-        `[DownloadManager] Skipping download for: ${request.title} (file already exists in library)`
+      logger.info(
+        { title: request.title },
+        'DownloadManager: Skipping download, file already exists in library'
       )
       throw new Error('File already exists in library')
     }
@@ -374,6 +387,33 @@ export class DownloadManager {
       download.externalId = externalId
       download.status = 'downloading'
       await download.save()
+
+      // Emit grab event
+      const mediaType = request.movieId
+        ? 'movies'
+        : request.episodeId || request.tvShowId
+          ? 'tv'
+          : request.bookId
+            ? 'books'
+            : 'music'
+      eventEmitter
+        .emitGrab({
+          media: {
+            id: request.movieId || request.episodeId || request.bookId || request.albumId || '',
+            title: request.title,
+            mediaType,
+          },
+          release: {
+            title: request.title,
+            indexer: request.indexerName || 'unknown',
+            size: request.size,
+            protocol: client.type === 'sabnzbd' || client.type === 'nzbget' ? 'usenet' : 'torrent',
+            guid: request.guid,
+          },
+          downloadClient: client.name,
+          downloadId: externalId,
+        })
+        .catch((err) => logger.error({ err }, 'DownloadManager: Failed to emit grab event'))
 
       return download
     } catch (error) {
@@ -477,6 +517,20 @@ export class DownloadManager {
         return result.hashString
       }
 
+      case 'deluge': {
+        const config: DelugeConfig = {
+          host: client.settings.host || 'localhost',
+          port: client.settings.port || 8112,
+          password: client.settings.password || '',
+          useSsl: client.settings.useSsl || false,
+        }
+
+        return delugeService.addTorrent(config, request.downloadUrl, {
+          downloadPath: client.settings.downloadDirectory,
+          addPaused: client.settings.addPaused,
+        })
+      }
+
       default:
         throw new Error(`Unsupported download client type: ${client.type}`)
     }
@@ -521,7 +575,10 @@ export class DownloadManager {
       try {
         await this.refreshClientQueue(client)
       } catch (error) {
-        console.error(`Failed to refresh queue for ${client.name}:`, error)
+        logger.error(
+          { client: client.name, err: error },
+          'DownloadManager: Failed to refresh queue'
+        )
       }
     }
   }
@@ -560,9 +617,9 @@ export class DownloadManager {
           const download = downloadsByExternalId.get(slot.nzo_id)
 
           if (download) {
-            download.progress = parseFloat(slot.percentage)
+            download.progress = Number.parseFloat(slot.percentage)
             download.status = this.mapSabnzbdStatus(slot.status)
-            download.remainingBytes = Math.floor(parseFloat(slot.mbleft) * 1024 * 1024)
+            download.remainingBytes = Math.floor(Number.parseFloat(slot.mbleft) * 1024 * 1024)
             download.etaSeconds = this.parseTimeLeft(slot.timeleft)
             await download.save()
           }
@@ -570,7 +627,7 @@ export class DownloadManager {
 
         // Check history for completed downloads (reduced limit to 50 for performance)
         const history = await sabnzbdService.getHistory(config, 50)
-        console.log(`[DownloadManager] Checking SABnzbd history: ${history.slots.length} items`)
+        logger.debug({ count: history.slots.length }, 'DownloadManager: Checking SABnzbd history')
 
         for (const slot of history.slots) {
           foundExternalIds.add(slot.nzo_id)
@@ -578,14 +635,20 @@ export class DownloadManager {
           const download = downloadsByExternalId.get(slot.nzo_id)
 
           if (download) {
-            console.log(
-              `[DownloadManager] Found download in history: ${download.title}, SABnzbd status: ${slot.status}, DB status: ${download.status}, outputPath: ${download.outputPath || 'none'}`
+            logger.debug(
+              {
+                title: download.title,
+                sabStatus: slot.status,
+                dbStatus: download.status,
+                outputPath: download.outputPath || 'none',
+              },
+              'DownloadManager: Found download in history'
             )
           }
 
           if (download && download.status !== 'completed' && download.status !== 'failed') {
             if (slot.status === 'Completed') {
-              console.log(`[DownloadManager] SABnzbd shows Completed for: ${download.title}`)
+              logger.info({ title: download.title }, 'DownloadManager: SABnzbd shows Completed')
 
               // Check if import is stuck (status is 'importing' for more than 2 minutes)
               const isStuck =
@@ -595,8 +658,9 @@ export class DownloadManager {
 
               // Trigger import if we haven't already OR if it's stuck
               const shouldTriggerImport = !download.outputPath || isStuck
-              console.log(
-                `[DownloadManager] shouldTriggerImport: ${shouldTriggerImport}, isStuck: ${isStuck}, storage path: ${slot.storage}`
+              logger.debug(
+                { shouldTriggerImport, isStuck, storagePath: slot.storage },
+                'DownloadManager: Import trigger check'
               )
 
               // Apply remote path mapping to get the local path
@@ -653,10 +717,45 @@ export class DownloadManager {
               download.outputPath = slot.storage
               await download.save()
 
+              // Emit download completed event
+              const dlMediaType = download.movieId
+                ? 'movies'
+                : download.tvShowId || download.episodeId
+                  ? 'tv'
+                  : download.bookId
+                    ? 'books'
+                    : 'music'
+              eventEmitter
+                .emitDownloadCompleted({
+                  media: {
+                    id:
+                      download.movieId ||
+                      download.episodeId ||
+                      download.bookId ||
+                      download.albumId ||
+                      '',
+                    title: download.title,
+                    mediaType: dlMediaType,
+                  },
+                  release: {
+                    title: download.title,
+                    indexer: download.nzbInfo?.indexer || 'unknown',
+                    size: download.sizeBytes ? Number(download.sizeBytes) : undefined,
+                    protocol: 'usenet',
+                  },
+                  downloadClient: client.name,
+                  downloadId: download.externalId || download.id,
+                  outputPath: localPath,
+                })
+                .catch((err) =>
+                  logger.error({ err }, 'DownloadManager: Failed to emit download completed event')
+                )
+
               // If path is not accessible, fail immediately with a clear error
               if (!pathAccessible) {
-                console.error(
-                  `[DownloadManager] Path not accessible for ${download.title}: ${pathError}`
+                logger.error(
+                  { title: download.title, pathError },
+                  'DownloadManager: Path not accessible'
                 )
                 download.status = 'failed'
                 download.errorMessage = pathError
@@ -666,17 +765,21 @@ export class DownloadManager {
 
               // Trigger import in background
               if (shouldTriggerImport) {
-                console.log(
-                  `[DownloadManager] Triggering import for: ${download.title}${isStuck ? ' (retry - was stuck)' : ''}`
+                logger.info(
+                  { title: download.title, retry: isStuck },
+                  'DownloadManager: Triggering import'
                 )
                 this.triggerImport(download).catch((error) => {
-                  console.error(
-                    `[DownloadManager] Failed to import download ${download.id}:`,
-                    error
+                  logger.error(
+                    { downloadId: download.id, err: error },
+                    'DownloadManager: Failed to import download'
                   )
                 })
               } else {
-                console.log(`[DownloadManager] Import recently triggered for: ${download.title}`)
+                logger.debug(
+                  { title: download.title },
+                  'DownloadManager: Import recently triggered'
+                )
               }
             } else if (slot.status === 'Failed') {
               const errorMessage = slot.fail_message || 'Download failed'
@@ -689,8 +792,9 @@ export class DownloadManager {
                 const guid = download.nzbInfo?.guid || download.externalId || ''
                 const indexer = download.nzbInfo?.indexer || 'unknown'
 
-                console.log(
-                  `[DownloadManager] Blacklisting failed release: ${download.title} (guid: ${guid}, indexer: ${indexer})`
+                logger.info(
+                  { title: download.title, guid, indexer },
+                  'DownloadManager: Blacklisting failed release'
                 )
 
                 await blacklistService.blacklist({
@@ -715,25 +819,28 @@ export class DownloadManager {
 
                 if (!hasExceeded) {
                   // Trigger search for alternative release
-                  console.log(
-                    `[DownloadManager] Searching for alternative release for: ${download.title}`
+                  logger.info(
+                    { title: download.title },
+                    'DownloadManager: Searching for alternative release'
                   )
                   this.triggerAlternativeSearch(download).catch((error) => {
-                    console.error(
-                      `[DownloadManager] Failed to find alternative for ${download.title}:`,
-                      error
+                    logger.error(
+                      { title: download.title, err: error },
+                      'DownloadManager: Failed to find alternative'
                     )
                   })
                 } else {
-                  console.log(
-                    `[DownloadManager] Max retries (3) exceeded for: ${download.title}, not searching for alternatives`
+                  logger.info(
+                    { title: download.title },
+                    'DownloadManager: Max retries exceeded, not searching for alternatives'
                   )
                 }
               }
             } else {
               // Post-processing statuses (Extracting, Verifying, Repairing, Moving, Running)
-              console.log(
-                `[DownloadManager] SABnzbd post-processing: ${download.title} - ${slot.status}`
+              logger.debug(
+                { title: download.title, status: slot.status },
+                'DownloadManager: SABnzbd post-processing'
               )
               if (download.status !== 'importing') {
                 download.status = 'importing'
@@ -753,8 +860,9 @@ export class DownloadManager {
 
         for (const orphan of orphanedDownloads) {
           if (orphan.externalId && !foundExternalIds.has(orphan.externalId)) {
-            console.log(
-              `[DownloadManager] Removing orphaned download: ${orphan.title} (externalId: ${orphan.externalId})`
+            logger.info(
+              { title: orphan.title, externalId: orphan.externalId },
+              'DownloadManager: Removing orphaned download'
             )
             await orphan.delete()
           }
@@ -816,9 +924,46 @@ export class DownloadManager {
               }
               await download.save()
 
+              // Emit download completed event
+              const nzbMediaType = download.movieId
+                ? 'movies'
+                : download.tvShowId || download.episodeId
+                  ? 'tv'
+                  : download.bookId
+                    ? 'books'
+                    : 'music'
+              eventEmitter
+                .emitDownloadCompleted({
+                  media: {
+                    id:
+                      download.movieId ||
+                      download.episodeId ||
+                      download.bookId ||
+                      download.albumId ||
+                      '',
+                    title: download.title,
+                    mediaType: nzbMediaType,
+                  },
+                  release: {
+                    title: download.title,
+                    indexer: download.nzbInfo?.indexer || 'unknown',
+                    size: download.sizeBytes ? Number(download.sizeBytes) : undefined,
+                    protocol: 'usenet',
+                  },
+                  downloadClient: client.name,
+                  downloadId: download.externalId || download.id,
+                  outputPath: download.outputPath || '',
+                })
+                .catch((err) =>
+                  logger.error({ err }, 'DownloadManager: Failed to emit download completed event')
+                )
+
               // Trigger import
               this.triggerImport(download).catch((error) => {
-                console.error(`[DownloadManager] Failed to import download ${download.id}:`, error)
+                logger.error(
+                  { downloadId: download.id, err: error },
+                  'DownloadManager: Failed to import download'
+                )
               })
             } else if (nzbgetService.mapStatusToDownloadStatus(item.Status) === 'failed') {
               download.status = 'failed'
@@ -869,9 +1014,46 @@ export class DownloadManager {
                 download.completedAt = DateTime.now()
               }
 
+              // Emit download completed event
+              const qbtMediaType = download.movieId
+                ? 'movies'
+                : download.tvShowId || download.episodeId
+                  ? 'tv'
+                  : download.bookId
+                    ? 'books'
+                    : 'music'
+              eventEmitter
+                .emitDownloadCompleted({
+                  media: {
+                    id:
+                      download.movieId ||
+                      download.episodeId ||
+                      download.bookId ||
+                      download.albumId ||
+                      '',
+                    title: download.title,
+                    mediaType: qbtMediaType,
+                  },
+                  release: {
+                    title: download.title,
+                    indexer: download.nzbInfo?.indexer || 'unknown',
+                    size: download.sizeBytes ? Number(download.sizeBytes) : undefined,
+                    protocol: 'torrent',
+                  },
+                  downloadClient: client.name,
+                  downloadId: download.externalId || download.id,
+                  outputPath: torrent.content_path,
+                })
+                .catch((err) =>
+                  logger.error({ err }, 'DownloadManager: Failed to emit download completed event')
+                )
+
               // Trigger import
               this.triggerImport(download).catch((error) => {
-                console.error(`[DownloadManager] Failed to import download ${download.id}:`, error)
+                logger.error(
+                  { downloadId: download.id, err: error },
+                  'DownloadManager: Failed to import download'
+                )
               })
             }
 
@@ -887,7 +1069,10 @@ export class DownloadManager {
 
         for (const orphan of orphanedDownloads) {
           if (orphan.externalId && !foundExternalIds.has(orphan.externalId)) {
-            console.log(`[DownloadManager] Removing orphaned qBittorrent download: ${orphan.title}`)
+            logger.info(
+              { title: orphan.title },
+              'DownloadManager: Removing orphaned qBittorrent download'
+            )
             await orphan.delete()
           }
         }
@@ -939,11 +1124,48 @@ export class DownloadManager {
                   download.completedAt = DateTime.now()
                 }
 
+                // Emit download completed event
+                const trMediaType = download.movieId
+                  ? 'movies'
+                  : download.tvShowId || download.episodeId
+                    ? 'tv'
+                    : download.bookId
+                      ? 'books'
+                      : 'music'
+                eventEmitter
+                  .emitDownloadCompleted({
+                    media: {
+                      id:
+                        download.movieId ||
+                        download.episodeId ||
+                        download.bookId ||
+                        download.albumId ||
+                        '',
+                      title: download.title,
+                      mediaType: trMediaType,
+                    },
+                    release: {
+                      title: download.title,
+                      indexer: download.nzbInfo?.indexer || 'unknown',
+                      size: download.sizeBytes ? Number(download.sizeBytes) : undefined,
+                      protocol: 'torrent',
+                    },
+                    downloadClient: client.name,
+                    downloadId: download.externalId || download.id,
+                    outputPath: torrent.downloadDir,
+                  })
+                  .catch((err) =>
+                    logger.error(
+                      { err },
+                      'DownloadManager: Failed to emit download completed event'
+                    )
+                  )
+
                 // Trigger import
                 this.triggerImport(download).catch((error) => {
-                  console.error(
-                    `[DownloadManager] Failed to import download ${download.id}:`,
-                    error
+                  logger.error(
+                    { downloadId: download.id, err: error },
+                    'DownloadManager: Failed to import download'
                   )
                 })
               }
@@ -966,8 +1188,118 @@ export class DownloadManager {
 
         for (const orphan of orphanedDownloads) {
           if (orphan.externalId && !foundExternalIds.has(orphan.externalId)) {
-            console.log(
-              `[DownloadManager] Removing orphaned Transmission download: ${orphan.title}`
+            logger.info(
+              { title: orphan.title },
+              'DownloadManager: Removing orphaned Transmission download'
+            )
+            await orphan.delete()
+          }
+        }
+
+        break
+      }
+
+      case 'deluge': {
+        const config: DelugeConfig = {
+          host: client.settings.host || 'localhost',
+          port: client.settings.port || 8112,
+          password: client.settings.password || '',
+          useSsl: client.settings.useSsl || false,
+        }
+
+        const allDownloads = await Download.query().where('downloadClientId', client.id)
+        const downloadsByExternalId = new Map<string, Download>()
+        for (const dl of allDownloads) {
+          if (dl.externalId) {
+            downloadsByExternalId.set(dl.externalId, dl)
+          }
+        }
+
+        const torrents = await delugeService.getTorrents(config)
+        const foundExternalIds = new Set<string>()
+
+        for (const torrent of torrents) {
+          foundExternalIds.add(torrent.hash)
+
+          const download = downloadsByExternalId.get(torrent.hash)
+          if (download) {
+            download.progress = torrent.progress
+            download.status = delugeService.mapStateToStatus(torrent.state, torrent.isFinished)
+            download.remainingBytes = torrent.totalSize - torrent.totalDone
+            download.etaSeconds = torrent.eta >= 0 ? torrent.eta : 0
+
+            if (
+              (torrent.isFinished || torrent.state === 'Seeding') &&
+              download.status !== 'failed'
+            ) {
+              if (download.outputPath !== torrent.savePath) {
+                download.status = 'importing'
+                download.progress = 100
+                download.outputPath = torrent.moveCompletedPath || torrent.savePath
+                if (!download.completedAt) {
+                  download.completedAt = DateTime.now()
+                }
+
+                const delMediaType = download.movieId
+                  ? 'movies'
+                  : download.tvShowId || download.episodeId
+                    ? 'tv'
+                    : download.bookId
+                      ? 'books'
+                      : 'music'
+                eventEmitter
+                  .emitDownloadCompleted({
+                    media: {
+                      id:
+                        download.movieId ||
+                        download.episodeId ||
+                        download.bookId ||
+                        download.albumId ||
+                        '',
+                      title: download.title,
+                      mediaType: delMediaType,
+                    },
+                    release: {
+                      title: download.title,
+                      indexer: download.nzbInfo?.indexer || 'unknown',
+                      size: download.sizeBytes ? Number(download.sizeBytes) : undefined,
+                      protocol: 'torrent',
+                    },
+                    downloadClient: client.name,
+                    downloadId: download.externalId || download.id,
+                    outputPath: download.outputPath || '',
+                  })
+                  .catch((err) =>
+                    logger.error(
+                      { err },
+                      'DownloadManager: Failed to emit download completed event'
+                    )
+                  )
+
+                this.triggerImport(download).catch((error) => {
+                  logger.error(
+                    { downloadId: download.id, err: error },
+                    'DownloadManager: Failed to import download'
+                  )
+                })
+              }
+            }
+
+            await download.save()
+          }
+        }
+
+        // Remove orphaned downloads
+        const orphanedDownloads = await Download.query()
+          .where('downloadClientId', client.id)
+          .whereNotNull('externalId')
+          .whereIn('status', ['queued', 'downloading', 'paused'])
+
+        for (const orphan of orphanedDownloads) {
+          if (orphan.externalId && !foundExternalIds.has(orphan.externalId)) {
+            logger.info(
+              { title: orphan.title },
+              'DownloadManager: Removing orphaned Deluge download'
             )
             await orphan.delete()
           }
@@ -983,8 +1315,8 @@ export class DownloadManager {
    * Routes to the appropriate import service based on media type
    */
   private async triggerImport(download: Download): Promise<void> {
-    console.log(`[DownloadManager] Starting import for download: ${download.title}`)
-    console.log(`[DownloadManager]   Original output path: ${download.outputPath}`)
+    logger.info({ title: download.title }, 'DownloadManager: Starting import')
+    logger.debug({ outputPath: download.outputPath }, 'DownloadManager: Original output path')
 
     try {
       // Apply remote path mapping if configured
@@ -997,7 +1329,10 @@ export class DownloadManager {
               client.settings.remotePath,
               client.settings.localPath
             )
-            console.log(`[DownloadManager]   Mapped path: ${oldPath} -> ${download.outputPath}`)
+            logger.debug(
+              { oldPath, newPath: download.outputPath },
+              'DownloadManager: Mapped remote path'
+            )
             await download.save()
           }
         }
@@ -1008,41 +1343,46 @@ export class DownloadManager {
       // Route to appropriate import service based on media type
       if (download.albumId) {
         // Music album
-        console.log(`[DownloadManager] Importing as music album (albumId: ${download.albumId})`)
+        logger.info({ albumId: download.albumId }, 'DownloadManager: Importing as music album')
         result = await downloadImportService.importDownload(download, (progress) => {
-          console.log(
-            `[DownloadManager] Music import progress: ${progress.phase} - ${progress.current}/${progress.total}`
+          logger.debug(
+            { phase: progress.phase, current: progress.current, total: progress.total },
+            'DownloadManager: Music import progress'
           )
         })
       } else if (download.movieId) {
         // Movie
-        console.log(`[DownloadManager] Importing as movie (movieId: ${download.movieId})`)
+        logger.info({ movieId: download.movieId }, 'DownloadManager: Importing as movie')
         result = await movieImportService.importDownload(download, (progress) => {
-          console.log(
-            `[DownloadManager] Movie import progress: ${progress.phase} - ${progress.current}/${progress.total}`
+          logger.debug(
+            { phase: progress.phase, current: progress.current, total: progress.total },
+            'DownloadManager: Movie import progress'
           )
         })
       } else if (download.tvShowId || download.episodeId) {
         // TV Episode
-        console.log(
-          `[DownloadManager] Importing as TV episode (tvShowId: ${download.tvShowId}, episodeId: ${download.episodeId})`
+        logger.info(
+          { tvShowId: download.tvShowId, episodeId: download.episodeId },
+          'DownloadManager: Importing as TV episode'
         )
         result = await episodeImportService.importDownload(download, (progress) => {
-          console.log(
-            `[DownloadManager] Episode import progress: ${progress.phase} - ${progress.current}/${progress.total}`
+          logger.debug(
+            { phase: progress.phase, current: progress.current, total: progress.total },
+            'DownloadManager: Episode import progress'
           )
         })
       } else if (download.bookId) {
         // Book
-        console.log(`[DownloadManager] Importing as book (bookId: ${download.bookId})`)
+        logger.info({ bookId: download.bookId }, 'DownloadManager: Importing as book')
         result = await bookImportService.importDownload(download, (progress) => {
-          console.log(
-            `[DownloadManager] Book import progress: ${progress.phase} - ${progress.current}/${progress.total}`
+          logger.debug(
+            { phase: progress.phase, current: progress.current, total: progress.total },
+            'DownloadManager: Book import progress'
           )
         })
       } else {
         // Unknown media type
-        console.error(`[DownloadManager] Unknown media type for download: ${download.title}`)
+        logger.error({ title: download.title }, 'DownloadManager: Unknown media type')
         download.status = 'failed'
         download.errorMessage = 'Unknown media type - cannot determine import service'
         await download.save()
@@ -1050,22 +1390,71 @@ export class DownloadManager {
       }
 
       if (result.success) {
-        console.log(
-          `[DownloadManager] Import completed: ${result.filesImported} files imported for ${download.title}`
+        logger.info(
+          { title: download.title, filesImported: result.filesImported },
+          'DownloadManager: Import completed'
         )
         download.status = 'completed'
       } else {
-        console.error(`[DownloadManager] Import failed for ${download.title}:`, result.errors)
+        logger.error(
+          { title: download.title, errors: result.errors },
+          'DownloadManager: Import failed'
+        )
         download.status = 'failed'
         download.errorMessage = result.errors.join('; ') || 'Import failed'
+
+        // Emit import failed event
+        const failedMediaType = download.movieId
+          ? 'movies'
+          : download.tvShowId || download.episodeId
+            ? 'tv'
+            : download.bookId
+              ? 'books'
+              : 'music'
+        eventEmitter
+          .emitImportFailed({
+            media: {
+              id:
+                download.movieId || download.episodeId || download.bookId || download.albumId || '',
+              title: download.title,
+              mediaType: failedMediaType,
+            },
+            errorMessage: result.errors.join('; ') || 'Import failed',
+            downloadId: download.externalId || download.id,
+          })
+          .catch((err) =>
+            logger.error({ err }, 'DownloadManager: Failed to emit import failed event')
+          )
       }
 
       await download.save()
     } catch (error) {
-      console.error(`[DownloadManager] Import error for ${download.title}:`, error)
+      logger.error({ title: download.title, err: error }, 'DownloadManager: Import error')
       download.status = 'failed'
       download.errorMessage = error instanceof Error ? error.message : 'Import failed'
       await download.save()
+
+      // Emit import failed event for unexpected errors
+      const errorMediaType = download.movieId
+        ? 'movies'
+        : download.tvShowId || download.episodeId
+          ? 'tv'
+          : download.bookId
+            ? 'books'
+            : 'music'
+      eventEmitter
+        .emitImportFailed({
+          media: {
+            id: download.movieId || download.episodeId || download.bookId || download.albumId || '',
+            title: download.title,
+            mediaType: errorMediaType,
+          },
+          errorMessage: error instanceof Error ? error.message : 'Import failed',
+          downloadId: download.externalId || download.id,
+        })
+        .catch((err) =>
+          logger.error({ err }, 'DownloadManager: Failed to emit import failed event')
+        )
     }
   }
 
@@ -1081,58 +1470,78 @@ export class DownloadManager {
       if (failedDownload.movieId) {
         const result = await requestedSearchTask.searchSingleMovie(failedDownload.movieId)
         if (result.grabbed) {
-          console.log(
-            `[DownloadManager] Found and grabbed alternative for movie: ${failedDownload.title}`
+          logger.info(
+            { title: failedDownload.title },
+            'DownloadManager: Found and grabbed alternative movie'
           )
         } else if (result.error) {
-          console.log(`[DownloadManager] No alternative found for movie: ${result.error}`)
+          logger.info(
+            { title: failedDownload.title, error: result.error },
+            'DownloadManager: No alternative found for movie'
+          )
         } else {
-          console.log(
-            `[DownloadManager] No alternative releases available for movie: ${failedDownload.title}`
+          logger.info(
+            { title: failedDownload.title },
+            'DownloadManager: No alternative releases available for movie'
           )
         }
       } else if (failedDownload.episodeId) {
         const result = await requestedSearchTask.searchSingleEpisode(failedDownload.episodeId)
         if (result.grabbed) {
-          console.log(
-            `[DownloadManager] Found and grabbed alternative for episode: ${failedDownload.title}`
+          logger.info(
+            { title: failedDownload.title },
+            'DownloadManager: Found and grabbed alternative episode'
           )
         } else if (result.error) {
-          console.log(`[DownloadManager] No alternative found for episode: ${result.error}`)
+          logger.info(
+            { title: failedDownload.title, error: result.error },
+            'DownloadManager: No alternative found for episode'
+          )
         } else {
-          console.log(
-            `[DownloadManager] No alternative releases available for episode: ${failedDownload.title}`
+          logger.info(
+            { title: failedDownload.title },
+            'DownloadManager: No alternative releases available for episode'
           )
         }
       } else if (failedDownload.albumId) {
         const result = await requestedSearchTask.searchSingleAlbum(failedDownload.albumId)
         if (result.grabbed) {
-          console.log(
-            `[DownloadManager] Found and grabbed alternative for album: ${failedDownload.title}`
+          logger.info(
+            { title: failedDownload.title },
+            'DownloadManager: Found and grabbed alternative album'
           )
         } else if (result.error) {
-          console.log(`[DownloadManager] No alternative found for album: ${result.error}`)
+          logger.info(
+            { title: failedDownload.title, error: result.error },
+            'DownloadManager: No alternative found for album'
+          )
         } else {
-          console.log(
-            `[DownloadManager] No alternative releases available for album: ${failedDownload.title}`
+          logger.info(
+            { title: failedDownload.title },
+            'DownloadManager: No alternative releases available for album'
           )
         }
       } else if (failedDownload.bookId) {
         const result = await requestedSearchTask.searchSingleBook(failedDownload.bookId)
         if (result.grabbed) {
-          console.log(
-            `[DownloadManager] Found and grabbed alternative for book: ${failedDownload.title}`
+          logger.info(
+            { title: failedDownload.title },
+            'DownloadManager: Found and grabbed alternative book'
           )
         } else if (result.error) {
-          console.log(`[DownloadManager] No alternative found for book: ${result.error}`)
+          logger.info(
+            { title: failedDownload.title, error: result.error },
+            'DownloadManager: No alternative found for book'
+          )
         } else {
-          console.log(
-            `[DownloadManager] No alternative releases available for book: ${failedDownload.title}`
+          logger.info(
+            { title: failedDownload.title },
+            'DownloadManager: No alternative releases available for book'
           )
         }
       }
     } catch (error) {
-      console.error(`[DownloadManager] Error searching for alternative:`, error)
+      logger.error({ err: error }, 'DownloadManager: Error searching for alternative')
     }
   }
 
@@ -1171,7 +1580,11 @@ export class DownloadManager {
 
     const parts = timeleft.split(':')
     if (parts.length === 3) {
-      return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2])
+      return (
+        Number.parseInt(parts[0]) * 3600 +
+        Number.parseInt(parts[1]) * 60 +
+        Number.parseInt(parts[2])
+      )
     }
     return 0
   }
@@ -1214,7 +1627,7 @@ export class DownloadManager {
             useSsl: client.settings.useSsl || false,
           }
 
-          const nzbId = parseInt(download.externalId, 10)
+          const nzbId = Number.parseInt(download.externalId, 10)
           // Try to delete from queue first, then from history
           try {
             await nzbgetService.deleteFromQueue(config, nzbId)
@@ -1253,6 +1666,18 @@ export class DownloadManager {
           if (torrent) {
             await transmissionService.remove(config, torrent.id, deleteFiles)
           }
+          break
+        }
+
+        case 'deluge': {
+          const config: DelugeConfig = {
+            host: client.settings.host || 'localhost',
+            port: client.settings.port || 8112,
+            password: client.settings.password || '',
+            useSsl: client.settings.useSsl || false,
+          }
+
+          await delugeService.remove(config, download.externalId, deleteFiles)
           break
         }
       }
@@ -1384,6 +1809,17 @@ export class DownloadManager {
         }
 
         return transmissionService.testConnection(config)
+      }
+
+      case 'deluge': {
+        const config: DelugeConfig = {
+          host: settings.host || 'localhost',
+          port: settings.port || 8112,
+          password: settings.password || '',
+          useSsl: settings.useSsl || false,
+        }
+
+        return delugeService.testConnection(config)
       }
 
       default:

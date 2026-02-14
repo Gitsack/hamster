@@ -192,7 +192,7 @@ export class BookParser {
     for (const pattern of patterns) {
       const match = name.match(pattern)
       if (match) {
-        const year = parseInt(match[1], 10)
+        const year = Number.parseInt(match[1], 10)
         if (year >= 1800 && year <= 2099) {
           const remaining = name.replace(match[0], '').trim()
           return { year, remaining }
@@ -238,14 +238,14 @@ export class BookParser {
             // "(Series #1)" at end - match[1] is title, match[2] is series, match[3] is position
             return {
               seriesName: match[2].trim(),
-              seriesPosition: parseInt(match[3], 10),
+              seriesPosition: Number.parseInt(match[3], 10),
               remaining: match[1].trim(),
             }
           } else {
             // Series info at start - match[1] is series, match[2] is position, match[3] is title
             return {
               seriesName: match[1].trim(),
-              seriesPosition: parseInt(match[2], 10),
+              seriesPosition: Number.parseInt(match[2], 10),
               remaining: match[3].trim(),
             }
           }
@@ -259,7 +259,7 @@ export class BookParser {
       // This is likely "Series Name #1" without a separate book title
       // The series name IS the title in this case
       return {
-        seriesPosition: parseInt(simpleMatch[2], 10),
+        seriesPosition: Number.parseInt(simpleMatch[2], 10),
         remaining: simpleMatch[1].trim(),
       }
     }

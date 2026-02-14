@@ -1,5 +1,8 @@
+import logger from '@adonisjs/core/services/logger'
 import { webhookService } from '#services/webhooks/webhook_service'
 import { notificationService } from '#services/notifications/notification_service'
+import { mediaServerService } from '#services/media_servers/media_server_service'
+import MediaServerConfig from '#models/media_server_config'
 import type { WebhookEvent } from '#models/webhook'
 import type { NotificationEvent } from '#models/notification_provider'
 import type {
@@ -217,7 +220,7 @@ export class EventEmitter {
     if (!options.skipWebhooks) {
       promises.push(
         webhookService.dispatch(event, payload).catch((error) => {
-          console.error(`[EventEmitter] Webhook dispatch failed for ${event}:`, error)
+          logger.error({ event, err: error }, 'Webhook dispatch failed')
         })
       )
     }
@@ -227,12 +230,43 @@ export class EventEmitter {
       const notificationPayload = this.createNotificationPayload(event, payload, mediaType)
       promises.push(
         notificationService.notify(event, notificationPayload).catch((error) => {
-          console.error(`[EventEmitter] Notification dispatch failed for ${event}:`, error)
+          logger.error({ event, err: error }, 'Notification dispatch failed')
+        })
+      )
+    }
+
+    // Trigger media server library refresh on import completed
+    if (event === 'import.completed') {
+      promises.push(
+        this.refreshMediaServers().catch((error) => {
+          logger.error({ err: error }, 'Media server refresh failed')
         })
       )
     }
 
     await Promise.allSettled(promises)
+  }
+
+  /**
+   * Refresh all enabled media server libraries
+   */
+  private async refreshMediaServers(): Promise<void> {
+    const servers = await MediaServerConfig.query().where('enabled', true)
+
+    for (const server of servers) {
+      try {
+        await mediaServerService.triggerRefresh({
+          type: server.type,
+          host: server.host,
+          port: server.port,
+          apiKey: server.apiKey,
+          useSsl: server.useSsl,
+          librarySections: server.librarySections,
+        })
+      } catch (error) {
+        logger.error({ server: server.name, err: error }, 'Failed to refresh media server')
+      }
+    }
   }
 
   /**

@@ -31,7 +31,7 @@ export function getTranscodingSettings(): TranscodingSettings {
 
 // Hardware acceleration detection
 type HwAccelType = 'videotoolbox' | 'cuda' | 'qsv' | 'vaapi' | null
-let detectedHwAccel: HwAccelType | undefined = undefined
+let detectedHwAccel: HwAccelType | undefined
 
 async function detectHardwareAcceleration(): Promise<HwAccelType> {
   if (detectedHwAccel !== undefined) {

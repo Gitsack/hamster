@@ -6,6 +6,7 @@ import { pushoverProvider } from './providers/pushover_provider.js'
 import { slackProvider } from './providers/slack_provider.js'
 import { gotifyProvider } from './providers/gotify_provider.js'
 import { emailProvider } from './providers/email_provider.js'
+import { ntfyProvider } from './providers/ntfy_provider.js'
 
 export interface NotificationPayload {
   title: string
@@ -89,6 +90,9 @@ export class NotificationService {
           break
         case 'email':
           await emailProvider.send(settings as Parameters<typeof emailProvider.send>[0], payload)
+          break
+        case 'ntfy':
+          await ntfyProvider.send(settings as Parameters<typeof ntfyProvider.send>[0], payload)
           break
         default:
           throw new Error(`Unknown provider type: ${provider.type}`)

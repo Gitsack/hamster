@@ -239,9 +239,7 @@ class FolderScanner {
    * Try to match a folder name to a library item
    * Uses a smarter approach: try ALL library types and pick the best match
    */
-  private async matchToLibrary(
-    folderName: string
-  ): Promise<{
+  private async matchToLibrary(folderName: string): Promise<{
     type: 'movie' | 'episode' | 'album' | 'book'
     id: string
     title: string
@@ -389,7 +387,7 @@ class FolderScanner {
   ): Promise<{ id: string; title: string; confidence: number } | null> {
     // Extract year from folder name
     const yearMatch = original.match(/\b(19\d{2}|20\d{2})\b/)
-    const folderYear = yearMatch ? parseInt(yearMatch[1]) : null
+    const folderYear = yearMatch ? Number.parseInt(yearMatch[1]) : null
 
     // Movie indicators
     const movieIndicators =
@@ -400,9 +398,7 @@ class FolderScanner {
     const musicIndicators = /\b(flac|mp3|cd|lp|vinyl|320|v0|album|\dcd)\b/i
     const hasMusicIndicator = musicIndicators.test(original)
 
-    const movies = await Movie.query().where((q) =>
-      q.where('requested', true).orWhere('hasFile', false)
-    )
+    const movies = await Movie.query().where((q) => q.where('requested', true))
 
     let bestMatch: { id: string; title: string; confidence: number } | null = null
 
@@ -460,8 +456,8 @@ class FolderScanner {
       return null // Must have episode pattern for TV
     }
 
-    const season = parseInt(tvMatch[1] || tvMatch[3])
-    const episode = parseInt(tvMatch[2] || tvMatch[4])
+    const season = Number.parseInt(tvMatch[1] || tvMatch[3])
+    const episode = Number.parseInt(tvMatch[2] || tvMatch[4])
 
     // TvShow doesn't have hasFile - it's at episode level
     const shows = await TvShow.query().where('requested', true)
@@ -508,7 +504,7 @@ class FolderScanner {
     }
 
     const books = await Book.query()
-      .where((q) => q.where('requested', true).orWhere('hasFile', false))
+      .where((q) => q.where('requested', true))
       .preload('author')
 
     let bestMatch: { id: string; title: string; confidence: number } | null = null

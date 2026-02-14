@@ -33,6 +33,8 @@ import {
   CheckmarkCircle01Icon,
   Clock01Icon,
   Search01Icon,
+  Notification01Icon,
+  NotificationOff01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useMemo } from 'react'
@@ -71,6 +73,7 @@ interface Author {
   overview: string | null
   imageUrl: string | null
   requested: boolean
+  monitored: boolean
   qualityProfile: { id: number; name: string } | null
   rootFolder: { id: number; path: string } | null
   books: LibraryBook[]
@@ -187,6 +190,31 @@ export default function AuthorDetail() {
       toast.error('Failed to refresh author')
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  const toggleMonitored = async () => {
+    if (!author) return
+
+    const wasMonitored = author.monitored
+    setAuthor({ ...author, monitored: !wasMonitored })
+
+    try {
+      const response = await fetch(`/api/v1/authors/${authorId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monitored: !wasMonitored }),
+      })
+      if (response.ok) {
+        toast.success(wasMonitored ? 'Monitoring disabled' : 'Monitoring enabled')
+      } else {
+        setAuthor({ ...author, monitored: wasMonitored })
+        toast.error('Failed to update monitoring')
+      }
+    } catch (error) {
+      console.error('Failed to update monitoring:', error)
+      setAuthor({ ...author, monitored: wasMonitored })
+      toast.error('Failed to update monitoring')
     }
   }
 
@@ -472,6 +500,13 @@ export default function AuthorDetail() {
               <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
               Back
             </Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={toggleMonitored}>
+            <HugeiconsIcon
+              icon={author.monitored ? Notification01Icon : NotificationOff01Icon}
+              className="h-4 w-4 mr-2"
+            />
+            {author.monitored ? 'Monitored' : 'Monitor'}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

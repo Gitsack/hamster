@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileNamingService } from './file_naming_service.js'
+import { eventEmitter } from '#services/events/event_emitter'
 import Download from '#models/download'
 import Book from '#models/book'
 import Author from '#models/author'
@@ -189,8 +190,50 @@ export class BookImportService {
         onProgress?.({ phase: 'cleaning', total: 1, current: 0 })
         await this.cleanupDownloadFolder(outputPath)
         console.log(`[BookImportService] Import complete - success`)
+
+        // Emit import completed event
+        eventEmitter
+          .emitImportCompleted({
+            media: {
+              id: book.id,
+              title: book.title,
+              year: book.releaseDate?.year ?? undefined,
+              mediaType: 'books',
+              posterUrl: book.coverUrl ?? undefined,
+              overview: book.overview ?? undefined,
+            },
+            files: result.importedPath
+              ? [
+                  {
+                    path: result.importedPath,
+                    relativePath: path.basename(result.importedPath),
+                    size: 0,
+                  },
+                ]
+              : [],
+            isUpgrade: false,
+          })
+          .catch((err) =>
+            console.error('[BookImportService] Failed to emit import completed event:', err)
+          )
       } else {
         console.log(`[BookImportService] Import complete - no files imported`)
+
+        // Emit import failed event
+        eventEmitter
+          .emitImportFailed({
+            media: {
+              id: book.id,
+              title: book.title,
+              mediaType: 'books',
+              posterUrl: book.coverUrl ?? undefined,
+            },
+            errorMessage: result.errors.join('; ') || 'No files imported',
+            downloadId: download.id,
+          })
+          .catch((err) =>
+            console.error('[BookImportService] Failed to emit import failed event:', err)
+          )
       }
 
       onProgress?.({ phase: 'complete', total: 1, current: 1 })
@@ -198,6 +241,23 @@ export class BookImportService {
       const errorMsg = error instanceof Error ? error.message : 'Import failed'
       console.log(`[BookImportService] Import exception: ${errorMsg}`)
       result.errors.push(errorMsg)
+
+      // Emit import failed event for unexpected errors
+      if (download.bookId) {
+        eventEmitter
+          .emitImportFailed({
+            media: {
+              id: download.bookId,
+              title: download.title,
+              mediaType: 'books',
+            },
+            errorMessage: errorMsg,
+            downloadId: download.id,
+          })
+          .catch((err) =>
+            console.error('[BookImportService] Failed to emit import failed event:', err)
+          )
+      }
     }
 
     console.log(

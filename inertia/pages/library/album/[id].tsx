@@ -375,10 +375,7 @@ export default function AlbumDetail() {
                 {searching ? 'Searching...' : 'Manual Search'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={toggleRequested}
-              >
+              <DropdownMenuItem className="text-destructive" onClick={toggleRequested}>
                 <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
                 Remove from Library
               </DropdownMenuItem>

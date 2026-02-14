@@ -1,3 +1,5 @@
+import db from '@adonisjs/lucid/services/db'
+import logger from '@adonisjs/core/services/logger'
 import Artist from '#models/artist'
 import Album from '#models/album'
 import Author from '#models/author'
@@ -29,7 +31,7 @@ class LibraryCleanupService {
       .first()
 
     if (requestedAlbums) {
-      console.log(`[LibraryCleanup] Artist ${artistId} has requested albums, keeping`)
+      logger.debug({ artistId }, 'LibraryCleanup: Artist has requested albums, keeping')
       return false
     }
 
@@ -40,18 +42,19 @@ class LibraryCleanupService {
       .first()
 
     if (albumsWithFiles) {
-      console.log(`[LibraryCleanup] Artist ${artistId} has albums with files, keeping`)
+      logger.debug({ artistId }, 'LibraryCleanup: Artist has albums with files, keeping')
       return false
     }
 
     // No requested albums and no albums with files - remove artist and all albums
-    console.log(`[LibraryCleanup] Removing empty artist: ${artist.name} (${artistId})`)
+    logger.info({ artistId, artistName: artist.name }, 'LibraryCleanup: Removing empty artist')
 
-    // Delete all albums (and their tracks via cascade)
-    await Album.query().where('artistId', artistId).delete()
-
-    // Delete the artist
-    await artist.delete()
+    // Delete all albums (and their tracks via cascade) and artist in a transaction
+    await db.transaction(async (trx) => {
+      await Album.query({ client: trx }).where('artistId', artistId).delete()
+      artist.useTransaction(trx)
+      await artist.delete()
+    })
     return true
   }
 
@@ -70,7 +73,7 @@ class LibraryCleanupService {
       .first()
 
     if (requestedBooks) {
-      console.log(`[LibraryCleanup] Author ${authorId} has requested books, keeping`)
+      logger.debug({ authorId }, 'LibraryCleanup: Author has requested books, keeping')
       return false
     }
 
@@ -81,18 +84,18 @@ class LibraryCleanupService {
       .first()
 
     if (booksWithFiles) {
-      console.log(`[LibraryCleanup] Author ${authorId} has books with files, keeping`)
+      logger.debug({ authorId }, 'LibraryCleanup: Author has books with files, keeping')
       return false
     }
 
     // No requested books and no books with files - remove author and all books
-    console.log(`[LibraryCleanup] Removing empty author: ${author.name} (${authorId})`)
+    logger.info({ authorId, authorName: author.name }, 'LibraryCleanup: Removing empty author')
 
-    // Delete all books
-    await Book.query().where('authorId', authorId).delete()
-
-    // Delete the author
-    await author.delete()
+    await db.transaction(async (trx) => {
+      await Book.query({ client: trx }).where('authorId', authorId).delete()
+      author.useTransaction(trx)
+      await author.delete()
+    })
     return true
   }
 
@@ -111,7 +114,7 @@ class LibraryCleanupService {
       .first()
 
     if (requestedEpisodes) {
-      console.log(`[LibraryCleanup] TV show ${showId} has requested episodes, keeping`)
+      logger.debug({ showId }, 'LibraryCleanup: TV show has requested episodes, keeping')
       return false
     }
 
@@ -122,21 +125,19 @@ class LibraryCleanupService {
       .first()
 
     if (episodesWithFiles) {
-      console.log(`[LibraryCleanup] TV show ${showId} has episodes with files, keeping`)
+      logger.debug({ showId }, 'LibraryCleanup: TV show has episodes with files, keeping')
       return false
     }
 
     // No requested episodes and no episodes with files - remove show, seasons, episodes
-    console.log(`[LibraryCleanup] Removing empty TV show: ${show.title} (${showId})`)
+    logger.info({ showId, showTitle: show.title }, 'LibraryCleanup: Removing empty TV show')
 
-    // Delete all episodes
-    await Episode.query().where('tvShowId', showId).delete()
-
-    // Delete all seasons
-    await Season.query().where('tvShowId', showId).delete()
-
-    // Delete the show
-    await show.delete()
+    await db.transaction(async (trx) => {
+      await Episode.query({ client: trx }).where('tvShowId', showId).delete()
+      await Season.query({ client: trx }).where('tvShowId', showId).delete()
+      show.useTransaction(trx)
+      await show.delete()
+    })
     return true
   }
 
@@ -155,7 +156,7 @@ class LibraryCleanupService {
       .first()
 
     if (requestedEpisodes) {
-      console.log(`[LibraryCleanup] Season ${seasonId} has requested episodes, keeping`)
+      logger.debug({ seasonId }, 'LibraryCleanup: Season has requested episodes, keeping')
       return false
     }
 
@@ -166,20 +167,21 @@ class LibraryCleanupService {
       .first()
 
     if (episodesWithFiles) {
-      console.log(`[LibraryCleanup] Season ${seasonId} has episodes with files, keeping`)
+      logger.debug({ seasonId }, 'LibraryCleanup: Season has episodes with files, keeping')
       return false
     }
 
     // No requested episodes and no episodes with files - remove season and its episodes
-    console.log(
-      `[LibraryCleanup] Removing empty season: ${season.title || `Season ${season.seasonNumber}`} (${seasonId})`
+    logger.info(
+      { seasonId, seasonTitle: season.title || `Season ${season.seasonNumber}` },
+      'LibraryCleanup: Removing empty season'
     )
 
-    // Delete all episodes in this season
-    await Episode.query().where('seasonId', seasonId).delete()
-
-    // Delete the season
-    await season.delete()
+    await db.transaction(async (trx) => {
+      await Episode.query({ client: trx }).where('seasonId', seasonId).delete()
+      season.useTransaction(trx)
+      await season.delete()
+    })
     return true
   }
 
@@ -201,7 +203,7 @@ class LibraryCleanupService {
     if (!album) return false
 
     const artistId = album.artistId
-    console.log(`[LibraryCleanup] Removing album: ${album.title} (${albumId})`)
+    logger.info({ albumId, albumTitle: album.title }, 'LibraryCleanup: Removing album')
 
     // Delete the album (tracks deleted via cascade or manual cleanup)
     await album.delete()
@@ -221,7 +223,7 @@ class LibraryCleanupService {
     if (!book) return false
 
     const authorId = book.authorId
-    console.log(`[LibraryCleanup] Removing book: ${book.title} (${bookId})`)
+    logger.info({ bookId, bookTitle: book.title }, 'LibraryCleanup: Removing book')
 
     // Delete the book
     await book.delete()
@@ -242,8 +244,9 @@ class LibraryCleanupService {
 
     const seasonId = episode.seasonId
     const showId = episode.tvShowId
-    console.log(
-      `[LibraryCleanup] Removing episode: S${episode.seasonNumber}E${episode.episodeNumber} (${episodeId})`
+    logger.info(
+      { episodeId, season: episode.seasonNumber, episode: episode.episodeNumber },
+      'LibraryCleanup: Removing episode'
     )
 
     // Delete the episode

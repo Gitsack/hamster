@@ -34,9 +34,20 @@ const BlacklistController = () => import('#controllers/blacklist_controller')
 const WebhooksController = () => import('#controllers/webhooks_controller')
 const NotificationsController = () => import('#controllers/notifications_controller')
 const SystemController = () => import('#controllers/system_controller')
+const BackupController = () => import('#controllers/backup_controller')
+const ScheduledTasksController = () => import('#controllers/scheduled_tasks_controller')
 const CalendarController = () => import('#controllers/calendar_controller')
 const RecommendationsController = () => import('#controllers/recommendations_controller')
 const JustWatchController = () => import('#controllers/justwatch_controller')
+const ApiKeysController = () => import('#controllers/api_keys_controller')
+const UserController = () => import('#controllers/user_controller')
+const TagsController = () => import('#controllers/tags_controller')
+const MediaServersController = () => import('#controllers/media_servers_controller')
+const CustomFormatsController = () => import('#controllers/custom_formats_controller')
+const ImportListsController = () => import('#controllers/import_lists_controller')
+const BulkController = () => import('#controllers/bulk_controller')
+const RenameController = () => import('#controllers/rename_controller')
+const AdminUsersController = () => import('#controllers/admin/users_controller')
 
 // Health check endpoint (enhanced for Docker/load balancers)
 router.get('/health', [SystemController, 'health'])
@@ -50,12 +61,17 @@ router
   .use(middleware.silentAuth())
 
 // Guest routes (only accessible when not logged in)
+// Auth POST routes have strict rate limiting: 5 attempts per minute per IP
 router
   .group(() => {
     router.get('/login', [AuthController, 'showLogin']).as('login')
-    router.post('/login', [AuthController, 'login'])
+    router
+      .post('/login', [AuthController, 'login'])
+      .use(middleware.rateLimit({ store: 'auth', maxAttempts: 5, windowSeconds: 60 }))
     router.get('/register', [AuthController, 'showRegister']).as('register')
-    router.post('/register', [AuthController, 'register'])
+    router
+      .post('/register', [AuthController, 'register'])
+      .use(middleware.rateLimit({ store: 'auth', maxAttempts: 5, windowSeconds: 60 }))
   })
   .use(middleware.guest())
 
@@ -92,66 +108,70 @@ router
       response.redirect('/library?tab=missing')
     )
 
+    // Calendar
+    router.on('/calendar').renderInertia('calendar/index').as('calendar')
+
     // Activity
     router.on('/activity/queue').renderInertia('activity/queue').as('activity.queue')
     router.on('/activity/history').renderInertia('activity/history').as('activity.history')
 
-    // Settings
-    router.get('/settings', async ({ response }) => response.redirect('/settings/media-management'))
+    // System
+    router.on('/system/status').renderInertia('system/status').as('system.status')
+    router.on('/system/events').renderInertia('system/events').as('system.events')
+
+    // Profile settings (accessible to all authenticated users)
+    router.on('/settings/profile').renderInertia('settings/ui').as('settings.profile')
+    router.get('/settings/ui', async ({ response }) => response.redirect('/settings/profile'))
+
+    // Settings pages (admin only)
     router
-      .on('/settings/media-management')
-      .renderInertia('settings/media-management')
-      .as('settings.media-management')
-    router.on('/settings/indexers').renderInertia('settings/indexers').as('settings.indexers')
-    router
-      .on('/settings/download-clients')
-      .renderInertia('settings/download-clients')
-      .as('settings.download-clients')
-    router.on('/settings/playback').renderInertia('settings/playback').as('settings.playback')
-    router.on('/settings/ui').renderInertia('settings/ui').as('settings.ui')
-    router
-      .on('/settings/notifications')
-      .renderInertia('settings/notifications')
-      .as('settings.notifications')
-    router.on('/settings/webhooks').renderInertia('settings/webhooks').as('settings.webhooks')
+      .group(() => {
+        router.get('/settings', async ({ response }) =>
+          response.redirect('/settings/media-management')
+        )
+        router
+          .on('/settings/media-management')
+          .renderInertia('settings/media-management')
+          .as('settings.media-management')
+        router.on('/settings/indexers').renderInertia('settings/indexers').as('settings.indexers')
+        router
+          .on('/settings/download-clients')
+          .renderInertia('settings/download-clients')
+          .as('settings.download-clients')
+        router.on('/settings/playback').renderInertia('settings/playback').as('settings.playback')
+        router
+          .on('/settings/notifications')
+          .renderInertia('settings/notifications')
+          .as('settings.notifications')
+        router.on('/settings/webhooks').renderInertia('settings/webhooks').as('settings.webhooks')
+        router.on('/settings/users').renderInertia('settings/users').as('settings.users')
+      })
+      .use(middleware.admin())
   })
   .use(middleware.auth())
 
 // API routes
 router
   .group(() => {
-    // Root folders
+    // Root folders (read-only for all users)
     router.get('/rootfolders', [RootFoldersController, 'index'])
-    router.post('/rootfolders', [RootFoldersController, 'store'])
-    router.post('/rootfolders/scan-all', [RootFoldersController, 'scanAll'])
     router.get('/rootfolders/:id', [RootFoldersController, 'show'])
-    router.put('/rootfolders/:id', [RootFoldersController, 'update'])
-    router.delete('/rootfolders/:id', [RootFoldersController, 'destroy'])
-    router.post('/rootfolders/:id/scan', [RootFoldersController, 'scan'])
     router.get('/rootfolders/:id/scan-status', [RootFoldersController, 'scanStatus'])
 
-    // Quality profiles
+    // Quality profiles (read-only for all users)
     router.get('/qualityprofiles', [QualityProfilesController, 'index'])
-    router.post('/qualityprofiles', [QualityProfilesController, 'store'])
     router.get('/qualityprofiles/:id', [QualityProfilesController, 'show'])
-    router.put('/qualityprofiles/:id', [QualityProfilesController, 'update'])
-    router.delete('/qualityprofiles/:id', [QualityProfilesController, 'destroy'])
 
-    // Indexers
+    // Indexers (read-only for all users)
     router.get('/indexers', [IndexersController, 'index'])
-    router.post('/indexers', [IndexersController, 'store'])
-    router.post('/indexers/test', [IndexersController, 'test'])
     router.get('/indexers/search', [IndexersController, 'search'])
     router.get('/indexers/:id', [IndexersController, 'show'])
-    router.put('/indexers/:id', [IndexersController, 'update'])
-    router.delete('/indexers/:id', [IndexersController, 'destroy'])
 
-    // Prowlarr
-    router.get('/prowlarr', [ProwlarrController, 'show'])
-    router.put('/prowlarr', [ProwlarrController, 'update'])
-    router.post('/prowlarr/test', [ProwlarrController, 'test'])
-    router.post('/prowlarr/sync', [ProwlarrController, 'sync'])
-    router.get('/prowlarr/indexers', [ProwlarrController, 'indexers'])
+    // Download clients (read-only for all users)
+    router.get('/downloadclients', [DownloadClientsController, 'index'])
+    router.get('/downloadclients/:id', [DownloadClientsController, 'show'])
+    router.get('/downloadclients/:id/browse', [DownloadClientsController, 'browseDownloads'])
+    router.get('/downloadclients/:id/download', [DownloadClientsController, 'downloadFile'])
 
     // Artists
     router.get('/artists', [ArtistsController, 'index'])
@@ -243,17 +263,6 @@ router
     router.post('/books/:id/download', [BooksController, 'download'])
     router.post('/books/:id/search', [BooksController, 'searchNow'])
 
-    // Download clients
-    router.get('/downloadclients', [DownloadClientsController, 'index'])
-    router.post('/downloadclients', [DownloadClientsController, 'store'])
-    router.get('/downloadclients/:id', [DownloadClientsController, 'show'])
-    router.put('/downloadclients/:id', [DownloadClientsController, 'update'])
-    router.delete('/downloadclients/:id', [DownloadClientsController, 'destroy'])
-    router.post('/downloadclients/test', [DownloadClientsController, 'test'])
-    router.get('/downloadclients/:id/browse', [DownloadClientsController, 'browseDownloads'])
-    router.post('/downloadclients/:id/import', [DownloadClientsController, 'importFromPath'])
-    router.get('/downloadclients/:id/download', [DownloadClientsController, 'downloadFile'])
-
     // Queue
     router.get('/queue', [QueueController, 'index'])
     router.get('/queue/debug', [QueueController, 'debug'])
@@ -289,21 +298,8 @@ router
     router.get('/playback/hls/:sessionId/:index.ts', [PlaybackController, 'hlsSegment'])
     router.delete('/playback/hls/:sessionId', [PlaybackController, 'hlsCleanup'])
 
-    // App Settings
-    router.get('/settings', [AppSettingsController, 'index'])
-    router.put('/settings', [AppSettingsController, 'update'])
-    router.post('/settings/media-type', [AppSettingsController, 'toggleMediaType'])
-    router.get('/settings/naming-patterns', [AppSettingsController, 'getNamingPatterns'])
-    router.put('/settings/naming-patterns', [AppSettingsController, 'updateNamingPatterns'])
-
-    // Playback settings
+    // Playback settings (read-only for all users)
     router.get('/settings/playback', [PlaybackSettingsController, 'index'])
-    router.put('/settings/playback', [PlaybackSettingsController, 'update'])
-
-    // Filesystem browser
-    router.get('/filesystem/browse', [FilesystemController, 'browse'])
-    router.get('/filesystem/quick-paths', [FilesystemController, 'quickPaths'])
-    router.get('/filesystem/check', [FilesystemController, 'checkPath'])
 
     // File downloads
     router.get('/files/movies/:id/download', [FilesController, 'downloadMovie'])
@@ -325,26 +321,6 @@ router
     router.post('/unmatched/bulk-update', [UnmatchedFilesController, 'bulkUpdate'])
     router.post('/unmatched/bulk-delete', [UnmatchedFilesController, 'bulkDestroy'])
 
-    // Webhooks
-    router.get('/webhooks', [WebhooksController, 'index'])
-    router.post('/webhooks', [WebhooksController, 'store'])
-    router.get('/webhooks/:id', [WebhooksController, 'show'])
-    router.put('/webhooks/:id', [WebhooksController, 'update'])
-    router.delete('/webhooks/:id', [WebhooksController, 'destroy'])
-    router.post('/webhooks/:id/test', [WebhooksController, 'test'])
-    router.get('/webhooks/:id/history', [WebhooksController, 'history'])
-    router.delete('/webhooks/:id/history', [WebhooksController, 'clearHistory'])
-
-    // Notifications
-    router.get('/notifications', [NotificationsController, 'index'])
-    router.post('/notifications', [NotificationsController, 'store'])
-    router.get('/notifications/types', [NotificationsController, 'types'])
-    router.get('/notifications/history', [NotificationsController, 'history'])
-    router.get('/notifications/:id', [NotificationsController, 'show'])
-    router.put('/notifications/:id', [NotificationsController, 'update'])
-    router.delete('/notifications/:id', [NotificationsController, 'destroy'])
-    router.post('/notifications/:id/test', [NotificationsController, 'test'])
-
     // Recommendations
     router.get('/recommendations/movies', [RecommendationsController, 'movies'])
     router.get('/recommendations/tv', [RecommendationsController, 'tv'])
@@ -356,8 +332,165 @@ router
     router.get('/calendar', [CalendarController, 'index'])
     router.get('/calendar.ics', [CalendarController, 'ical'])
 
-    // System
+    // Tags
+    router.get('/tags', [TagsController, 'index'])
+    router.post('/tags', [TagsController, 'store'])
+    router.get('/tags/media', [TagsController, 'forMedia'])
+    router.get('/tags/:id', [TagsController, 'show'])
+    router.put('/tags/:id', [TagsController, 'update'])
+    router.delete('/tags/:id', [TagsController, 'destroy'])
+    router.post('/tags/:id/assign', [TagsController, 'assign'])
+    router.post('/tags/:id/unassign', [TagsController, 'unassign'])
+    router.post('/tags/:id/bulk-assign', [TagsController, 'bulkAssign'])
+    router.get('/tags/:id/media', [TagsController, 'media'])
+
+    // Custom Formats
+    router.get('/customformats', [CustomFormatsController, 'index'])
+    router.post('/customformats', [CustomFormatsController, 'store'])
+    router.post('/customformats/test', [CustomFormatsController, 'test'])
+    router.get('/customformats/:id', [CustomFormatsController, 'show'])
+    router.put('/customformats/:id', [CustomFormatsController, 'update'])
+    router.delete('/customformats/:id', [CustomFormatsController, 'destroy'])
+    router.post('/customformats/:id/profile', [CustomFormatsController, 'assignToProfile'])
+    router.delete('/customformats/:id/profile/:profileId', [
+      CustomFormatsController,
+      'removeFromProfile',
+    ])
+
+    // User profile
+    router.put('/user/profile', [UserController, 'updateProfile'])
+    router.put('/user/password', [UserController, 'changePassword'])
+
+    // Import Lists
+    router.get('/import-lists', [ImportListsController, 'index'])
+    router.post('/import-lists', [ImportListsController, 'store'])
+    router.get('/import-lists/:id', [ImportListsController, 'show'])
+    router.put('/import-lists/:id', [ImportListsController, 'update'])
+    router.delete('/import-lists/:id', [ImportListsController, 'destroy'])
+    router.post('/import-lists/:id/sync', [ImportListsController, 'sync'])
+    router.post('/import-lists/sync-all', [ImportListsController, 'syncAll'])
+
+    // Bulk Operations
+    router.post('/movies/bulk', [BulkController, 'movies'])
+    router.post('/tvshows/bulk', [BulkController, 'tvshows'])
+    router.post('/artists/bulk', [BulkController, 'artists'])
+    router.post('/books/bulk', [BulkController, 'books'])
+
+    // Rename/Organize
+    router.post('/movies/:id/rename', [RenameController, 'renameMovie'])
+    router.post('/tvshows/:id/rename', [RenameController, 'renameTvShow'])
+    router.post('/artists/:id/rename', [RenameController, 'renameArtist'])
+    router.post('/authors/:id/rename', [RenameController, 'renameAuthor'])
+
+    // Read-only endpoints available to all authenticated users
+    router.get('/notifications/history', [NotificationsController, 'history'])
     router.get('/system/info', [SystemController, 'info'])
+
+    // Admin-only API routes
+    router
+      .group(() => {
+        // Root folders (write operations)
+        router.post('/rootfolders', [RootFoldersController, 'store'])
+        router.post('/rootfolders/scan-all', [RootFoldersController, 'scanAll'])
+        router.put('/rootfolders/:id', [RootFoldersController, 'update'])
+        router.delete('/rootfolders/:id', [RootFoldersController, 'destroy'])
+        router.post('/rootfolders/:id/scan', [RootFoldersController, 'scan'])
+
+        // Quality profiles (write operations)
+        router.post('/qualityprofiles', [QualityProfilesController, 'store'])
+        router.put('/qualityprofiles/:id', [QualityProfilesController, 'update'])
+        router.delete('/qualityprofiles/:id', [QualityProfilesController, 'destroy'])
+
+        // Indexers (write operations)
+        router.post('/indexers', [IndexersController, 'store'])
+        router.post('/indexers/test', [IndexersController, 'test'])
+        router.put('/indexers/:id', [IndexersController, 'update'])
+        router.delete('/indexers/:id', [IndexersController, 'destroy'])
+
+        // Prowlarr
+        router.get('/prowlarr', [ProwlarrController, 'show'])
+        router.put('/prowlarr', [ProwlarrController, 'update'])
+        router.post('/prowlarr/test', [ProwlarrController, 'test'])
+        router.post('/prowlarr/sync', [ProwlarrController, 'sync'])
+        router.get('/prowlarr/indexers', [ProwlarrController, 'indexers'])
+
+        // Download clients (write operations)
+        router.post('/downloadclients', [DownloadClientsController, 'store'])
+        router.put('/downloadclients/:id', [DownloadClientsController, 'update'])
+        router.delete('/downloadclients/:id', [DownloadClientsController, 'destroy'])
+        router.post('/downloadclients/test', [DownloadClientsController, 'test'])
+        router.post('/downloadclients/:id/import', [DownloadClientsController, 'importFromPath'])
+
+        // App Settings
+        router.get('/settings', [AppSettingsController, 'index'])
+        router.put('/settings', [AppSettingsController, 'update'])
+        router.post('/settings/media-type', [AppSettingsController, 'toggleMediaType'])
+        router.get('/settings/naming-patterns', [AppSettingsController, 'getNamingPatterns'])
+        router.put('/settings/naming-patterns', [AppSettingsController, 'updateNamingPatterns'])
+
+        // Media servers
+        router.get('/mediaservers', [MediaServersController, 'index'])
+        router.post('/mediaservers', [MediaServersController, 'store'])
+        router.get('/mediaservers/:id', [MediaServersController, 'show'])
+        router.put('/mediaservers/:id', [MediaServersController, 'update'])
+        router.delete('/mediaservers/:id', [MediaServersController, 'destroy'])
+        router.post('/mediaservers/:id/test', [MediaServersController, 'test'])
+        router.post('/mediaservers/:id/refresh', [MediaServersController, 'refresh'])
+
+        // Playback settings (write)
+        router.put('/settings/playback', [PlaybackSettingsController, 'update'])
+
+        // Filesystem browser (admin only - exposes server filesystem)
+        router.get('/filesystem/browse', [FilesystemController, 'browse'])
+        router.get('/filesystem/quick-paths', [FilesystemController, 'quickPaths'])
+        router.get('/filesystem/check', [FilesystemController, 'checkPath'])
+
+        // Webhooks
+        router.get('/webhooks', [WebhooksController, 'index'])
+        router.post('/webhooks', [WebhooksController, 'store'])
+        router.get('/webhooks/:id', [WebhooksController, 'show'])
+        router.put('/webhooks/:id', [WebhooksController, 'update'])
+        router.delete('/webhooks/:id', [WebhooksController, 'destroy'])
+        router.post('/webhooks/:id/test', [WebhooksController, 'test'])
+        router.get('/webhooks/:id/history', [WebhooksController, 'history'])
+        router.delete('/webhooks/:id/history', [WebhooksController, 'clearHistory'])
+
+        // Notifications (management - admin only)
+        router.get('/notifications', [NotificationsController, 'index'])
+        router.post('/notifications', [NotificationsController, 'store'])
+        router.get('/notifications/types', [NotificationsController, 'types'])
+        router.get('/notifications/:id', [NotificationsController, 'show'])
+        router.put('/notifications/:id', [NotificationsController, 'update'])
+        router.delete('/notifications/:id', [NotificationsController, 'destroy'])
+        router.post('/notifications/:id/test', [NotificationsController, 'test'])
+
+        // Backup
+        router.get('/system/backup', [BackupController, 'index'])
+        router.post('/system/backup', [BackupController, 'create'])
+        router.get('/system/backup/:name/download', [BackupController, 'download'])
+        router.post('/system/backup/:name/restore', [BackupController, 'restore'])
+        router.delete('/system/backup/:name', [BackupController, 'destroy'])
+
+        // Scheduled Tasks
+        router.get('/system/tasks', [ScheduledTasksController, 'index'])
+        router.put('/system/tasks/:id', [ScheduledTasksController, 'update'])
+        router.post('/system/tasks/:id/run', [ScheduledTasksController, 'run'])
+
+        // API Keys management
+        router.get('/apikeys', [ApiKeysController, 'index'])
+        router.post('/apikeys', [ApiKeysController, 'store'])
+        router.delete('/apikeys/:id', [ApiKeysController, 'destroy'])
+
+        // User management (admin only)
+        router.get('/users', [AdminUsersController, 'index'])
+        router.get('/users/:id', [AdminUsersController, 'show'])
+        router.post('/users', [AdminUsersController, 'store'])
+        router.put('/users/:id', [AdminUsersController, 'update'])
+        router.delete('/users/:id', [AdminUsersController, 'destroy'])
+        router.post('/users/:id/reset-password', [AdminUsersController, 'resetPassword'])
+      })
+      .use(middleware.admin())
   })
   .prefix('/api/v1')
-  .use(middleware.auth())
+  .use(middleware.apiKeyAuth())
+  .use(middleware.rateLimit({ store: 'api', maxAttempts: 100, windowSeconds: 60 }))

@@ -1,6 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import db from '@adonisjs/lucid/services/db'
+import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
+import { eventEmitter } from '#services/events/event_emitter'
 import Download from '#models/download'
 import Movie from '#models/movie'
 import MovieFile from '#models/movie_file'
@@ -54,7 +57,8 @@ export class MovieImportService {
       // Apply remote path mapping if configured
       let outputPath = download.outputPath
       if (download.downloadClientId) {
-        const DownloadClient = (await import('#models/download_client')).default
+        const downloadClientModule = await import('#models/download_client')
+        const DownloadClient = downloadClientModule.default
         const client = await DownloadClient.find(download.downloadClientId)
         if (client?.settings?.remotePath && client?.settings?.localPath) {
           outputPath = outputPath.replace(client.settings.remotePath, client.settings.localPath)
@@ -149,11 +153,72 @@ export class MovieImportService {
         result.success = true
         onProgress?.({ phase: 'cleaning', total: 1, current: 0 })
         await this.cleanupDownloadFolder(outputPath)
+
+        // Emit import completed event
+        eventEmitter
+          .emitImportCompleted({
+            media: {
+              id: movie.id,
+              title: movie.title,
+              year: movie.year ?? undefined,
+              mediaType: 'movies',
+              posterUrl: movie.posterUrl ?? undefined,
+              overview: movie.overview ?? undefined,
+            },
+            files: result.importedPath
+              ? [
+                  {
+                    path: result.importedPath,
+                    relativePath: path.basename(result.importedPath),
+                    size: 0,
+                    quality: mainFile.quality,
+                  },
+                ]
+              : [],
+            isUpgrade: false,
+          })
+          .catch((err) =>
+            logger.error({ err }, 'MovieImportService: Failed to emit import completed event')
+          )
+      } else {
+        // Emit import failed event
+        eventEmitter
+          .emitImportFailed({
+            media: {
+              id: movie.id,
+              title: movie.title,
+              year: movie.year ?? undefined,
+              mediaType: 'movies',
+              posterUrl: movie.posterUrl ?? undefined,
+            },
+            errorMessage: result.errors.join('; ') || 'No files imported',
+            downloadId: download.id,
+          })
+          .catch((err) =>
+            logger.error({ err }, 'MovieImportService: Failed to emit import failed event')
+          )
       }
 
       onProgress?.({ phase: 'complete', total: 1, current: 1 })
     } catch (error) {
       result.errors.push(error instanceof Error ? error.message : 'Import failed')
+
+      // Emit import failed event for unexpected errors
+      if (download.movieId) {
+        eventEmitter
+          .emitImportFailed({
+            media: {
+              id: download.movieId,
+              title: download.title,
+              mediaType: 'movies',
+            },
+            errorMessage: error instanceof Error ? error.message : 'Import failed',
+            downloadId: download.id,
+          })
+          .catch((err) =>
+            logger.error({ err }, 'MovieImportService: Failed to emit import failed event')
+          )
+      }
     }
 
     return result
@@ -188,30 +253,37 @@ export class MovieImportService {
     // Get file stats
     const stats = await fs.stat(absolutePath)
 
-    // Create or update movie file record
-    let movieFile = await MovieFile.query().where('movieId', movie.id).first()
+    // Create or update movie file record and update movie in a transaction
+    await db.transaction(async (trx) => {
+      let movieFile = await MovieFile.query({ client: trx }).where('movieId', movie.id).first()
 
-    if (movieFile) {
-      movieFile.merge({
-        relativePath,
-        sizeBytes: stats.size,
-        quality: quality || null,
-        dateAdded: DateTime.now(),
-      })
-      await movieFile.save()
-    } else {
-      movieFile = await MovieFile.create({
-        movieId: movie.id,
-        relativePath,
-        sizeBytes: stats.size,
-        quality: quality || null,
-        dateAdded: DateTime.now(),
-      })
-    }
+      if (movieFile) {
+        movieFile.useTransaction(trx)
+        movieFile.merge({
+          relativePath,
+          sizeBytes: stats.size,
+          quality: quality || null,
+          dateAdded: DateTime.now(),
+        })
+        await movieFile.save()
+      } else {
+        await MovieFile.create(
+          {
+            movieId: movie.id,
+            relativePath,
+            sizeBytes: stats.size,
+            quality: quality || null,
+            dateAdded: DateTime.now(),
+          },
+          { client: trx }
+        )
+      }
 
-    // Update movie to indicate it has a file
-    movie.hasFile = true
-    await movie.save()
+      // Update movie to indicate it has a file
+      movie.useTransaction(trx)
+      movie.hasFile = true
+      await movie.save()
+    })
 
     return { success: true, destinationPath: absolutePath }
   }
@@ -261,7 +333,7 @@ export class MovieImportService {
         }
       }
     } catch (error) {
-      console.error(`Error scanning directory ${dir}:`, error)
+      logger.error({ dir, err: error }, 'Error scanning directory')
     }
 
     return results
@@ -374,7 +446,7 @@ export class MovieImportService {
         // Folder not empty, that's fine
       }
     } catch (error) {
-      console.error('Error cleaning up download folder:', error)
+      logger.error({ err: error }, 'Error cleaning up download folder')
     }
   }
 

@@ -352,13 +352,13 @@ export class FileScannerService {
     // Try [YEAR] prefix
     const bracketMatch = folderName.match(/^\[(\d{4})\]\s*(.+)$/)
     if (bracketMatch) {
-      return { title: bracketMatch[2], year: parseInt(bracketMatch[1], 10) }
+      return { title: bracketMatch[2], year: Number.parseInt(bracketMatch[1], 10) }
     }
 
     // Try (YEAR) suffix
     const parenMatch = folderName.match(/^(.+)\s*\((\d{4})\)$/)
     if (parenMatch) {
-      return { title: parenMatch[1].trim(), year: parseInt(parenMatch[2], 10) }
+      return { title: parenMatch[1].trim(), year: Number.parseInt(parenMatch[2], 10) }
     }
 
     return { title: folderName }

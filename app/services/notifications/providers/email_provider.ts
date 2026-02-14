@@ -1,16 +1,13 @@
+import nodemailer from 'nodemailer'
 import type { EmailSettings } from '#models/notification_provider'
 import type { NotificationPayload } from '../notification_service.js'
 
 /**
- * Email notification provider using SMTP
- * Uses native fetch with a basic SMTP client implementation
- * For production, consider using a library like nodemailer
+ * Email notification provider using SMTP via nodemailer
  */
 export class EmailProvider {
   /**
-   * Send notification via email
-   * Note: This is a simplified implementation. For production use,
-   * consider using nodemailer or a transactional email service API.
+   * Send notification via email using SMTP
    */
   async send(settings: EmailSettings, payload: NotificationPayload): Promise<void> {
     const { host, port, secure, username, password, from, to } = settings
@@ -19,51 +16,24 @@ export class EmailProvider {
       throw new Error('Email host, from, and to addresses are required')
     }
 
-    // For now, we'll use a simple HTTP-based email service approach
-    // In a real implementation, you'd want to use nodemailer or similar
-    // This stub shows the interface - actual SMTP is complex to implement raw
+    const transporter = this.createTransporter(host, port, secure, username, password)
 
-    // Build HTML email content
     const htmlBody = this.buildHtmlEmail(payload)
 
-    // Create the email data
-    const emailData = {
-      host,
-      port: port || (secure ? 465 : 587),
-      secure: secure ?? false,
-      auth: username ? { user: username, pass: password } : undefined,
+    await transporter.sendMail({
       from,
       to,
       subject: payload.title,
-      html: htmlBody,
       text: payload.message,
-    }
-
-    // Log email attempt (actual sending requires nodemailer or similar)
-    console.log(`[Email] Would send email to ${to}:`, {
-      subject: emailData.subject,
-      from: emailData.from,
+      html: htmlBody,
     })
-
-    // In production, install and use nodemailer:
-    // import nodemailer from 'nodemailer'
-    // const transporter = nodemailer.createTransporter({ host, port, secure, auth })
-    // await transporter.sendMail({ from, to, subject, html, text })
-
-    // For now, throw if not configured (indicates email needs nodemailer)
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error(
-        'Email provider requires nodemailer package. Install with: npm install nodemailer'
-      )
-    }
   }
 
   /**
-   * Test email connection
+   * Test SMTP connection by verifying transporter credentials
    */
   async test(settings: EmailSettings): Promise<{ success: boolean; error?: string }> {
     try {
-      // Validate settings
       if (!settings.host) {
         throw new Error('SMTP host is required')
       }
@@ -74,8 +44,6 @@ export class EmailProvider {
         throw new Error('To address is required')
       }
 
-      // In production, verify SMTP connection
-      // For now, just validate the settings format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(settings.from)) {
         throw new Error('Invalid from email address format')
@@ -84,6 +52,16 @@ export class EmailProvider {
         throw new Error('Invalid to email address format')
       }
 
+      const transporter = this.createTransporter(
+        settings.host,
+        settings.port,
+        settings.secure,
+        settings.username,
+        settings.password
+      )
+
+      await transporter.verify()
+
       return { success: true }
     } catch (error) {
       return {
@@ -91,6 +69,24 @@ export class EmailProvider {
         error: error instanceof Error ? error.message : 'Unknown error',
       }
     }
+  }
+
+  /**
+   * Create a nodemailer transporter
+   */
+  private createTransporter(
+    host: string,
+    port?: number,
+    secure?: boolean,
+    username?: string,
+    password?: string
+  ) {
+    return nodemailer.createTransport({
+      host,
+      port: port || (secure ? 465 : 587),
+      secure: secure ?? false,
+      auth: username ? { user: username, pass: password } : undefined,
+    })
   }
 
   /**

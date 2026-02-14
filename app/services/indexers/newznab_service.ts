@@ -118,7 +118,7 @@ export class NewznabService {
       if (!cat) continue
 
       const category: NewznabCategory = {
-        id: parseInt(cat['@_id'], 10),
+        id: Number.parseInt(cat['@_id'], 10),
         name: cat['@_name'],
         subCategories: [],
       }
@@ -129,7 +129,7 @@ export class NewznabService {
       for (const subCat of subCatArray) {
         if (!subCat) continue
         category.subCategories?.push({
-          id: parseInt(subCat['@_id'], 10),
+          id: Number.parseInt(subCat['@_id'], 10),
           name: subCat['@_name'],
         })
       }
@@ -148,8 +148,8 @@ export class NewznabService {
       },
       categories,
       limits: {
-        max: parseInt(caps.limits?.['@_max'] || '100', 10),
-        default: parseInt(caps.limits?.['@_default'] || '100', 10),
+        max: Number.parseInt(caps.limits?.['@_max'] || '100', 10),
+        default: Number.parseInt(caps.limits?.['@_default'] || '100', 10),
       },
     }
   }
@@ -273,21 +273,21 @@ export class NewznabService {
           guid: item.guid?.['#text'] || item.guid || '',
           title: item.title,
           link: item.link,
-          size: parseInt(attrs.size || '0', 10),
+          size: Number.parseInt(attrs.size || '0', 10),
           pubDate: item.pubDate,
           category: attrs.category || '',
-          categoryId: parseInt(attrs.categoryId || '0', 10),
+          categoryId: Number.parseInt(attrs.categoryId || '0', 10),
           indexer: config.name,
           indexerId: config.id,
           downloadUrl: item.link,
           infoUrl: item.comments,
-          grabs: attrs.grabs ? parseInt(attrs.grabs, 10) : undefined,
-          seeders: attrs.seeders ? parseInt(attrs.seeders, 10) : undefined,
-          peers: attrs.peers ? parseInt(attrs.peers, 10) : undefined,
+          grabs: attrs.grabs ? Number.parseInt(attrs.grabs, 10) : undefined,
+          seeders: attrs.seeders ? Number.parseInt(attrs.seeders, 10) : undefined,
+          peers: attrs.peers ? Number.parseInt(attrs.peers, 10) : undefined,
           artist: attrs.artist,
           album: attrs.album,
           label: attrs.label,
-          year: attrs.year ? parseInt(attrs.year, 10) : undefined,
+          year: attrs.year ? Number.parseInt(attrs.year, 10) : undefined,
         }
       })
   }

@@ -13,13 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectPopup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
@@ -859,8 +853,7 @@ export default function MediaManagement() {
                   >
                     <SelectTrigger className="w-36">
                       <span className="truncate">
-                        {LOCALE_DISPLAY_NAMES[settings.justwatchLocale] ||
-                          settings.justwatchLocale}
+                        {LOCALE_DISPLAY_NAMES[settings.justwatchLocale] || settings.justwatchLocale}
                       </span>
                     </SelectTrigger>
                     <SelectPopup>
@@ -917,7 +910,8 @@ export default function MediaManagement() {
                 <div>
                   <span className="font-medium">Personalized Recommendations</span>
                   <p className="text-sm text-muted-foreground">
-                    "Because you have..." lanes based on your library. Uses TMDB recommendations API.
+                    "Because you have..." lanes based on your library. Uses TMDB recommendations
+                    API.
                   </p>
                 </div>
               </div>
@@ -1338,10 +1332,7 @@ export default function MediaManagement() {
             <Button variant="outline" onClick={() => setTraktDialogOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={handleSaveTraktKey}
-              disabled={savingTraktKey || !traktClientId.trim()}
-            >
+            <Button onClick={handleSaveTraktKey} disabled={savingTraktKey || !traktClientId.trim()}>
               {savingTraktKey ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>

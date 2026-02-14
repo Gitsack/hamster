@@ -12,6 +12,7 @@ const authorValidator = vine.compile(
     qualityProfileId: vine.string().optional(),
     rootFolderId: vine.string(),
     requested: vine.boolean().optional(),
+    monitored: vine.boolean().optional(),
     addBooks: vine.boolean().optional(),
   })
 )
@@ -31,6 +32,7 @@ export default class AuthorsController {
         overview: author.overview,
         imageUrl: author.imageUrl,
         requested: author.requested,
+        monitored: author.monitored,
         bookCount: author.$extras.books_count,
         qualityProfile: author.qualityProfile?.name,
         rootFolder: author.rootFolder?.path,
@@ -83,6 +85,7 @@ export default class AuthorsController {
       name: data.name,
       sortName: data.name.split(' ').reverse().join(', '),
       requested: data.requested ?? true,
+      monitored: data.monitored ?? true,
       qualityProfileId: data.qualityProfileId,
       rootFolderId: data.rootFolderId,
       addedAt: DateTime.now(),
@@ -159,6 +162,7 @@ export default class AuthorsController {
       overview: author.overview,
       imageUrl: author.imageUrl,
       requested: author.requested,
+      monitored: author.monitored,
       qualityProfile: author.qualityProfile,
       rootFolder: author.rootFolder,
       books: author.books.map((b) => ({
@@ -181,19 +185,21 @@ export default class AuthorsController {
       return response.notFound({ error: 'Author not found' })
     }
 
-    const { requested, qualityProfileId, rootFolderId } = request.only([
+    const { requested, monitored, qualityProfileId, rootFolderId } = request.only([
       'requested',
+      'monitored',
       'qualityProfileId',
       'rootFolderId',
     ])
 
     if (requested !== undefined) author.requested = requested
+    if (monitored !== undefined) author.monitored = monitored
     if (qualityProfileId !== undefined) author.qualityProfileId = qualityProfileId
     if (rootFolderId !== undefined) author.rootFolderId = rootFolderId
 
     await author.save()
 
-    return response.json({ id: author.id, name: author.name, requested: author.requested })
+    return response.json({ id: author.id, name: author.name, requested: author.requested, monitored: author.monitored })
   }
 
   async destroy({ params, response }: HttpContext) {
@@ -292,7 +298,7 @@ export default class AuthorsController {
             overview: work.description,
             coverUrl: openLibraryService.getCoverUrl(work.coverId, 'L'),
             genres: work.subjects || [],
-            requested: false, // New books are not requested by default
+            requested: author.monitored, // Auto-request if author is monitored
             hasFile: false,
           })
           addedCount++

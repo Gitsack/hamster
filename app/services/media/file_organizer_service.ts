@@ -1,12 +1,20 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import db from '@adonisjs/lucid/services/db'
+import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
 import { mediaInfoService } from './media_info_service.js'
+import { eventEmitter } from '#services/events/event_emitter'
 import RootFolder from '#models/root_folder'
 import Artist from '#models/artist'
 import Album from '#models/album'
 import Track from '#models/track'
 import TrackFile from '#models/track_file'
+import Movie from '#models/movie'
+import TvShow from '#models/tv_show'
+import Episode from '#models/episode'
+import Author from '#models/author'
+import Book from '#models/book'
 import { DateTime } from 'luxon'
 
 interface ImportResult {
@@ -15,6 +23,13 @@ interface ImportResult {
   error?: string
   sourceFile: string
   destinationFile?: string
+}
+
+export interface RenamePreviewItem {
+  id: string
+  currentPath: string
+  newPath: string
+  willChange: boolean
 }
 
 interface ImportOptions {
@@ -105,40 +120,72 @@ export class FileOrganizerService {
       // Get file stats
       const stats = await fs.stat(absolutePath)
 
-      // Create or update track file record
-      let trackFile = await TrackFile.query().where('trackId', track.id).first()
+      // Create or update track file record in a transaction
+      let trackFile!: TrackFile
+      await db.transaction(async (trx) => {
+        const existing = await TrackFile.query({ client: trx }).where('trackId', track.id).first()
 
-      if (trackFile) {
-        trackFile.merge({
-          relativePath,
-          sizeBytes: stats.size,
-          quality: this.determineQuality(mediaInfo),
-          mediaInfo: {
-            codec: mediaInfo.codec,
-            bitrate: mediaInfo.bitrate,
-            sampleRate: mediaInfo.sampleRate,
-            channels: mediaInfo.channels,
-            bitsPerSample: mediaInfo.bitDepth,
+        if (existing) {
+          existing.useTransaction(trx)
+          existing.merge({
+            relativePath,
+            sizeBytes: stats.size,
+            quality: this.determineQuality(mediaInfo),
+            mediaInfo: {
+              codec: mediaInfo.codec,
+              bitrate: mediaInfo.bitrate,
+              sampleRate: mediaInfo.sampleRate,
+              channels: mediaInfo.channels,
+              bitsPerSample: mediaInfo.bitDepth,
+            },
+          })
+          await existing.save()
+          trackFile = existing
+        } else {
+          trackFile = await TrackFile.create(
+            {
+              trackId: track.id,
+              albumId: album.id,
+              relativePath,
+              sizeBytes: stats.size,
+              quality: this.determineQuality(mediaInfo),
+              dateAdded: DateTime.now(),
+              mediaInfo: {
+                codec: mediaInfo.codec,
+                bitrate: mediaInfo.bitrate,
+                sampleRate: mediaInfo.sampleRate,
+                channels: mediaInfo.channels,
+                bitsPerSample: mediaInfo.bitDepth,
+              },
+            },
+            { client: trx }
+          )
+        }
+      })
+
+      // Emit import completed event
+      eventEmitter
+        .emitImportCompleted({
+          media: {
+            id: album.id,
+            title: `${artist.name} - ${album.title}`,
+            year: album.releaseDate?.year ?? undefined,
+            mediaType: 'music',
+            posterUrl: album.imageUrl ?? undefined,
           },
+          files: [
+            {
+              path: absolutePath,
+              relativePath,
+              size: stats.size,
+              quality: this.determineQuality(mediaInfo),
+            },
+          ],
+          isUpgrade: false,
         })
-        await trackFile.save()
-      } else {
-        trackFile = await TrackFile.create({
-          trackId: track.id,
-          albumId: album.id,
-          relativePath,
-          sizeBytes: stats.size,
-          quality: this.determineQuality(mediaInfo),
-          dateAdded: DateTime.now(),
-          mediaInfo: {
-            codec: mediaInfo.codec,
-            bitrate: mediaInfo.bitrate,
-            sampleRate: mediaInfo.sampleRate,
-            channels: mediaInfo.channels,
-            bitsPerSample: mediaInfo.bitDepth,
-          },
-        })
-      }
+        .catch((err) =>
+          logger.error({ err }, 'FileOrganizerService: Failed to emit import completed event')
+        )
 
       return {
         success: true,
@@ -205,7 +252,7 @@ export class FileOrganizerService {
 
       return true
     } catch (error) {
-      console.error('Failed to move track file:', error)
+      logger.error({ err: error }, 'Failed to move track file')
       return false
     }
   }
@@ -344,7 +391,7 @@ export class FileOrganizerService {
         }
       }
     } catch (error) {
-      console.error(`Error reading directory ${dir}:`, error)
+      logger.error({ dir, err: error }, 'Error reading directory')
     }
 
     return results
@@ -360,6 +407,314 @@ export class FileOrganizerService {
     } catch {
       return false
     }
+  }
+
+  // =====================
+  // Movie rename/organize
+  // =====================
+
+  /**
+   * Preview what a movie rename would look like
+   */
+  async previewRenameMovie(movieId: string): Promise<RenamePreviewItem[]> {
+    const movie = await Movie.query()
+      .where('id', movieId)
+      .preload('rootFolder')
+      .preload('movieFile')
+      .first()
+
+    if (!movie || !movie.movieFile || !movie.rootFolder) return []
+
+    const extension = path.extname(movie.movieFile.relativePath)
+    const expectedPath = await fileNamingService.getMoviePath(
+      { movie, quality: movie.movieFile.quality || undefined },
+      extension
+    )
+
+    return [
+      {
+        id: movie.movieFile.id,
+        currentPath: movie.movieFile.relativePath,
+        newPath: expectedPath,
+        willChange: movie.movieFile.relativePath !== expectedPath,
+      },
+    ]
+  }
+
+  /**
+   * Rename/organize a movie file based on current naming settings
+   */
+  async renameMovie(movieId: string): Promise<{ moved: number; errors: string[] }> {
+    const preview = await this.previewRenameMovie(movieId)
+    const toMove = preview.filter((p) => p.willChange)
+
+    if (toMove.length === 0) return { moved: 0, errors: [] }
+
+    const movie = await Movie.query()
+      .where('id', movieId)
+      .preload('rootFolder')
+      .preload('movieFile')
+      .first()
+
+    if (!movie || !movie.movieFile || !movie.rootFolder) {
+      return { moved: 0, errors: ['Movie, file, or root folder not found'] }
+    }
+
+    const errors: string[] = []
+    const item = toMove[0]
+
+    try {
+      const oldPath = path.join(movie.rootFolder.path, item.currentPath)
+      const newPath = path.join(movie.rootFolder.path, item.newPath)
+
+      await fs.mkdir(path.dirname(newPath), { recursive: true })
+      await fs.rename(oldPath, newPath)
+
+      movie.movieFile.relativePath = item.newPath
+      await movie.movieFile.save()
+
+      await this.removeEmptyDirectories(path.dirname(oldPath), movie.rootFolder.path)
+    } catch (error) {
+      errors.push(`Failed to rename: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+
+    return { moved: toMove.length - errors.length, errors }
+  }
+
+  // =====================
+  // Episode rename/organize
+  // =====================
+
+  /**
+   * Preview what a TV show episode rename would look like
+   */
+  async previewRenameEpisodes(tvShowId: string): Promise<RenamePreviewItem[]> {
+    const tvShow = await TvShow.query().where('id', tvShowId).preload('rootFolder').first()
+
+    if (!tvShow || !tvShow.rootFolder) return []
+
+    const episodes = await Episode.query().where('tvShowId', tvShowId).preload('episodeFile')
+
+    const previews: RenamePreviewItem[] = []
+
+    for (const episode of episodes) {
+      if (!episode.episodeFile) continue
+
+      const extension = path.extname(episode.episodeFile.relativePath)
+      const expectedPath = await fileNamingService.getEpisodePath(
+        { episode, tvShow, quality: episode.episodeFile.quality || undefined },
+        extension
+      )
+
+      previews.push({
+        id: episode.episodeFile.id,
+        currentPath: episode.episodeFile.relativePath,
+        newPath: expectedPath,
+        willChange: episode.episodeFile.relativePath !== expectedPath,
+      })
+    }
+
+    return previews
+  }
+
+  /**
+   * Rename/organize all episode files for a TV show
+   */
+  async renameEpisodes(tvShowId: string): Promise<{ moved: number; errors: string[] }> {
+    const tvShow = await TvShow.query().where('id', tvShowId).preload('rootFolder').first()
+
+    if (!tvShow || !tvShow.rootFolder) {
+      return { moved: 0, errors: ['TV show or root folder not found'] }
+    }
+
+    const episodes = await Episode.query().where('tvShowId', tvShowId).preload('episodeFile')
+
+    let moved = 0
+    const errors: string[] = []
+
+    for (const episode of episodes) {
+      if (!episode.episodeFile) continue
+
+      const extension = path.extname(episode.episodeFile.relativePath)
+      const expectedPath = await fileNamingService.getEpisodePath(
+        { episode, tvShow, quality: episode.episodeFile.quality || undefined },
+        extension
+      )
+
+      if (episode.episodeFile.relativePath === expectedPath) continue
+
+      try {
+        const oldPath = path.join(tvShow.rootFolder.path, episode.episodeFile.relativePath)
+        const newPath = path.join(tvShow.rootFolder.path, expectedPath)
+
+        await fs.mkdir(path.dirname(newPath), { recursive: true })
+        await fs.rename(oldPath, newPath)
+
+        episode.episodeFile.relativePath = expectedPath
+        await episode.episodeFile.save()
+
+        await this.removeEmptyDirectories(path.dirname(oldPath), tvShow.rootFolder.path)
+        moved++
+      } catch (error) {
+        errors.push(
+          `S${episode.seasonNumber}E${episode.episodeNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
+      }
+    }
+
+    return { moved, errors }
+  }
+
+  // =====================
+  // Artist rename/organize
+  // =====================
+
+  /**
+   * Preview what an artist rename would look like (all album tracks)
+   */
+  async previewRenameArtist(artistId: string): Promise<RenamePreviewItem[]> {
+    const artist = await Artist.find(artistId)
+    if (!artist || !artist.rootFolderId) return []
+
+    const rootFolder = await RootFolder.find(artist.rootFolderId)
+    if (!rootFolder) return []
+
+    const albums = await Album.query().where('artistId', artist.id)
+    const previews: RenamePreviewItem[] = []
+
+    for (const album of albums) {
+      const tracks = await Track.query().where('albumId', album.id).preload('file')
+
+      for (const track of tracks) {
+        if (!track.file) continue
+
+        const extension = path.extname(track.file.relativePath)
+        const expectedPath = await fileNamingService.getTrackPath(
+          { track, album, artist },
+          extension
+        )
+
+        previews.push({
+          id: track.file.id,
+          currentPath: track.file.relativePath,
+          newPath: expectedPath,
+          willChange: track.file.relativePath !== expectedPath,
+        })
+      }
+    }
+
+    return previews
+  }
+
+  /**
+   * Rename/organize all files for an artist based on current naming settings
+   */
+  async renameArtist(artistId: string): Promise<{ moved: number; errors: string[] }> {
+    const artist = await Artist.find(artistId)
+    if (!artist || !artist.rootFolderId) {
+      return { moved: 0, errors: ['Artist or root folder not configured'] }
+    }
+
+    const rootFolder = await RootFolder.find(artist.rootFolderId)
+    if (!rootFolder) return { moved: 0, errors: ['Root folder not found'] }
+
+    const albums = await Album.query().where('artistId', artist.id)
+
+    let totalMoved = 0
+    const allErrors: string[] = []
+
+    for (const album of albums) {
+      const result = await this.organizeAlbum(album)
+      totalMoved += result.moved
+      allErrors.push(...result.errors)
+    }
+
+    return { moved: totalMoved, errors: allErrors }
+  }
+
+  // =====================
+  // Book rename/organize
+  // =====================
+
+  /**
+   * Preview what a book rename would look like for an author's books
+   */
+  async previewRenameBooks(authorId: string): Promise<RenamePreviewItem[]> {
+    const author = await Author.find(authorId)
+    if (!author || !author.rootFolderId) return []
+
+    const rootFolder = await RootFolder.find(author.rootFolderId)
+    if (!rootFolder) return []
+
+    const books = await Book.query().where('authorId', author.id).preload('bookFile')
+    const previews: RenamePreviewItem[] = []
+
+    for (const book of books) {
+      if (!book.bookFile) continue
+
+      const extension = path.extname(book.bookFile.relativePath)
+      const expectedPath = await fileNamingService.getBookPath(
+        { book, author, format: book.bookFile.format || undefined },
+        extension
+      )
+
+      previews.push({
+        id: book.bookFile.id,
+        currentPath: book.bookFile.relativePath,
+        newPath: expectedPath,
+        willChange: book.bookFile.relativePath !== expectedPath,
+      })
+    }
+
+    return previews
+  }
+
+  /**
+   * Rename/organize all book files for an author
+   */
+  async renameBooks(authorId: string): Promise<{ moved: number; errors: string[] }> {
+    const author = await Author.find(authorId)
+    if (!author || !author.rootFolderId) {
+      return { moved: 0, errors: ['Author or root folder not configured'] }
+    }
+
+    const rootFolder = await RootFolder.find(author.rootFolderId)
+    if (!rootFolder) return { moved: 0, errors: ['Root folder not found'] }
+
+    const books = await Book.query().where('authorId', author.id).preload('bookFile')
+
+    let moved = 0
+    const errors: string[] = []
+
+    for (const book of books) {
+      if (!book.bookFile) continue
+
+      const extension = path.extname(book.bookFile.relativePath)
+      const expectedPath = await fileNamingService.getBookPath(
+        { book, author, format: book.bookFile.format || undefined },
+        extension
+      )
+
+      if (book.bookFile.relativePath === expectedPath) continue
+
+      try {
+        const oldPath = path.join(rootFolder.path, book.bookFile.relativePath)
+        const newPath = path.join(rootFolder.path, expectedPath)
+
+        await fs.mkdir(path.dirname(newPath), { recursive: true })
+        await fs.rename(oldPath, newPath)
+
+        book.bookFile.relativePath = expectedPath
+        await book.bookFile.save()
+
+        await this.removeEmptyDirectories(path.dirname(oldPath), rootFolder.path)
+        moved++
+      } catch (error) {
+        errors.push(`"${book.title}": ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    }
+
+    return { moved, errors }
   }
 
   /**

@@ -8,6 +8,8 @@ export type TaskType =
   | 'refresh_artist'
   | 'backup'
   | 'download_monitor'
+  | 'requested_search'
+  | 'completed_scanner'
 
 export default class ScheduledTask extends BaseModel {
   @column({ isPrimary: true })

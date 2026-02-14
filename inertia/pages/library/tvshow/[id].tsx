@@ -36,12 +36,13 @@ import {
   Add01Icon,
   PlayIcon,
   Refresh01Icon,
+  Notification01Icon,
+  NotificationOff01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { StatusBadge } from '@/components/library/status-badge'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { VideoPlayer } from '@/components/player/video_player'
@@ -104,6 +105,7 @@ interface TvShow {
   rating: number | null
   genres: string[]
   requested: boolean
+  monitored: boolean
   seasonCount: number
   episodeCount: number
   qualityProfile: QualityProfile | null
@@ -253,6 +255,31 @@ export default function TvShowDetail() {
         next.delete(seasonNumber)
         return next
       })
+    }
+  }
+
+  const toggleMonitored = async () => {
+    if (!show) return
+
+    const wasMonitored = show.monitored
+    setShow({ ...show, monitored: !wasMonitored })
+
+    try {
+      const response = await fetch(`/api/v1/tvshows/${showId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monitored: !wasMonitored }),
+      })
+      if (response.ok) {
+        toast.success(wasMonitored ? 'Monitoring disabled' : 'Monitoring enabled')
+      } else {
+        setShow({ ...show, monitored: wasMonitored })
+        toast.error('Failed to update monitoring')
+      }
+    } catch (error) {
+      console.error('Failed to update monitoring:', error)
+      setShow({ ...show, monitored: wasMonitored })
+      toast.error('Failed to update monitoring')
     }
   }
 
@@ -729,6 +756,13 @@ export default function TvShowDetail() {
               Back
             </Link>
           </Button>
+          <Button variant="outline" size="sm" onClick={toggleMonitored}>
+            <HugeiconsIcon
+              icon={show.monitored ? Notification01Icon : NotificationOff01Icon}
+              className="h-4 w-4 mr-2"
+            />
+            {show.monitored ? 'Monitored' : 'Monitor'}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon">
@@ -1033,7 +1067,7 @@ export default function TvShowDetail() {
                                     if (status === 'downloaded') {
                                       return (
                                         <>
-                                          <StatusBadge status="downloaded" />
+                                          <MediaStatusBadge status="downloaded" size="sm" />
                                           {episode.episodeFile && (
                                             <>
                                               <Button

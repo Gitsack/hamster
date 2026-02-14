@@ -91,6 +91,9 @@ export default class TvShow extends BaseModel {
   declare requested: boolean
 
   @column()
+  declare monitored: boolean
+
+  @column()
   declare needsReview: boolean
 
   // Configuration

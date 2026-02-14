@@ -7,12 +7,17 @@ import { downloadImportService } from '#services/media/download_import_service'
 const downloadClientValidator = vine.compile(
   vine.object({
     name: vine.string().minLength(1).maxLength(255),
-    type: vine.enum(['sabnzbd', 'nzbget']),
+    type: vine.enum(['sabnzbd', 'nzbget', 'qbittorrent', 'transmission', 'deluge']),
     host: vine.string().minLength(1),
     port: vine.number().min(1).max(65535),
-    apiKey: vine.string().minLength(1),
+    apiKey: vine.string().optional(),
+    username: vine.string().optional(),
+    password: vine.string().optional(),
     useSsl: vine.boolean().optional(),
     category: vine.string().optional(),
+    urlBase: vine.string().optional(),
+    downloadDirectory: vine.string().optional(),
+    addPaused: vine.boolean().optional(),
     enabled: vine.boolean().optional(),
     priority: vine.number().optional(),
     removeCompletedDownloads: vine.boolean().optional(),
@@ -22,28 +27,24 @@ const downloadClientValidator = vine.compile(
   })
 )
 
+const downloadClientTestValidator = vine.compile(
+  vine.object({
+    type: vine.enum(['sabnzbd', 'nzbget', 'qbittorrent', 'transmission', 'deluge']),
+    host: vine.string().minLength(1),
+    port: vine.number().min(1).max(65535),
+    apiKey: vine.string().optional(),
+    username: vine.string().optional(),
+    password: vine.string().optional(),
+    useSsl: vine.boolean().optional(),
+    urlBase: vine.string().optional(),
+  })
+)
+
 export default class DownloadClientsController {
   async index({ response }: HttpContext) {
     const clients = await DownloadClient.query().orderBy('priority', 'asc').orderBy('name', 'asc')
 
-    return response.json(
-      clients.map((client) => ({
-        id: client.id,
-        name: client.name,
-        type: client.type,
-        host: client.settings.host || '',
-        port: client.settings.port || 8080,
-        apiKey: client.settings.apiKey || '',
-        useSsl: client.settings.useSsl || false,
-        category: client.settings.category || '',
-        enabled: client.enabled,
-        priority: client.priority,
-        removeCompletedDownloads: client.removeCompletedDownloads,
-        removeFailedDownloads: client.removeFailedDownloads,
-        remotePath: client.settings.remotePath || '',
-        localPath: client.settings.localPath || '',
-      }))
-    )
+    return response.json(clients.map((client) => this.serializeClient(client)))
   }
 
   async store({ request, response }: HttpContext) {
@@ -60,21 +61,19 @@ export default class DownloadClientsController {
         host: data.host,
         port: data.port,
         apiKey: data.apiKey,
+        username: data.username,
+        password: data.password,
         useSsl: data.useSsl || false,
         category: data.category,
+        urlBase: data.urlBase,
+        downloadDirectory: data.downloadDirectory,
+        addPaused: data.addPaused,
         remotePath: data.remotePath,
         localPath: data.localPath,
       },
     })
 
-    return response.created({
-      id: client.id,
-      name: client.name,
-      type: client.type,
-      host: client.settings.host,
-      port: client.settings.port,
-      enabled: client.enabled,
-    })
+    return response.created(this.serializeClient(client))
   }
 
   async show({ params, response }: HttpContext) {
@@ -83,22 +82,7 @@ export default class DownloadClientsController {
       return response.notFound({ error: 'Download client not found' })
     }
 
-    return response.json({
-      id: client.id,
-      name: client.name,
-      type: client.type,
-      host: client.settings.host || '',
-      port: client.settings.port || 8080,
-      apiKey: client.settings.apiKey || '',
-      useSsl: client.settings.useSsl || false,
-      category: client.settings.category || '',
-      enabled: client.enabled,
-      priority: client.priority,
-      removeCompletedDownloads: client.removeCompletedDownloads,
-      removeFailedDownloads: client.removeFailedDownloads,
-      remotePath: client.settings.remotePath || '',
-      localPath: client.settings.localPath || '',
-    })
+    return response.json(this.serializeClient(client))
   }
 
   async update({ params, request, response }: HttpContext) {
@@ -120,20 +104,20 @@ export default class DownloadClientsController {
         host: data.host,
         port: data.port,
         apiKey: data.apiKey,
+        username: data.username,
+        password: data.password,
         useSsl: data.useSsl || false,
         category: data.category,
+        urlBase: data.urlBase,
+        downloadDirectory: data.downloadDirectory,
+        addPaused: data.addPaused,
         remotePath: data.remotePath,
         localPath: data.localPath,
       },
     })
     await client.save()
 
-    return response.json({
-      id: client.id,
-      name: client.name,
-      type: client.type,
-      enabled: client.enabled,
-    })
+    return response.json(this.serializeClient(client))
   }
 
   async destroy({ params, response }: HttpContext) {
@@ -147,19 +131,17 @@ export default class DownloadClientsController {
   }
 
   async test({ request, response }: HttpContext) {
-    const { type, host, port, apiKey, useSsl } = request.only([
-      'type',
-      'host',
-      'port',
-      'apiKey',
-      'useSsl',
-    ])
+    const data = await request.validateUsing(downloadClientTestValidator)
 
-    if (!type || !host || !port || !apiKey) {
-      return response.badRequest({ error: 'Type, host, port, and API key are required' })
-    }
-
-    const result = await downloadManager.testClient(type, { host, port, apiKey, useSsl })
+    const result = await downloadManager.testClient(data.type, {
+      host: data.host,
+      port: data.port,
+      apiKey: data.apiKey,
+      username: data.username,
+      password: data.password,
+      useSsl: data.useSsl,
+      urlBase: data.urlBase,
+    })
 
     return response.json(result)
   }
@@ -414,6 +396,30 @@ export default class DownloadClientsController {
       'webp': 'image/webp',
     }
     return mimeTypes[ext || ''] || 'application/octet-stream'
+  }
+
+  private serializeClient(client: DownloadClient) {
+    return {
+      id: client.id,
+      name: client.name,
+      type: client.type,
+      host: client.settings.host || '',
+      port: client.settings.port || 8080,
+      apiKey: client.settings.apiKey || '',
+      username: client.settings.username || '',
+      password: client.settings.password || '',
+      useSsl: client.settings.useSsl || false,
+      category: client.settings.category || '',
+      urlBase: client.settings.urlBase || '',
+      downloadDirectory: client.settings.downloadDirectory || '',
+      addPaused: client.settings.addPaused || false,
+      enabled: client.enabled,
+      priority: client.priority,
+      removeCompletedDownloads: client.removeCompletedDownloads,
+      removeFailedDownloads: client.removeFailedDownloads,
+      remotePath: client.settings.remotePath || '',
+      localPath: client.settings.localPath || '',
+    }
   }
 
   private async getDirSize(dirPath: string): Promise<number> {
