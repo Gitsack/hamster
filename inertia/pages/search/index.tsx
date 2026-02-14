@@ -56,12 +56,7 @@ import {
   ArrowLeft01Icon,
   ViewIcon,
   Cancel01Icon,
-  StarIcon,
-  Time01Icon,
-  Calendar03Icon,
-  InformationCircleIcon,
 } from '@hugeicons/core-free-icons'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
 import {
   useState,
@@ -77,11 +72,10 @@ import { toast } from 'sonner'
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
 import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dialog'
 import {
-  MediaStatusBadge,
   CardStatusBadge,
   type MediaItemStatus,
 } from '@/components/library/media-status-badge'
-import { SimilarLane } from '@/components/library/similar-lane'
+import { useMediaPreview } from '@/contexts/media_preview_context'
 
 // Error boundary to catch rendering errors
 class ErrorBoundary extends Component<
@@ -240,17 +234,6 @@ interface QualityProfile {
   id: string
   name: string
   mediaType?: string
-}
-
-interface StreamingOffer {
-  monetizationType: string
-  providerId: number
-  providerName: string
-  providerIconUrl: string
-  presentationType: string
-  url: string
-  retailPrice?: number
-  currency?: string
 }
 
 interface RecommendationLane {
@@ -432,55 +415,8 @@ export default function SearchPage() {
   // Navigation control after adding
   const [navigateAfterAdd, setNavigateAfterAdd] = useState(true)
 
-  // Entity details sheet state
-  const [detailsSheetOpen, setDetailsSheetOpen] = useState(false)
-  const [detailsType, setDetailsType] = useState<'movie' | 'tv' | null>(null)
-  const [detailsLoading, setDetailsLoading] = useState(false)
-  const [togglingDetails, setTogglingDetails] = useState(false)
-  const [movieDetails, setMovieDetails] = useState<{
-    tmdbId: string
-    imdbId?: string
-    title: string
-    originalTitle?: string
-    year?: number
-    overview?: string
-    posterUrl?: string
-    backdropUrl?: string
-    releaseDate?: string
-    runtime?: number
-    status?: string
-    rating?: number
-    votes?: number
-    genres?: string[]
-    cast?: { id: number; name: string; character: string; profileUrl?: string }[]
-    streamingOffers?: StreamingOffer[]
-    inLibrary: boolean
-    libraryId?: number
-    requested?: boolean
-    hasFile?: boolean
-  } | null>(null)
-  const [tvShowDetails, setTvShowDetails] = useState<{
-    tmdbId: string
-    title: string
-    originalTitle?: string
-    year?: number
-    overview?: string
-    posterUrl?: string
-    backdropUrl?: string
-    firstAirDate?: string
-    status?: string
-    rating?: number
-    votes?: number
-    genres?: string[]
-    networks?: string[]
-    seasonCount?: number
-    episodeCount?: number
-    cast?: { id: number; name: string; character: string; profileUrl?: string }[]
-    streamingOffers?: StreamingOffer[]
-    inLibrary: boolean
-    libraryId?: number
-    requested?: boolean
-  } | null>(null)
+  // Media preview context
+  const { openMoviePreview, openTvShowPreview } = useMediaPreview()
 
   // Books add state
   const [selectedAuthor, setSelectedAuthor] = useState<AuthorSearchResult | null>(null)
@@ -1390,191 +1326,6 @@ export default function SearchPage() {
     }
   }
 
-  // Toggle movie requested state from details sheet
-  const toggleMovieDetailsRequested = async () => {
-    if (!movieDetails?.libraryId || !movieDetails?.inLibrary) return
-
-    const wasRequested = movieDetails.requested
-
-    // If unrequesting a movie with a file, show error
-    if (wasRequested && movieDetails.hasFile) {
-      toast.error('Movie has downloaded files. Delete files first before unrequesting.')
-      return
-    }
-
-    setTogglingDetails(true)
-
-    // Optimistic update
-    setMovieDetails({ ...movieDetails, requested: !wasRequested })
-
-    try {
-      const response = await fetch(`/api/v1/movies/${movieDetails.libraryId}/request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requested: !wasRequested }),
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        const tmdbId = movieDetails.tmdbId
-        if (data.deleted) {
-          // Movie was deleted - update local state to remove from library
-          toast.success('Removed from library')
-          setMovieDetails({
-            ...movieDetails,
-            inLibrary: false,
-            libraryId: undefined,
-            requested: false,
-          })
-          setMovieResults((prev) =>
-            prev.map((m) =>
-              m.tmdbId === tmdbId
-                ? { ...m, inLibrary: false, libraryId: undefined, requested: false }
-                : m
-            )
-          )
-          setMovieDiscoverLanes((prev) => {
-            const updated: Record<string, MovieSearchResult[]> = {}
-            for (const [key, lane] of Object.entries(prev)) {
-              updated[key] = lane.map((m) =>
-                m.tmdbId === tmdbId
-                  ? { ...m, inLibrary: false, libraryId: undefined, requested: false }
-                  : m
-              )
-            }
-            return updated
-          })
-        } else {
-          toast.success(wasRequested ? 'Movie unrequested' : 'Movie requested')
-          // Also update in the search results/discover lanes
-          setMovieResults((prev) =>
-            prev.map((m) => (m.tmdbId === tmdbId ? { ...m, requested: !wasRequested } : m))
-          )
-          setMovieDiscoverLanes((prev) => {
-            const updated: Record<string, MovieSearchResult[]> = {}
-            for (const [key, lane] of Object.entries(prev)) {
-              updated[key] = lane.map((m) =>
-                m.tmdbId === tmdbId ? { ...m, requested: !wasRequested } : m
-              )
-            }
-            return updated
-          })
-        }
-      } else if (data.hasFile) {
-        // Revert on error
-        setMovieDetails({ ...movieDetails, requested: wasRequested })
-        toast.error('Movie has downloaded files. Delete files first before unrequesting.')
-      } else {
-        // Revert on error
-        setMovieDetails({ ...movieDetails, requested: wasRequested })
-        toast.error(data.error || 'Failed to update movie')
-      }
-    } catch (error) {
-      console.error('Failed to update movie:', error)
-      setMovieDetails({ ...movieDetails, requested: wasRequested })
-      toast.error('Failed to update movie')
-    } finally {
-      setTogglingDetails(false)
-    }
-  }
-
-  // Toggle TV show requested state from details sheet
-  const toggleTvShowDetailsRequested = async () => {
-    if (!tvShowDetails?.libraryId || !tvShowDetails?.inLibrary) return
-
-    setTogglingDetails(true)
-    const wasRequested = tvShowDetails.requested
-
-    // Optimistic update
-    setTvShowDetails({ ...tvShowDetails, requested: !wasRequested })
-
-    try {
-      const response = await fetch(`/api/v1/tvshows/${tvShowDetails.libraryId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requested: !wasRequested }),
-      })
-      if (response.ok) {
-        toast.success(wasRequested ? 'TV show unrequested' : 'TV show requested')
-        // Also update in the search results/discover lanes
-        const tmdbId = tvShowDetails.tmdbId
-        setTvShowResults((prev) =>
-          prev.map((s) => (s.tmdbId === tmdbId ? { ...s, requested: !wasRequested } : s))
-        )
-        setTvDiscoverLanes((prev) => {
-          const updated: Record<string, TvShowSearchResult[]> = {}
-          for (const [key, lane] of Object.entries(prev)) {
-            updated[key] = lane.map((s) =>
-              s.tmdbId === tmdbId ? { ...s, requested: !wasRequested } : s
-            )
-          }
-          return updated
-        })
-      } else {
-        // Revert on error
-        setTvShowDetails({ ...tvShowDetails, requested: wasRequested })
-        toast.error('Failed to update TV show')
-      }
-    } catch (error) {
-      console.error('Failed to update TV show:', error)
-      setTvShowDetails({ ...tvShowDetails, requested: wasRequested })
-      toast.error('Failed to update TV show')
-    } finally {
-      setTogglingDetails(false)
-    }
-  }
-
-  // Open movie details sheet
-  const openMovieDetails = async (movie: MovieSearchResult) => {
-    setDetailsType('movie')
-    setDetailsSheetOpen(true)
-    setDetailsLoading(true)
-    setMovieDetails(null)
-
-    try {
-      const response = await fetch(`/api/v1/movies/preview?tmdbId=${movie.tmdbId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setMovieDetails(data)
-      } else {
-        toast.error('Failed to load movie details')
-        setDetailsSheetOpen(false)
-      }
-    } catch (error) {
-      console.error('Failed to fetch movie details:', error)
-      toast.error('Failed to load movie details')
-      setDetailsSheetOpen(false)
-    } finally {
-      setDetailsLoading(false)
-    }
-  }
-
-  // Open TV show details sheet
-  const openTvShowDetails = async (show: TvShowSearchResult) => {
-    setDetailsType('tv')
-    setDetailsSheetOpen(true)
-    setDetailsLoading(true)
-    setTvShowDetails(null)
-
-    try {
-      const response = await fetch(`/api/v1/tvshows/preview?tmdbId=${show.tmdbId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setTvShowDetails(data)
-      } else {
-        toast.error('Failed to load TV show details')
-        setDetailsSheetOpen(false)
-      }
-    } catch (error) {
-      console.error('Failed to fetch TV show details:', error)
-      toast.error('Failed to load TV show details')
-      setDetailsSheetOpen(false)
-    } finally {
-      setDetailsLoading(false)
-    }
-  }
-
   const addAuthorWithProfile = async (
     author: AuthorSearchResult,
     qualityProfileId: string,
@@ -2479,7 +2230,7 @@ export default function SearchPage() {
                 inLibrary: movie.inLibrary,
               },
               Film01Icon,
-              () => openMovieDetails(movie),
+              () => openMoviePreview(movie.tmdbId),
               () => handleAddMovie(movie, false)
             )
           )}
@@ -2544,7 +2295,7 @@ export default function SearchPage() {
             items={lane.items}
             type="movie"
             moreHref={`/discover/movies/${lane.key.replace(/-movies$/, '')}`}
-            onItemClick={(item) => openMovieDetails(item as MovieSearchResult)}
+            onItemClick={(item) => openMoviePreview(item.tmdbId)}
             onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
             onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
             togglingItems={togglingMovies}
@@ -2558,7 +2309,7 @@ export default function SearchPage() {
               items={movieDiscoverLanes[cat.key]}
               type="movie"
               moreHref={`/discover/movies/${cat.key}`}
-              onItemClick={(item) => openMovieDetails(item as MovieSearchResult)}
+              onItemClick={(item) => openMoviePreview(item.tmdbId)}
               onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
               onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
               togglingItems={togglingMovies}
@@ -2580,7 +2331,7 @@ export default function SearchPage() {
             source={lane.source}
             items={lane.items}
             type="movie"
-            onItemClick={(item) => openMovieDetails(item as MovieSearchResult)}
+            onItemClick={(item) => openMoviePreview(item.tmdbId)}
             onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
             onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
             togglingItems={togglingMovies}
@@ -2612,7 +2363,7 @@ export default function SearchPage() {
                 inLibrary: show.inLibrary,
               },
               Tv01Icon,
-              () => openTvShowDetails(show),
+              () => openTvShowPreview(show.tmdbId),
               () => handleAddTvShow(show, false)
             )
           )}
@@ -2675,7 +2426,7 @@ export default function SearchPage() {
             items={lane.items}
             type="tv"
             moreHref={`/discover/tv/${lane.key.replace(/-shows$/, '')}`}
-            onItemClick={(item) => openTvShowDetails(item as TvShowSearchResult)}
+            onItemClick={(item) => openTvShowPreview(item.tmdbId)}
             onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
             onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
             togglingItems={togglingTvShows}
@@ -2689,7 +2440,7 @@ export default function SearchPage() {
               items={tvDiscoverLanes[cat.key]}
               type="tv"
               moreHref={`/discover/tv/${cat.key}`}
-              onItemClick={(item) => openTvShowDetails(item as TvShowSearchResult)}
+              onItemClick={(item) => openTvShowPreview(item.tmdbId)}
               onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
               onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
               togglingItems={togglingTvShows}
@@ -2711,7 +2462,7 @@ export default function SearchPage() {
             source={lane.source}
             items={lane.items}
             type="tv"
-            onItemClick={(item) => openTvShowDetails(item as TvShowSearchResult)}
+            onItemClick={(item) => openTvShowPreview(item.tmdbId)}
             onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
             onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
             togglingItems={togglingTvShows}
@@ -3197,528 +2948,6 @@ export default function SearchPage() {
             </TabsContent>
           </Tabs>
         </div>
-
-        {/* Entity details sheet */}
-        <Sheet open={detailsSheetOpen} onOpenChange={setDetailsSheetOpen}>
-          <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-            {detailsLoading ? (
-              <div className="space-y-4 p-6">
-                <Skeleton className="h-8 w-3/4" />
-                <Skeleton className="aspect-video w-full rounded-lg" />
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-2/3" />
-                </div>
-              </div>
-            ) : detailsType === 'movie' && movieDetails ? (
-              <>
-                <SheetHeader className="pb-4">
-                  <SheetTitle className="text-xl pr-8">{movieDetails.title}</SheetTitle>
-                </SheetHeader>
-                <div className="space-y-4 px-6 pb-6 overflow-y-auto">
-                  {/* Backdrop/Poster */}
-                  {(movieDetails.backdropUrl || movieDetails.posterUrl) && (
-                    <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
-                      <img
-                        src={movieDetails.backdropUrl || movieDetails.posterUrl}
-                        alt={movieDetails.title}
-                        className="w-full h-full object-cover"
-                      />
-                      {movieDetails.inLibrary && (
-                        <div className="absolute top-3 right-3">
-                          <MediaStatusBadge
-                            status={
-                              movieDetails.hasFile
-                                ? 'downloaded'
-                                : movieDetails.requested
-                                  ? 'requested'
-                                  : 'downloaded'
-                            }
-                            size="sm"
-                            isToggling={togglingDetails}
-                            onToggleRequest={
-                              !movieDetails.hasFile && movieDetails.requested
-                                ? toggleMovieDetailsRequested
-                                : undefined
-                            }
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Meta info */}
-                  <div className="flex flex-wrap items-center gap-3 text-sm">
-                    {movieDetails.year && (
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <HugeiconsIcon icon={Calendar03Icon} className="h-4 w-4" />
-                        <span>{movieDetails.year}</span>
-                      </div>
-                    )}
-                    {movieDetails.runtime && (
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <HugeiconsIcon icon={Time01Icon} className="h-4 w-4" />
-                        <span>{movieDetails.runtime} min</span>
-                      </div>
-                    )}
-                    {movieDetails.rating && (
-                      <div className="flex items-center gap-1.5 text-yellow-500">
-                        <HugeiconsIcon icon={StarIcon} className="h-4 w-4 fill-current" />
-                        <span className="font-medium">{movieDetails.rating.toFixed(1)}</span>
-                        {movieDetails.votes && (
-                          <span className="text-muted-foreground">
-                            ({movieDetails.votes.toLocaleString()})
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Genres */}
-                  {movieDetails.genres && movieDetails.genres.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {movieDetails.genres.map((genre) => (
-                        <Badge key={genre} variant="secondary">
-                          {genre}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Where to Watch - Streaming Providers */}
-                  {movieDetails.streamingOffers && movieDetails.streamingOffers.length > 0 && (
-                    <div>
-                      <h4 className="font-medium mb-3">Where to Watch</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {movieDetails.streamingOffers
-                          .filter((o) => o.monetizationType === 'flatrate')
-                          .map((offer) => (
-                            <a
-                              key={`${offer.providerId}-${offer.presentationType}`}
-                              href={offer.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted transition-colors"
-                            >
-                              {offer.providerIconUrl && (
-                                <img
-                                  src={offer.providerIconUrl}
-                                  alt={offer.providerName}
-                                  className="w-6 h-6 rounded"
-                                />
-                              )}
-                              <span className="text-sm font-medium">{offer.providerName}</span>
-                              {offer.presentationType && (
-                                <Badge variant="outline" className="text-[10px] px-1 py-0">
-                                  {offer.presentationType.toUpperCase()}
-                                </Badge>
-                              )}
-                            </a>
-                          ))}
-                      </div>
-                      {movieDetails.streamingOffers.some(
-                        (o) => o.monetizationType === 'rent' || o.monetizationType === 'buy'
-                      ) && (
-                        <div className="mt-3">
-                          <p className="text-xs text-muted-foreground mb-2">
-                            Also available to rent or buy:
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {movieDetails.streamingOffers
-                              .filter(
-                                (o) => o.monetizationType === 'rent' || o.monetizationType === 'buy'
-                              )
-                              .map((offer) => (
-                                <a
-                                  key={`${offer.providerId}-${offer.monetizationType}-${offer.presentationType}`}
-                                  href={offer.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 hover:bg-muted transition-colors text-xs"
-                                >
-                                  {offer.providerIconUrl && (
-                                    <img
-                                      src={offer.providerIconUrl}
-                                      alt={offer.providerName}
-                                      className="w-4 h-4 rounded"
-                                    />
-                                  )}
-                                  <span>{offer.providerName}</span>
-                                  <span className="text-muted-foreground">
-                                    {offer.monetizationType === 'rent' ? 'Rent' : 'Buy'}
-                                    {offer.retailPrice
-                                      ? ` ${offer.currency || 'EUR'} ${offer.retailPrice.toFixed(2)}`
-                                      : ''}
-                                  </span>
-                                </a>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Cast */}
-                  {movieDetails.cast && movieDetails.cast.length > 0 && (
-                    <div>
-                      <h4 className="font-medium mb-3">Cast</h4>
-                      <div
-                        className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
-                        style={{ scrollbarWidth: 'thin' }}
-                      >
-                        {movieDetails.cast.map((actor) => (
-                          <div key={actor.id} className="flex-shrink-0 w-16 text-center">
-                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted mb-1.5">
-                              {actor.profileUrl ? (
-                                <img
-                                  src={actor.profileUrl}
-                                  alt={actor.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-lg font-medium">
-                                  {actor.name.charAt(0)}
-                                </div>
-                              )}
-                            </div>
-                            <p className="text-[11px] font-medium leading-tight line-clamp-2">
-                              {actor.name}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
-                              {actor.character}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Overview */}
-                  {movieDetails.overview && (
-                    <div>
-                      <h4 className="font-medium mb-2">Overview</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        {movieDetails.overview}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Status */}
-                  {movieDetails.status && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <HugeiconsIcon
-                        icon={InformationCircleIcon}
-                        className="h-4 w-4 text-muted-foreground"
-                      />
-                      <span className="text-muted-foreground">Status:</span>
-                      <span>{movieDetails.status}</span>
-                    </div>
-                  )}
-
-                  {/* Similar Movies */}
-                  <SimilarLane mediaType="movies" tmdbId={movieDetails.tmdbId} />
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-4">
-                    {movieDetails.inLibrary ? (
-                      <Button
-                        className="flex-1"
-                        onClick={() => {
-                          setDetailsSheetOpen(false)
-                          router.visit(`/movie/${movieDetails.libraryId}`)
-                        }}
-                      >
-                        <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-2" />
-                        View in Library
-                      </Button>
-                    ) : (
-                      <Button
-                        className="flex-1"
-                        disabled={addingMovie}
-                        onClick={() => {
-                          const movie: MovieSearchResult = {
-                            tmdbId: movieDetails.tmdbId,
-                            title: movieDetails.title,
-                            year: movieDetails.year,
-                            overview: movieDetails.overview,
-                            posterUrl: movieDetails.posterUrl,
-                            rating: movieDetails.rating,
-                            inLibrary: false,
-                          }
-                          setDetailsSheetOpen(false)
-                          handleAddMovie(movie, false)
-                        }}
-                      >
-                        {addingMovie ? (
-                          <Spinner className="h-4 w-4 mr-2" />
-                        ) : (
-                          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-                        )}
-                        Add to Library
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </>
-            ) : detailsType === 'tv' && tvShowDetails ? (
-              <>
-                <SheetHeader className="pb-4">
-                  <SheetTitle className="text-xl pr-8">{tvShowDetails.title}</SheetTitle>
-                </SheetHeader>
-                <div className="space-y-4 px-6 pb-6 overflow-y-auto">
-                  {/* Backdrop/Poster */}
-                  {(tvShowDetails.backdropUrl || tvShowDetails.posterUrl) && (
-                    <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
-                      <img
-                        src={tvShowDetails.backdropUrl || tvShowDetails.posterUrl}
-                        alt={tvShowDetails.title}
-                        className="w-full h-full object-cover"
-                      />
-                      {tvShowDetails.inLibrary && (
-                        <div className="absolute top-3 right-3">
-                          <MediaStatusBadge
-                            status={tvShowDetails.requested ? 'requested' : 'downloaded'}
-                            size="sm"
-                            isToggling={togglingDetails}
-                            onToggleRequest={
-                              tvShowDetails.requested ? toggleTvShowDetailsRequested : undefined
-                            }
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Meta info */}
-                  <div className="flex flex-wrap items-center gap-3 text-sm">
-                    {tvShowDetails.year && (
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <HugeiconsIcon icon={Calendar03Icon} className="h-4 w-4" />
-                        <span>{tvShowDetails.year}</span>
-                      </div>
-                    )}
-                    {tvShowDetails.seasonCount && (
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <HugeiconsIcon icon={Tv01Icon} className="h-4 w-4" />
-                        <span>
-                          {tvShowDetails.seasonCount} Season
-                          {tvShowDetails.seasonCount !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    )}
-                    {tvShowDetails.rating && (
-                      <div className="flex items-center gap-1.5 text-yellow-500">
-                        <HugeiconsIcon icon={StarIcon} className="h-4 w-4 fill-current" />
-                        <span className="font-medium">{tvShowDetails.rating.toFixed(1)}</span>
-                        {tvShowDetails.votes && (
-                          <span className="text-muted-foreground">
-                            ({tvShowDetails.votes.toLocaleString()})
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Genres */}
-                  {tvShowDetails.genres && tvShowDetails.genres.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {tvShowDetails.genres.map((genre) => (
-                        <Badge key={genre} variant="secondary">
-                          {genre}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Networks */}
-                  {tvShowDetails.networks && tvShowDetails.networks.length > 0 && (
-                    <div className="text-sm text-muted-foreground">
-                      Network: {tvShowDetails.networks.join(', ')}
-                    </div>
-                  )}
-
-                  {/* Where to Watch - Streaming Providers */}
-                  {tvShowDetails.streamingOffers && tvShowDetails.streamingOffers.length > 0 && (
-                    <div>
-                      <h4 className="font-medium mb-3">Where to Watch</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {tvShowDetails.streamingOffers
-                          .filter((o) => o.monetizationType === 'flatrate')
-                          .map((offer) => (
-                            <a
-                              key={`${offer.providerId}-${offer.presentationType}`}
-                              href={offer.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted transition-colors"
-                            >
-                              {offer.providerIconUrl && (
-                                <img
-                                  src={offer.providerIconUrl}
-                                  alt={offer.providerName}
-                                  className="w-6 h-6 rounded"
-                                />
-                              )}
-                              <span className="text-sm font-medium">{offer.providerName}</span>
-                              {offer.presentationType && (
-                                <Badge variant="outline" className="text-[10px] px-1 py-0">
-                                  {offer.presentationType.toUpperCase()}
-                                </Badge>
-                              )}
-                            </a>
-                          ))}
-                      </div>
-                      {tvShowDetails.streamingOffers.some(
-                        (o) => o.monetizationType === 'rent' || o.monetizationType === 'buy'
-                      ) && (
-                        <div className="mt-3">
-                          <p className="text-xs text-muted-foreground mb-2">
-                            Also available to rent or buy:
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {tvShowDetails.streamingOffers
-                              .filter(
-                                (o) => o.monetizationType === 'rent' || o.monetizationType === 'buy'
-                              )
-                              .map((offer) => (
-                                <a
-                                  key={`${offer.providerId}-${offer.monetizationType}-${offer.presentationType}`}
-                                  href={offer.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 hover:bg-muted transition-colors text-xs"
-                                >
-                                  {offer.providerIconUrl && (
-                                    <img
-                                      src={offer.providerIconUrl}
-                                      alt={offer.providerName}
-                                      className="w-4 h-4 rounded"
-                                    />
-                                  )}
-                                  <span>{offer.providerName}</span>
-                                  <span className="text-muted-foreground">
-                                    {offer.monetizationType === 'rent' ? 'Rent' : 'Buy'}
-                                    {offer.retailPrice
-                                      ? ` ${offer.currency || 'EUR'} ${offer.retailPrice.toFixed(2)}`
-                                      : ''}
-                                  </span>
-                                </a>
-                              ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Cast */}
-                  {tvShowDetails.cast && tvShowDetails.cast.length > 0 && (
-                    <div>
-                      <h4 className="font-medium mb-3">Cast</h4>
-                      <div
-                        className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
-                        style={{ scrollbarWidth: 'thin' }}
-                      >
-                        {tvShowDetails.cast.map((actor) => (
-                          <div key={actor.id} className="flex-shrink-0 w-16 text-center">
-                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted mb-1.5">
-                              {actor.profileUrl ? (
-                                <img
-                                  src={actor.profileUrl}
-                                  alt={actor.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-lg font-medium">
-                                  {actor.name.charAt(0)}
-                                </div>
-                              )}
-                            </div>
-                            <p className="text-[11px] font-medium leading-tight line-clamp-2">
-                              {actor.name}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
-                              {actor.character}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Overview */}
-                  {tvShowDetails.overview && (
-                    <div>
-                      <h4 className="font-medium mb-2">Overview</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        {tvShowDetails.overview}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Status */}
-                  {tvShowDetails.status && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <HugeiconsIcon
-                        icon={InformationCircleIcon}
-                        className="h-4 w-4 text-muted-foreground"
-                      />
-                      <span className="text-muted-foreground">Status:</span>
-                      <span>{tvShowDetails.status}</span>
-                    </div>
-                  )}
-
-                  {/* Similar Shows */}
-                  <SimilarLane mediaType="tv" tmdbId={tvShowDetails.tmdbId} />
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-4">
-                    {tvShowDetails.inLibrary ? (
-                      <Button
-                        className="flex-1"
-                        onClick={() => {
-                          setDetailsSheetOpen(false)
-                          router.visit(`/tvshow/${tvShowDetails.libraryId}`)
-                        }}
-                      >
-                        <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-2" />
-                        View in Library
-                      </Button>
-                    ) : (
-                      <Button
-                        className="flex-1"
-                        disabled={addingTvShow}
-                        onClick={() => {
-                          const show: TvShowSearchResult = {
-                            tmdbId: tvShowDetails.tmdbId,
-                            title: tvShowDetails.title,
-                            year: tvShowDetails.year,
-                            overview: tvShowDetails.overview,
-                            posterUrl: tvShowDetails.posterUrl,
-                            status: tvShowDetails.status,
-                            rating: tvShowDetails.rating,
-                            seasonCount: tvShowDetails.seasonCount,
-                            episodeCount: tvShowDetails.episodeCount,
-                            inLibrary: false,
-                          }
-                          setDetailsSheetOpen(false)
-                          handleAddTvShow(show, false)
-                        }}
-                      >
-                        {addingTvShow ? (
-                          <Spinner className="h-4 w-4 mr-2" />
-                        ) : (
-                          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-                        )}
-                        Add to Library
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </>
-            ) : null}
-          </SheetContent>
-        </Sheet>
 
         {/* Download confirmation dialog */}
         <Dialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>

@@ -18,6 +18,7 @@ import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dial
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
+import { useMediaPreview } from '@/contexts/media_preview_context'
 
 interface MovieResult {
   tmdbId: string
@@ -508,10 +509,15 @@ export default function DiscoverPage() {
     }
   }
 
+  const { openMoviePreview, openTvShowPreview } = useMediaPreview()
+
   const handleItemClick = (item: DiscoverItem) => {
     if (item.inLibrary && item.libraryId) {
       const path = mediaType === 'movies' ? `/movie/${item.libraryId}` : `/tvshow/${item.libraryId}`
       router.visit(path)
+    } else {
+      if (mediaType === 'movies') openMoviePreview(item.tmdbId)
+      else openTvShowPreview(item.tmdbId)
     }
   }
 

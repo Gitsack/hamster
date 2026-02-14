@@ -35,6 +35,7 @@ export default class TvShowsController {
     const shows = await TvShow.query()
       .preload('qualityProfile')
       .preload('rootFolder')
+      .preload('episodes')
       .orderBy('sortTitle', 'asc')
 
     return response.json(
@@ -50,6 +51,7 @@ export default class TvShowsController {
         requested: show.requested,
         seasonCount: show.seasonCount,
         episodeCount: show.episodeCount,
+        downloadedEpisodeCount: show.episodes.filter((e) => e.hasFile).length,
         qualityProfile: show.qualityProfile?.name,
         rootFolder: show.rootFolder?.path,
         addedAt: show.addedAt?.toISO(),

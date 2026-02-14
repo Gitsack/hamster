@@ -91,6 +91,7 @@ interface TvShow {
   requested: boolean
   seasonCount: number
   episodeCount: number
+  downloadedEpisodeCount: number
 }
 
 interface Author {
@@ -903,6 +904,7 @@ export default function Library() {
     hasFile?: boolean
     mediaType: MediaType
     externalId?: string | null
+    downloadedEpisodeCount?: number
   }) => {
     const config = MEDIA_TYPE_CONFIG[item.mediaType]
     const imageKey = `${item.mediaType}-${item.id}`
@@ -920,7 +922,9 @@ export default function Library() {
       }
     })
     const isDownloading = !!queueItem
-    const isNotRequested = !item.requested && !item.hasFile && !isDownloading
+    // TV shows manage status at episode level, so never show as "not requested"
+    const isNotRequested =
+      item.mediaType !== 'tv' && !item.requested && !item.hasFile && !isDownloading
     const isToggling = togglingItems.has(imageKey)
 
     // Get status info
@@ -963,6 +967,12 @@ export default function Library() {
             </h3>
             {item.subtitle && (
               <p className="text-sm text-muted-foreground truncate">{item.subtitle}</p>
+            )}
+            {item.downloadedEpisodeCount !== undefined && (
+              <p className="text-xs text-green-500 truncate flex items-center gap-1">
+                <HugeiconsIcon icon={Download01Icon} className="h-3 w-3" />
+                {item.downloadedEpisodeCount} episode{item.downloadedEpisodeCount !== 1 ? 's' : ''}
+              </p>
             )}
           </CardContent>
         </Link>
@@ -1045,6 +1055,7 @@ export default function Library() {
     mediaType: MediaType
     badges?: string[]
     externalId?: string | null
+    downloadedEpisodeCount?: number
   }) => {
     const config = MEDIA_TYPE_CONFIG[item.mediaType]
     const imageKey = `${item.mediaType}-${item.id}`
@@ -1062,7 +1073,9 @@ export default function Library() {
       }
     })
     const isDownloading = !!queueItem
-    const isNotRequested = !item.requested && !item.hasFile && !isDownloading
+    // TV shows manage status at episode level, so never show as "not requested"
+    const isNotRequested =
+      item.mediaType !== 'tv' && !item.requested && !item.hasFile && !isDownloading
     const isToggling = togglingItems.has(imageKey)
 
     // Get status info
@@ -1104,6 +1117,11 @@ export default function Library() {
               <h3 className="font-medium truncate">{item.name}</h3>
               {item.subtitle && (
                 <p className="text-sm text-muted-foreground truncate">{item.subtitle}</p>
+              )}
+              {item.downloadedEpisodeCount !== undefined && (
+                <p className="text-xs text-green-500 truncate">
+                  {item.downloadedEpisodeCount} episode{item.downloadedEpisodeCount !== 1 ? 's' : ''} downloaded
+                </p>
               )}
             </div>
           </Link>
@@ -1274,6 +1292,7 @@ export default function Library() {
       detailUrl: `/tvshow/${show.id}`,
       mediaType: 'tv' as MediaType,
       externalId: show.tmdbId,
+      downloadedEpisodeCount: show.downloadedEpisodeCount,
     }))
 
     if (viewMode === 'grid') {
@@ -1296,6 +1315,7 @@ export default function Library() {
             mediaType: 'tv',
             badges: [show.network, show.status].filter(Boolean) as string[],
             externalId: show.tmdbId,
+            downloadedEpisodeCount: show.downloadedEpisodeCount,
           })
         )}
       </div>

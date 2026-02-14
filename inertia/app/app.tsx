@@ -6,6 +6,7 @@ import { hydrateRoot } from 'react-dom/client'
 import { createInertiaApp } from '@inertiajs/react'
 import { resolvePageComponent } from '@adonisjs/inertia/helpers'
 import { AudioPlayerProvider } from '@/contexts/audio_player_context'
+import { MediaPreviewProvider } from '@/contexts/media_preview_context'
 import { AudioPlayer } from '@/components/player/audio_player'
 import { Toaster } from 'sonner'
 import { useState, useEffect } from 'react'
@@ -32,9 +33,11 @@ createInertiaApp({
     hydrateRoot(
       el,
       <AudioPlayerProvider>
-        <App {...props} />
-        <AudioPlayer />
-        <ClientOnlyToaster />
+        <MediaPreviewProvider>
+          <App {...props} />
+          <AudioPlayer />
+          <ClientOnlyToaster />
+        </MediaPreviewProvider>
       </AudioPlayerProvider>
     )
   },
