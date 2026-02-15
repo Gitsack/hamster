@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.1](https://github.com/Gitsack/hamster/compare/hamster-v1.17.0...hamster-v1.17.1) (2026-02-15)
+
+
+### Bug Fixes
+
+* show download matching ([977503b](https://github.com/Gitsack/hamster/commit/977503b55b23dcc327b2dff0083d7bed11c69c78))
+
 ## [1.17.0](https://github.com/Gitsack/hamster/compare/hamster-v1.16.0...hamster-v1.17.0) (2026-02-15)
 
 
