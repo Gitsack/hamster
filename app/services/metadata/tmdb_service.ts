@@ -402,12 +402,26 @@ export class TmdbService {
     return cache.getOrSet(cacheKey, CACHE_TTL.METADATA, async () => {
       const data = await this.fetch(`/${type}/${id}/watch/providers`)
       const regionData = data.results?.[region]
-      if (!regionData?.flatrate) return []
-      return regionData.flatrate.map((p: any) => ({
-        id: p.provider_id,
-        name: p.provider_name,
-        logoPath: `${TMDB_IMAGE_BASE}/w92${p.logo_path}`,
-      }))
+      if (!regionData) return []
+      const entries = [
+        ...(regionData.flatrate || []),
+        ...(regionData.buy || []),
+        ...(regionData.rent || []),
+        ...(regionData.free || []),
+        ...(regionData.ads || []),
+      ]
+      const seen = new Set<number>()
+      return entries.reduce<TmdbWatchProvider[]>((providers, p: any) => {
+        if (!seen.has(p.provider_id)) {
+          seen.add(p.provider_id)
+          providers.push({
+            id: p.provider_id,
+            name: p.provider_name,
+            logoPath: `${TMDB_IMAGE_BASE}/w92${p.logo_path}`,
+          })
+        }
+        return providers
+      }, [])
     })
   }
 

@@ -61,16 +61,10 @@ until su-exec hamster bun -e "
 done
 echo "Database is ready!"
 
-# Run pending database migrations (if any)
-echo "Checking for pending migrations..."
-MIGRATION_STATUS=$(su-exec hamster bun ace migration:status 2>&1 || true)
-if echo "$MIGRATION_STATUS" | grep -q "pending"; then
-  echo "Running pending migrations..."
-  su-exec hamster bun ace migration:run --force
-  echo "Migrations completed successfully!"
-else
-  echo "No pending migrations."
-fi
+# Run database migrations
+echo "Running database migrations..."
+su-exec hamster bun ace migration:run --force
+echo "Migrations completed successfully!"
 
 # Execute the main command as hamster user
 echo "Starting server..."

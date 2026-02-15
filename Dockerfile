@@ -68,9 +68,11 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Create directories for media, downloads, and tmp with correct permissions
-RUN mkdir -p /media/music /media/movies /media/tv /media/books /downloads /app/tmp && \
-    chown -R hamster:hamster /app /media /downloads
+# Make app files world-readable so any PUID/PGID can read them without runtime chown
+# Only /app/tmp, /media, /downloads need write access (chowned at runtime in entrypoint)
+RUN chmod -R a+rX /app && \
+    mkdir -p /media/music /media/movies /media/tv /media/books /downloads /app/tmp && \
+    chown -R hamster:hamster /app/tmp /media /downloads
 
 # Note: Container starts as root, entrypoint drops to hamster user after PUID/PGID setup
 
