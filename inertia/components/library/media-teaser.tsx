@@ -97,14 +97,19 @@ export function MediaTeaser({
     setImageFailed(true)
   }, [])
 
-  // Track loading→loaded transition with a debounce so fast fetches skip the animation entirely
+  // Track loading→loaded transition with a debounce so fast fetches skip the animation entirely.
+  // All provider rendering is gated through this state to prevent flash of unstyled badges.
   const wasVisibleRef = useRef(false)
+  const loadingRef = useRef(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [transition, setTransition] = useState<'loading' | 'fading-out' | 'fading-in' | 'idle'>('idle')
+  const [transition, setTransition] = useState<'pending' | 'loading' | 'fading-out' | 'fading-in' | 'idle'>('idle')
 
   useEffect(() => {
     if (isLoadingProviders) {
-      // Delay showing the loader — only show if loading takes > 400ms
+      loadingRef.current = true
+      // Mark as pending immediately to suppress the plain providers branch
+      setTransition('pending')
+      // Delay showing the spinner — only show if loading takes > 400ms
       debounceRef.current = setTimeout(() => {
         wasVisibleRef.current = true
         setTransition('loading')
@@ -112,18 +117,23 @@ export function MediaTeaser({
       return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
     }
 
-    // Loading just finished
+    if (!loadingRef.current) return
+    loadingRef.current = false
+
+    // Loading just finished — clear the debounce timer
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
       debounceRef.current = null
     }
+
+    const hasProviders = streamingProviders && streamingProviders.length > 0
 
     if (wasVisibleRef.current) {
       // Loader was shown — animate the transition out
       wasVisibleRef.current = false
       setTransition('fading-out')
       const t1 = setTimeout(() => {
-        setTransition(streamingProviders && streamingProviders.length > 0 ? 'fading-in' : 'idle')
+        setTransition(hasProviders ? 'fading-in' : 'idle')
       }, 250)
       const t2 = setTimeout(() => {
         setTransition('idle')
@@ -132,10 +142,12 @@ export function MediaTeaser({
     }
 
     // Loader was never shown (fast fetch) — go straight to fade-in or idle
-    if (streamingProviders && streamingProviders.length > 0) {
+    if (hasProviders) {
       setTransition('fading-in')
       const t = setTimeout(() => setTransition('idle'), 250)
       return () => clearTimeout(t)
+    } else {
+      setTransition('idle')
     }
   }, [isLoadingProviders, streamingProviders])
 
@@ -201,7 +213,11 @@ export function MediaTeaser({
           />
         </div>
         {/* Streaming provider badges / loading */}
-        {transition === 'fading-out' ? (
+        {transition === 'loading' ? (
+          <div className="absolute bottom-2 left-2 z-10">
+            <StreamingProviderLoader />
+          </div>
+        ) : transition === 'fading-out' ? (
           <div className="absolute bottom-2 left-2 z-10">
             <StreamingProviderLoader fadeOut />
           </div>
@@ -222,7 +238,7 @@ export function MediaTeaser({
               </span>
             )}
           </div>
-        ) : visibleProviders.length > 0 ? (
+        ) : transition === 'idle' && visibleProviders.length > 0 ? (
           <div className="absolute bottom-2 left-2 flex items-center -space-x-1 z-10">
             {visibleProviders.map((provider) => (
               <img
@@ -238,10 +254,6 @@ export function MediaTeaser({
                 +{extraCount}
               </span>
             )}
-          </div>
-        ) : transition === 'loading' ? (
-          <div className="absolute bottom-2 left-2 z-10">
-            <StreamingProviderLoader />
           </div>
         ) : null}
         {/* Hover info */}
