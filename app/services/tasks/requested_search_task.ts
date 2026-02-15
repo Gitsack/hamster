@@ -34,7 +34,11 @@ function normalizeTitle(title: string): string {
  * - "Friends with Benefits S01E01" for show "Friends" (different show!)
  * - "My Friends S01E01" for show "Friends"
  */
-function doesTvReleaseTitleMatch(releaseTitle: string, expectedTitle: string): boolean {
+function doesTvReleaseTitleMatch(
+  releaseTitle: string,
+  expectedTitle: string,
+  seriesType: 'standard' | 'daily' | 'anime' = 'standard'
+): boolean {
   const normalizedRelease = normalizeTitle(releaseTitle)
   const normalizedExpected = normalizeTitle(expectedTitle)
   const expectedWords = normalizedExpected.split(' ')
@@ -52,14 +56,25 @@ function doesTvReleaseTitleMatch(releaseTitle: string, expectedTitle: string): b
     return false
   }
 
-  // Now verify that what comes AFTER the title is a season/episode pattern
+  // Now verify that what comes AFTER the title is a season/episode or date pattern
   // This prevents "friends with benefits" from matching "friends"
   const afterTitle = releaseWords.slice(expectedWords.length).join(' ')
 
   // The next part should start with a season pattern like "s01" or "s01e01" or "season 1"
   const seasonPattern = /^s\d+|^season\s*\d+/i
-  if (!seasonPattern.test(afterTitle)) {
-    return false
+  // Date pattern for daily shows: "2024 01 15" or "2024 1 15"
+  // Can appear anywhere in the afterTitle (e.g., "starring jimmy fallon 2025 12 18")
+  const datePattern = /\d{4}\s+\d{1,2}\s+\d{1,2}/
+
+  if (seriesType === 'daily') {
+    // Daily shows can match either season/episode OR date patterns anywhere in title
+    if (!seasonPattern.test(afterTitle) && !datePattern.test(afterTitle)) {
+      return false
+    }
+  } else {
+    if (!seasonPattern.test(afterTitle)) {
+      return false
+    }
   }
 
   return true
@@ -109,13 +124,35 @@ function doesMovieReleaseTitleMatch(releaseTitle: string, expectedTitle: string)
 }
 
 /**
- * Filter TV show search results to only include those matching the expected title
+ * Filter TV show search results to only include those matching the expected title(s).
+ * For daily shows, also accepts results that match the air date (since ID-based search
+ * already confirmed the show identity, and indexers may use a different title).
  */
 function filterTvResultsByTitle(
   results: UnifiedSearchResult[],
-  expectedTitle: string
+  expectedTitles: string | string[],
+  seriesType: 'standard' | 'daily' | 'anime' = 'standard',
+  airDate?: string
 ): UnifiedSearchResult[] {
-  return results.filter((result) => doesTvReleaseTitleMatch(result.title, expectedTitle))
+  const titles = Array.isArray(expectedTitles) ? expectedTitles : [expectedTitles]
+  return results.filter((result) => {
+    // Check if any title matches
+    if (titles.some((title) => doesTvReleaseTitleMatch(result.title, title, seriesType))) {
+      return true
+    }
+
+    // For daily shows with an airDate, also accept results that contain the date
+    // This handles cases where indexers use a different name (e.g., "Jimmy Fallon"
+    // instead of "The Tonight Show Starring Jimmy Fallon")
+    if (seriesType === 'daily' && airDate) {
+      const normalizedRelease = normalizeTitle(result.title)
+      const dateSpaced = airDate.replace(/-/g, ' ')
+      const dateDotted = airDate.replace(/-/g, '.')
+      return normalizedRelease.includes(dateSpaced) || result.title.includes(dateDotted)
+    }
+
+    return false
+  })
 }
 
 /**
@@ -686,17 +723,32 @@ class RequestedSearchTask {
       result.episodes.searched++
 
       try {
+        const tvShow = episode.tvShow
+        const seriesType = tvShow.seriesType || 'standard'
+        const alternateTitles = tvShow.alternateTitles || []
+        const airDate =
+          seriesType === 'daily' && episode.airDate ? episode.airDate.toISODate() : undefined
+
         const searchResults = await indexerManager.searchTvShows({
-          title: episode.tvShow.title,
+          title: tvShow.title,
           season: episode.seasonNumber,
           episode: episode.episodeNumber,
-          tvdbId: episode.tvShow.tvdbId || undefined,
-          imdbId: episode.tvShow.imdbId || undefined,
+          tvdbId: tvShow.tvdbId || undefined,
+          imdbId: tvShow.imdbId || undefined,
+          alternateTitles,
+          airDate: airDate ?? undefined,
+          seriesType,
           limit: 25,
         })
 
         // Filter results to only include those that actually match the show title
-        const matchingResults = filterTvResultsByTitle(searchResults, episode.tvShow.title)
+        const allTitles = [tvShow.title, ...alternateTitles]
+        const matchingResults = filterTvResultsByTitle(
+          searchResults,
+          allTitles,
+          seriesType,
+          airDate ?? undefined
+        )
 
         // Filter out blacklisted releases
         const availableResults = await blacklistService.filterBlacklisted(matchingResults)
@@ -704,7 +756,7 @@ class RequestedSearchTask {
         if (availableResults.length === 0) {
           logger.debug(
             {
-              show: episode.tvShow.title,
+              show: tvShow.title,
               season: episode.seasonNumber,
               episode: episode.episodeNumber,
               totalResults: searchResults.length,
@@ -717,7 +769,7 @@ class RequestedSearchTask {
         result.episodes.found++
 
         // Load quality profile from the TV show and rank by quality
-        const profile = await loadQualityProfile(episode.tvShow.qualityProfileId)
+        const profile = await loadQualityProfile(tvShow.qualityProfileId)
         const bestResult = selectBestRelease(
           availableResults,
           'tv',
@@ -728,7 +780,7 @@ class RequestedSearchTask {
         if (!bestResult) {
           logger.debug(
             {
-              show: episode.tvShow.title,
+              show: tvShow.title,
               season: episode.seasonNumber,
               episode: episode.episodeNumber,
             },
@@ -746,7 +798,7 @@ class RequestedSearchTask {
         if (!stillRequested) {
           logger.debug(
             {
-              show: episode.tvShow.title,
+              show: tvShow.title,
               season: episode.seasonNumber,
               episode: episode.episodeNumber,
             },
@@ -970,17 +1022,59 @@ class RequestedSearchTask {
         return { found: false, grabbed: false, error: 'Already has active download' }
       }
 
-      const searchResults = await indexerManager.searchTvShows({
-        title: episode.tvShow.title,
+      const tvShow = episode.tvShow
+      const seriesType = tvShow.seriesType || 'standard'
+      const alternateTitles = tvShow.alternateTitles || []
+      const airDate =
+        seriesType === 'daily' && episode.airDate ? episode.airDate.toISODate() : undefined
+
+      console.log('[SearchSingleEpisode] Searching:', {
+        showTitle: tvShow.title,
+        seriesType,
+        alternateTitles,
+        airDate,
         season: episode.seasonNumber,
         episode: episode.episodeNumber,
-        tvdbId: episode.tvShow.tvdbId || undefined,
-        imdbId: episode.tvShow.imdbId || undefined,
+        tvdbId: tvShow.tvdbId,
+        imdbId: tvShow.imdbId,
+        episodeAirDate: episode.airDate?.toISODate(),
+      })
+
+      const searchResults = await indexerManager.searchTvShows({
+        title: tvShow.title,
+        season: episode.seasonNumber,
+        episode: episode.episodeNumber,
+        tvdbId: tvShow.tvdbId || undefined,
+        imdbId: tvShow.imdbId || undefined,
+        alternateTitles,
+        airDate: airDate ?? undefined,
+        seriesType,
         limit: 25,
       })
 
+      console.log('[SearchSingleEpisode] Raw results:', searchResults.length)
+      if (searchResults.length > 0) {
+        console.log(
+          '[SearchSingleEpisode] Sample result titles:',
+          searchResults.slice(0, 5).map((r) => r.title)
+        )
+      }
+
       // Filter results to only include those that actually match the show title
-      const matchingResults = filterTvResultsByTitle(searchResults, episode.tvShow.title)
+      const allTitles = [tvShow.title, ...alternateTitles]
+      const matchingResults = filterTvResultsByTitle(
+        searchResults,
+        allTitles,
+        seriesType,
+        airDate ?? undefined
+      )
+
+      console.log('[SearchSingleEpisode] After title filter:', {
+        before: searchResults.length,
+        after: matchingResults.length,
+        titles: allTitles,
+        seriesType,
+      })
 
       // Filter out blacklisted releases
       const availableResults = await blacklistService.filterBlacklisted(matchingResults)
@@ -990,7 +1084,7 @@ class RequestedSearchTask {
       }
 
       // Load quality profile from the TV show and rank by quality
-      const profile = await loadQualityProfile(episode.tvShow.qualityProfileId)
+      const profile = await loadQualityProfile(tvShow.qualityProfileId)
       const bestResult = selectBestRelease(
         availableResults,
         'tv',
@@ -1139,17 +1233,32 @@ class RequestedSearchTask {
         result.searched++
 
         try {
+          const tvShow = episode.tvShow
+          const seriesType = tvShow.seriesType || 'standard'
+          const alternateTitles = tvShow.alternateTitles || []
+          const airDate =
+            seriesType === 'daily' && episode.airDate ? episode.airDate.toISODate() : undefined
+
           const searchResults = await indexerManager.searchTvShows({
-            title: episode.tvShow.title,
+            title: tvShow.title,
             season: episode.seasonNumber,
             episode: episode.episodeNumber,
-            tvdbId: episode.tvShow.tvdbId || undefined,
-            imdbId: episode.tvShow.imdbId || undefined,
+            tvdbId: tvShow.tvdbId || undefined,
+            imdbId: tvShow.imdbId || undefined,
+            alternateTitles,
+            airDate: airDate ?? undefined,
+            seriesType,
             limit: 25,
           })
 
           // Filter results to only include those that actually match the show title
-          const matchingResults = filterTvResultsByTitle(searchResults, episode.tvShow.title)
+          const allTitles = [tvShow.title, ...alternateTitles]
+          const matchingResults = filterTvResultsByTitle(
+            searchResults,
+            allTitles,
+            seriesType,
+            airDate ?? undefined
+          )
 
           if (matchingResults.length === 0) {
             continue
@@ -1158,7 +1267,7 @@ class RequestedSearchTask {
           result.found++
 
           // Load quality profile from the TV show and rank by quality
-          const profile = await loadQualityProfile(episode.tvShow.qualityProfileId)
+          const profile = await loadQualityProfile(tvShow.qualityProfileId)
           const bestResult = selectBestRelease(
             matchingResults,
             'tv',
@@ -1177,7 +1286,7 @@ class RequestedSearchTask {
           if (!stillRequested) {
             logger.debug(
               {
-                show: episode.tvShow.title,
+                show: tvShow.title,
                 season: episode.seasonNumber,
                 ep: episode.episodeNumber,
               },

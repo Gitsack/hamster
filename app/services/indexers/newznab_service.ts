@@ -238,6 +238,63 @@ export class NewznabService {
   }
 
   /**
+   * Search for TV shows using Newznab tvsearch
+   */
+  async searchTvShows(
+    config: NewznabIndexerConfig,
+    options: {
+      query?: string
+      tvdbId?: string
+      imdbId?: string
+      season?: number
+      episode?: number
+      airDate?: string
+      categories?: number[]
+      limit?: number
+      offset?: number
+    } = {}
+  ): Promise<NewznabSearchResult[]> {
+    const tvCategories = [5000, 5010, 5020, 5030, 5040, 5045, 5050, 5060, 5070, 5080]
+
+    const params = new URLSearchParams({
+      t: 'tvsearch',
+      apikey: config.apiKey,
+      limit: String(options.limit || 100),
+      offset: String(options.offset || 0),
+      extended: '1',
+    })
+
+    if (options.query) params.set('q', options.query)
+    if (options.tvdbId) params.set('tvdbid', options.tvdbId)
+    if (options.imdbId) params.set('imdbid', options.imdbId)
+
+    // For daily shows, use date-based season/ep: season=YYYY, ep=MM/DD
+    if (options.airDate) {
+      const [year, month, day] = options.airDate.split('-')
+      params.set('season', year)
+      params.set('ep', `${month}/${day}`)
+    } else {
+      if (options.season !== undefined) params.set('season', String(options.season))
+      if (options.episode !== undefined) params.set('ep', String(options.episode))
+    }
+
+    const categories = options.categories || config.categories || tvCategories
+    if (categories.length > 0) {
+      params.set('cat', categories.join(','))
+    }
+
+    const searchUrl = `${this.normalizeUrl(config.url)}/api?${params.toString()}`
+
+    const response = await this.fetchWithTimeout(searchUrl)
+    if (!response.ok) {
+      throw new Error(`TV search failed: ${response.status}`)
+    }
+
+    const xml = await response.text()
+    return this.parseSearchResults(xml, config)
+  }
+
+  /**
    * Get NZB download URL
    */
   getNzbUrl(config: NewznabIndexerConfig, guid: string): string {

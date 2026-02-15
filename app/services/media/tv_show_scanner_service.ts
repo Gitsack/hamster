@@ -431,6 +431,12 @@ export class TvShowScannerService {
    * Create show from TMDB data
    */
   private async createShowFromTmdb(tmdb: TmdbTvShow, rootFolderId: string): Promise<TvShow> {
+    // Fetch alternate titles and detect series type
+    const alternateTitles = await tmdbService
+      .getTvShowAlternateTitles(tmdb.id)
+      .catch(() => [] as string[])
+    const seriesType = tmdbService.detectSeriesType(tmdb)
+
     return TvShow.create({
       tmdbId: String(tmdb.id),
       title: tmdb.name,
@@ -448,10 +454,14 @@ export class TvShowScannerService {
       genres: tmdb.genres,
       seasonCount: tmdb.numberOfSeasons,
       episodeCount: tmdb.numberOfEpisodes,
+      imdbId: tmdb.imdbId,
+      tvdbId: tmdb.tvdbId,
       requested: false,
       needsReview: false,
       rootFolderId,
       addedAt: DateTime.now(),
+      alternateTitles,
+      seriesType,
     })
   }
 

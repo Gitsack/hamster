@@ -262,7 +262,15 @@ export default class TvShowsController {
 
     if (data.tmdbId) {
       try {
-        const tmdbData = await tmdbService.getTvShow(Number.parseInt(data.tmdbId))
+        const tmdbIdNum = Number.parseInt(data.tmdbId)
+        const tmdbData = await tmdbService.getTvShow(tmdbIdNum)
+
+        // Fetch alternate titles and detect series type
+        const [alternateTitles] = await Promise.all([
+          tmdbService.getTvShowAlternateTitles(tmdbIdNum).catch(() => [] as string[]),
+        ])
+        const seriesType = tmdbService.detectSeriesType(tmdbData)
+
         showData = {
           ...showData,
           tmdbId: String(tmdbData.id),
@@ -285,6 +293,10 @@ export default class TvShowsController {
           genres: tmdbData.genres,
           seasonCount: tmdbData.numberOfSeasons,
           episodeCount: tmdbData.numberOfEpisodes,
+          imdbId: tmdbData.imdbId,
+          tvdbId: tmdbData.tvdbId,
+          alternateTitles,
+          seriesType,
         }
       } catch (error) {
         console.error('Failed to fetch TMDB data:', error)
@@ -964,7 +976,11 @@ export default class TvShowsController {
 
     // Fetch full details from TMDB
     try {
-      const tmdbData = await tmdbService.getTvShow(best.id)
+      const [tmdbData, alternateTitles] = await Promise.all([
+        tmdbService.getTvShow(best.id),
+        tmdbService.getTvShowAlternateTitles(best.id).catch(() => [] as string[]),
+      ])
+      const seriesType = tmdbService.detectSeriesType(tmdbData)
 
       show.merge({
         tmdbId: String(tmdbData.id),
@@ -982,6 +998,10 @@ export default class TvShowsController {
         genres: tmdbData.genres || null,
         seasonCount: tmdbData.numberOfSeasons || show.seasonCount,
         episodeCount: tmdbData.numberOfEpisodes || show.episodeCount,
+        imdbId: tmdbData.imdbId || null,
+        tvdbId: tmdbData.tvdbId || null,
+        alternateTitles,
+        seriesType,
       })
       await show.save()
 
@@ -1089,8 +1109,17 @@ export default class TvShowsController {
     try {
       const tmdbId = Number.parseInt(show.tmdbId)
 
-      // Fetch updated show data
-      const tmdbData = await tmdbService.getTvShow(tmdbId)
+      // Clear cached TMDB data to ensure fresh fetch with external IDs
+      const { cache } = await import('#services/cache/cache_service')
+      cache.delete(`tmdb:tv:${tmdbId}`)
+
+      // Fetch updated show data + alternate titles
+      const [tmdbData, alternateTitles] = await Promise.all([
+        tmdbService.getTvShow(tmdbId),
+        tmdbService.getTvShowAlternateTitles(tmdbId).catch(() => [] as string[]),
+      ])
+      const seriesType = tmdbService.detectSeriesType(tmdbData)
+
       show.merge({
         originalTitle: tmdbData.originalName || show.originalTitle,
         overview: tmdbData.overview || show.overview,
@@ -1101,6 +1130,10 @@ export default class TvShowsController {
         votes: tmdbData.voteCount || show.votes,
         seasonCount: tmdbData.numberOfSeasons || show.seasonCount,
         episodeCount: tmdbData.numberOfEpisodes || show.episodeCount,
+        imdbId: tmdbData.imdbId || show.imdbId,
+        tvdbId: tmdbData.tvdbId || show.tvdbId,
+        alternateTitles,
+        seriesType,
       })
       await show.save()
 

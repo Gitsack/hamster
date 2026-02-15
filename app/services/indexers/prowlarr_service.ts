@@ -105,6 +105,8 @@ export class ProwlarrService {
       categories?: number[]
       type?: 'search' | 'tvsearch' | 'movie' | 'music' | 'book'
       indexerIds?: number[]
+      tvdbId?: string
+      imdbId?: string
       limit?: number
       offset?: number
     } = {}
@@ -115,6 +117,8 @@ export class ProwlarrService {
     if (options.type) params.set('type', options.type)
     if (options.categories?.length) params.set('categories', options.categories.join(','))
     if (options.indexerIds?.length) params.set('indexerIds', options.indexerIds.join(','))
+    if (options.tvdbId) params.set('tvdbId', options.tvdbId)
+    if (options.imdbId) params.set('imdbId', options.imdbId)
     if (options.limit) params.set('limit', String(options.limit))
     if (options.offset) params.set('offset', String(options.offset))
 
@@ -214,13 +218,17 @@ export class ProwlarrService {
       episode?: number
       tvdbId?: string
       imdbId?: string
+      airDate?: string
       indexerIds?: number[]
       limit?: number
     } = {}
   ): Promise<ProwlarrSearchResult[]> {
     // Build search query
     let query = options.query || options.title || ''
-    if (options.season !== undefined && !options.query) {
+    if (options.airDate && !options.query) {
+      // Daily shows use date-based naming: "Title 2024 01 15"
+      query = `${query} ${options.airDate.replace(/-/g, ' ')}`.trim()
+    } else if (options.season !== undefined && !options.query) {
       query = `${query} S${String(options.season).padStart(2, '0')}`.trim()
       if (options.episode !== undefined) {
         query = `${query}E${String(options.episode).padStart(2, '0')}`
@@ -230,13 +238,23 @@ export class ProwlarrService {
     // TV categories: 5000 (TV), 5010 (WEB-DL), 5020 (Foreign), 5030 (SD), 5040 (HD), 5045 (UHD), 5050 (Other), 5060 (Sports), 5070 (Anime), 5080 (Documentary)
     const tvCategories = [5000, 5010, 5020, 5030, 5040, 5045, 5050, 5060, 5070, 5080]
 
-    return this.search(config, {
+    const searchParams: Parameters<ProwlarrService['search']>[1] = {
       query,
       type: 'tvsearch',
       categories: tvCategories,
       indexerIds: options.indexerIds,
       limit: options.limit || 100,
-    })
+    }
+
+    // Pass external IDs to Prowlarr for ID-based lookup
+    if (options.tvdbId) {
+      searchParams.tvdbId = options.tvdbId
+    }
+    if (options.imdbId) {
+      searchParams.imdbId = options.imdbId
+    }
+
+    return this.search(config, searchParams)
   }
 
   /**

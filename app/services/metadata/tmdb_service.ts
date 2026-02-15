@@ -83,6 +83,8 @@ export interface TmdbTvShow {
   networks: string[]
   numberOfSeasons: number
   numberOfEpisodes: number
+  imdbId: string | null
+  tvdbId: string | null
 }
 
 export interface TmdbSeason {
@@ -290,8 +292,8 @@ export class TmdbService {
 
   async getTvShow(id: number): Promise<TmdbTvShow> {
     return cache.getOrSet(`tmdb:tv:${id}`, CACHE_TTL.METADATA, async () => {
-      const data = await this.fetch(`/tv/${id}`)
-      return this.mapTvShow(data)
+      const data = await this.fetch(`/tv/${id}?append_to_response=external_ids`)
+      return this.mapTvShow(data, data.external_ids)
     })
   }
 
@@ -344,7 +346,7 @@ export class TmdbService {
     return { season, episodes }
   }
 
-  private mapTvShow(s: any): TmdbTvShow {
+  private mapTvShow(s: any, externalIds?: any): TmdbTvShow {
     // Map genre_ids to names using our mapping, or use full genre objects if available
     const genres =
       s.genres?.map((g: any) => g.name) ||
@@ -367,7 +369,26 @@ export class TmdbService {
       networks: s.networks?.map((n: any) => n.name) || [],
       numberOfSeasons: s.number_of_seasons || 0,
       numberOfEpisodes: s.number_of_episodes || 0,
+      imdbId: externalIds?.imdb_id || null,
+      tvdbId: externalIds?.tvdb_id ? String(externalIds.tvdb_id) : null,
     }
+  }
+
+  async getTvShowAlternateTitles(id: number): Promise<string[]> {
+    const cacheKey = `tmdb:tv:${id}:alt_titles`
+    return cache.getOrSet(cacheKey, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/tv/${id}/alternative_titles`)
+      const results = data.results || []
+      return results.map((r: any) => r.title).filter((t: string) => t && t.length > 0)
+    })
+  }
+
+  detectSeriesType(tmdbShow: TmdbTvShow): 'standard' | 'daily' | 'anime' {
+    const dailyGenres = ['Talk', 'News']
+    if (tmdbShow.genres.some((g) => dailyGenres.includes(g))) {
+      return 'daily'
+    }
+    return 'standard'
   }
 
   // Watch Providers

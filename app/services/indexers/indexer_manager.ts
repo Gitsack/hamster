@@ -58,6 +58,9 @@ export interface TvSearchOptions {
   episode?: number
   tvdbId?: string
   imdbId?: string
+  alternateTitles?: string[]
+  airDate?: string
+  seriesType?: 'standard' | 'daily' | 'anime'
   indexerIds?: string[]
   limit?: number
 }
@@ -467,55 +470,129 @@ export class IndexerManager {
   }
 
   /**
-   * Search for TV shows/episodes across Prowlarr and direct indexers
+   * Search for TV shows/episodes across Prowlarr and direct indexers.
+   * Supports alternate titles, date-based queries for daily shows, and
+   * Newznab tvsearch with external IDs for direct indexers.
    */
   async searchTvShows(options: TvSearchOptions): Promise<UnifiedSearchResult[]> {
+    const allTitles = [options.title, ...(options.alternateTitles || [])]
+    const allResults: UnifiedSearchResult[] = []
+
+    console.log('[IndexerManager] searchTvShows called:', {
+      title: options.title,
+      seriesType: options.seriesType,
+      airDate: options.airDate,
+      season: options.season,
+      episode: options.episode,
+      tvdbId: options.tvdbId,
+      imdbId: options.imdbId,
+      alternateTitles: options.alternateTitles,
+    })
+
+    let isFirstTitle = true
+    for (const title of allTitles) {
+      const titleResults = await this._searchTvShowsSingleTitle(
+        { ...options, title },
+        !isFirstTitle // skip Prowlarr for alternate titles (it uses IDs internally)
+      )
+      allResults.push(...titleResults)
+      isFirstTitle = false
+    }
+
+    // Deduplicate by downloadUrl
+    const seen = new Map<string, UnifiedSearchResult>()
+    for (const result of allResults) {
+      const key = result.downloadUrl
+      if (!seen.has(key)) {
+        seen.set(key, result)
+      }
+    }
+
+    const deduped = Array.from(seen.values())
+
+    console.log('[IndexerManager] searchTvShows results:', {
+      totalBeforeDedup: allResults.length,
+      totalAfterDedup: deduped.length,
+      sampleTitles: deduped.slice(0, 5).map((r) => r.title),
+    })
+
+    if (deduped.length === 0) {
+      const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
+      const directIndexers = await Indexer.query().where('enabled', true)
+      if (!prowlarrConfig && directIndexers.length === 0) {
+        throw new Error(
+          'No indexers configured. Please configure Prowlarr or add indexers in settings.'
+        )
+      }
+    }
+
+    // Sort by size (larger = better quality usually)
+    return deduped.sort((a, b) => b.size - a.size)
+  }
+
+  private async _searchTvShowsSingleTitle(
+    options: TvSearchOptions,
+    skipProwlarr: boolean
+  ): Promise<UnifiedSearchResult[]> {
     const results: UnifiedSearchResult[] = []
 
-    // TV categories: 5000 (TV), 5010 (WEB-DL), 5020 (Foreign), 5030 (SD), 5040 (HD), 5045 (UHD), 5050 (Other), 5060 (Sports), 5070 (Anime), 5080 (Documentary)
+    // TV categories
     const tvCategories = [5000, 5010, 5020, 5030, 5040, 5045, 5050, 5060, 5070, 5080]
 
-    // Try Prowlarr first if configured
-    const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
+    // Try Prowlarr first if configured and not skipped
+    if (!skipProwlarr) {
+      const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
 
-    if (prowlarrConfig) {
-      try {
-        const prowlarrResults = await prowlarrService.searchTvShows(
-          {
-            url: prowlarrConfig.baseUrl,
-            apiKey: prowlarrConfig.apiKey,
-          },
-          {
-            title: options.title,
-            season: options.season,
-            episode: options.episode,
-            tvdbId: options.tvdbId,
-            imdbId: options.imdbId,
-            // Don't pass indexerIds to Prowlarr - our UUIDs don't match Prowlarr's numeric IDs
-            limit: options.limit || 50,
+      if (prowlarrConfig) {
+        try {
+          const prowlarrResults = await prowlarrService.searchTvShows(
+            {
+              url: prowlarrConfig.baseUrl,
+              apiKey: prowlarrConfig.apiKey,
+            },
+            {
+              title: options.title,
+              season: options.seriesType === 'daily' ? undefined : options.season,
+              episode: options.seriesType === 'daily' ? undefined : options.episode,
+              tvdbId: options.tvdbId,
+              imdbId: options.imdbId,
+              airDate: options.seriesType === 'daily' ? options.airDate : undefined,
+              // Don't pass indexerIds to Prowlarr - our UUIDs don't match Prowlarr's numeric IDs
+              limit: options.limit || 50,
+            }
+          )
+
+          console.log(
+            `[IndexerManager] Prowlarr tvsearch returned ${prowlarrResults.length} results`
+          )
+          if (prowlarrResults.length > 0) {
+            console.log(
+              '[IndexerManager] Prowlarr sample titles:',
+              prowlarrResults.slice(0, 5).map((r) => r.title)
+            )
           }
-        )
 
-        results.push(
-          ...prowlarrResults.map((result) => ({
-            id: result.guid,
-            title: result.title,
-            indexer: result.indexer,
-            indexerId: String(result.indexerId),
-            size: result.size,
-            publishDate: result.publishDate,
-            downloadUrl: result.downloadUrl,
-            infoUrl: result.infoUrl,
-            grabs: result.grabs,
-            seeders: result.seeders,
-            peers: result.leechers,
-            protocol: result.protocol,
-            source: 'prowlarr' as const,
-            quality: this.detectVideoQuality(result.title),
-          }))
-        )
-      } catch (error) {
-        console.error('Prowlarr TV search failed:', error)
+          results.push(
+            ...prowlarrResults.map((result) => ({
+              id: result.guid,
+              title: result.title,
+              indexer: result.indexer,
+              indexerId: String(result.indexerId),
+              size: result.size,
+              publishDate: result.publishDate,
+              downloadUrl: result.downloadUrl,
+              infoUrl: result.infoUrl,
+              grabs: result.grabs,
+              seeders: result.seeders,
+              peers: result.leechers,
+              protocol: result.protocol,
+              source: 'prowlarr' as const,
+              quality: this.detectVideoQuality(result.title),
+            }))
+          )
+        } catch (error) {
+          console.error('Prowlarr TV search failed:', error)
+        }
       }
     }
 
@@ -533,36 +610,62 @@ export class IndexerManager {
           enabled: indexer.enabled,
         }
 
-        // Build search query
-        let query = options.title
-        if (options.season !== undefined) {
-          query = `${query} S${String(options.season).padStart(2, '0')}`
-          if (options.episode !== undefined) {
-            query = `${query}E${String(options.episode).padStart(2, '0')}`
+        // Try tvsearch with external IDs first, then fall back to text search
+        let tvSearchResults: NewznabSearchResult[] = []
+
+        if (options.tvdbId || options.imdbId) {
+          try {
+            tvSearchResults = await newznabService.searchTvShows(config, {
+              tvdbId: options.tvdbId,
+              imdbId: options.imdbId,
+              season: options.seriesType === 'daily' ? undefined : options.season,
+              episode: options.seriesType === 'daily' ? undefined : options.episode,
+              airDate:
+                options.seriesType === 'daily' && options.airDate ? options.airDate : undefined,
+              categories: tvCategories,
+              limit: options.limit || 50,
+            })
+            console.log(
+              `[IndexerManager] ${indexer.name}: tvsearch by ID returned ${tvSearchResults.length} results`
+            )
+          } catch (err) {
+            console.log(
+              `[IndexerManager] ${indexer.name}: tvsearch by ID failed:`,
+              err instanceof Error ? err.message : err
+            )
           }
         }
 
-        const searchResults = await newznabService.search(config, query, {
-          categories: tvCategories,
-          limit: options.limit || 50,
-        })
+        // Fall back to text-based search if ID search returned nothing
+        if (tvSearchResults.length === 0) {
+          const query = this._buildTvSearchQuery(options)
+          console.log(`[IndexerManager] ${indexer.name}: falling back to text search: "${query}"`)
+          try {
+            tvSearchResults = await newznabService.searchTvShows(config, {
+              query,
+              categories: tvCategories,
+              limit: options.limit || 50,
+            })
+            console.log(
+              `[IndexerManager] ${indexer.name}: text tvsearch returned ${tvSearchResults.length} results`
+            )
+          } catch {
+            // tvsearch not supported, fall back to general search
+            console.log(
+              `[IndexerManager] ${indexer.name}: tvsearch not supported, using general search`
+            )
+            const searchResults = await newznabService.search(config, query, {
+              categories: tvCategories,
+              limit: options.limit || 50,
+            })
+            console.log(
+              `[IndexerManager] ${indexer.name}: general search returned ${searchResults.length} results`
+            )
+            return this.mapNewznabTvResults(searchResults)
+          }
+        }
 
-        return searchResults.map((result) => ({
-          id: result.guid,
-          title: result.title,
-          indexer: result.indexer,
-          indexerId: result.indexerId,
-          size: result.size,
-          publishDate: result.pubDate,
-          downloadUrl: result.downloadUrl,
-          infoUrl: result.infoUrl,
-          grabs: result.grabs,
-          seeders: result.seeders,
-          peers: result.peers,
-          protocol: 'usenet' as const,
-          source: 'direct' as const,
-          quality: this.detectVideoQuality(result.title),
-        }))
+        return this.mapNewznabTvResults(tvSearchResults)
       } catch (error) {
         console.error(`TV search failed for indexer ${indexer.name}:`, error)
         return []
@@ -572,14 +675,43 @@ export class IndexerManager {
     const directResults = await Promise.all(directSearches)
     results.push(...directResults.flat())
 
-    if (results.length === 0 && !prowlarrConfig && directIndexers.length === 0) {
-      throw new Error(
-        'No indexers configured. Please configure Prowlarr or add indexers in settings.'
-      )
-    }
+    return results
+  }
 
-    // Sort by size (larger = better quality usually)
-    return results.sort((a, b) => b.size - a.size)
+  /**
+   * Build full text search query for TV shows
+   */
+  private _buildTvSearchQuery(options: TvSearchOptions): string {
+    let query = options.title
+    if (options.seriesType === 'daily' && options.airDate) {
+      // Daily shows: "Title 2024 01 15"
+      query = `${query} ${options.airDate.replace(/-/g, ' ')}`
+    } else if (options.season !== undefined) {
+      query = `${query} S${String(options.season).padStart(2, '0')}`
+      if (options.episode !== undefined) {
+        query = `${query}E${String(options.episode).padStart(2, '0')}`
+      }
+    }
+    return query
+  }
+
+  private mapNewznabTvResults(results: NewznabSearchResult[]): UnifiedSearchResult[] {
+    return results.map((result) => ({
+      id: result.guid,
+      title: result.title,
+      indexer: result.indexer,
+      indexerId: result.indexerId,
+      size: result.size,
+      publishDate: result.pubDate,
+      downloadUrl: result.downloadUrl,
+      infoUrl: result.infoUrl,
+      grabs: result.grabs,
+      seeders: result.seeders,
+      peers: result.peers,
+      protocol: 'usenet' as const,
+      source: 'direct' as const,
+      quality: this.detectVideoQuality(result.title),
+    }))
   }
 
   /**

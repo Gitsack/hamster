@@ -79,6 +79,24 @@ export default class TvShow extends BaseModel {
   })
   declare genres: string[]
 
+  @column({
+    prepare: (value: string[]) => JSON.stringify(value),
+    consume: (value: string | string[]) => {
+      if (!value) return []
+      if (Array.isArray(value)) return value
+      try {
+        const parsed = JSON.parse(value)
+        return Array.isArray(parsed) ? parsed : [value]
+      } catch {
+        return value.includes(',') ? value.split(',').map((s) => s.trim()) : [value]
+      }
+    },
+  })
+  declare alternateTitles: string[]
+
+  @column()
+  declare seriesType: 'standard' | 'daily' | 'anime'
+
   // Stats
   @column()
   declare seasonCount: number
