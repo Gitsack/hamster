@@ -97,16 +97,30 @@ export function MediaTeaser({
     setImageFailed(true)
   }, [])
 
-  // Track loading→loaded transition: 'loading' | 'fading-out' | 'fading-in' | 'idle'
-  const wasLoadingRef = useRef(false)
+  // Track loading→loaded transition with a debounce so fast fetches skip the animation entirely
+  const wasVisibleRef = useRef(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [transition, setTransition] = useState<'loading' | 'fading-out' | 'fading-in' | 'idle'>('idle')
 
   useEffect(() => {
     if (isLoadingProviders) {
-      wasLoadingRef.current = true
-      setTransition('loading')
-    } else if (wasLoadingRef.current) {
-      wasLoadingRef.current = false
+      // Delay showing the loader — only show if loading takes > 400ms
+      debounceRef.current = setTimeout(() => {
+        wasVisibleRef.current = true
+        setTransition('loading')
+      }, 400)
+      return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    }
+
+    // Loading just finished
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+
+    if (wasVisibleRef.current) {
+      // Loader was shown — animate the transition out
+      wasVisibleRef.current = false
       setTransition('fading-out')
       const t1 = setTimeout(() => {
         setTransition(streamingProviders && streamingProviders.length > 0 ? 'fading-in' : 'idle')
@@ -115,6 +129,13 @@ export function MediaTeaser({
         setTransition('idle')
       }, 500)
       return () => { clearTimeout(t1); clearTimeout(t2) }
+    }
+
+    // Loader was never shown (fast fetch) — go straight to fade-in or idle
+    if (streamingProviders && streamingProviders.length > 0) {
+      setTransition('fading-in')
+      const t = setTimeout(() => setTransition('idle'), 250)
+      return () => clearTimeout(t)
     }
   }, [isLoadingProviders, streamingProviders])
 
