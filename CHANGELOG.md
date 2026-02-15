@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.17.0](https://github.com/Gitsack/hamster/compare/hamster-v1.16.0...hamster-v1.17.0) (2026-02-15)
+
+
+### Features
+
+* better streaming service selection ([138761d](https://github.com/Gitsack/hamster/commit/138761d910ca889acbfdf2f8ecb2b676885a7be6))
+* quick view of personal streaming availability ([829a1dd](https://github.com/Gitsack/hamster/commit/829a1dd60c03ae088ad5ae5a897f1adb53b0b571))
+
+
+### Bug Fixes
+
+* adapted streaming loading debounce ([dfe68e1](https://github.com/Gitsack/hamster/commit/dfe68e1693d70f1862a3aa463705e0a40fc2bd11))
+* correct appearing streaming badges ([425e973](https://github.com/Gitsack/hamster/commit/425e9732b62c6f4b2bc65caaa3b3c523ce3be424))
+
 ## [1.16.0](https://github.com/Gitsack/hamster/compare/hamster-v1.15.4...hamster-v1.16.0) (2026-02-14)
 
 
