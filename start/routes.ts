@@ -326,6 +326,9 @@ router
     router.post('/unmatched/bulk-update', [UnmatchedFilesController, 'bulkUpdate'])
     router.post('/unmatched/bulk-delete', [UnmatchedFilesController, 'bulkDestroy'])
 
+    // Watch providers (batch fetch for streaming badges)
+    router.post('/watch-providers/batch', [AppSettingsController, 'batchWatchProviders'])
+
     // Recommendations
     router.get('/recommendations/movies', [RecommendationsController, 'movies'])
     router.get('/recommendations/tv', [RecommendationsController, 'tv'])
@@ -432,6 +435,7 @@ router
         router.post('/settings/media-type', [AppSettingsController, 'toggleMediaType'])
         router.get('/settings/naming-patterns', [AppSettingsController, 'getNamingPatterns'])
         router.put('/settings/naming-patterns', [AppSettingsController, 'updateNamingPatterns'])
+        router.get('/settings/watch-providers', [AppSettingsController, 'getWatchProviders'])
 
         // Media servers
         router.get('/mediaservers', [MediaServersController, 'index'])

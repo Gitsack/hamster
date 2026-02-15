@@ -1,7 +1,6 @@
 import { Head, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -12,8 +11,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Film01Icon, Tv01Icon, ArrowLeft01Icon } from '@hugeicons/core-free-icons'
-import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
+import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
+import { type MediaItemStatus } from '@/components/library/media-status-badge'
+import { MediaTeaser } from '@/components/library/media-teaser'
+import { useVisibleWatchProviders } from '@/hooks/use_visible_watch_providers'
 import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dialog'
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -175,7 +176,6 @@ export default function DiscoverPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
-  const [failedImages, setFailedImages] = useState<Set<string>>(new Set())
   const [togglingItems, setTogglingItems] = useState<Set<string>>(new Set())
   const [sortBy, setSortBy] = useState(initialSortBy)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -316,10 +316,6 @@ export default function DiscoverPage() {
     observer.observe(sentinel)
     return () => observer.disconnect()
   }, [isRecommendation, page, totalPages, loading, fetchPage])
-
-  const handleImageError = useCallback((key: string) => {
-    setFailedImages((prev) => new Set(prev).add(key))
-  }, [])
 
   const updateItem = (tmdbId: string, updater: (item: DiscoverItem) => DiscoverItem) => {
     setItems((prev) => prev.map((i) => (i.tmdbId === tmdbId ? updater(i) : i)))
@@ -522,7 +518,9 @@ export default function DiscoverPage() {
   }
 
   const isMovie = mediaType === 'movies'
-  const IconComponent = isMovie ? Film01Icon : Tv01Icon
+
+  // Lazy-load streaming provider badges as items become visible
+  const { providers: watchProviders, loadingIds: watchProviderLoading, observerRef: watchProviderRef } = useVisibleWatchProviders(isMovie ? 'movie' : 'tv')
 
   return (
     <AppLayout
@@ -570,9 +568,6 @@ export default function DiscoverPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {items.map((item) => {
-              const imageKey = `discover-${item.tmdbId}`
-              const hasImage = item.posterUrl && !failedImages.has(imageKey)
-
               let status: MediaItemStatus = 'none'
               if (item.inLibrary) {
                 if (isMovie) {
@@ -596,54 +591,23 @@ export default function DiscoverPage() {
                     : undefined
 
               return (
-                <div
+                <MediaTeaser
                   key={item.tmdbId}
-                  className="group cursor-pointer"
+                  tmdbId={item.tmdbId}
+                  title={item.title}
+                  year={item.year}
+                  posterUrl={item.posterUrl}
+                  genres={item.genres}
+                  mediaType={isMovie ? 'movie' : 'tv'}
+                  status={status}
+                  isToggling={togglingItems.has(item.tmdbId)}
+                  showStatusOnHover={status === 'none'}
+                  onToggleRequest={handleToggle}
+                  streamingProviders={watchProviders[item.tmdbId]}
+                  isLoadingProviders={watchProviderLoading.has(item.tmdbId)}
+                  observerRef={watchProviderRef(item.tmdbId)}
                   onClick={() => handleItemClick(item)}
-                >
-                  <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-muted">
-                    {hasImage ? (
-                      <img
-                        src={item.posterUrl!}
-                        alt={item.title}
-                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                        onError={() => handleImageError(imageKey)}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <HugeiconsIcon
-                          icon={IconComponent}
-                          className="h-12 w-12 text-muted-foreground/30"
-                        />
-                      </div>
-                    )}
-                    {item.genres && item.genres.length > 0 && (
-                      <Badge
-                        className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-black/40 backdrop-blur-sm text-white/90 border-0"
-                        variant="secondary"
-                      >
-                        {item.genres[0].toUpperCase()}
-                      </Badge>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                    <div
-                      className="absolute top-2 right-2 z-10"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <CardStatusBadge
-                        status={status}
-                        size="tiny"
-                        showOnHover={status === 'none'}
-                        isToggling={togglingItems.has(item.tmdbId)}
-                        onToggleRequest={handleToggle}
-                      />
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <p className="text-white text-sm font-medium line-clamp-2">{item.title}</p>
-                      {item.year && <p className="text-white/70 text-xs">{item.year}</p>}
-                    </div>
-                  </div>
-                </div>
+                />
               )
             })}
           </div>

@@ -171,11 +171,7 @@ export default class MoviesController {
       let data: { results: any[]; totalPages: number }
 
       if (category === 'genre' && genreId) {
-        data = await tmdbService.discoverMoviesByGenre(
-          Number.parseInt(genreId),
-          sortBy,
-          page
-        )
+        data = await tmdbService.discoverMoviesByGenre(Number.parseInt(genreId), sortBy, page)
       } else {
         switch (category) {
           case 'now_playing':
@@ -699,13 +695,15 @@ export default class MoviesController {
     try {
       const results = await tmdbService.getSimilarMovies(Number.parseInt(tmdbIdStr))
 
+      const sliced = results.slice(0, 20)
+
       // Check library status
-      const tmdbIds = results.map((r) => String(r.id))
+      const tmdbIds = sliced.map((r) => String(r.id))
       const existing = await Movie.query().whereIn('tmdbId', tmdbIds)
       const existingMap = new Map(existing.map((m) => [m.tmdbId, m]))
 
       return response.json({
-        results: results.slice(0, 20).map((m) => {
+        results: sliced.map((m) => {
           const libraryMovie = existingMap.get(String(m.id))
           return {
             tmdbId: String(m.id),

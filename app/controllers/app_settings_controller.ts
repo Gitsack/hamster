@@ -25,7 +25,9 @@ function ensureArray<T>(value: T[] | string | undefined, defaultValue: T[]): T[]
 
 export default class AppSettingsController {
   async index({ response }: HttpContext) {
-    const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['movies'])
+    const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', [
+      'movies',
+    ])
     const enabledMediaTypes = ensureArray(rawMediaTypes, ['movies'])
     const tmdbApiKey = await AppSetting.get<string>('tmdbApiKey', '')
     const traktClientId = await AppSetting.get<string>('traktClientId', '')
@@ -37,6 +39,10 @@ export default class AppSettingsController {
     })
     const justwatchEnabled = await AppSetting.get<boolean>('justwatchEnabled', false)
     const justwatchLocale = await AppSetting.get<string>('justwatchLocale', 'en_US')
+    const selectedStreamingProviders = await AppSetting.get<number[]>(
+      'selectedStreamingProviders',
+      []
+    )
 
     return response.json({
       enabledMediaTypes,
@@ -46,6 +52,7 @@ export default class AppSettingsController {
       recommendationSettings,
       justwatchEnabled,
       justwatchLocale,
+      selectedStreamingProviders,
     })
   }
 
@@ -57,6 +64,7 @@ export default class AppSettingsController {
       recommendationSettings,
       justwatchEnabled,
       justwatchLocale,
+      selectedStreamingProviders,
     } = request.only([
       'enabledMediaTypes',
       'tmdbApiKey',
@@ -64,6 +72,7 @@ export default class AppSettingsController {
       'recommendationSettings',
       'justwatchEnabled',
       'justwatchLocale',
+      'selectedStreamingProviders',
     ])
 
     if (enabledMediaTypes !== undefined) {
@@ -101,7 +110,13 @@ export default class AppSettingsController {
       justwatchService.setLocale(justwatchLocale)
     }
 
-    const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', ['movies'])
+    if (selectedStreamingProviders !== undefined) {
+      await AppSetting.set('selectedStreamingProviders', selectedStreamingProviders)
+    }
+
+    const rawMediaTypes = await AppSetting.get<MediaType[] | string>('enabledMediaTypes', [
+      'movies',
+    ])
     const storedTmdbKey = await AppSetting.get<string>('tmdbApiKey', '')
     const storedTraktId = await AppSetting.get<string>('traktClientId', '')
     const storedRecommendationSettings = await AppSetting.get('recommendationSettings', {
@@ -112,6 +127,10 @@ export default class AppSettingsController {
     })
     const storedJustwatchEnabled = await AppSetting.get<boolean>('justwatchEnabled', false)
     const storedJustwatchLocale = await AppSetting.get<string>('justwatchLocale', 'en_US')
+    const storedStreamingProviders = await AppSetting.get<number[]>(
+      'selectedStreamingProviders',
+      []
+    )
 
     return response.json({
       enabledMediaTypes: ensureArray(rawMediaTypes, ['movies']),
@@ -121,6 +140,7 @@ export default class AppSettingsController {
       recommendationSettings: storedRecommendationSettings,
       justwatchEnabled: storedJustwatchEnabled,
       justwatchLocale: storedJustwatchLocale,
+      selectedStreamingProviders: storedStreamingProviders,
     })
   }
 
@@ -145,6 +165,67 @@ export default class AppSettingsController {
 
     await AppSetting.set('enabledMediaTypes', enabledTypes)
     return response.json({ enabledMediaTypes: enabledTypes })
+  }
+
+  /**
+   * Get available streaming providers for the configured region
+   */
+  async getWatchProviders({ response }: HttpContext) {
+    const justwatchLocale = (await AppSetting.get<string>('justwatchLocale', 'en_US')) ?? 'en_US'
+    // Extract country code from locale (e.g., 'en_US' -> 'US')
+    const region = justwatchLocale.split('_')[1] || 'US'
+
+    try {
+      const { tmdbService } = await import('#services/metadata/tmdb_service')
+      const providers = await tmdbService.getAvailableProviders(region)
+      return response.json({ providers, region })
+    } catch (error) {
+      console.error('Failed to fetch watch providers:', error)
+      return response.badRequest({ error: 'Failed to fetch watch providers' })
+    }
+  }
+
+  /**
+   * Batch fetch watch providers for multiple TMDB items.
+   * Returns only providers matching the user's selected streaming services.
+   */
+  async batchWatchProviders({ request, response }: HttpContext) {
+    const { tmdbIds, type } = request.only(['tmdbIds', 'type'])
+
+    if (!Array.isArray(tmdbIds) || tmdbIds.length === 0 || !['movie', 'tv'].includes(type)) {
+      return response.badRequest({ error: 'tmdbIds (array) and type (movie|tv) are required' })
+    }
+
+    const selectedProviders =
+      (await AppSetting.get<number[]>('selectedStreamingProviders', [])) ?? []
+    if (selectedProviders.length === 0) {
+      return response.json({ providers: {} })
+    }
+
+    const locale = (await AppSetting.get<string>('justwatchLocale', 'en_US')) ?? 'en_US'
+    const region = locale.split('_')[1] || 'US'
+
+    try {
+      const { tmdbService } = await import('#services/metadata/tmdb_service')
+      const numericIds = tmdbIds.map((id: string | number) => Number(id)).slice(0, 40)
+      const providerMap = await tmdbService.getWatchProvidersForMany(type, numericIds, region)
+
+      // Build response: { [tmdbId]: [{ id, name, logoUrl }] }
+      const result: Record<string, { id: number; name: string; logoUrl: string }[]> = {}
+      for (const [tmdbId, allProviders] of providerMap) {
+        const filtered = allProviders
+          .filter((p) => selectedProviders.includes(p.id))
+          .map((p) => ({ id: p.id, name: p.name, logoUrl: p.logoPath }))
+        if (filtered.length > 0) {
+          result[String(tmdbId)] = filtered
+        }
+      }
+
+      return response.json({ providers: result })
+    } catch (error) {
+      console.error('Failed to batch fetch watch providers:', error)
+      return response.json({ providers: {} })
+    }
   }
 
   /**

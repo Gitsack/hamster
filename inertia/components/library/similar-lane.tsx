@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { router } from '@inertiajs/react'
 import { Skeleton } from '@/components/ui/skeleton'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { Film01Icon, Tv01Icon } from '@hugeicons/core-free-icons'
 import { useMediaPreview } from '@/contexts/media_preview_context'
+import { MediaTeaser } from '@/components/library/media-teaser'
+import { useVisibleWatchProviders } from '@/hooks/use_visible_watch_providers'
 
 interface SimilarItem {
   tmdbId: string
@@ -28,6 +28,8 @@ export function SimilarLane({ mediaType, mediaId, tmdbId }: SimilarLaneProps) {
   const [items, setItems] = useState<SimilarItem[]>([])
   const [loading, setLoading] = useState(true)
   const { openMoviePreview, openTvShowPreview } = useMediaPreview()
+
+  const { providers: watchProviders, loadingIds: watchProviderLoading, observerRef: watchProviderRef } = useVisibleWatchProviders(mediaType === 'movies' ? 'movie' : 'tv')
 
   useEffect(() => {
     if (!tmdbId) {
@@ -79,8 +81,6 @@ export function SimilarLane({ mediaType, mediaId, tmdbId }: SimilarLaneProps) {
   }
   if (items.length === 0) return null
 
-  const iconComponent = mediaType === 'movies' ? Film01Icon : Tv01Icon
-
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold">
@@ -88,38 +88,21 @@ export function SimilarLane({ mediaType, mediaId, tmdbId }: SimilarLaneProps) {
       </h2>
       <div className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full">
         {items.map((item) => (
-          <div
+          <MediaTeaser
             key={item.tmdbId}
-            className="flex-shrink-0 w-32 group cursor-pointer"
+            tmdbId={item.tmdbId}
+            title={item.title}
+            year={item.year}
+            posterUrl={item.posterUrl}
+            genres={item.genres}
+            mediaType={mediaType === 'movies' ? 'movie' : 'tv'}
+            status={item.inLibrary ? 'downloaded' : 'none'}
+            streamingProviders={watchProviders[item.tmdbId]}
+            isLoadingProviders={watchProviderLoading.has(item.tmdbId)}
+            observerRef={watchProviderRef(item.tmdbId)}
             onClick={() => handleClick(item)}
-          >
-            <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-muted">
-              {item.posterUrl ? (
-                <img
-                  src={item.posterUrl}
-                  alt={item.title}
-                  className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <HugeiconsIcon
-                    icon={iconComponent}
-                    className="h-8 w-8 text-muted-foreground/30"
-                  />
-                </div>
-              )}
-              {item.inLibrary && (
-                <div className="absolute top-1.5 right-1.5">
-                  <div className="h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background" />
-                </div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <p className="text-white text-xs font-medium line-clamp-2">{item.title}</p>
-                {item.year && <p className="text-white/70 text-[10px]">{item.year}</p>}
-              </div>
-            </div>
-          </div>
+            size="small"
+          />
         ))}
       </div>
     </div>

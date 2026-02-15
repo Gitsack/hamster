@@ -115,6 +115,12 @@ export interface TmdbVideo {
   name: string
 }
 
+export interface TmdbWatchProvider {
+  id: number
+  name: string
+  logoPath: string
+}
+
 export interface TmdbCastMember {
   id: number
   name: string
@@ -362,6 +368,67 @@ export class TmdbService {
       numberOfSeasons: s.number_of_seasons || 0,
       numberOfEpisodes: s.number_of_episodes || 0,
     }
+  }
+
+  // Watch Providers
+
+  async getWatchProviders(
+    type: 'movie' | 'tv',
+    id: number,
+    region: string
+  ): Promise<TmdbWatchProvider[]> {
+    const cacheKey = `tmdb:${type}:${id}:watch:${region}`
+    return cache.getOrSet(cacheKey, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/${type}/${id}/watch/providers`)
+      const regionData = data.results?.[region]
+      if (!regionData?.flatrate) return []
+      return regionData.flatrate.map((p: any) => ({
+        id: p.provider_id,
+        name: p.provider_name,
+        logoPath: `${TMDB_IMAGE_BASE}/w92${p.logo_path}`,
+      }))
+    })
+  }
+
+  async getWatchProvidersForMany(
+    type: 'movie' | 'tv',
+    tmdbIds: number[],
+    region: string
+  ): Promise<Map<number, TmdbWatchProvider[]>> {
+    const result = new Map<number, TmdbWatchProvider[]>()
+    const promises = tmdbIds.map(async (id) => {
+      try {
+        const providers = await this.getWatchProviders(type, id, region)
+        result.set(id, providers)
+      } catch {
+        result.set(id, [])
+      }
+    })
+    await Promise.all(promises)
+    return result
+  }
+
+  async getAvailableProviders(region: string): Promise<TmdbWatchProvider[]> {
+    const cacheKey = `tmdb:providers:${region}`
+    return cache.getOrSet(cacheKey, CACHE_TTL.METADATA, async () => {
+      const [movieData, tvData] = await Promise.all([
+        this.fetch(`/watch/providers/movie?watch_region=${region}`),
+        this.fetch(`/watch/providers/tv?watch_region=${region}`),
+      ])
+      // Merge and deduplicate by provider ID
+      const providerMap = new Map<number, TmdbWatchProvider>()
+      for (const p of [...(movieData.results || []), ...(tvData.results || [])]) {
+        if (!providerMap.has(p.provider_id)) {
+          providerMap.set(p.provider_id, {
+            id: p.provider_id,
+            name: p.provider_name,
+            logoPath: `${TMDB_IMAGE_BASE}/w92${p.logo_path}`,
+          })
+        }
+      }
+      // Sort by display priority (lower = more popular)
+      return Array.from(providerMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+    })
   }
 
   getImageUrl(

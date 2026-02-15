@@ -183,11 +183,7 @@ export default class TvShowsController {
       let data: { results: any[]; totalPages: number }
 
       if (category === 'genre' && genreId) {
-        data = await tmdbService.discoverTvShowsByGenre(
-          Number.parseInt(genreId),
-          sortBy,
-          page
-        )
+        data = await tmdbService.discoverTvShowsByGenre(Number.parseInt(genreId), sortBy, page)
       } else {
         switch (category) {
           case 'on_the_air':
@@ -1236,13 +1232,15 @@ export default class TvShowsController {
     try {
       const results = await tmdbService.getSimilarTvShows(Number.parseInt(tmdbIdStr))
 
+      const sliced = results.slice(0, 20)
+
       // Check library status
-      const tmdbIds = results.map((r) => String(r.id))
+      const tmdbIds = sliced.map((r) => String(r.id))
       const existing = await TvShow.query().whereIn('tmdbId', tmdbIds)
       const existingMap = new Map(existing.map((s) => [s.tmdbId, s]))
 
       return response.json({
-        results: results.slice(0, 20).map((s) => {
+        results: sliced.map((s) => {
           const libraryShow = existingMap.get(String(s.id))
           return {
             tmdbId: String(s.id),

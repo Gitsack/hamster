@@ -59,6 +59,12 @@ interface RecommendationSettings {
   justwatchEnabled: boolean
 }
 
+interface StreamingProvider {
+  id: number
+  name: string
+  logoPath: string
+}
+
 interface AppSettings {
   enabledMediaTypes: MediaType[]
   hasTmdbApiKey: boolean
@@ -66,6 +72,7 @@ interface AppSettings {
   recommendationSettings: RecommendationSettings
   justwatchEnabled: boolean
   justwatchLocale: string
+  selectedStreamingProviders: number[]
 }
 
 const mediaTypeInfo: Record<
@@ -233,9 +240,14 @@ export default function MediaManagement() {
     },
     justwatchEnabled: false,
     justwatchLocale: 'en_US',
+    selectedStreamingProviders: [],
   })
   const [rootFolders, setRootFolders] = useState<RootFolder[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Streaming providers state
+  const [availableProviders, setAvailableProviders] = useState<StreamingProvider[]>([])
+  const [loadingProviders, setLoadingProviders] = useState(false)
 
   // Naming patterns state
   const [namingData, setNamingData] = useState<NamingPatternsData | null>(null)
@@ -318,9 +330,54 @@ export default function MediaManagement() {
     }
   }
 
+  const fetchProviders = async () => {
+    setLoadingProviders(true)
+    try {
+      const res = await fetch('/api/v1/settings/watch-providers')
+      if (res.ok) {
+        const data = await res.json()
+        setAvailableProviders(data.providers || [])
+      }
+    } catch {
+      // Silently fail - providers are optional
+    } finally {
+      setLoadingProviders(false)
+    }
+  }
+
   useEffect(() => {
     fetchData()
   }, [])
+
+  // Fetch providers when TMDB key is available
+  useEffect(() => {
+    if (settings.hasTmdbApiKey) {
+      fetchProviders()
+    }
+  }, [settings.hasTmdbApiKey])
+
+  const handleToggleStreamingProvider = async (providerId: number) => {
+    const current = settings.selectedStreamingProviders
+    const updated = current.includes(providerId)
+      ? current.filter((id) => id !== providerId)
+      : [...current, providerId]
+
+    setSettings((prev) => ({ ...prev, selectedStreamingProviders: updated }))
+    try {
+      const response = await fetch('/api/v1/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selectedStreamingProviders: updated }),
+      })
+      if (!response.ok) {
+        toast.error('Failed to save streaming providers')
+        fetchData()
+      }
+    } catch {
+      toast.error('Failed to save streaming providers')
+      fetchData()
+    }
+  }
 
   const handleToggleMediaType = async (mediaType: MediaType, enabled: boolean) => {
     // Check if TMDB API key is needed
@@ -950,6 +1007,62 @@ export default function MediaManagement() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Streaming Services */}
+        {settings.hasTmdbApiKey && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Streaming Services</CardTitle>
+              <CardDescription>
+                Select your streaming subscriptions to see availability badges on teasers
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingProviders ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
+                  ))}
+                </div>
+              ) : availableProviders.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {availableProviders.map((provider) => {
+                    const isSelected = settings.selectedStreamingProviders.includes(provider.id)
+                    return (
+                      <button
+                        key={provider.id}
+                        type="button"
+                        onClick={() => handleToggleStreamingProvider(provider.id)}
+                        className={`flex items-center gap-3 rounded-lg border p-3 transition-all text-left ${
+                          isSelected
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                            : 'border-border hover:border-muted-foreground/30'
+                        }`}
+                      >
+                        <img
+                          src={provider.logoPath}
+                          alt={provider.name}
+                          className="h-8 w-8 rounded-md flex-shrink-0"
+                        />
+                        <span className="text-sm font-medium truncate">{provider.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No providers available. Make sure a locale is configured above.
+                </p>
+              )}
+              {settings.selectedStreamingProviders.length > 0 && (
+                <p className="text-sm text-muted-foreground mt-3">
+                  {settings.selectedStreamingProviders.length} service
+                  {settings.selectedStreamingProviders.length !== 1 ? 's' : ''} selected
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Media Types */}
         <Card>

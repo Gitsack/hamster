@@ -75,6 +75,8 @@ import {
   CardStatusBadge,
   type MediaItemStatus,
 } from '@/components/library/media-status-badge'
+import { MediaTeaser } from '@/components/library/media-teaser'
+import { useVisibleWatchProviders } from '@/hooks/use_visible_watch_providers'
 import { useMediaPreview } from '@/contexts/media_preview_context'
 
 // Error boundary to catch rendering errors
@@ -419,6 +421,10 @@ export default function SearchPage() {
 
   // Media preview context
   const { openMoviePreview, openTvShowPreview } = useMediaPreview()
+
+  // Lazy-load streaming provider badges as items become visible
+  const { providers: movieWatchProviders, loadingIds: movieWatchProviderLoading, observerRef: movieWatchProviderRef } = useVisibleWatchProviders('movie')
+  const { providers: tvWatchProviders, loadingIds: tvWatchProviderLoading, observerRef: tvWatchProviderRef } = useVisibleWatchProviders('tv')
 
   // Books add state
   const [selectedAuthor, setSelectedAuthor] = useState<AuthorSearchResult | null>(null)
@@ -2052,6 +2058,9 @@ export default function SearchPage() {
     onAdd,
     onToggle,
     togglingItems,
+    watchProviderMap,
+    watchProviderLoading,
+    watchProviderObserverRef,
   }: {
     title: string
     items: (MovieSearchResult | TvShowSearchResult)[]
@@ -2062,6 +2071,9 @@ export default function SearchPage() {
     onAdd: (item: MovieSearchResult | TvShowSearchResult) => void
     onToggle: (item: MovieSearchResult | TvShowSearchResult) => void
     togglingItems: Set<string>
+    watchProviderMap?: Record<string, { id: number; name: string; logoUrl: string }[]>
+    watchProviderLoading?: Set<string>
+    watchProviderObserverRef?: (tmdbId: string) => (el: HTMLDivElement | null) => void
   }) => {
     const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -2113,87 +2125,46 @@ export default function SearchPage() {
           style={{ scrollbarWidth: 'thin' }}
         >
           {items.map((item) => {
-            const imageKey = `discover-${type}-${item.tmdbId}`
-            const hasImage = item.posterUrl && !failedImages.has(imageKey)
+            let status: MediaItemStatus = 'none'
+            if (item.inLibrary) {
+              if (type === 'movie') {
+                const movie = item as MovieSearchResult
+                status = movie.hasFile
+                  ? 'downloaded'
+                  : movie.requested
+                    ? 'requested'
+                    : 'downloaded'
+              } else {
+                const show = item as TvShowSearchResult
+                status = show.requested ? 'requested' : 'downloaded'
+              }
+            }
+            const handleToggle =
+              status === 'none'
+                ? () => onAdd(item)
+                : status === 'requested'
+                  ? () => onToggle(item)
+                  : undefined
 
             return (
-              <div
+              <MediaTeaser
                 key={item.tmdbId}
-                className="flex-shrink-0 w-[150px] group cursor-pointer"
+                tmdbId={item.tmdbId}
+                title={item.title}
+                year={item.year}
+                posterUrl={item.posterUrl}
+                genres={item.genres}
+                mediaType={type}
+                status={status}
+                isToggling={togglingItems.has(item.tmdbId)}
+                showStatusOnHover={status === 'none'}
+                onToggleRequest={handleToggle}
+                streamingProviders={watchProviderMap?.[item.tmdbId]}
+                isLoadingProviders={watchProviderLoading?.has(item.tmdbId)}
+                observerRef={watchProviderObserverRef?.(item.tmdbId)}
                 onClick={() => onItemClick(item)}
-              >
-                <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-muted">
-                  {hasImage ? (
-                    <img
-                      src={item.posterUrl!}
-                      alt={item.title}
-                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                      onError={() => handleImageError(imageKey)}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <HugeiconsIcon
-                        icon={type === 'movie' ? Film01Icon : Tv01Icon}
-                        className="h-12 w-12 text-muted-foreground/30"
-                      />
-                    </div>
-                  )}
-                  {item.genres && item.genres.length > 0 && (
-                    <Badge
-                      className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-black/40 backdrop-blur-sm text-white/90 border-0"
-                      variant="secondary"
-                    >
-                      {item.genres[0].toUpperCase()}
-                    </Badge>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                  {(() => {
-                    // Determine media status for the badge
-                    let status: MediaItemStatus = 'none'
-                    if (item.inLibrary) {
-                      if (type === 'movie') {
-                        const movie = item as MovieSearchResult
-                        status = movie.hasFile
-                          ? 'downloaded'
-                          : movie.requested
-                            ? 'requested'
-                            : 'downloaded'
-                      } else {
-                        const show = item as TvShowSearchResult
-                        status = show.requested ? 'requested' : 'downloaded'
-                      }
-                    }
-                    const isToggling = togglingItems.has(item.tmdbId)
-                    // For 'none' status: add to library
-                    // For 'requested' status: toggle requested state
-                    // For 'downloaded' status: no action (can't unrequest downloaded items)
-                    const handleToggle =
-                      status === 'none'
-                        ? () => onAdd(item)
-                        : status === 'requested'
-                          ? () => onToggle(item)
-                          : undefined
-                    return (
-                      <div
-                        className="absolute top-2 right-2 z-10"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <CardStatusBadge
-                          status={status}
-                          size="tiny"
-                          showOnHover={status === 'none'}
-                          isToggling={isToggling}
-                          onToggleRequest={handleToggle}
-                        />
-                      </div>
-                    )
-                  })()}
-                  <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <p className="text-white text-sm font-medium line-clamp-2">{item.title}</p>
-                    {item.year && <p className="text-white/70 text-xs">{item.year}</p>}
-                  </div>
-                </div>
-              </div>
+                size="lane"
+              />
             )
           })}
         </div>
@@ -2304,6 +2275,9 @@ export default function SearchPage() {
             onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
             onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
             togglingItems={togglingMovies}
+            watchProviderMap={movieWatchProviders}
+            watchProviderLoading={movieWatchProviderLoading}
+            watchProviderObserverRef={movieWatchProviderRef}
           />
         ))}
         {movieDiscoverCategories.map((cat) =>
@@ -2318,6 +2292,7 @@ export default function SearchPage() {
               onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
               onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
               togglingItems={togglingMovies}
+              watchProviderMap={movieWatchProviders}
             />
           ) : loadingMovieDiscover ? (
             <DiscoverLaneSkeleton key={cat.key} />
@@ -2340,6 +2315,9 @@ export default function SearchPage() {
             onAdd={(item) => handleAddMovie(item as MovieSearchResult, false)}
             onToggle={(item) => toggleMovieRequested(item as MovieSearchResult)}
             togglingItems={togglingMovies}
+            watchProviderMap={movieWatchProviders}
+            watchProviderLoading={movieWatchProviderLoading}
+            watchProviderObserverRef={movieWatchProviderRef}
           />
         ))}
       </div>
@@ -2435,6 +2413,9 @@ export default function SearchPage() {
             onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
             onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
             togglingItems={togglingTvShows}
+            watchProviderMap={tvWatchProviders}
+            watchProviderLoading={tvWatchProviderLoading}
+            watchProviderObserverRef={tvWatchProviderRef}
           />
         ))}
         {tvDiscoverCategories.map((cat) =>
@@ -2449,6 +2430,7 @@ export default function SearchPage() {
               onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
               onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
               togglingItems={togglingTvShows}
+              watchProviderMap={tvWatchProviders}
             />
           ) : loadingTvDiscover ? (
             <DiscoverLaneSkeleton key={cat.key} />
@@ -2471,6 +2453,9 @@ export default function SearchPage() {
             onAdd={(item) => handleAddTvShow(item as TvShowSearchResult, false)}
             onToggle={(item) => toggleTvShowRequested(item as TvShowSearchResult)}
             togglingItems={togglingTvShows}
+            watchProviderMap={tvWatchProviders}
+            watchProviderLoading={tvWatchProviderLoading}
+            watchProviderObserverRef={tvWatchProviderRef}
           />
         ))}
       </div>

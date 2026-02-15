@@ -20,6 +20,12 @@ npm run format           # Prettier formatting
 
 # Testing
 npm test                 # Run tests (Japa)
+npm run test:frontend         # Run frontend tests (Vitest)
+npm run test:frontend:watch   # Run frontend tests in watch mode
+
+# Storybook
+npm run storybook             # Start Storybook dev server (port 6006)
+npm run build-storybook       # Build static Storybook
 
 # Production
 npm run build            # Build for production
