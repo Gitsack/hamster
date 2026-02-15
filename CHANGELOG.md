@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.4](https://github.com/Gitsack/hamster/compare/hamster-v1.17.3...hamster-v1.17.4) (2026-02-15)
+
+
+### Bug Fixes
+
+* streaming server matching, correct chowning ([d9e41c2](https://github.com/Gitsack/hamster/commit/d9e41c2055922fc9b510d61a494587149f3b5c1e))
+
 ## [1.17.3](https://github.com/Gitsack/hamster/compare/hamster-v1.17.2...hamster-v1.17.3) (2026-02-15)
 
 
