@@ -25,8 +25,8 @@ if [ "$PUID" != "$CURRENT_UID" ]; then
   usermod -o -u "$PUID" hamster
 fi
 
-# Fix ownership of app directories
-chown -R hamster:hamster /app
+# Fix ownership of writable directories only (skip node_modules/build for speed)
+chown -R hamster:hamster /app/tmp /media /downloads
 
 # Handle APP_KEY: use env var if set, otherwise load/generate persisted key
 if [ -n "$APP_KEY" ]; then
@@ -61,11 +61,16 @@ until su-exec hamster bun -e "
 done
 echo "Database is ready!"
 
-# Run database migrations
-echo "Running database migrations..."
-su-exec hamster bun ace migration:run --force
-
-echo "Migrations completed successfully!"
+# Run pending database migrations (if any)
+echo "Checking for pending migrations..."
+MIGRATION_STATUS=$(su-exec hamster bun ace migration:status 2>&1 || true)
+if echo "$MIGRATION_STATUS" | grep -q "pending"; then
+  echo "Running pending migrations..."
+  su-exec hamster bun ace migration:run --force
+  echo "Migrations completed successfully!"
+else
+  echo "No pending migrations."
+fi
 
 # Execute the main command as hamster user
 echo "Starting server..."
