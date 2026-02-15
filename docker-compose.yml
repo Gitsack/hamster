@@ -72,6 +72,7 @@ services:
       interval: 30s
       timeout: 10s
       start_period: 60s
+      start_interval: 2s
       retries: 3
     networks:
       - hamster-network

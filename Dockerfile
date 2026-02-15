@@ -78,7 +78,7 @@ RUN mkdir -p /media/music /media/movies /media/tv /media/books /downloads /app/t
 EXPOSE 3333
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --start-interval=2s --retries=3 \
     CMD curl -f http://localhost:3333/health || exit 1
 
 # Use tini as init system for proper signal handling
