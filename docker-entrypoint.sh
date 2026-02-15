@@ -25,8 +25,9 @@ if [ "$PUID" != "$CURRENT_UID" ]; then
   usermod -o -u "$PUID" hamster
 fi
 
-# Fix ownership of writable directories only (skip node_modules/build for speed)
-chown -R hamster:hamster /app/tmp /media /downloads
+# Fix ownership of app tmp directory only
+# Media and download directories are NAS mounts - permissions are managed by the host/NAS
+chown -R hamster:hamster /app/tmp
 
 # Handle APP_KEY: use env var if set, otherwise load/generate persisted key
 if [ -n "$APP_KEY" ]; then
