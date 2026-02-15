@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.2](https://github.com/Gitsack/hamster/compare/hamster-v1.17.1...hamster-v1.17.2) (2026-02-15)
+
+
+### Bug Fixes
+
+* updated docker start interval to 2s ([a2364cd](https://github.com/Gitsack/hamster/commit/a2364cd0ee776084e4edfa12ab7a560458b16735))
+
 ## [1.17.1](https://github.com/Gitsack/hamster/compare/hamster-v1.17.0...hamster-v1.17.1) (2026-02-15)
 
 
