@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.3](https://github.com/Gitsack/hamster/compare/hamster-v1.17.2...hamster-v1.17.3) (2026-02-15)
+
+
+### Bug Fixes
+
+* chown only necessary folders ([c160d02](https://github.com/Gitsack/hamster/commit/c160d02588a6b160ee80b113fcc4c1fc6e1c1984))
+
 ## [1.17.2](https://github.com/Gitsack/hamster/compare/hamster-v1.17.1...hamster-v1.17.2) (2026-02-15)
 
 
