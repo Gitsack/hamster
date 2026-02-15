@@ -287,6 +287,10 @@ export default function MediaManagement() {
   const [qualityUpgradeAllowed, setQualityUpgradeAllowed] = useState(true)
   const [savingQuality, setSavingQuality] = useState(false)
 
+  // Streaming provider selection panel state
+  const [showProviderSelection, setShowProviderSelection] = useState(false)
+  const [providerSearch, setProviderSearch] = useState('')
+
   // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingProfile, setDeletingProfile] = useState<QualityProfile | null>(null)
@@ -1025,39 +1029,107 @@ export default function MediaManagement() {
                   ))}
                 </div>
               ) : availableProviders.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {availableProviders.map((provider) => {
-                    const isSelected = settings.selectedStreamingProviders.includes(provider.id)
-                    return (
-                      <button
-                        key={provider.id}
-                        type="button"
-                        onClick={() => handleToggleStreamingProvider(provider.id)}
-                        className={`flex items-center gap-3 rounded-lg border p-3 transition-all text-left ${
-                          isSelected
-                            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                            : 'border-border hover:border-muted-foreground/30'
-                        }`}
-                      >
-                        <img
-                          src={provider.logoPath}
-                          alt={provider.name}
-                          className="h-8 w-8 rounded-md flex-shrink-0"
-                        />
-                        <span className="text-sm font-medium truncate">{provider.name}</span>
-                      </button>
-                    )
-                  })}
+                <div className="space-y-4">
+                  {/* Selected providers */}
+                  {settings.selectedStreamingProviders.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {availableProviders
+                        .filter((p) => settings.selectedStreamingProviders.includes(p.id))
+                        .map((provider) => (
+                          <div
+                            key={provider.id}
+                            className="flex items-center gap-3 rounded-lg border border-primary bg-primary/5 ring-1 ring-primary/30 p-3"
+                          >
+                            <img
+                              src={provider.logoPath}
+                              alt={provider.name}
+                              className="h-8 w-8 rounded-md flex-shrink-0"
+                            />
+                            <span className="text-sm font-medium truncate">{provider.name}</span>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No services selected</p>
+                  )}
+
+                  {/* Toggle selection panel */}
+                  {!showProviderSelection ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowProviderSelection(true)}
+                    >
+                      <HugeiconsIcon icon={Add01Icon} className="size-4 mr-1" />
+                      Select services
+                    </Button>
+                  ) : (
+                    <div className="space-y-3 rounded-lg border border-border p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">
+                          {settings.selectedStreamingProviders.length} service
+                          {settings.selectedStreamingProviders.length !== 1 ? 's' : ''} selected
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setShowProviderSelection(false)
+                            setProviderSearch('')
+                          }}
+                        >
+                          Done
+                        </Button>
+                      </div>
+                      <Input
+                        placeholder="Search services..."
+                        value={providerSearch}
+                        onChange={(e) => setProviderSearch(e.target.value)}
+                      />
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-80 overflow-y-auto">
+                        {availableProviders
+                          .filter((p) =>
+                            p.name.toLowerCase().includes(providerSearch.toLowerCase())
+                          )
+                          .map((provider) => {
+                            const isSelected = settings.selectedStreamingProviders.includes(
+                              provider.id
+                            )
+                            return (
+                              <button
+                                key={provider.id}
+                                type="button"
+                                onClick={() => handleToggleStreamingProvider(provider.id)}
+                                className={`flex items-center gap-3 rounded-lg border p-3 transition-all text-left ${
+                                  isSelected
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                                    : 'border-border hover:border-muted-foreground/30'
+                                }`}
+                              >
+                                <img
+                                  src={provider.logoPath}
+                                  alt={provider.name}
+                                  className="h-8 w-8 rounded-md flex-shrink-0"
+                                />
+                                <span className="text-sm font-medium truncate">
+                                  {provider.name}
+                                </span>
+                                {isSelected && (
+                                  <HugeiconsIcon
+                                    icon={CheckmarkCircle02Icon}
+                                    className="size-4 text-primary flex-shrink-0 ml-auto"
+                                  />
+                                )}
+                              </button>
+                            )
+                          })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   No providers available. Make sure a locale is configured above.
-                </p>
-              )}
-              {settings.selectedStreamingProviders.length > 0 && (
-                <p className="text-sm text-muted-foreground mt-3">
-                  {settings.selectedStreamingProviders.length} service
-                  {settings.selectedStreamingProviders.length !== 1 ? 's' : ''} selected
                 </p>
               )}
             </CardContent>
