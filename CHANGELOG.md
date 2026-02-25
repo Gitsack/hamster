@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/Gitsack/hamster/compare/hamster-v1.19.1...hamster-v1.20.0) (2026-02-25)
+
+
+### Features
+
+* new size quality profile ([c069e95](https://github.com/Gitsack/hamster/commit/c069e95a4c24ab0870104299ea7ee30cc5830f09))
+
 ## [1.19.1](https://github.com/Gitsack/hamster/compare/hamster-v1.19.0...hamster-v1.19.1) (2026-02-25)
 
 
