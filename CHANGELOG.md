@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/Gitsack/hamster/compare/hamster-v1.18.0...hamster-v1.19.0) (2026-02-25)
+
+
+### Features
+
+* directly access sabnzbd when deduplicating ([981ff75](https://github.com/Gitsack/hamster/commit/981ff753d1e90e7e1d79c957c169809e70f49de1))
+
 ## [1.18.0](https://github.com/Gitsack/hamster/compare/hamster-v1.17.5...hamster-v1.18.0) (2026-02-25)
 
 
