@@ -7,6 +7,12 @@ import { bookImportService } from '#services/media/book_import_service'
 import { movieImportService } from '#services/media/movie_import_service'
 import { episodeImportService } from '#services/media/episode_import_service'
 import { sabnzbdService, type SabnzbdConfig } from '#services/download_clients/sabnzbd_service'
+import Movie from '#models/movie'
+import Episode from '#models/episode'
+import Book from '#models/book'
+import { isUpgrade } from '#services/quality/quality_scorer'
+import type { MediaType } from '#services/quality/quality_parser'
+import type { QualityItem } from '#models/quality_profile'
 
 export default class QueueController {
   private static lastRefresh: Date | null = null
@@ -595,6 +601,83 @@ export default class QueueController {
           } catch (err) {
             console.error(`[Deduplicate] Failed to cancel download ${dup.id}:`, err)
           }
+        }
+      }
+
+      // 3. Remove downloads for media items that already have files (unless upgrading)
+      const remainingDownloads = await Download.query()
+        .whereIn('status', ['queued', 'downloading', 'paused'])
+        .where((query) => {
+          query.whereNotNull('movieId').orWhereNotNull('episodeId').orWhereNotNull('bookId')
+        })
+
+      for (const download of remainingDownloads) {
+        try {
+          let hasFile = false
+          let mediaType: MediaType = 'movies'
+          let qualityName: string | null = null
+          let profile: {
+            items: QualityItem[]
+            cutoff: number
+            upgradeAllowed: boolean
+          } | null = null
+
+          if (download.movieId) {
+            const movie = await Movie.query()
+              .where('id', download.movieId)
+              .preload('qualityProfile')
+              .preload('movieFile')
+              .first()
+            if (movie) {
+              hasFile = movie.hasFile
+              qualityName = movie.movieFile?.quality ?? null
+              profile = movie.qualityProfile ?? null
+              mediaType = 'movies'
+            }
+          } else if (download.episodeId) {
+            const episode = await Episode.query()
+              .where('id', download.episodeId)
+              .preload('tvShow', (q) => q.preload('qualityProfile'))
+              .preload('episodeFile')
+              .first()
+            if (episode) {
+              hasFile = episode.hasFile
+              qualityName = episode.episodeFile?.quality ?? null
+              profile = episode.tvShow?.qualityProfile ?? null
+              mediaType = 'tv'
+            }
+          } else if (download.bookId) {
+            const book = await Book.query()
+              .where('id', download.bookId)
+              .preload('author', (q) => q.preload('qualityProfile'))
+              .preload('bookFile')
+              .first()
+            if (book) {
+              hasFile = book.hasFile
+              qualityName = book.bookFile?.quality ?? null
+              profile = book.author?.qualityProfile ?? null
+              mediaType = 'books'
+            }
+          }
+
+          if (!hasFile) continue
+
+          // Media already has a file. Keep the download only if it's a valid upgrade.
+          if (
+            profile &&
+            profile.upgradeAllowed &&
+            isUpgrade(qualityName, download.title, mediaType, profile.items, profile.cutoff, true)
+          ) {
+            continue
+          }
+
+          await downloadManager.cancel(download.id, false)
+          removed++
+        } catch (err) {
+          console.error(
+            `[Deduplicate] Failed to cancel already-downloaded item ${download.id}:`,
+            err
+          )
         }
       }
 
