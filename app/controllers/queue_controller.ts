@@ -508,111 +508,113 @@ export default class QueueController {
   }
 
   /**
+   * Extract a normalized media identity key from a release filename.
+   * Pulls out title + year (e.g. "scott pilgrim vs the world 2010") so that
+   * different releases for the same movie/show group together.
+   */
+  private extractMediaKey(filename: string): string {
+    // Normalize separators: dots, underscores, hyphens → spaces
+    let name = filename.replace(/[._]/g, ' ')
+
+    // Try to match "Title Year" before quality/format keywords
+    const match = name.match(/^(.+?\b(?:19|20)\d{2})\b.*$/i)
+    if (match) {
+      return match[1].toLowerCase().replace(/\s+/g, ' ').trim()
+    }
+
+    // Try matching up to common quality/format keywords for titles without a year
+    const keywordMatch = name.match(
+      /^(.+?)\s*\b(?:720p|1080p|2160p|4k|bluray|blu-ray|web-?dl|webrip|hdtv|dvd|remux|complete|uhd|hdr|sdr|x264|x265|h264|h265|hevc|avc|flac|mp3|dts|truehd|atmos)\b/i
+    )
+    if (keywordMatch) {
+      return keywordMatch[1].toLowerCase().replace(/\s+/g, ' ').trim()
+    }
+
+    // Fallback: use full normalized name
+    return name.toLowerCase().replace(/\s+/g, ' ').trim()
+  }
+
+  /**
    * Deduplicate queue by removing duplicate downloads directly from download clients.
-   * Groups by filename in the download client queue and keeps the most progressed entry.
-   * Also deduplicates DB records by media association.
+   * Groups by media identity (title+year) in the download client queue and keeps the
+   * most progressed entry. Also removes downloads for already-downloaded media.
    */
   async deduplicateQueue({ response }: HttpContext) {
     try {
       let removed = 0
-
-      // 1. Deduplicate directly in SABnzbd (handles items not tracked in DB)
       const clients = await DownloadClient.query().where('enabled', true)
 
       for (const client of clients) {
-        if (client.type === 'sabnzbd') {
-          const config: SabnzbdConfig = {
-            host: client.settings.host || 'localhost',
-            port: client.settings.port || 8080,
-            apiKey: client.settings.apiKey || '',
-            useSsl: client.settings.useSsl || false,
+        if (client.type !== 'sabnzbd') continue
+
+        const config: SabnzbdConfig = {
+          host: client.settings.host || 'localhost',
+          port: client.settings.port || 8080,
+          apiKey: client.settings.apiKey || '',
+          useSsl: client.settings.useSsl || false,
+        }
+
+        // Fetch all items from SABnzbd
+        const queue = await sabnzbdService.getQueue(config, 10000)
+
+        // Build lookup: nzo_id → DB Download record (if tracked)
+        const allDbDownloads = await Download.query().where('downloadClientId', client.id)
+        const dbByExternalId = new Map<string, Download>()
+        for (const dl of allDbDownloads) {
+          if (dl.externalId) dbByExternalId.set(dl.externalId, dl)
+        }
+
+        // Track which nzo_ids we've already deleted (to avoid double-deleting)
+        const deleted = new Set<string>()
+
+        // --- Pass 1: Group SABnzbd items by media identity and deduplicate ---
+        const mediaGroups = new Map<
+          string,
+          { slot: (typeof queue.slots)[0]; dbDownload: Download | null }[]
+        >()
+
+        for (const slot of queue.slots) {
+          const key = this.extractMediaKey(slot.filename)
+          if (!mediaGroups.has(key)) {
+            mediaGroups.set(key, [])
           }
+          mediaGroups.get(key)!.push({
+            slot,
+            dbDownload: dbByExternalId.get(slot.nzo_id) ?? null,
+          })
+        }
 
-          // Fetch all items (use high limit to get everything)
-          const queue = await sabnzbdService.getQueue(config, 10000)
+        for (const [, entries] of mediaGroups) {
+          if (entries.length <= 1) continue
 
-          // Group SABnzbd slots by filename (exact duplicates)
-          const groups = new Map<string, typeof queue.slots>()
-          for (const slot of queue.slots) {
-            const key = slot.filename
-            if (!groups.has(key)) {
-              groups.set(key, [])
-            }
-            groups.get(key)!.push(slot)
-          }
+          // Sort by progress descending
+          entries.sort(
+            (a, b) => Number.parseFloat(b.slot.percentage) - Number.parseFloat(a.slot.percentage)
+          )
 
-          for (const [, slots] of groups) {
-            if (slots.length <= 1) continue
-
-            // Sort by progress descending
-            slots.sort((a, b) => Number.parseFloat(b.percentage) - Number.parseFloat(a.percentage))
-
-            // Keep the first (most progressed), delete the rest
-            for (const dup of slots.slice(1)) {
-              try {
-                await sabnzbdService.delete(config, dup.nzo_id, true)
-                // Also clean up any DB record for this
-                await Download.query()
-                  .where('externalId', dup.nzo_id)
-                  .where('downloadClientId', client.id)
-                  .delete()
-                removed++
-              } catch (err) {
-                console.error(`[Deduplicate] Failed to remove SABnzbd item ${dup.nzo_id}:`, err)
+          // Keep the first (most progressed), delete the rest
+          for (const dup of entries.slice(1)) {
+            try {
+              await sabnzbdService.delete(config, dup.slot.nzo_id, true)
+              deleted.add(dup.slot.nzo_id)
+              if (dup.dbDownload) {
+                await dup.dbDownload.delete()
               }
+              removed++
+            } catch (err) {
+              console.error(`[Deduplicate] Failed to remove SABnzbd item ${dup.slot.nzo_id}:`, err)
             }
           }
         }
-      }
 
-      // 2. Deduplicate DB records by media association (for items tracked in DB)
-      const activeStatuses: string[] = ['queued', 'downloading', 'paused']
-      const activeDownloads = await Download.query().whereIn('status', activeStatuses)
+        // --- Pass 2: Remove downloads for media that already has files (unless upgrading) ---
+        // Check remaining SABnzbd items against library
+        for (const slot of queue.slots) {
+          if (deleted.has(slot.nzo_id)) continue
 
-      const mediaGroups = new Map<string, Download[]>()
-      for (const download of activeDownloads) {
-        let key: string | null = null
-        if (download.movieId) key = `movie:${download.movieId}`
-        else if (download.albumId) key = `album:${download.albumId}`
-        else if (download.episodeId) key = `episode:${download.episodeId}`
-        else if (download.bookId) key = `book:${download.bookId}`
-        else if (download.tvShowId) key = `tvShow:${download.tvShowId}`
+          const dbDownload = dbByExternalId.get(slot.nzo_id)
+          if (!dbDownload) continue // Can't check without a DB record
 
-        if (!key) continue
-
-        if (!mediaGroups.has(key)) {
-          mediaGroups.set(key, [])
-        }
-        mediaGroups.get(key)!.push(download)
-      }
-
-      for (const [, downloads] of mediaGroups) {
-        if (downloads.length <= 1) continue
-
-        downloads.sort((a, b) => {
-          if (b.progress !== a.progress) return b.progress - a.progress
-          return (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)
-        })
-
-        for (const dup of downloads.slice(1)) {
-          try {
-            await downloadManager.cancel(dup.id, false)
-            removed++
-          } catch (err) {
-            console.error(`[Deduplicate] Failed to cancel download ${dup.id}:`, err)
-          }
-        }
-      }
-
-      // 3. Remove downloads for media items that already have files (unless upgrading)
-      const remainingDownloads = await Download.query()
-        .whereIn('status', ['queued', 'downloading', 'paused'])
-        .where((query) => {
-          query.whereNotNull('movieId').orWhereNotNull('episodeId').orWhereNotNull('bookId')
-        })
-
-      for (const download of remainingDownloads) {
-        try {
           let hasFile = false
           let mediaType: MediaType = 'movies'
           let qualityName: string | null = null
@@ -622,9 +624,9 @@ export default class QueueController {
             upgradeAllowed: boolean
           } | null = null
 
-          if (download.movieId) {
+          if (dbDownload.movieId) {
             const movie = await Movie.query()
-              .where('id', download.movieId)
+              .where('id', dbDownload.movieId)
               .preload('qualityProfile')
               .preload('movieFile')
               .first()
@@ -634,9 +636,9 @@ export default class QueueController {
               profile = movie.qualityProfile ?? null
               mediaType = 'movies'
             }
-          } else if (download.episodeId) {
+          } else if (dbDownload.episodeId) {
             const episode = await Episode.query()
-              .where('id', download.episodeId)
+              .where('id', dbDownload.episodeId)
               .preload('tvShow', (q) => q.preload('qualityProfile'))
               .preload('episodeFile')
               .first()
@@ -646,9 +648,9 @@ export default class QueueController {
               profile = episode.tvShow?.qualityProfile ?? null
               mediaType = 'tv'
             }
-          } else if (download.bookId) {
+          } else if (dbDownload.bookId) {
             const book = await Book.query()
-              .where('id', download.bookId)
+              .where('id', dbDownload.bookId)
               .preload('author', (q) => q.preload('qualityProfile'))
               .preload('bookFile')
               .first()
@@ -662,22 +664,26 @@ export default class QueueController {
 
           if (!hasFile) continue
 
-          // Media already has a file. Keep the download only if it's a valid upgrade.
+          // Media already has a file. Keep only if it's a valid upgrade.
           if (
             profile &&
             profile.upgradeAllowed &&
-            isUpgrade(qualityName, download.title, mediaType, profile.items, profile.cutoff, true)
+            isUpgrade(qualityName, dbDownload.title, mediaType, profile.items, profile.cutoff, true)
           ) {
             continue
           }
 
-          await downloadManager.cancel(download.id, false)
-          removed++
-        } catch (err) {
-          console.error(
-            `[Deduplicate] Failed to cancel already-downloaded item ${download.id}:`,
-            err
-          )
+          try {
+            await sabnzbdService.delete(config, slot.nzo_id, true)
+            deleted.add(slot.nzo_id)
+            await dbDownload.delete()
+            removed++
+          } catch (err) {
+            console.error(
+              `[Deduplicate] Failed to remove already-downloaded item ${slot.nzo_id}:`,
+              err
+            )
+          }
         }
       }
 
