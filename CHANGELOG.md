@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.2](https://github.com/Gitsack/hamster/compare/hamster-v1.20.1...hamster-v1.20.2) (2026-02-25)
+
+
+### Bug Fixes
+
+* different matching for deduplication ([520322e](https://github.com/Gitsack/hamster/commit/520322e069456db52725afb5444190f166a62266))
+
 ## [1.20.1](https://github.com/Gitsack/hamster/compare/hamster-v1.20.0...hamster-v1.20.1) (2026-02-25)
 
 
