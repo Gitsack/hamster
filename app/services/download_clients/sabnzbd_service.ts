@@ -105,8 +105,8 @@ export class SabnzbdService {
   /**
    * Get queue status
    */
-  async getQueue(config: SabnzbdConfig): Promise<SabnzbdQueue> {
-    const url = this.buildUrl(config, { mode: 'queue', limit: '100' })
+  async getQueue(config: SabnzbdConfig, limit = 100): Promise<SabnzbdQueue> {
+    const url = this.buildUrl(config, { mode: 'queue', limit: String(limit) })
     const startTime = Date.now()
 
     try {

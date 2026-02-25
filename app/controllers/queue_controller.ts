@@ -502,19 +502,68 @@ export default class QueueController {
   }
 
   /**
-   * Deduplicate queue by removing duplicate downloads for the same media item
+   * Deduplicate queue by removing duplicate downloads directly from download clients.
+   * Groups by filename in the download client queue and keeps the most progressed entry.
+   * Also deduplicates DB records by media association.
    */
   async deduplicateQueue({ response }: HttpContext) {
     try {
-      // Refresh queue to get latest state from download clients
-      await downloadManager.refreshQueue()
+      let removed = 0
 
-      // Find active downloads grouped by media association
-      const activeStatuses = ['queued', 'downloading', 'paused']
+      // 1. Deduplicate directly in SABnzbd (handles items not tracked in DB)
+      const clients = await DownloadClient.query().where('enabled', true)
+
+      for (const client of clients) {
+        if (client.type === 'sabnzbd') {
+          const config: SabnzbdConfig = {
+            host: client.settings.host || 'localhost',
+            port: client.settings.port || 8080,
+            apiKey: client.settings.apiKey || '',
+            useSsl: client.settings.useSsl || false,
+          }
+
+          // Fetch all items (use high limit to get everything)
+          const queue = await sabnzbdService.getQueue(config, 10000)
+
+          // Group SABnzbd slots by filename (exact duplicates)
+          const groups = new Map<string, typeof queue.slots>()
+          for (const slot of queue.slots) {
+            const key = slot.filename
+            if (!groups.has(key)) {
+              groups.set(key, [])
+            }
+            groups.get(key)!.push(slot)
+          }
+
+          for (const [, slots] of groups) {
+            if (slots.length <= 1) continue
+
+            // Sort by progress descending
+            slots.sort((a, b) => Number.parseFloat(b.percentage) - Number.parseFloat(a.percentage))
+
+            // Keep the first (most progressed), delete the rest
+            for (const dup of slots.slice(1)) {
+              try {
+                await sabnzbdService.delete(config, dup.nzo_id, true)
+                // Also clean up any DB record for this
+                await Download.query()
+                  .where('externalId', dup.nzo_id)
+                  .where('downloadClientId', client.id)
+                  .delete()
+                removed++
+              } catch (err) {
+                console.error(`[Deduplicate] Failed to remove SABnzbd item ${dup.nzo_id}:`, err)
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Deduplicate DB records by media association (for items tracked in DB)
+      const activeStatuses: string[] = ['queued', 'downloading', 'paused']
       const activeDownloads = await Download.query().whereIn('status', activeStatuses)
 
-      // Group downloads by their media association key
-      const groups = new Map<string, Download[]>()
+      const mediaGroups = new Map<string, Download[]>()
       for (const download of activeDownloads) {
         let key: string | null = null
         if (download.movieId) key = `movie:${download.movieId}`
@@ -525,25 +574,21 @@ export default class QueueController {
 
         if (!key) continue
 
-        if (!groups.has(key)) {
-          groups.set(key, [])
+        if (!mediaGroups.has(key)) {
+          mediaGroups.set(key, [])
         }
-        groups.get(key)!.push(download)
+        mediaGroups.get(key)!.push(download)
       }
 
-      let removed = 0
-      for (const [, downloads] of groups) {
+      for (const [, downloads] of mediaGroups) {
         if (downloads.length <= 1) continue
 
-        // Sort by progress descending, then by createdAt descending (most recent first)
         downloads.sort((a, b) => {
           if (b.progress !== a.progress) return b.progress - a.progress
           return (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)
         })
 
-        // Keep the first (best), cancel the rest
-        const duplicates = downloads.slice(1)
-        for (const dup of duplicates) {
+        for (const dup of downloads.slice(1)) {
           try {
             await downloadManager.cancel(dup.id, false)
             removed++
@@ -553,7 +598,8 @@ export default class QueueController {
         }
       }
 
-      // Refresh queue after deduplication
+      // Refresh and return updated queue
+      await downloadManager.refreshQueue()
       const queue = await downloadManager.getQueue()
 
       return response.json({
