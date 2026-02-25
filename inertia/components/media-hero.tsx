@@ -58,7 +58,7 @@ export function MediaHero({
           trailerUrl={trailerUrl}
           images={images}
           title={title}
-          className="h-48 md:aspect-video"
+          className="h-48 md:h-auto md:aspect-video"
         >
           {/* Desktop gradient */}
           <div className="hidden md:block absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
