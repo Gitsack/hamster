@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/Gitsack/hamster/compare/hamster-v1.20.0...hamster-v1.20.1) (2026-02-25)
+
+
+### Bug Fixes
+
+* deduplicate download items that have already been downloaded ([f723050](https://github.com/Gitsack/hamster/commit/f723050a74e1a1d4008eb974e1333aeaf8f34824))
+
 ## [1.20.0](https://github.com/Gitsack/hamster/compare/hamster-v1.19.1...hamster-v1.20.0) (2026-02-25)
 
 
