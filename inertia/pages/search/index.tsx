@@ -237,6 +237,8 @@ interface QualityProfile {
   id: string
   name: string
   mediaType?: string
+  minSizeMb?: number | null
+  maxSizeMb?: number | null
 }
 
 interface RecommendationLane {

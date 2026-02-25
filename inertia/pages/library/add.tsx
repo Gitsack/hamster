@@ -42,6 +42,8 @@ interface SearchResult {
 interface QualityProfile {
   id: string
   name: string
+  minSizeMb?: number | null
+  maxSizeMb?: number | null
 }
 
 export default function AddArtist() {

@@ -52,6 +52,8 @@ import { VideoPlayer } from '@/components/player/video_player'
 interface QualityProfile {
   id: number
   name: string
+  minSizeMb?: number | null
+  maxSizeMb?: number | null
 }
 
 interface RootFolder {

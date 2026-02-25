@@ -179,6 +179,8 @@ interface QualityProfile {
   mediaType: MediaType
   cutoff: number
   upgradeAllowed: boolean
+  minSizeMb: number | null
+  maxSizeMb: number | null
   items: QualityItem[]
 }
 
@@ -285,6 +287,8 @@ export default function MediaManagement() {
   const [qualityName, setQualityName] = useState('')
   const [qualityItems, setQualityItems] = useState<QualityItem[]>([])
   const [qualityUpgradeAllowed, setQualityUpgradeAllowed] = useState(true)
+  const [qualityMinSize, setQualityMinSize] = useState('')
+  const [qualityMaxSize, setQualityMaxSize] = useState('')
   const [savingQuality, setSavingQuality] = useState(false)
 
   // Streaming provider selection panel state
@@ -690,12 +694,16 @@ export default function MediaManagement() {
       setQualityName(profile.name)
       setQualityItems(profile.items)
       setQualityUpgradeAllowed(profile.upgradeAllowed)
+      setQualityMinSize(profile.minSizeMb != null ? String(profile.minSizeMb) : '')
+      setQualityMaxSize(profile.maxSizeMb != null ? String(profile.maxSizeMb) : '')
     } else {
       setEditingQuality(null)
       setQualityName('')
       // Initialize with all items enabled
       setQualityItems(QUALITY_OPTIONS[mediaType].map((q) => ({ ...q, allowed: true })))
       setQualityUpgradeAllowed(true)
+      setQualityMinSize('')
+      setQualityMaxSize('')
     }
     setQualityDialogOpen(true)
   }
@@ -720,6 +728,8 @@ export default function MediaManagement() {
           mediaType: qualityMediaType,
           items: qualityItems,
           upgradeAllowed: qualityUpgradeAllowed,
+          minSizeMb: qualityMinSize ? Number(qualityMinSize) : undefined,
+          maxSizeMb: qualityMaxSize ? Number(qualityMaxSize) : undefined,
           cutoff: qualityItems.find((i) => i.allowed)?.id || 1,
         }),
       })
@@ -1565,6 +1575,30 @@ export default function MediaManagement() {
                     </div>
                   )
                 })}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="qualityMinSize">Min Size (MB)</Label>
+                <Input
+                  id="qualityMinSize"
+                  type="number"
+                  min="0"
+                  placeholder="No minimum"
+                  value={qualityMinSize}
+                  onChange={(e) => setQualityMinSize(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="qualityMaxSize">Max Size (MB)</Label>
+                <Input
+                  id="qualityMaxSize"
+                  type="number"
+                  min="0"
+                  placeholder="No maximum"
+                  value={qualityMaxSize}
+                  onChange={(e) => setQualityMaxSize(e.target.value)}
+                />
               </div>
             </div>
             <div className="flex items-center gap-2">

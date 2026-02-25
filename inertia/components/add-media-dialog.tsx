@@ -20,6 +20,8 @@ export interface QualityProfile {
   id: string
   name: string
   mediaType: string
+  minSizeMb?: number | null
+  maxSizeMb?: number | null
 }
 
 export interface AddMediaDialogProps {

@@ -8,6 +8,8 @@ const qualityProfileValidator = vine.compile(
     mediaType: vine.string().optional(),
     cutoff: vine.number(),
     upgradeAllowed: vine.boolean().optional(),
+    minSizeMb: vine.number().min(0).optional(),
+    maxSizeMb: vine.number().min(0).optional(),
     items: vine.array(
       vine.object({
         id: vine.number(),
@@ -32,6 +34,8 @@ export default class QualityProfilesController {
       mediaType: data.mediaType ?? null,
       cutoff: data.cutoff,
       upgradeAllowed: data.upgradeAllowed ?? true,
+      minSizeMb: data.minSizeMb ?? null,
+      maxSizeMb: data.maxSizeMb ?? null,
       items: data.items,
     })
 
@@ -59,6 +63,8 @@ export default class QualityProfilesController {
       mediaType: data.mediaType ?? profile.mediaType,
       cutoff: data.cutoff,
       upgradeAllowed: data.upgradeAllowed ?? profile.upgradeAllowed,
+      minSizeMb: data.minSizeMb ?? null,
+      maxSizeMb: data.maxSizeMb ?? null,
       items: data.items,
     })
     await profile.save()

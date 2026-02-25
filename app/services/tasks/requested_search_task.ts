@@ -173,13 +173,14 @@ function selectBestRelease(
   results: UnifiedSearchResult[],
   mediaType: MediaType,
   profileItems: QualityItem[] | null,
-  cutoff: number | null
+  cutoff: number | null,
+  sizeOptions?: { minSizeBytes?: number; maxSizeBytes?: number }
 ): UnifiedSearchResult | null {
   if (results.length === 0) return null
 
   // If we have a quality profile, use quality-based scoring
   if (profileItems && profileItems.length > 0 && cutoff !== null) {
-    const scored = scoreAndRankReleases(results, mediaType, profileItems, cutoff)
+    const scored = scoreAndRankReleases(results, mediaType, profileItems, cutoff, sizeOptions)
     if (scored.length > 0) {
       return scored[0].release
     }
@@ -190,6 +191,22 @@ function selectBestRelease(
   // Fallback: sort by size descending
   const sorted = [...results].sort((a, b) => b.size - a.size)
   return sorted[0]
+}
+
+/**
+ * Build size filter options from a quality profile's min/max size (in MB).
+ */
+function buildSizeOptions(
+  profile: QualityProfile | null
+): { minSizeBytes?: number; maxSizeBytes?: number } | undefined {
+  if (!profile) return undefined
+  const opts: { minSizeBytes?: number; maxSizeBytes?: number } = {}
+  if (profile.minSizeMb !== null && profile.minSizeMb !== undefined)
+    opts.minSizeBytes = profile.minSizeMb * 1024 * 1024
+  if (profile.maxSizeMb !== null && profile.maxSizeMb !== undefined)
+    opts.maxSizeBytes = profile.maxSizeMb * 1024 * 1024
+  if (Object.keys(opts).length === 0) return undefined
+  return opts
 }
 
 /**
@@ -374,7 +391,8 @@ class RequestedSearchTask {
           availableResults,
           'music',
           profile?.items ?? null,
-          profile?.cutoff ?? null
+          profile?.cutoff ?? null,
+          buildSizeOptions(profile)
         )
 
         if (!bestResult) {
@@ -488,7 +506,8 @@ class RequestedSearchTask {
           availableResults,
           'movies',
           profile?.items ?? null,
-          profile?.cutoff ?? null
+          profile?.cutoff ?? null,
+          buildSizeOptions(profile)
         )
 
         if (!bestResult) {
@@ -598,7 +617,8 @@ class RequestedSearchTask {
           availableResults,
           'books',
           profile?.items ?? null,
-          profile?.cutoff ?? null
+          profile?.cutoff ?? null,
+          buildSizeOptions(profile)
         )
 
         if (!bestResult) {
@@ -774,7 +794,8 @@ class RequestedSearchTask {
           availableResults,
           'tv',
           profile?.items ?? null,
-          profile?.cutoff ?? null
+          profile?.cutoff ?? null,
+          buildSizeOptions(profile)
         )
 
         if (!bestResult) {
@@ -889,7 +910,8 @@ class RequestedSearchTask {
         availableResults,
         'music',
         profile?.items ?? null,
-        profile?.cutoff ?? null
+        profile?.cutoff ?? null,
+        buildSizeOptions(profile)
       )
 
       if (!bestResult) {
@@ -967,7 +989,8 @@ class RequestedSearchTask {
         availableResults,
         'movies',
         profile?.items ?? null,
-        profile?.cutoff ?? null
+        profile?.cutoff ?? null,
+        buildSizeOptions(profile)
       )
 
       if (!bestResult) {
@@ -1089,7 +1112,8 @@ class RequestedSearchTask {
         availableResults,
         'tv',
         profile?.items ?? null,
-        profile?.cutoff ?? null
+        profile?.cutoff ?? null,
+        buildSizeOptions(profile)
       )
 
       if (!bestResult) {
@@ -1164,7 +1188,8 @@ class RequestedSearchTask {
         availableResults,
         'books',
         profile?.items ?? null,
-        profile?.cutoff ?? null
+        profile?.cutoff ?? null,
+        buildSizeOptions(profile)
       )
 
       if (!bestResult) {
@@ -1272,7 +1297,8 @@ class RequestedSearchTask {
             matchingResults,
             'tv',
             profile?.items ?? null,
-            profile?.cutoff ?? null
+            profile?.cutoff ?? null,
+            buildSizeOptions(profile)
           )
 
           if (!bestResult) continue

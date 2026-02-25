@@ -102,12 +102,14 @@ export function scoreRelease(
 /**
  * Score and rank an array of releases against a quality profile.
  * Returns only allowed releases, sorted by score descending, then by size descending as tiebreaker.
+ * Optionally filters by min/max size in bytes.
  */
 export function scoreAndRankReleases<T extends { title: string; size: number }>(
   releases: T[],
   mediaType: MediaType,
   profileItems: QualityItem[],
-  cutoff: number
+  cutoff: number,
+  options?: { minSizeBytes?: number; maxSizeBytes?: number }
 ): ScoredRelease<T>[] {
   const scored = releases.map((release) => ({
     release,
@@ -115,7 +117,17 @@ export function scoreAndRankReleases<T extends { title: string; size: number }>(
   }))
 
   // Filter to only allowed releases
-  const allowed = scored.filter((s) => s.score.allowed)
+  let allowed = scored.filter((s) => s.score.allowed)
+
+  // Filter by size limits
+  if (options?.minSizeBytes) {
+    const min = options.minSizeBytes
+    allowed = allowed.filter((s) => s.release.size >= min)
+  }
+  if (options?.maxSizeBytes) {
+    const max = options.maxSizeBytes
+    allowed = allowed.filter((s) => s.release.size <= max)
+  }
 
   // Sort: highest score first, then largest size as tiebreaker
   allowed.sort((a, b) => {

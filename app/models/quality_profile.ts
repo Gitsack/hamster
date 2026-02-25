@@ -31,6 +31,12 @@ export default class QualityProfile extends BaseModel {
   @column()
   declare upgradeAllowed: boolean
 
+  @column()
+  declare minSizeMb: number | null
+
+  @column()
+  declare maxSizeMb: number | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
