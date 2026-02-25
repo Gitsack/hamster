@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.1](https://github.com/Gitsack/hamster/compare/hamster-v1.19.0...hamster-v1.19.1) (2026-02-25)
+
+
+### Bug Fixes
+
+* duplication check on adding items ([2c13b05](https://github.com/Gitsack/hamster/commit/2c13b05c793f9082a6f116c661bdc2e81d2afdcc))
+
 ## [1.19.0](https://github.com/Gitsack/hamster/compare/hamster-v1.18.0...hamster-v1.19.0) (2026-02-25)
 
 
