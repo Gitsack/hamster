@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.18.0](https://github.com/Gitsack/hamster/compare/hamster-v1.17.5...hamster-v1.18.0) (2026-02-25)
+
+
+### Features
+
+* scheduled metadata refresh, media hero, deduplicate action ([b087601](https://github.com/Gitsack/hamster/commit/b08760157c29c28d5e441c5dfa8fa68603c959f1))
+
+
+### Bug Fixes
+
+* lane refresh mid scroll ([ce8c941](https://github.com/Gitsack/hamster/commit/ce8c94109ba798bd66377ac32adb8795c174aef1))
+* next fix for lane refresh bug ([963b8db](https://github.com/Gitsack/hamster/commit/963b8dbcfca888747fa1619302e290d46072dcf2))
+
 ## [1.17.5](https://github.com/Gitsack/hamster/compare/hamster-v1.17.4...hamster-v1.17.5) (2026-02-15)
 
 
