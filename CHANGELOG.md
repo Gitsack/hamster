@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.3](https://github.com/Gitsack/hamster/compare/hamster-v1.20.2...hamster-v1.20.3) (2026-02-25)
+
+
+### Bug Fixes
+
+* media-hero ([e84dd9b](https://github.com/Gitsack/hamster/commit/e84dd9b1c800062e6cbbf1027a64675e516d6327))
+
 ## [1.20.2](https://github.com/Gitsack/hamster/compare/hamster-v1.20.1...hamster-v1.20.2) (2026-02-25)
 
 
