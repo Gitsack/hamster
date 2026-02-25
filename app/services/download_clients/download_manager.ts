@@ -15,6 +15,9 @@ import { episodeImportService } from '#services/media/episode_import_service'
 import { bookImportService } from '#services/media/book_import_service'
 import { fileNamingService } from '#services/media/file_naming_service'
 import { blacklistService } from '#services/blacklist/blacklist_service'
+import QualityProfile from '#models/quality_profile'
+import { scoreRelease } from '#services/quality/quality_scorer'
+import type { MediaType } from '#services/quality/quality_parser'
 import { eventEmitter } from '#services/events/event_emitter'
 import { DateTime } from 'luxon'
 import * as fs from 'node:fs/promises'
@@ -251,6 +254,168 @@ export class DownloadManager {
   }
 
   /**
+   * Check the actual download client queue for existing downloads of the same media item.
+   * Blocks the grab unless upgrades are allowed and the new release is better quality.
+   */
+  private async checkClientQueueForDuplicates(
+    client: DownloadClient,
+    request: DownloadRequest
+  ): Promise<void> {
+    if (client.type !== 'sabnzbd') return
+
+    const config: SabnzbdConfig = {
+      host: client.settings.host || 'localhost',
+      port: client.settings.port || 8080,
+      apiKey: client.settings.apiKey || '',
+      useSsl: client.settings.useSsl || false,
+    }
+
+    let sabQueue: Awaited<ReturnType<typeof sabnzbdService.getQueue>>
+    try {
+      sabQueue = await sabnzbdService.getQueue(config, 10000)
+    } catch (error) {
+      logger.warn(
+        { err: error },
+        'DownloadManager: Failed to check download client queue for duplicates, proceeding anyway'
+      )
+      return
+    }
+
+    if (sabQueue.slots.length === 0) return
+
+    // Build a set of SABnzbd nzo_ids currently in the queue
+    const sabNzoIds = new Set(sabQueue.slots.map((s) => s.nzo_id))
+
+    // Find DB downloads for the same media item that are still in SABnzbd's queue
+    const mediaKey = request.episodeId
+      ? { column: 'episodeId', value: request.episodeId }
+      : request.movieId
+        ? { column: 'movieId', value: request.movieId }
+        : request.albumId
+          ? { column: 'albumId', value: request.albumId }
+          : request.bookId
+            ? { column: 'bookId', value: request.bookId }
+            : null
+
+    if (!mediaKey) return
+
+    const existingDownloads = await Download.query()
+      .where(mediaKey.column, mediaKey.value)
+      .where('downloadClientId', client.id)
+      .whereNotNull('externalId')
+      .whereIn('status', ['queued', 'downloading', 'paused'])
+
+    // Check if any of these are actually still in SABnzbd's queue
+    const inClientQueue = existingDownloads.filter(
+      (d) => d.externalId && sabNzoIds.has(d.externalId)
+    )
+
+    if (inClientQueue.length === 0) return
+
+    // There's already a download for this media item in the client queue.
+    // Only allow if upgrades are enabled and the new release is better quality.
+    const profile = await this.getQualityProfileForMedia(request)
+
+    if (!profile || !profile.upgradeAllowed) {
+      logger.info(
+        {
+          title: request.title,
+          existing: inClientQueue[0].title,
+          upgradeAllowed: profile?.upgradeAllowed ?? false,
+        },
+        'DownloadManager: Blocking duplicate - same media already in download client queue'
+      )
+      throw new Error('Already in download client queue')
+    }
+
+    // Upgrades are allowed — check if new release is actually better
+    const mediaType: MediaType = request.movieId
+      ? 'movies'
+      : request.episodeId
+        ? 'tv'
+        : request.bookId
+          ? 'books'
+          : 'music'
+
+    const newScore = scoreRelease(request.title, mediaType, profile.items, profile.cutoff)
+    const initialScore = scoreRelease(
+      inClientQueue[0].title,
+      mediaType,
+      profile.items,
+      profile.cutoff
+    )
+    const bestExisting = inClientQueue.reduce((best, dl) => {
+      const score = scoreRelease(dl.title, mediaType, profile.items, profile.cutoff)
+      return score.score > best.score ? score : best
+    }, initialScore)
+
+    if (!newScore.allowed || newScore.score <= bestExisting.score) {
+      logger.info(
+        {
+          title: request.title,
+          newScore: newScore.score,
+          existingScore: bestExisting.score,
+        },
+        'DownloadManager: Blocking duplicate - new release is not a quality upgrade'
+      )
+      throw new Error('Already in download client queue')
+    }
+
+    logger.info(
+      {
+        title: request.title,
+        newScore: newScore.score,
+        existingScore: bestExisting.score,
+      },
+      'DownloadManager: Allowing upgrade over existing download in client queue'
+    )
+  }
+
+  /**
+   * Get the quality profile for a media item from a download request.
+   */
+  private async getQualityProfileForMedia(
+    request: DownloadRequest
+  ): Promise<QualityProfile | null> {
+    if (request.movieId) {
+      const movie = await Movie.query()
+        .where('id', request.movieId)
+        .preload('qualityProfile')
+        .first()
+      return movie?.qualityProfile ?? null
+    }
+
+    if (request.episodeId) {
+      const episode = await Episode.query()
+        .where('id', request.episodeId)
+        .preload('tvShow', (q) => q.preload('qualityProfile'))
+        .first()
+      return episode?.tvShow?.qualityProfile ?? null
+    }
+
+    if (request.albumId) {
+      // Albums get quality profile through their artist
+      const albumModule = await import('#models/album')
+      const AlbumModel = albumModule.default
+      const album = await AlbumModel.query()
+        .where('id', request.albumId)
+        .preload('artist', (q) => q.preload('qualityProfile'))
+        .first()
+      return album?.artist?.qualityProfile ?? null
+    }
+
+    if (request.bookId) {
+      const book = await Book.query()
+        .where('id', request.bookId)
+        .preload('author', (q) => q.preload('qualityProfile'))
+        .first()
+      return book?.author?.qualityProfile ?? null
+    }
+
+    return null
+  }
+
+  /**
    * Send a release to the download client
    */
   async grab(request: DownloadRequest): Promise<Download> {
@@ -356,6 +521,10 @@ export class DownloadManager {
     if (!client) {
       throw new Error('No enabled download client configured')
     }
+
+    // Check the actual download client queue for duplicates for the same media item.
+    // Only allow through if upgrade is enabled on the quality profile AND the new release is better.
+    await this.checkClientQueueForDuplicates(client, request)
 
     // Create download record
     const download = await Download.create({
