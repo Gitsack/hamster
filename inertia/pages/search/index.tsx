@@ -61,9 +61,11 @@ import { Spinner } from '@/components/ui/spinner'
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useCallback,
   useRef,
+  memo,
   Component,
   ErrorInfo,
   ReactNode,
@@ -1110,14 +1112,20 @@ export default function SearchPage() {
         // Update in discover lanes
         setMovieDiscoverLanes((prev) => {
           const updated: Record<string, MovieSearchResult[]> = {}
+          let changed = false
           for (const [key, lane] of Object.entries(prev)) {
-            updated[key] = lane.map((m) =>
-              m.tmdbId === movie.tmdbId
-                ? { ...m, inLibrary: true, libraryId: data.id, requested: true }
-                : m
-            )
+            if (lane.some((m) => m.tmdbId === movie.tmdbId)) {
+              updated[key] = lane.map((m) =>
+                m.tmdbId === movie.tmdbId
+                  ? { ...m, inLibrary: true, libraryId: data.id, requested: true }
+                  : m
+              )
+              changed = true
+            } else {
+              updated[key] = lane
+            }
           }
-          return updated
+          return changed ? updated : prev
         })
         if (navigate) {
           router.visit(`/movie/${data.id}`)
@@ -1185,14 +1193,20 @@ export default function SearchPage() {
         // Update in discover lanes
         setTvDiscoverLanes((prev) => {
           const updated: Record<string, TvShowSearchResult[]> = {}
+          let changed = false
           for (const [key, lane] of Object.entries(prev)) {
-            updated[key] = lane.map((s) =>
-              s.tmdbId === show.tmdbId
-                ? { ...s, inLibrary: true, libraryId: data.id, requested: true }
-                : s
-            )
+            if (lane.some((s) => s.tmdbId === show.tmdbId)) {
+              updated[key] = lane.map((s) =>
+                s.tmdbId === show.tmdbId
+                  ? { ...s, inLibrary: true, libraryId: data.id, requested: true }
+                  : s
+              )
+              changed = true
+            } else {
+              updated[key] = lane
+            }
           }
-          return updated
+          return changed ? updated : prev
         })
         if (navigate) {
           router.visit(`/tvshow/${data.id}`)
@@ -1226,10 +1240,16 @@ export default function SearchPage() {
       setMovieResults((prev) => prev.map((m) => (m.tmdbId === tmdbId ? updater(m) : m)))
       setMovieDiscoverLanes((prev) => {
         const updated: Record<string, MovieSearchResult[]> = {}
+        let changed = false
         for (const [key, lane] of Object.entries(prev)) {
-          updated[key] = lane.map((m) => (m.tmdbId === tmdbId ? updater(m) : m))
+          if (lane.some((m) => m.tmdbId === tmdbId)) {
+            updated[key] = lane.map((m) => (m.tmdbId === tmdbId ? updater(m) : m))
+            changed = true
+          } else {
+            updated[key] = lane
+          }
         }
-        return updated
+        return changed ? updated : prev
       })
     }
 
@@ -1300,10 +1320,16 @@ export default function SearchPage() {
       setTvShowResults((prev) => prev.map((s) => (s.tmdbId === tmdbId ? updater(s) : s)))
       setTvDiscoverLanes((prev) => {
         const updated: Record<string, TvShowSearchResult[]> = {}
+        let changed = false
         for (const [key, lane] of Object.entries(prev)) {
-          updated[key] = lane.map((s) => (s.tmdbId === tmdbId ? updater(s) : s))
+          if (lane.some((s) => s.tmdbId === tmdbId)) {
+            updated[key] = lane.map((s) => (s.tmdbId === tmdbId ? updater(s) : s))
+            changed = true
+          } else {
+            updated[key] = lane
+          }
         }
-        return updated
+        return changed ? updated : prev
       })
     }
 
@@ -2048,7 +2074,7 @@ export default function SearchPage() {
   }
 
   // Horizontal scroll lane component for discover content
-  const DiscoverLane = ({
+  const DiscoverLane = memo(({
     title,
     items,
     type,
@@ -2076,6 +2102,20 @@ export default function SearchPage() {
     watchProviderObserverRef?: (tmdbId: string) => (el: HTMLDivElement | null) => void
   }) => {
     const scrollRef = useRef<HTMLDivElement>(null)
+    const scrollPositionRef = useRef(0)
+
+    // Restore scroll position after re-renders (runs before paint)
+    useLayoutEffect(() => {
+      if (scrollRef.current && scrollPositionRef.current > 0) {
+        scrollRef.current.scrollLeft = scrollPositionRef.current
+      }
+    })
+
+    const handleScroll = useCallback(() => {
+      if (scrollRef.current) {
+        scrollPositionRef.current = scrollRef.current.scrollLeft
+      }
+    }, [])
 
     const scroll = (direction: 'left' | 'right') => {
       if (scrollRef.current) {
@@ -2121,6 +2161,7 @@ export default function SearchPage() {
         </div>
         <div
           ref={scrollRef}
+          onScroll={handleScroll}
           className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
           style={{ scrollbarWidth: 'thin' }}
         >
@@ -2170,7 +2211,7 @@ export default function SearchPage() {
         </div>
       </div>
     )
-  }
+  })
 
   // Skeleton for discover lanes
   const DiscoverLaneSkeleton = () => (
