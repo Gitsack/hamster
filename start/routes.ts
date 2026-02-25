@@ -100,7 +100,15 @@ router
     router.on('/book/:id').renderInertia('library/book/[id]').as('book')
 
     // Search & Discover
-    router.on('/search').renderInertia('search/index').as('search')
+    router
+      .get('/search', ({ inertia, request }) => {
+        const qs = request.qs()
+        return inertia.render('search/index', {
+          initialMode: qs.mode || 'movies',
+          initialMusicSearchType: qs.type || 'artist',
+        })
+      })
+      .as('search')
     router.on('/discover/:type/:category').renderInertia('search/discover')
 
     // Requests - redirect to library missing tab
