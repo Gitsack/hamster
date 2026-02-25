@@ -13,6 +13,7 @@ import { requestedSearchTask } from '#services/tasks/requested_search_task'
 import { downloadMonitorTask } from '#services/tasks/download_monitor_task'
 import { completedDownloadsScanner } from '#services/tasks/completed_downloads_scanner'
 import { rssSyncTask } from '#services/tasks/rss_sync_task'
+import { refreshMetadataTask } from '#services/tasks/refresh_metadata_task'
 import { backupService } from '#services/backup/backup_service'
 import { blacklistService } from '#services/blacklist/blacklist_service'
 import { taskScheduler } from '#services/tasks/task_scheduler'
@@ -66,6 +67,7 @@ taskScheduler.register('completed_scanner', {
 taskScheduler.register('requested_search', requestedSearchTask)
 taskScheduler.register('rss_sync', rssSyncTask)
 taskScheduler.register('backup', backupService)
+taskScheduler.register('refresh_metadata', refreshMetadataTask)
 taskScheduler.register('cleanup', {
   start() {},
   stop() {},

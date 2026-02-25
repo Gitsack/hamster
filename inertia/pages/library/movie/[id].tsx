@@ -38,7 +38,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
-import { MediaGallery } from '@/components/media-gallery'
+import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { VideoPlayer } from '@/components/player/video_player'
@@ -435,133 +435,105 @@ export default function MovieDetail() {
       <Head title={movie.title} />
 
       <div className="space-y-6">
-        {/* Gallery: Trailer + Backdrop Images */}
-        <div className="-mx-4 -mt-4 mb-6">
-          <MediaGallery
-            trailerUrl={movie.trailerUrl}
-            images={movie.backdropImages?.length ? movie.backdropImages : movie.backdropUrl ? [movie.backdropUrl] : undefined}
-            title={movie.title}
-            className="h-48 md:h-64"
-          />
-        </div>
+        <MediaHero
+          trailerUrl={movie.trailerUrl}
+          images={movie.backdropImages?.length ? movie.backdropImages : movie.backdropUrl ? [movie.backdropUrl] : undefined}
+          title={movie.title}
+          posterUrl={movie.posterUrl}
+          posterFallback={<HugeiconsIcon icon={Film01Icon} className="h-16 w-16 text-muted-foreground/50" />}
+          overview={movie.overview}
+        >
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-2xl font-bold">{movie.title}</h1>
+              {movie.year && <span className="text-muted-foreground">({movie.year})</span>}
+            </div>
+            {movie.originalTitle && movie.originalTitle !== movie.title && (
+              <p className="text-muted-foreground">{movie.originalTitle}</p>
+            )}
+          </div>
 
-        {/* Movie header */}
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Movie poster */}
-          <div className="w-full md:w-48 aspect-[2/3] md:aspect-auto md:h-72 bg-muted rounded-lg overflow-hidden flex-shrink-0">
-            {movie.posterUrl ? (
-              <img src={movie.posterUrl} alt={movie.title} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon icon={Film01Icon} className="h-16 w-16 text-muted-foreground/50" />
+          {/* Status */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(() => {
+              const { status, progress } = getMovieStatus()
+              return (
+                <MediaStatusBadge
+                  status={status}
+                  progress={progress}
+                  isToggling={toggling}
+                  onToggleRequest={toggleWanted}
+                />
+              )
+            })()}
+            {movie.status && <Badge variant="outline">{movie.status}</Badge>}
+          </div>
+
+          {/* Meta info */}
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {movie.releaseDate && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
+                {movie.releaseDate}
+              </div>
+            )}
+            {movie.runtime && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <HugeiconsIcon icon={Time01Icon} className="h-4 w-4" />
+                {formatRuntime(movie.runtime)}
+              </div>
+            )}
+            {movie.rating && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
+                {movie.rating.toFixed(1)}
               </div>
             )}
           </div>
 
-          {/* Movie info */}
-          <div className="flex-1 space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl font-bold">{movie.title}</h1>
-                {movie.year && <span className="text-muted-foreground">({movie.year})</span>}
-              </div>
-              {movie.originalTitle && movie.originalTitle !== movie.title && (
-                <p className="text-muted-foreground">{movie.originalTitle}</p>
-              )}
+          {/* Genres */}
+          {movie.genres && movie.genres.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {movie.genres.slice(0, 5).map((genre, i) => (
+                <Badge key={i} variant="outline">
+                  {genre}
+                </Badge>
+              ))}
             </div>
+          )}
 
-            {/* Status */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {(() => {
-                const { status, progress } = getMovieStatus()
-                return (
-                  <MediaStatusBadge
-                    status={status}
-                    progress={progress}
-                    isToggling={toggling}
-                    onToggleRequest={toggleWanted}
-                  />
-                )
-              })()}
-              {movie.status && <Badge variant="outline">{movie.status}</Badge>}
-            </div>
-
-            {/* Meta info */}
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-              {movie.releaseDate && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
-                  {movie.releaseDate}
-                </div>
-              )}
-              {movie.runtime && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={Time01Icon} className="h-4 w-4" />
-                  {formatRuntime(movie.runtime)}
-                </div>
-              )}
-              {movie.rating && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
-                  {movie.rating.toFixed(1)}
-                </div>
-              )}
-            </div>
-
-            {/* Genres */}
-            {movie.genres && movie.genres.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {movie.genres.slice(0, 5).map((genre, i) => (
-                  <Badge key={i} variant="outline">
-                    {genre}
-                  </Badge>
-                ))}
-              </div>
+          {/* Quality and folder info */}
+          <div className="flex flex-wrap gap-2 text-sm">
+            {movie.qualityProfile && (
+              <Badge variant="secondary">{movie.qualityProfile.name}</Badge>
             )}
-
-            {/* Quality and folder info */}
-            <div className="flex flex-wrap gap-2 text-sm">
-              {movie.qualityProfile && (
-                <Badge variant="secondary">{movie.qualityProfile.name}</Badge>
-              )}
-              {movie.rootFolder && <Badge variant="secondary">{movie.rootFolder.path}</Badge>}
-            </div>
-
-            {/* External links */}
-            <div className="flex gap-2 text-sm">
-              {movie.tmdbId && (
-                <a
-                  href={`https://www.themoviedb.org/movie/${movie.tmdbId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-primary"
-                >
-                  TMDB
-                </a>
-              )}
-              {movie.imdbId && (
-                <a
-                  href={`https://www.imdb.com/title/${movie.imdbId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-primary"
-                >
-                  IMDB
-                </a>
-              )}
-            </div>
+            {movie.rootFolder && <Badge variant="secondary">{movie.rootFolder.path}</Badge>}
           </div>
-        </div>
 
-        {/* Overview */}
-        {movie.overview && (
-          <Card>
-            <CardContent className="pt-6">
-              <h2 className="font-semibold mb-2">Overview</h2>
-              <p className="text-muted-foreground">{movie.overview}</p>
-            </CardContent>
-          </Card>
-        )}
+          {/* External links */}
+          <div className="flex gap-2 text-sm">
+            {movie.tmdbId && (
+              <a
+                href={`https://www.themoviedb.org/movie/${movie.tmdbId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary"
+              >
+                TMDB
+              </a>
+            )}
+            {movie.imdbId && (
+              <a
+                href={`https://www.imdb.com/title/${movie.imdbId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary"
+              >
+                IMDB
+              </a>
+            )}
+          </div>
+        </MediaHero>
 
         {/* File info */}
         {movie.movieFile && (

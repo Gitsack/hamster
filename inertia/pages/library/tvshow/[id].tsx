@@ -44,7 +44,7 @@ import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
-import { MediaGallery } from '@/components/media-gallery'
+import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { VideoPlayer } from '@/components/player/video_player'
@@ -808,108 +808,80 @@ export default function TvShowDetail() {
       <Head title={show.title} />
 
       <div className="space-y-6">
-        {/* Gallery: Trailer + Backdrop Images */}
-        <div className="-mx-4 -mt-4 mb-6">
-          <MediaGallery
-            trailerUrl={show.trailerUrl}
-            images={show.backdropImages?.length ? show.backdropImages : show.backdropUrl ? [show.backdropUrl] : undefined}
-            title={show.title}
-            className="h-48 md:h-64"
-          />
-        </div>
-
-        {/* Show header */}
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Show poster */}
-          <div className="w-full md:w-48 aspect-[2/3] md:aspect-auto md:h-72 bg-muted rounded-lg overflow-hidden flex-shrink-0">
-            {show.posterUrl ? (
-              <img src={show.posterUrl} alt={show.title} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon icon={Tv01Icon} className="h-16 w-16 text-muted-foreground/50" />
-              </div>
+        <MediaHero
+          trailerUrl={show.trailerUrl}
+          images={show.backdropImages?.length ? show.backdropImages : show.backdropUrl ? [show.backdropUrl] : undefined}
+          title={show.title}
+          posterUrl={show.posterUrl}
+          posterFallback={<HugeiconsIcon icon={Tv01Icon} className="h-16 w-16 text-muted-foreground/50" />}
+          overview={show.overview}
+        >
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-2xl font-bold">{show.title}</h1>
+              {show.year && <span className="text-muted-foreground">({show.year})</span>}
+            </div>
+            {show.originalTitle && show.originalTitle !== show.title && (
+              <p className="text-muted-foreground">{show.originalTitle}</p>
             )}
           </div>
 
-          {/* Show info */}
-          <div className="flex-1 space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl font-bold">{show.title}</h1>
-                {show.year && <span className="text-muted-foreground">({show.year})</span>}
-              </div>
-              {show.originalTitle && show.originalTitle !== show.title && (
-                <p className="text-muted-foreground">{show.originalTitle}</p>
-              )}
-            </div>
-
-            {/* Status */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {show.status && <Badge variant="outline">{show.status}</Badge>}
-              {show.network && <Badge variant="outline">{show.network}</Badge>}
-            </div>
-
-            {/* Meta info */}
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-              {show.firstAired && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
-                  {show.firstAired}
-                </div>
-              )}
-              {show.rating && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
-                  {show.rating.toFixed(1)}
-                </div>
-              )}
-              <div className="text-muted-foreground">
-                {show.seasonCount} seasons • {show.episodeCount} episodes
-              </div>
-            </div>
-
-            {/* Genres */}
-            {show.genres && show.genres.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {show.genres.slice(0, 5).map((genre, i) => (
-                  <Badge key={i} variant="outline">
-                    {genre}
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            {/* Quality and folder info */}
-            <div className="flex flex-wrap gap-2 text-sm">
-              {show.qualityProfile && <Badge variant="secondary">{show.qualityProfile.name}</Badge>}
-              {show.rootFolder && <Badge variant="secondary">{show.rootFolder.path}</Badge>}
-            </div>
-
-            {/* External links */}
-            {show.tmdbId && (
-              <div className="text-sm">
-                <a
-                  href={`https://www.themoviedb.org/tv/${show.tmdbId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-primary"
-                >
-                  TMDB
-                </a>
-              </div>
-            )}
+          {/* Status */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {show.status && <Badge variant="outline">{show.status}</Badge>}
+            {show.network && <Badge variant="outline">{show.network}</Badge>}
           </div>
-        </div>
 
-        {/* Overview */}
-        {show.overview && (
-          <Card>
-            <CardContent className="pt-6">
-              <h2 className="font-semibold mb-2">Overview</h2>
-              <p className="text-muted-foreground">{show.overview}</p>
-            </CardContent>
-          </Card>
-        )}
+          {/* Meta info */}
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {show.firstAired && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
+                {show.firstAired}
+              </div>
+            )}
+            {show.rating && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
+                {show.rating.toFixed(1)}
+              </div>
+            )}
+            <div className="text-muted-foreground">
+              {show.seasonCount} seasons · {show.episodeCount} episodes
+            </div>
+          </div>
+
+          {/* Genres */}
+          {show.genres && show.genres.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {show.genres.slice(0, 5).map((genre, i) => (
+                <Badge key={i} variant="outline">
+                  {genre}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {/* Quality and folder info */}
+          <div className="flex flex-wrap gap-2 text-sm">
+            {show.qualityProfile && <Badge variant="secondary">{show.qualityProfile.name}</Badge>}
+            {show.rootFolder && <Badge variant="secondary">{show.rootFolder.path}</Badge>}
+          </div>
+
+          {/* External links */}
+          {show.tmdbId && (
+            <div className="text-sm">
+              <a
+                href={`https://www.themoviedb.org/tv/${show.tmdbId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary"
+              >
+                TMDB
+              </a>
+            </div>
+          )}
+        </MediaHero>
 
         {/* Seasons */}
         <Card>

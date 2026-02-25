@@ -280,6 +280,7 @@ router
     router.delete('/queue/:id', [QueueController, 'destroy'])
     router.get('/queue/history', [QueueController, 'history'])
     router.post('/queue/grab', [QueueController, 'grab'])
+    router.post('/queue/deduplicate', [QueueController, 'deduplicateQueue'])
     router.post('/queue/search-requested', [QueueController, 'searchRequested'])
     router.get('/queue/requested-status', [QueueController, 'requestedStatus'])
 

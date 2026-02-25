@@ -12,7 +12,7 @@ export default class extends BaseSchema {
       ADD CONSTRAINT "scheduled_tasks_type_check"
       CHECK ("type" IN (
         'rss_sync', 'library_scan', 'cleanup', 'refresh_artist', 'backup',
-        'download_monitor', 'requested_search', 'completed_scanner'
+        'download_monitor', 'requested_search', 'completed_scanner', 'refresh_metadata'
       ))
     `)
   }
@@ -25,7 +25,8 @@ export default class extends BaseSchema {
       ALTER TABLE "scheduled_tasks"
       ADD CONSTRAINT "scheduled_tasks_type_check"
       CHECK ("type" IN (
-        'rss_sync', 'library_scan', 'cleanup', 'refresh_artist', 'backup', 'download_monitor'
+        'rss_sync', 'library_scan', 'cleanup', 'refresh_artist', 'backup',
+        'download_monitor', 'requested_search', 'completed_scanner'
       ))
     `)
   }

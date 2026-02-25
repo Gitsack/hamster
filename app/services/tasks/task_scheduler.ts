@@ -27,6 +27,7 @@ const DEFAULT_TASKS: DefaultTask[] = [
   { name: 'RSS Sync', type: 'rss_sync', intervalMinutes: 15, enabled: true },
   { name: 'Backup', type: 'backup', intervalMinutes: 1440, enabled: true },
   { name: 'Blacklist Cleanup', type: 'cleanup', intervalMinutes: 1440, enabled: true },
+  { name: 'Refresh Metadata', type: 'refresh_metadata', intervalMinutes: 720, enabled: true },
 ]
 
 class TaskScheduler {
@@ -140,6 +141,7 @@ class TaskScheduler {
       rss_sync: 30000,
       cleanup: 45000,
       backup: 60000,
+      refresh_metadata: 75000,
     }
     return delays[type] || 15000
   }

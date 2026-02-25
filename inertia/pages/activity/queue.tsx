@@ -32,6 +32,7 @@ import {
   PauseIcon,
   FolderSearchIcon,
   Search01Icon,
+  CleanIcon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
@@ -57,6 +58,7 @@ export default function Queue() {
   const [refreshing, setRefreshing] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [searchingRequested, setSearchingRequested] = useState(false)
+  const [deduplicating, setDeduplicating] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -143,6 +145,26 @@ export default function Queue() {
     }
   }
 
+  const deduplicateQueue = async () => {
+    setDeduplicating(true)
+    try {
+      const response = await fetch('/api/v1/queue/deduplicate', { method: 'POST' })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(data.message || 'Deduplication complete')
+        if (data.queue) setQueue(data.queue)
+        else fetchQueue(false)
+      } else {
+        toast.error(data.error || 'Deduplication failed')
+      }
+    } catch (err) {
+      console.error('Failed to deduplicate queue:', err)
+      toast.error('Failed to deduplicate queue')
+    } finally {
+      setDeduplicating(false)
+    }
+  }
+
   const cancelDownload = async () => {
     if (!deleteId) return
 
@@ -224,6 +246,13 @@ export default function Queue() {
               className={`h-4 w-4 md:mr-2 ${searchingRequested ? 'animate-pulse' : ''}`}
             />
             <span className="hidden md:inline">{searchingRequested ? 'Searching...' : 'Search Requested'}</span>
+          </Button>
+          <Button onClick={deduplicateQueue} disabled={deduplicating} variant="outline" size="sm">
+            <HugeiconsIcon
+              icon={CleanIcon}
+              className={`h-4 w-4 md:mr-2 ${deduplicating ? 'animate-pulse' : ''}`}
+            />
+            <span className="hidden md:inline">{deduplicating ? 'Deduplicating...' : 'Deduplicate'}</span>
           </Button>
           <Button onClick={scanCompleted} disabled={scanning} variant="outline" size="sm">
             <HugeiconsIcon

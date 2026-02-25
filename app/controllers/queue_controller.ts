@@ -502,6 +502,73 @@ export default class QueueController {
   }
 
   /**
+   * Deduplicate queue by removing duplicate downloads for the same media item
+   */
+  async deduplicateQueue({ response }: HttpContext) {
+    try {
+      // Refresh queue to get latest state from download clients
+      await downloadManager.refreshQueue()
+
+      // Find active downloads grouped by media association
+      const activeStatuses = ['queued', 'downloading', 'paused']
+      const activeDownloads = await Download.query().whereIn('status', activeStatuses)
+
+      // Group downloads by their media association key
+      const groups = new Map<string, Download[]>()
+      for (const download of activeDownloads) {
+        let key: string | null = null
+        if (download.movieId) key = `movie:${download.movieId}`
+        else if (download.albumId) key = `album:${download.albumId}`
+        else if (download.episodeId) key = `episode:${download.episodeId}`
+        else if (download.bookId) key = `book:${download.bookId}`
+        else if (download.tvShowId) key = `tvShow:${download.tvShowId}`
+
+        if (!key) continue
+
+        if (!groups.has(key)) {
+          groups.set(key, [])
+        }
+        groups.get(key)!.push(download)
+      }
+
+      let removed = 0
+      for (const [, downloads] of groups) {
+        if (downloads.length <= 1) continue
+
+        // Sort by progress descending, then by createdAt descending (most recent first)
+        downloads.sort((a, b) => {
+          if (b.progress !== a.progress) return b.progress - a.progress
+          return (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)
+        })
+
+        // Keep the first (best), cancel the rest
+        const duplicates = downloads.slice(1)
+        for (const dup of duplicates) {
+          try {
+            await downloadManager.cancel(dup.id, false)
+            removed++
+          } catch (err) {
+            console.error(`[Deduplicate] Failed to cancel download ${dup.id}:`, err)
+          }
+        }
+      }
+
+      // Refresh queue after deduplication
+      const queue = await downloadManager.getQueue()
+
+      return response.json({
+        message: `Removed ${removed} duplicate download${removed !== 1 ? 's' : ''}`,
+        removed,
+        queue,
+      })
+    } catch (error) {
+      return response.badRequest({
+        error: error instanceof Error ? error.message : 'Failed to deduplicate queue',
+      })
+    }
+  }
+
+  /**
    * Get requested search task status
    */
   async requestedStatus({ response }: HttpContext) {
