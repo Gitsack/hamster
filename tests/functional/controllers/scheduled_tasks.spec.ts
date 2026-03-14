@@ -109,8 +109,6 @@ test.group('ScheduledTasksController', () => {
   test('update returns 422 for non-number intervalMinutes', async ({ assert }) => {
     const controller = new ScheduledTasksController()
     let statusCode = 0
-    let result: Record<string, unknown> = {}
-
     await controller.update({
       params: { id: 'some-task' },
       request: {
@@ -120,9 +118,7 @@ test.group('ScheduledTasksController', () => {
         status(code: number) {
           statusCode = code
           return {
-            json(data: unknown) {
-              result = data as Record<string, unknown>
-            },
+            json() {},
           }
         },
         json() {},

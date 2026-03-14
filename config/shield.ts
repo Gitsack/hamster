@@ -24,7 +24,7 @@ const shieldConfig = defineConfig({
         'https://img.youtube.com',
       ],
       fontSrc: ["'self'", 'data:'],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", 'ws:'],
       mediaSrc: ["'self'", 'blob:'],
       frameSrc: ["'self'", 'https://www.youtube.com'],
       objectSrc: ["'none'"],

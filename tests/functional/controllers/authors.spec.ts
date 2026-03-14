@@ -8,8 +8,6 @@ import { BookFactory } from '../../../database/factories/book_factory.js'
 test.group('AuthorsController', (group) => {
   let author1: Author
   let author2: Author
-  let book1: Book
-
   group.setup(async () => {
     author1 = await AuthorFactory.create({
       name: 'Authors Test Alice',
@@ -25,7 +23,7 @@ test.group('AuthorsController', (group) => {
       monitored: false,
     })
 
-    book1 = await BookFactory.create({
+    await BookFactory.create({
       authorId: author1.id,
       title: 'Authors Test Book One',
       requested: true,

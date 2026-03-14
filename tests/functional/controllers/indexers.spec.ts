@@ -5,8 +5,6 @@ import { IndexerFactory } from '#database/factories/indexer_factory'
 
 test.group('IndexersController', (group) => {
   let indexer1: Indexer
-  let indexer2: Indexer
-
   group.setup(async () => {
     indexer1 = await IndexerFactory.create({
       name: 'IDX Test NZBGeek',
@@ -18,7 +16,7 @@ test.group('IndexersController', (group) => {
         categories: [3000, 3010],
       },
     })
-    indexer2 = await IndexerFactory.create({
+    await IndexerFactory.create({
       name: 'IDX Test DrunkenSlug',
       priority: 20,
       enabled: false,

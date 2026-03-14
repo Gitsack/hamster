@@ -9,9 +9,6 @@ import { AlbumFactory } from '../../../database/factories/album_factory.js'
 test.group('TracksController', (group) => {
   let artist: Artist
   let album: Album
-  let track1: Track
-  let track2: Track
-
   group.setup(async () => {
     artist = await ArtistFactory.create({
       name: 'Tracks Test Artist',
@@ -23,7 +20,7 @@ test.group('TracksController', (group) => {
       title: 'Tracks Test Album',
     })
 
-    track1 = await Track.create({
+    await Track.create({
       albumId: album.id,
       musicbrainzId: 'tracks-test-recording-001',
       title: 'Tracks Test Song Alpha',
@@ -34,7 +31,7 @@ test.group('TracksController', (group) => {
       requested: false,
     })
 
-    track2 = await Track.create({
+    await Track.create({
       albumId: album.id,
       musicbrainzId: 'tracks-test-recording-002',
       title: 'Tracks Test Song Beta',

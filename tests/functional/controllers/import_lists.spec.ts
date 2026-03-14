@@ -5,8 +5,6 @@ import { importListSyncService } from '#services/import_lists/import_list_sync'
 
 test.group('ImportListsController', (group) => {
   let list1: ImportList
-  let list2: ImportList
-
   group.setup(async () => {
     list1 = await ImportList.create({
       name: 'ImportListTest Trakt Watchlist',
@@ -20,7 +18,7 @@ test.group('ImportListsController', (group) => {
       syncIntervalMinutes: 360,
     })
 
-    list2 = await ImportList.create({
+    await ImportList.create({
       name: 'ImportListTest IMDb List',
       type: 'imdb_list',
       enabled: false,

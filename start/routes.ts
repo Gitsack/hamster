@@ -198,7 +198,7 @@ router
     router.post('/albums', [AlbumsController, 'store'])
     router.get('/albums/search', [AlbumsController, 'search'])
     router.get('/albums/requested', [AlbumsController, 'requested'])
-    router.get('/albums/wanted', [AlbumsController, 'requested']) // Alias for backwards compatibility
+    router.get('/albums/wanted', [AlbumsController, 'requested']).as('albums.wanted') // Alias for backwards compatibility
     router.get('/albums/:id', [AlbumsController, 'show'])
     router.get('/albums/:mbid/tracks', [AlbumsController, 'tracksByMbid'])
     router.put('/albums/:id', [AlbumsController, 'update'])
@@ -227,7 +227,7 @@ router
     router.post('/movies/:id/download', [MoviesController, 'download'])
     router.post('/movies/:id/search', [MoviesController, 'searchNow'])
     router.post('/movies/:id/enrich', [MoviesController, 'enrich'])
-    router.get('/movies/:id/similar', [MoviesController, 'similar'])
+    router.get('/movies/:id/similar', [MoviesController, 'similar']).as('movies.similar.byId')
 
     // TV Shows
     router.get('/tvshows', [TvShowsController, 'index'])
@@ -251,7 +251,7 @@ router
     router.post('/tvshows/:id/episodes/:episodeId/search', [TvShowsController, 'searchEpisodeNow'])
     router.post('/tvshows/:id/enrich', [TvShowsController, 'enrich'])
     router.post('/tvshows/:id/refresh', [TvShowsController, 'refresh'])
-    router.get('/tvshows/:id/similar', [TvShowsController, 'similar'])
+    router.get('/tvshows/:id/similar', [TvShowsController, 'similar']).as('tvshows.similar.byId')
 
     // Authors
     router.get('/authors', [AuthorsController, 'index'])

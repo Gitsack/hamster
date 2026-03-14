@@ -1,0 +1,31 @@
+import { BaseSchema } from '@adonisjs/lucid/schema'
+
+export default class extends BaseSchema {
+  async up() {
+    this.schema.raw(
+      'ALTER TABLE "scheduled_tasks" DROP CONSTRAINT IF EXISTS "scheduled_tasks_type_check"'
+    )
+    this.schema.raw(`
+      ALTER TABLE "scheduled_tasks"
+      ADD CONSTRAINT "scheduled_tasks_type_check"
+      CHECK ("type" IN (
+        'rss_sync', 'library_scan', 'cleanup', 'refresh_artist', 'backup',
+        'download_monitor', 'requested_search', 'completed_scanner', 'refresh_metadata'
+      ))
+    `)
+  }
+
+  async down() {
+    this.schema.raw(
+      'ALTER TABLE "scheduled_tasks" DROP CONSTRAINT IF EXISTS "scheduled_tasks_type_check"'
+    )
+    this.schema.raw(`
+      ALTER TABLE "scheduled_tasks"
+      ADD CONSTRAINT "scheduled_tasks_type_check"
+      CHECK ("type" IN (
+        'rss_sync', 'library_scan', 'cleanup', 'refresh_artist', 'backup',
+        'download_monitor', 'requested_search', 'completed_scanner'
+      ))
+    `)
+  }
+}

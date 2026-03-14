@@ -4,8 +4,6 @@ import DownloadClientsController from '#controllers/download_clients_controller'
 
 test.group('DownloadClientsController', (group) => {
   let client1: DownloadClient
-  let client2: DownloadClient
-
   group.setup(async () => {
     client1 = await DownloadClient.create({
       name: 'DLC Test SABnzbd',
@@ -21,7 +19,7 @@ test.group('DownloadClientsController', (group) => {
         useSsl: false,
       },
     })
-    client2 = await DownloadClient.create({
+    await DownloadClient.create({
       name: 'DLC Test qBittorrent',
       type: 'qbittorrent',
       enabled: false,

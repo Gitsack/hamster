@@ -1,16 +1,19 @@
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
-import { getDirname } from '@adonisjs/core/helpers'
-import inertia from '@adonisjs/inertia/client'
+import inertia from '@adonisjs/inertia/vite'
 import react from '@vitejs/plugin-react'
 import adonisjs from '@adonisjs/vite/client'
 import tailwindcss from '@tailwindcss/vite'
 
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
 export default defineConfig({
   plugins: [
     tailwindcss(),
-    inertia({ ssr: { enabled: true, entrypoint: 'inertia/app/ssr.tsx' } }),
+    inertia({ ssr: { enabled: true, entrypoint: 'inertia/ssr.tsx' } }),
     react(),
-    adonisjs({ entrypoints: ['inertia/app/app.tsx'], reload: ['resources/views/**/*.edge'] }),
+    adonisjs({ entrypoints: ['inertia/app.tsx'], reload: ['resources/views/**/*.edge'] }),
   ],
 
   /**
@@ -19,8 +22,8 @@ export default defineConfig({
    */
   resolve: {
     alias: {
-      '~/': `${getDirname(import.meta.url)}/inertia/`,
-      '@/': `${getDirname(import.meta.url)}/inertia/`,
+      '~/': `${__dirname}/inertia/`,
+      '@/': `${__dirname}/inertia/`,
     },
   },
 })

@@ -6,9 +6,6 @@ import UnmatchedFilesController from '#controllers/unmatched_files_controller'
 test.group('UnmatchedFilesController', (group) => {
   let rootFolder: RootFolder
   let file1: UnmatchedFile
-  let file2: UnmatchedFile
-  let file3: UnmatchedFile
-
   group.setup(async () => {
     rootFolder = await RootFolder.create({
       name: 'UnmatchedTest Root',
@@ -27,7 +24,7 @@ test.group('UnmatchedFilesController', (group) => {
       status: 'pending',
     })
 
-    file2 = await UnmatchedFile.create({
+    await UnmatchedFile.create({
       rootFolderId: rootFolder.id,
       relativePath: 'unknown_episode.mkv',
       fileName: 'unknown_episode.mkv',
@@ -36,7 +33,7 @@ test.group('UnmatchedFilesController', (group) => {
       status: 'pending',
     })
 
-    file3 = await UnmatchedFile.create({
+    await UnmatchedFile.create({
       rootFolderId: rootFolder.id,
       relativePath: 'ignored_file.mkv',
       fileName: 'ignored_file.mkv',

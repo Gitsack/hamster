@@ -5,12 +5,10 @@ import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 
 test.group('BlacklistController', (group) => {
-  let entry1: BlacklistedRelease
-  let entry2: BlacklistedRelease
   const movieId = randomUUID()
 
   group.setup(async () => {
-    entry1 = await BlacklistedRelease.create({
+    await BlacklistedRelease.create({
       guid: 'bl-test-guid-1',
       indexer: 'bl-test-indexer',
       title: 'Blacklist Test Release 1',
@@ -21,7 +19,7 @@ test.group('BlacklistController', (group) => {
       expiresAt: DateTime.now().plus({ days: 30 }),
     })
 
-    entry2 = await BlacklistedRelease.create({
+    await BlacklistedRelease.create({
       guid: 'bl-test-guid-2',
       indexer: 'bl-test-indexer',
       title: 'Blacklist Test Release 2',

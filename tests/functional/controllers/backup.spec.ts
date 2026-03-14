@@ -7,8 +7,6 @@ import BackupController from '#controllers/backup_controller'
  * to avoid real filesystem and pg_dump operations.
  */
 
-// Store original module for restoration
-let originalBackupService: typeof import('#services/backup/backup_service')
 
 const mockBackups = [
   {
@@ -27,7 +25,7 @@ const mockBackups = [
 
 test.group('BackupController', (group) => {
   group.setup(async () => {
-    originalBackupService = await import('#services/backup/backup_service')
+    await import('#services/backup/backup_service')
   })
 
   // ---- index ----

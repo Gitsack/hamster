@@ -5,8 +5,6 @@ import { mediaServerService } from '#services/media_servers/media_server_service
 
 test.group('MediaServersController', (group) => {
   let server1: MediaServerConfig
-  let server2: MediaServerConfig
-
   let originalTestConnection: typeof mediaServerService.testConnection
   let originalTriggerRefresh: typeof mediaServerService.triggerRefresh
 
@@ -22,7 +20,7 @@ test.group('MediaServersController', (group) => {
       librarySections: ['1', '2'],
     })
 
-    server2 = await MediaServerConfig.create({
+    await MediaServerConfig.create({
       name: 'MediaServerTest Jellyfin',
       type: 'jellyfin',
       host: '192.168.1.200',
