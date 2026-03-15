@@ -427,57 +427,64 @@ export class DownloadManager {
    * Send a release to the download client
    */
   async grab(request: DownloadRequest): Promise<Download> {
-    // Check for existing active downloads for the same media item
-    // This prevents duplicate downloads when multiple search tasks run concurrently
-    const existingDownloadQuery = Download.query().whereIn('status', [
-      'queued',
-      'downloading',
-      'paused',
-      'importing',
-    ])
+    // Only run duplicate/hasFile checks when downloading for a specific media item.
+    // Direct downloads (no media ID) skip these checks since there's no media item to deduplicate against.
+    const hasMediaId =
+      request.episodeId || request.movieId || request.albumId || request.bookId
 
-    if (request.episodeId) {
-      existingDownloadQuery.where('episodeId', request.episodeId)
-    } else if (request.movieId) {
-      existingDownloadQuery.where('movieId', request.movieId)
-    } else if (request.albumId) {
-      existingDownloadQuery.where('albumId', request.albumId)
-    } else if (request.bookId) {
-      existingDownloadQuery.where('bookId', request.bookId)
-    }
+    if (hasMediaId) {
+      // Check for existing active downloads for the same media item
+      // This prevents duplicate downloads when multiple search tasks run concurrently
+      const existingDownloadQuery = Download.query().whereIn('status', [
+        'queued',
+        'downloading',
+        'paused',
+        'importing',
+      ])
 
-    const existingDownload = await existingDownloadQuery.first()
-    if (existingDownload) {
-      logger.info(
-        { title: request.title, existingId: existingDownload.id },
-        'DownloadManager: Skipping duplicate download'
-      )
-      return existingDownload
-    }
+      if (request.episodeId) {
+        existingDownloadQuery.where('episodeId', request.episodeId)
+      } else if (request.movieId) {
+        existingDownloadQuery.where('movieId', request.movieId)
+      } else if (request.albumId) {
+        existingDownloadQuery.where('albumId', request.albumId)
+      } else if (request.bookId) {
+        existingDownloadQuery.where('bookId', request.bookId)
+      }
 
-    // Check for recently completed downloads (within 1 hour) to prevent duplicate downloads
-    // when a download just finished but hasFile hasn't been updated yet
-    const recentlyCompletedQuery = Download.query()
-      .where('status', 'completed')
-      .where('completedAt', '>=', DateTime.now().minus({ hours: 1 }).toSQL())
+      const existingDownload = await existingDownloadQuery.first()
+      if (existingDownload) {
+        logger.info(
+          { title: request.title, existingId: existingDownload.id },
+          'DownloadManager: Skipping duplicate download'
+        )
+        return existingDownload
+      }
 
-    if (request.episodeId) {
-      recentlyCompletedQuery.where('episodeId', request.episodeId)
-    } else if (request.movieId) {
-      recentlyCompletedQuery.where('movieId', request.movieId)
-    } else if (request.albumId) {
-      recentlyCompletedQuery.where('albumId', request.albumId)
-    } else if (request.bookId) {
-      recentlyCompletedQuery.where('bookId', request.bookId)
-    }
+      // Check for recently completed downloads (within 1 hour) to prevent duplicate downloads
+      // when a download just finished but hasFile hasn't been updated yet
+      const recentlyCompletedQuery = Download.query()
+        .where('status', 'completed')
+        .where('completedAt', '>=', DateTime.now().minus({ hours: 1 }).toSQL())
 
-    const recentlyCompleted = await recentlyCompletedQuery.first()
-    if (recentlyCompleted) {
-      logger.info(
-        { title: request.title, completedId: recentlyCompleted.id },
-        'DownloadManager: Skipping recently completed download'
-      )
-      throw new Error('A download for this item completed recently')
+      if (request.episodeId) {
+        recentlyCompletedQuery.where('episodeId', request.episodeId)
+      } else if (request.movieId) {
+        recentlyCompletedQuery.where('movieId', request.movieId)
+      } else if (request.albumId) {
+        recentlyCompletedQuery.where('albumId', request.albumId)
+      } else if (request.bookId) {
+        recentlyCompletedQuery.where('bookId', request.bookId)
+      }
+
+      const recentlyCompleted = await recentlyCompletedQuery.first()
+      if (recentlyCompleted) {
+        logger.info(
+          { title: request.title, completedId: recentlyCompleted.id },
+          'DownloadManager: Skipping recently completed download'
+        )
+        throw new Error('A download for this item completed recently')
+      }
     }
 
     // Check hasFile flag directly on the media item as a safety net
