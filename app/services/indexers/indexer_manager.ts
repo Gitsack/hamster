@@ -8,6 +8,14 @@ import {
 } from './newznab_service.js'
 import { prowlarrService, type ProwlarrSearchResult } from './prowlarr_service.js'
 
+/**
+ * Clean a title for use as a search query by removing special characters
+ * that can interfere with indexer text search (e.g. apostrophes, asterisks).
+ */
+function sanitizeSearchQuery(title: string): string {
+  return title.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, ' ').trim()
+}
+
 export interface UnifiedSearchResult {
   id: string
   title: string
@@ -497,22 +505,30 @@ export class IndexerManager {
         }
 
         // Use movie-specific search with IMDB ID when available for precise matching
-        let query = options.title
+        let query = sanitizeSearchQuery(options.title)
         if (options.year) {
           query = `${query} ${options.year}`
         }
 
-        const searchResults = options.imdbId
-          ? await newznabService.searchMovies(config, {
-              query,
-              imdbId: options.imdbId,
-              categories: movieCategories,
-              limit: options.limit || 50,
-            })
-          : await newznabService.search(config, query, {
-              categories: movieCategories,
-              limit: options.limit || 50,
-            })
+        let searchResults: NewznabSearchResult[] = []
+
+        // Try movie-specific search with IMDB ID first for precise matching
+        if (options.imdbId) {
+          searchResults = await newznabService.searchMovies(config, {
+            query,
+            imdbId: options.imdbId,
+            categories: movieCategories,
+            limit: options.limit || 50,
+          })
+        }
+
+        // Fall back to generic text search if movie search returned no results
+        if (searchResults.length === 0) {
+          searchResults = await newznabService.search(config, query, {
+            categories: movieCategories,
+            limit: options.limit || 50,
+          })
+        }
 
         return searchResults.map((result) => ({
           id: result.guid,
@@ -804,7 +820,7 @@ export class IndexerManager {
    * Build full text search query for TV shows
    */
   private _buildTvSearchQuery(options: TvSearchOptions): string {
-    let query = options.title
+    let query = sanitizeSearchQuery(options.title)
     // Include year to disambiguate reboots/remakes (e.g. "Scrubs 2026" vs "Scrubs")
     if (options.year) {
       query = `${query} ${options.year}`
@@ -904,9 +920,9 @@ export class IndexerManager {
         }
 
         // Build search query
-        let query = options.title
+        let query = sanitizeSearchQuery(options.title)
         if (options.author) {
-          query = `${options.author} ${query}`
+          query = `${sanitizeSearchQuery(options.author)} ${query}`
         }
 
         const searchResults = await newznabService.search(config, query, {
