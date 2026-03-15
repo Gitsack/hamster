@@ -635,97 +635,15 @@ export class DownloadImportService {
       const stats = await fs.stat(downloadPath)
 
       if (stats.isFile()) {
-        // Single file download, nothing to clean
+        await fs.unlink(downloadPath).catch(() => {})
         return
       }
 
-      // Remove common non-music files
-      const deletePatterns = [
-        /\.nfo$/i,
-        /\.sfv$/i,
-        /\.txt$/i,
-        /\.url$/i,
-        /\.m3u$/i,
-        /\.cue$/i,
-        /\.log$/i,
-        /\.accurip$/i,
-        /thumbs\.db$/i,
-        /\.ds_store$/i,
-      ]
-
-      await this.cleanDirectory(downloadPath, deletePatterns)
-
-      // Remove empty directories
-      await this.removeEmptyDirectories(downloadPath)
-
-      // Try to remove the root download folder if empty
-      try {
-        const remaining = await fs.readdir(downloadPath)
-        if (remaining.length === 0) {
-          await fs.rmdir(downloadPath)
-        }
-      } catch {
-        // Folder not empty or error, that's fine
-      }
+      // All media files have been moved out – remove the entire folder
+      await fs.rm(downloadPath, { recursive: true, force: true })
     } catch (error) {
       console.error('Error cleaning up download folder:', error)
     }
-  }
-
-  /**
-   * Clean a directory of unwanted files
-   */
-  private async cleanDirectory(dir: string, deletePatterns: RegExp[]): Promise<void> {
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name)
-
-        if (entry.isDirectory()) {
-          await this.cleanDirectory(fullPath, deletePatterns)
-        } else if (entry.isFile()) {
-          const shouldDelete = deletePatterns.some((pattern) => pattern.test(entry.name))
-          if (shouldDelete) {
-            try {
-              await fs.unlink(fullPath)
-            } catch {
-              // Ignore errors
-            }
-          }
-        }
-      }
-    } catch {
-      // Ignore errors
-    }
-  }
-
-  /**
-   * Remove empty directories recursively
-   */
-  private async removeEmptyDirectories(dir: string): Promise<boolean> {
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-
-      // First, recurse into subdirectories
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const subPath = path.join(dir, entry.name)
-          await this.removeEmptyDirectories(subPath)
-        }
-      }
-
-      // Check if directory is now empty
-      const remainingEntries = await fs.readdir(dir)
-      if (remainingEntries.length === 0) {
-        await fs.rmdir(dir)
-        return true
-      }
-    } catch {
-      // Ignore errors
-    }
-
-    return false
   }
 }
 

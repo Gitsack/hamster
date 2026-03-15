@@ -4,7 +4,6 @@ import { HugeiconsIcon, IconSvgElement } from '@hugeicons/react'
 import {
   MusicNote01Icon,
   Download04Icon,
-  Clock01Icon,
   Search01Icon,
   Folder01Icon,
   LogoutSquare01Icon,
@@ -65,14 +64,9 @@ const mainNavItems: NavItem[] = [
 
 const activityNavItems: NavItem[] = [
   {
-    title: 'Queue',
+    title: 'Activity',
     url: '/activity/queue',
     icon: Download04Icon,
-  },
-  {
-    title: 'History',
-    url: '/activity/history',
-    icon: Clock01Icon,
   },
 ]
 

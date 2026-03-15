@@ -1,5 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import path from 'node:path'
+import fs from 'node:fs/promises'
 import { accessWithTimeout } from '../utils/fs_utils.js'
 import MovieFile from '#models/movie_file'
 import EpisodeFile from '#models/episode_file'
@@ -8,6 +9,7 @@ import TrackFile from '#models/track_file'
 import Movie from '#models/movie'
 import Author from '#models/author'
 import RootFolder from '#models/root_folder'
+import DownloadClient from '#models/download_client'
 import { completedDownloadsScanner } from '#services/tasks/completed_downloads_scanner'
 import { folderScanner } from '#services/tasks/folder_scanner'
 
@@ -290,5 +292,345 @@ export default class FilesController {
       },
       totalImported: apiResults.imported + folderResults.imported,
     })
+  }
+
+  /**
+   * Run both scans with streaming progress events (NDJSON)
+   */
+  async scanAllStream({ response }: HttpContext) {
+    const res = response.response
+    res.writeHead(200, {
+      'Content-Type': 'application/x-ndjson',
+      'Cache-Control': 'no-cache',
+      'X-Accel-Buffering': 'no',
+    })
+
+    const emit = (phase: string, action: string, message: string) => {
+      res.write(JSON.stringify({ phase, action, message }) + '\n')
+    }
+
+    try {
+      emit('api', 'start', 'Checking download client history...')
+      const apiResults = await completedDownloadsScanner.scan((action, message) => {
+        emit('api', action, message)
+      })
+
+      emit('folder', 'start', 'Scanning download folders...')
+      const folderResults = await folderScanner.scan((action, message) => {
+        emit('folder', action, message)
+      })
+
+      emit('done', 'complete', JSON.stringify({
+        apiImported: apiResults.imported,
+        folderImported: folderResults.imported,
+        folderCreated: folderResults.created,
+        totalImported: apiResults.imported + folderResults.imported,
+      }))
+    } catch (error) {
+      emit('done', 'error', error instanceof Error ? error.message : 'Scan failed')
+    }
+
+    res.end()
+  }
+
+  /**
+   * Browse completed download folders from all enabled download clients
+   */
+  async browseCompleted({ response }: HttpContext) {
+    const clients = await DownloadClient.query().where('enabled', true)
+
+    interface CompletedEntry {
+      name: string
+      path: string
+      baseName: string
+      isDuplicate: boolean
+      isUnpacking: boolean
+      mediaType: 'tv' | 'music' | 'movies' | 'books'
+      title: string
+      year: string | null
+      sizeBytes: number | null
+      downloadClientId: string
+      downloadClientName: string
+      duplicateCount: number
+    }
+
+    const allEntries: CompletedEntry[] = []
+
+    for (const client of clients) {
+      const localPath = client.settings?.localPath
+      if (!localPath) continue
+
+      // Look for a "complete" or "completed" subfolder first, otherwise use localPath directly
+      let scanPath = localPath
+      for (const sub of ['complete', 'completed']) {
+        const candidate = path.join(localPath, sub)
+        try {
+          const stat = await fs.stat(candidate)
+          if (stat.isDirectory()) {
+            scanPath = candidate
+            break
+          }
+        } catch {
+          // not found, continue
+        }
+      }
+
+      let dirEntries: import('node:fs').Dirent[]
+      try {
+        dirEntries = await fs.readdir(scanPath, { withFileTypes: true })
+      } catch {
+        continue
+      }
+
+      for (const entry of dirEntries) {
+        const name = entry.name
+        const fullPath = path.join(scanPath, name)
+
+        // Validate path is within scanPath (prevent traversal)
+        const resolved = path.resolve(fullPath)
+        if (!resolved.startsWith(path.resolve(scanPath))) continue
+
+        const isUnpacking = name.startsWith('_UNPACK_')
+
+        // Determine if this is a SABnzbd duplicate suffix (.1, .2, etc.)
+        // Must end with .N where N is a small number (1-99), not a year or other meaningful number
+        const dupMatch = name.match(/^(.+[^\s])\.(\d{1,2})$/)
+        const isDuplicate = dupMatch !== null && !/^\d+$/.test(dupMatch[1])
+        const baseName = isDuplicate ? dupMatch![1] : name
+
+        // Guess media type
+        const mediaType = this.#guessMediaType(name)
+
+        // Parse title and year
+        const { title, year } = this.#parseTitleAndYear(name)
+
+        // Get size for files, null for directories
+        let sizeBytes: number | null = null
+        if (entry.isFile()) {
+          try {
+            const stat = await fs.stat(fullPath)
+            sizeBytes = stat.size
+          } catch {
+            // ignore stat errors
+          }
+        }
+
+        allEntries.push({
+          name,
+          path: fullPath,
+          baseName,
+          isDuplicate,
+          isUnpacking,
+          mediaType,
+          title,
+          year,
+          sizeBytes,
+          downloadClientId: client.id,
+          downloadClientName: client.name,
+          duplicateCount: 0,
+        })
+      }
+    }
+
+    // Group by baseName and set duplicateCount
+    const baseNameCounts = new Map<string, number>()
+    for (const entry of allEntries) {
+      baseNameCounts.set(entry.baseName, (baseNameCounts.get(entry.baseName) || 0) + 1)
+    }
+    for (const entry of allEntries) {
+      entry.duplicateCount = baseNameCounts.get(entry.baseName) || 1
+    }
+
+    // Filter out entries that are already tracked as completed downloads or unmatched files
+    const { default: Download } = await import('#models/download')
+    const { default: UnmatchedFile } = await import('#models/unmatched_file')
+
+    const [completedDownloads, unmatchedFiles] = await Promise.all([
+      Download.query().whereIn('status', ['completed', 'importing']).select('title', 'outputPath'),
+      UnmatchedFile.query().select('fileName'),
+    ])
+
+    const trackedPaths = new Set<string>()
+    const trackedTitles = new Set<string>()
+    for (const d of completedDownloads) {
+      if (d.outputPath) trackedPaths.add(d.outputPath)
+      trackedTitles.add(d.title)
+    }
+    const unmatchedNames = new Set(unmatchedFiles.map((u) => u.fileName))
+
+    const filteredEntries = allEntries.filter(
+      (e) => !trackedPaths.has(e.path) && !trackedTitles.has(e.name) && !unmatchedNames.has(e.name)
+    )
+
+    // Group by baseName and set duplicateCount
+    const baseNameCounts = new Map<string, number>()
+    for (const entry of filteredEntries) {
+      baseNameCounts.set(entry.baseName, (baseNameCounts.get(entry.baseName) || 0) + 1)
+    }
+    for (const entry of filteredEntries) {
+      entry.duplicateCount = baseNameCounts.get(entry.baseName) || 1
+    }
+
+    // Sort by baseName then name
+    filteredEntries.sort((a, b) => {
+      const baseCompare = a.baseName.localeCompare(b.baseName)
+      if (baseCompare !== 0) return baseCompare
+      return a.name.localeCompare(b.name)
+    })
+
+    return response.json({ entries: filteredEntries })
+  }
+
+  /**
+   * Clean up completed download folders: remove _UNPACK_ folders and duplicate entries
+   */
+  async cleanupCompleted({ response }: HttpContext) {
+    const clients = await DownloadClient.query().where('enabled', true)
+
+    let deleted = 0
+    let freedBytes = 0
+    const errors: string[] = []
+
+    for (const client of clients) {
+      const localPath = client.settings?.localPath
+      if (!localPath) continue
+
+      // Look for a "complete" or "completed" subfolder first
+      let scanPath = localPath
+      for (const sub of ['complete', 'completed']) {
+        const candidate = path.join(localPath, sub)
+        try {
+          const stat = await fs.stat(candidate)
+          if (stat.isDirectory()) {
+            scanPath = candidate
+            break
+          }
+        } catch {
+          // not found
+        }
+      }
+
+      let dirEntries: import('node:fs').Dirent[]
+      try {
+        dirEntries = await fs.readdir(scanPath, { withFileTypes: true })
+      } catch {
+        continue
+      }
+
+      for (const entry of dirEntries) {
+        const name = entry.name
+        const fullPath = path.join(scanPath, name)
+
+        // Validate path is within scanPath
+        const resolved = path.resolve(fullPath)
+        if (!resolved.startsWith(path.resolve(scanPath))) continue
+
+        // Delete _UNPACK_ folders
+        if (name.startsWith('_UNPACK_')) {
+          try {
+            const size = await this.#getEntrySize(fullPath)
+            await fs.rm(fullPath, { recursive: true, force: true })
+            deleted++
+            freedBytes += size
+          } catch (err) {
+            errors.push(`Failed to delete ${fullPath}: ${err instanceof Error ? err.message : String(err)}`)
+          }
+          continue
+        }
+
+        // Delete SABnzbd duplicate entries (.1, .2, etc.)
+        // These are always safe to remove — SABnzbd appends the suffix when the original already exists
+        const dupMatch = name.match(/^(.+[^\s])\.(\d{1,2})$/)
+        const isDuplicate = dupMatch !== null && !/^\d+$/.test(dupMatch[1])
+
+        if (isDuplicate) {
+          try {
+            const size = await this.#getEntrySize(fullPath)
+            await fs.rm(fullPath, { recursive: true, force: true })
+            deleted++
+            freedBytes += size
+          } catch (err) {
+            errors.push(`Failed to delete ${fullPath}: ${err instanceof Error ? err.message : String(err)}`)
+          }
+        }
+      }
+    }
+
+    return response.json({ deleted, freedBytes, errors })
+  }
+
+  /**
+   * Guess media type from a folder/file name
+   */
+  #guessMediaType(name: string): 'tv' | 'music' | 'movies' | 'books' {
+    // TV: has S01E01 pattern
+    if (/S\d+E\d+/i.test(name)) return 'tv'
+
+    // Music: FLAC, WEB-FLAC, CD-FLAC, MP3, OST, or artist-album pattern
+    if (/\b(FLAC|WEB-FLAC|CD-FLAC|MP3|OST)\b/i.test(name)) return 'music'
+
+    // Books: epub, mobi, pdf in name, or "Author - Title" pattern
+    if (/\b(epub|mobi|pdf)\b/i.test(name)) return 'books'
+    if (/^[^-]+ - [^-]+$/.test(name) && !/\b(720p|1080p|2160p|BluRay|WEB-DL|HDRip)\b/i.test(name)) {
+      return 'books'
+    }
+
+    // Default to movies
+    return 'movies'
+  }
+
+  /**
+   * Parse title and year from a release name
+   */
+  #parseTitleAndYear(name: string): { title: string; year: string | null } {
+    // Remove _UNPACK_ prefix if present
+    let cleanName = name.replace(/^_UNPACK_/, '')
+
+    // Remove SABnzbd duplicate suffix
+    cleanName = cleanName.replace(/\.\d+$/, '')
+
+    // Try to find a year (19xx or 20xx)
+    const yearMatch = cleanName.match(/[\.\s\-_\(]((?:19|20)\d{2})[\.\s\-_\)]/)
+    const year = yearMatch ? yearMatch[1] : null
+
+    // Title is everything before the year or quality indicators
+    let title = cleanName
+    if (yearMatch && yearMatch.index !== undefined) {
+      title = cleanName.substring(0, yearMatch.index)
+    } else {
+      // Try to cut at quality indicators
+      const qualityMatch = cleanName.match(
+        /[\.\s\-_](720p|1080p|2160p|4K|BluRay|BDRip|WEB-DL|WEBRip|HDRip|DVDRip|HDTV|FLAC|MP3|WEB-FLAC|CD-FLAC)/i
+      )
+      if (qualityMatch && qualityMatch.index !== undefined) {
+        title = cleanName.substring(0, qualityMatch.index)
+      }
+    }
+
+    // Replace dots, underscores with spaces and trim
+    title = title.replace(/[\._]/g, ' ').trim()
+
+    return { title, year }
+  }
+
+  /**
+   * Get total size of a file or directory
+   */
+  async #getEntrySize(entryPath: string): Promise<number> {
+    try {
+      const stat = await fs.stat(entryPath)
+      if (stat.isFile()) return stat.size
+
+      // For directories, sum up all files recursively
+      let total = 0
+      const entries = await fs.readdir(entryPath, { withFileTypes: true })
+      for (const entry of entries) {
+        const childPath = path.join(entryPath, entry.name)
+        total += await this.#getEntrySize(childPath)
+      }
+      return total
+    } catch {
+      return 0
+    }
   }
 }

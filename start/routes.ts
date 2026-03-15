@@ -122,7 +122,7 @@ router
 
     // Activity
     router.on('/activity/queue').renderInertia('activity/queue').as('activity.queue')
-    router.on('/activity/history').renderInertia('activity/history').as('activity.history')
+    router.get('/activity/history', ({ response }) => response.redirect('/activity/queue'))
 
     // System
     router.on('/system/status').renderInertia('system/status').as('system.status')
@@ -278,6 +278,7 @@ router
 
     // Queue
     router.get('/queue', [QueueController, 'index'])
+    router.get('/queue/completed', [QueueController, 'completed'])
     router.get('/queue/debug', [QueueController, 'debug'])
     router.get('/queue/failed', [QueueController, 'failed'])
     router.post('/queue/refresh', [QueueController, 'refresh'])
@@ -324,6 +325,9 @@ router
     router.post('/files/scan-completed', [FilesController, 'scanCompletedDownloads'])
     router.post('/files/scan-folders', [FilesController, 'scanFolders'])
     router.post('/files/scan-all', [FilesController, 'scanAll'])
+    router.post('/files/scan-all-stream', [FilesController, 'scanAllStream'])
+    router.get('/files/browse-completed', [FilesController, 'browseCompleted'])
+    router.post('/files/cleanup-completed', [FilesController, 'cleanupCompleted'])
 
     // Unmatched files (library scanner results)
     router.get('/unmatched', [UnmatchedFilesController, 'index'])

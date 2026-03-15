@@ -4,6 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
+import { probeFile, checkFfmpegAvailable } from '#utils/ffmpeg_utils'
 import Download from '#models/download'
 import Movie from '#models/movie'
 import MovieFile from '#models/movie_file'
@@ -227,16 +228,84 @@ export class MovieImportService {
   /**
    * Import a single video file into the library
    */
+  /**
+   * Minimum size for a valid movie file (100 MB).
+   * Anything smaller is almost certainly corrupt, incomplete, or a sample.
+   */
+  private static readonly MIN_MOVIE_FILE_SIZE = 100 * 1024 * 1024
+
   private async importVideoFile(
     sourcePath: string,
     movie: Movie,
     rootFolder: RootFolder,
     quality?: string
   ): Promise<{ success: boolean; error?: string; destinationPath?: string }> {
+    // --- Integrity check 1: minimum file size ---
+    const sourceStats = await fs.stat(sourcePath)
+    if (sourceStats.size < MovieImportService.MIN_MOVIE_FILE_SIZE) {
+      return {
+        success: false,
+        error: `Source file is too small (${Math.round(sourceStats.size / 1024 / 1024)} MB) — likely corrupt or incomplete`,
+      }
+    }
+
+    // --- Integrity check 2: ffprobe validation ---
+    const { ffprobe } = await checkFfmpegAvailable()
+    if (ffprobe) {
+      try {
+        const analysis = await probeFile(sourcePath)
+        if (!analysis.videoCodec) {
+          return {
+            success: false,
+            error: `Source file has no valid video stream — likely corrupt`,
+          }
+        }
+        if (analysis.duration <= 0) {
+          return {
+            success: false,
+            error: `Source file has no valid duration — likely corrupt or incomplete`,
+          }
+        }
+      } catch {
+        return {
+          success: false,
+          error: `Source file could not be read by ffprobe — likely corrupt`,
+        }
+      }
+    }
+
+    // --- Integrity check 3: don't overwrite a larger existing file ---
+    const existingFile = await MovieFile.query().where('movieId', movie.id).first()
+    if (existingFile) {
+      const existingAbsPath = path.join(rootFolder.path, existingFile.relativePath)
+      try {
+        const existingStats = await fs.stat(existingAbsPath)
+        if (existingStats.size > sourceStats.size) {
+          return {
+            success: false,
+            error: `Existing file is larger (${Math.round(existingStats.size / 1024 / 1024)} MB) than source (${Math.round(sourceStats.size / 1024 / 1024)} MB) — refusing to overwrite with smaller file`,
+          }
+        }
+      } catch {
+        // Existing file not accessible on disk, safe to replace the record
+      }
+    }
+
     // Generate destination path
     const extension = path.extname(sourcePath)
     const relativePath = await fileNamingService.getMoviePath({ movie, quality }, extension)
     const absolutePath = path.join(rootFolder.path, relativePath)
+
+    // If the existing file is at a different path, remove it before importing
+    if (existingFile && existingFile.relativePath !== relativePath) {
+      const oldPath = path.join(rootFolder.path, existingFile.relativePath)
+      try {
+        await fs.unlink(oldPath)
+        logger.info(`Removed old movie file: ${oldPath}`)
+      } catch {
+        // Old file may already be gone
+      }
+    }
 
     // Create directories
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
@@ -416,86 +485,16 @@ export class MovieImportService {
       const stats = await fs.stat(downloadPath)
 
       if (stats.isFile()) {
+        // Single file download – delete it directly
+        await fs.unlink(downloadPath).catch(() => {})
         return
       }
 
-      // Remove common non-video files
-      const deletePatterns = [
-        /\.nfo$/i,
-        /\.sfv$/i,
-        /\.txt$/i,
-        /\.url$/i,
-        /\.srt$/i,
-        /\.sub$/i,
-        /\.idx$/i,
-        /\.nzb$/i,
-        /thumbs\.db$/i,
-        /\.ds_store$/i,
-      ]
-
-      await this.cleanDirectory(downloadPath, deletePatterns)
-      await this.removeEmptyDirectories(downloadPath)
-
-      // Try to remove the root download folder if empty
-      try {
-        const remaining = await fs.readdir(downloadPath)
-        if (remaining.length === 0) {
-          await fs.rmdir(downloadPath)
-        }
-      } catch {
-        // Folder not empty, that's fine
-      }
+      // All media files have been moved out – remove the entire folder
+      await fs.rm(downloadPath, { recursive: true, force: true })
     } catch (error) {
       logger.error({ err: error }, 'Error cleaning up download folder')
     }
-  }
-
-  private async cleanDirectory(dir: string, deletePatterns: RegExp[]): Promise<void> {
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name)
-
-        if (entry.isDirectory()) {
-          await this.cleanDirectory(fullPath, deletePatterns)
-        } else if (entry.isFile()) {
-          const shouldDelete = deletePatterns.some((pattern) => pattern.test(entry.name))
-          if (shouldDelete) {
-            try {
-              await fs.unlink(fullPath)
-            } catch {
-              // Ignore errors
-            }
-          }
-        }
-      }
-    } catch {
-      // Ignore errors
-    }
-  }
-
-  private async removeEmptyDirectories(dir: string): Promise<boolean> {
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const subPath = path.join(dir, entry.name)
-          await this.removeEmptyDirectories(subPath)
-        }
-      }
-
-      const remainingEntries = await fs.readdir(dir)
-      if (remainingEntries.length === 0) {
-        await fs.rmdir(dir)
-        return true
-      }
-    } catch {
-      // Ignore errors
-    }
-
-    return false
   }
 }
 

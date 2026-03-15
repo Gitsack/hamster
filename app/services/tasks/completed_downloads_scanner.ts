@@ -16,6 +16,10 @@ import { episodeImportService } from '#services/media/episode_import_service'
 import { downloadImportService } from '#services/media/download_import_service'
 import { bookImportService } from '#services/media/book_import_service'
 import { DateTime } from 'luxon'
+import UnmatchedFile from '#models/unmatched_file'
+import type { ParsedInfo } from '#models/unmatched_file'
+import RootFolder from '#models/root_folder'
+import type { ProgressCallback } from '#services/tasks/folder_scanner'
 
 /**
  * Service that scans download client completed folders for orphaned downloads
@@ -104,7 +108,9 @@ class CompletedDownloadsScanner {
   /**
    * Run a single scan
    */
-  async scan(): Promise<{ processed: number; imported: number; errors: string[] }> {
+  async scan(
+    onProgress?: ProgressCallback
+  ): Promise<{ processed: number; imported: number; errors: string[] }> {
     if (this.isRunning) {
       console.log('[CompletedScanner] Already running, skipping...')
       return { processed: 0, imported: 0, errors: [] }
@@ -115,6 +121,7 @@ class CompletedDownloadsScanner {
 
     try {
       console.log('[CompletedScanner] Scanning for orphaned completed downloads...')
+      onProgress?.('info', 'Checking download client history...')
 
       // Load library items once at the start
       await this.loadCache()
@@ -123,7 +130,7 @@ class CompletedDownloadsScanner {
 
       for (const client of clients) {
         try {
-          const clientResults = await this.scanClient(client)
+          const clientResults = await this.scanClient(client, onProgress)
           results.processed += clientResults.processed
           results.imported += clientResults.imported
           results.errors.push(...clientResults.errors)
@@ -134,9 +141,9 @@ class CompletedDownloadsScanner {
         }
       }
 
-      console.log(
-        `[CompletedScanner] Scan complete: ${results.processed} processed, ${results.imported} imported`
-      )
+      const summary = `API scan: ${results.processed} processed, ${results.imported} imported`
+      console.log(`[CompletedScanner] Scan complete: ${summary}`)
+      onProgress?.('info', summary)
     } finally {
       this.clearCache()
       this.isRunning = false
@@ -149,7 +156,8 @@ class CompletedDownloadsScanner {
    * Scan a specific download client
    */
   private async scanClient(
-    client: DownloadClient
+    client: DownloadClient,
+    onProgress?: ProgressCallback
   ): Promise<{ processed: number; imported: number; errors: string[] }> {
     const results = { processed: 0, imported: 0, errors: [] as string[] }
 
@@ -176,14 +184,17 @@ class CompletedDownloadsScanner {
             const importResult = await this.processCompletedDownload(client, slot)
             if (importResult.imported) {
               results.imported++
+              onProgress?.('imported', `Imported "${slot.name}"`)
             }
             if (importResult.error) {
               results.errors.push(importResult.error)
+              onProgress?.('error', `Failed: "${slot.name}"`)
             }
           } catch (error) {
             results.errors.push(
               `Error processing ${slot.name}: ${error instanceof Error ? error.message : 'Unknown'}`
             )
+            onProgress?.('error', `Error processing "${slot.name}"`)
           }
         }
         break
@@ -253,7 +264,8 @@ class CompletedDownloadsScanner {
     const match = await this.matchToLibrary(slot.name)
 
     if (!match) {
-      // Can't match - skip silently (user might have removed it from library)
+      // Can't match - create an unmatched file record so user can review
+      await this.createUnmatchedFileRecord(client, slot)
       return { imported: false }
     }
 
@@ -391,6 +403,98 @@ class CompletedDownloadsScanner {
       await download.save()
       return { imported: false, error: errorMsg }
     }
+  }
+
+  /**
+   * Create an UnmatchedFile record for a completed download that couldn't be matched
+   */
+  private async createUnmatchedFileRecord(
+    _client: DownloadClient,
+    slot: SabnzbdHistoryItem
+  ): Promise<void> {
+    try {
+      const parsed = this.parseFolderName(slot.name)
+      const mediaType = this.guessMediaTypeFromParsed(parsed, slot.name)
+
+      // Find a root folder for this media type
+      const rootFolder = await RootFolder.query().where('mediaType', mediaType).first()
+      if (!rootFolder) {
+        console.log(
+          `[CompletedScanner] No root folder for type "${mediaType}", cannot create unmatched file record for "${slot.name}"`
+        )
+        return
+      }
+
+      // Build parsed info from the folder name parsing
+      const parsedInfo: ParsedInfo = {}
+      if (parsed.title) parsedInfo.title = parsed.title
+      if (parsed.year) parsedInfo.year = parsed.year
+      if (parsed.season !== undefined) parsedInfo.seasonNumber = parsed.season
+      if (parsed.episode !== undefined) parsedInfo.episodeNumber = parsed.episode
+      if (parsed.artist) parsedInfo.artistName = parsed.artist
+      if (parsed.album) parsedInfo.albumTitle = parsed.album
+      if (parsed.author) parsedInfo.authorName = parsed.author
+      if (parsed.bookTitle) parsedInfo.bookTitle = parsed.bookTitle
+
+      // Use the storage path as relative path, or fall back to slot name
+      const relativePath = slot.storage || slot.name
+
+      await UnmatchedFile.updateOrCreate(
+        { relativePath, fileName: slot.name },
+        {
+          rootFolderId: rootFolder.id,
+          relativePath,
+          fileName: slot.name,
+          mediaType,
+          fileSizeBytes: slot.bytes || null,
+          parsedInfo,
+          status: 'pending',
+        }
+      )
+
+      console.log(
+        `[CompletedScanner] Created unmatched file record for "${slot.name}" (type: ${mediaType})`
+      )
+    } catch (error) {
+      console.error(
+        `[CompletedScanner] Failed to create unmatched file record for "${slot.name}":`,
+        error instanceof Error ? error.message : 'Unknown error'
+      )
+    }
+  }
+
+  /**
+   * Guess media type from parsed folder name info
+   */
+  private guessMediaTypeFromParsed(
+    parsed: ReturnType<typeof this.parseFolderName>,
+    folderName: string
+  ): 'movies' | 'music' | 'tv' | 'books' {
+    // If it has season/episode info, it's TV
+    if (parsed.season !== undefined || parsed.episode !== undefined) {
+      return 'tv'
+    }
+
+    // If it has artist/album, it's music
+    if (parsed.artist && parsed.album) {
+      return 'music'
+    }
+
+    // If it has author/bookTitle or book-related extensions, it's books
+    if (parsed.author && parsed.bookTitle) {
+      return 'books'
+    }
+    if (/\b(epub|mobi|azw3?|pdf|ebook|audiobook)\b/i.test(folderName)) {
+      return 'books'
+    }
+
+    // Check for music indicators
+    if (/\b(flac|mp3|aac|ogg|wav|alac|vinyl|cd|lp)\b/i.test(folderName)) {
+      return 'music'
+    }
+
+    // Default to movies (video content)
+    return 'movies'
   }
 
   /**

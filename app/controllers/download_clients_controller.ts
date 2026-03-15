@@ -24,6 +24,8 @@ const downloadClientValidator = vine.compile(
     removeFailedDownloads: vine.boolean().optional(),
     remotePath: vine.string().optional(),
     localPath: vine.string().optional(),
+    remoteTempPath: vine.string().optional(),
+    localTempPath: vine.string().optional(),
   })
 )
 
@@ -70,6 +72,8 @@ export default class DownloadClientsController {
         addPaused: data.addPaused,
         remotePath: data.remotePath,
         localPath: data.localPath,
+        remoteTempPath: data.remoteTempPath,
+        localTempPath: data.localTempPath,
       },
     })
 
@@ -113,6 +117,8 @@ export default class DownloadClientsController {
         addPaused: data.addPaused,
         remotePath: data.remotePath,
         localPath: data.localPath,
+        remoteTempPath: data.remoteTempPath,
+        localTempPath: data.localTempPath,
       },
     })
     await client.save()
@@ -419,6 +425,8 @@ export default class DownloadClientsController {
       removeFailedDownloads: client.removeFailedDownloads,
       remotePath: client.settings.remotePath || '',
       localPath: client.settings.localPath || '',
+      remoteTempPath: client.settings.remoteTempPath || '',
+      localTempPath: client.settings.localTempPath || '',
     }
   }
 

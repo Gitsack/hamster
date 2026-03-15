@@ -431,81 +431,15 @@ export class BookImportService {
       const stats = await fs.stat(downloadPath)
 
       if (stats.isFile()) {
+        await fs.unlink(downloadPath).catch(() => {})
         return
       }
 
-      const deletePatterns = [
-        /\.nfo$/i,
-        /\.sfv$/i,
-        /\.txt$/i,
-        /\.url$/i,
-        /\.nzb$/i,
-        /thumbs\.db$/i,
-        /\.ds_store$/i,
-      ]
-
-      await this.cleanDirectory(downloadPath, deletePatterns)
-      await this.removeEmptyDirectories(downloadPath)
-
-      try {
-        const remaining = await fs.readdir(downloadPath)
-        if (remaining.length === 0) {
-          await fs.rmdir(downloadPath)
-        }
-      } catch {
-        // Folder not empty, that's fine
-      }
+      // All media files have been moved out – remove the entire folder
+      await fs.rm(downloadPath, { recursive: true, force: true })
     } catch (error) {
       console.error('Error cleaning up download folder:', error)
     }
-  }
-
-  private async cleanDirectory(dir: string, deletePatterns: RegExp[]): Promise<void> {
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name)
-
-        if (entry.isDirectory()) {
-          await this.cleanDirectory(fullPath, deletePatterns)
-        } else if (entry.isFile()) {
-          const shouldDelete = deletePatterns.some((pattern) => pattern.test(entry.name))
-          if (shouldDelete) {
-            try {
-              await fs.unlink(fullPath)
-            } catch {
-              // Ignore errors
-            }
-          }
-        }
-      }
-    } catch {
-      // Ignore errors
-    }
-  }
-
-  private async removeEmptyDirectories(dir: string): Promise<boolean> {
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const subPath = path.join(dir, entry.name)
-          await this.removeEmptyDirectories(subPath)
-        }
-      }
-
-      const remainingEntries = await fs.readdir(dir)
-      if (remainingEntries.length === 0) {
-        await fs.rmdir(dir)
-        return true
-      }
-    } catch {
-      // Ignore errors
-    }
-
-    return false
   }
 }
 

@@ -1875,6 +1875,7 @@ export class DownloadManager {
     error?: string
     remotePath?: string
     pathAccessible?: boolean
+    remoteTempPath?: string
   }> {
     switch (type) {
       case 'sabnzbd': {
@@ -1906,6 +1907,7 @@ export class DownloadManager {
                 ...result,
                 remotePath: sabConfig.completeDir,
                 pathAccessible,
+                remoteTempPath: sabConfig.incompleteDir,
               }
             }
           } catch {

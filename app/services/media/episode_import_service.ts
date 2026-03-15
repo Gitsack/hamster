@@ -4,6 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
+import { probeFile, checkFfmpegAvailable } from '#utils/ffmpeg_utils'
 import Download from '#models/download'
 import TvShow from '#models/tv_show'
 import Episode from '#models/episode'
@@ -226,6 +227,11 @@ export class EpisodeImportService {
   /**
    * Import a single video file into the library
    */
+  /**
+   * Minimum size for a valid episode file (50 MB).
+   */
+  private static readonly MIN_EPISODE_FILE_SIZE = 50 * 1024 * 1024
+
   private async importVideoFile(
     sourcePath: string,
     tvShow: TvShow,
@@ -233,6 +239,40 @@ export class EpisodeImportService {
     knownEpisodeId?: string | null
   ): Promise<{ success: boolean; error?: string; destinationPath?: string }> {
     const fileName = path.basename(sourcePath)
+
+    // --- Integrity check 1: minimum file size ---
+    const sourceStats = await fs.stat(sourcePath)
+    if (sourceStats.size < EpisodeImportService.MIN_EPISODE_FILE_SIZE) {
+      return {
+        success: false,
+        error: `Source file "${fileName}" is too small (${Math.round(sourceStats.size / 1024 / 1024)} MB) — likely corrupt or incomplete`,
+      }
+    }
+
+    // --- Integrity check 2: ffprobe validation ---
+    const { ffprobe } = await checkFfmpegAvailable()
+    if (ffprobe) {
+      try {
+        const analysis = await probeFile(sourcePath)
+        if (!analysis.videoCodec) {
+          return {
+            success: false,
+            error: `Source file "${fileName}" has no valid video stream — likely corrupt`,
+          }
+        }
+        if (analysis.duration <= 0) {
+          return {
+            success: false,
+            error: `Source file "${fileName}" has no valid duration — likely corrupt or incomplete`,
+          }
+        }
+      } catch {
+        return {
+          success: false,
+          error: `Source file "${fileName}" could not be read by ffprobe — likely corrupt`,
+        }
+      }
+    }
 
     // Try to find matching episode
     let episode: Episode | null = null
@@ -258,6 +298,23 @@ export class EpisodeImportService {
       return { success: false, error: 'Could not match to episode' }
     }
 
+    // --- Integrity check 3: don't overwrite a larger existing file ---
+    const existingFile = await EpisodeFile.query().where('episodeId', episode.id).first()
+    if (existingFile) {
+      const existingAbsPath = path.join(rootFolder.path, existingFile.relativePath)
+      try {
+        const existingStats = await fs.stat(existingAbsPath)
+        if (existingStats.size > sourceStats.size) {
+          return {
+            success: false,
+            error: `Existing file is larger (${Math.round(existingStats.size / 1024 / 1024)} MB) than source (${Math.round(sourceStats.size / 1024 / 1024)} MB) — refusing to overwrite`,
+          }
+        }
+      } catch {
+        // Existing file not accessible on disk, safe to replace the record
+      }
+    }
+
     // Determine quality
     const quality = this.detectQuality(fileName)
 
@@ -268,6 +325,17 @@ export class EpisodeImportService {
       extension
     )
     const absolutePath = path.join(rootFolder.path, relativePath)
+
+    // If the existing file is at a different path, remove it before importing
+    if (existingFile && existingFile.relativePath !== relativePath) {
+      const oldPath = path.join(rootFolder.path, existingFile.relativePath)
+      try {
+        await fs.unlink(oldPath)
+        logger.info(`Removed old episode file: ${oldPath}`)
+      } catch {
+        // Old file may already be gone
+      }
+    }
 
     // Create directories
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
@@ -404,84 +472,15 @@ export class EpisodeImportService {
       const stats = await fs.stat(downloadPath)
 
       if (stats.isFile()) {
+        await fs.unlink(downloadPath).catch(() => {})
         return
       }
 
-      const deletePatterns = [
-        /\.nfo$/i,
-        /\.sfv$/i,
-        /\.txt$/i,
-        /\.url$/i,
-        /\.srt$/i,
-        /\.sub$/i,
-        /\.idx$/i,
-        /\.nzb$/i,
-        /thumbs\.db$/i,
-        /\.ds_store$/i,
-      ]
-
-      await this.cleanDirectory(downloadPath, deletePatterns)
-      await this.removeEmptyDirectories(downloadPath)
-
-      try {
-        const remaining = await fs.readdir(downloadPath)
-        if (remaining.length === 0) {
-          await fs.rmdir(downloadPath)
-        }
-      } catch {
-        // Folder not empty, that's fine
-      }
+      // All media files have been moved out – remove the entire folder
+      await fs.rm(downloadPath, { recursive: true, force: true })
     } catch (error) {
       logger.error({ err: error }, 'Error cleaning up download folder')
     }
-  }
-
-  private async cleanDirectory(dir: string, deletePatterns: RegExp[]): Promise<void> {
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name)
-
-        if (entry.isDirectory()) {
-          await this.cleanDirectory(fullPath, deletePatterns)
-        } else if (entry.isFile()) {
-          const shouldDelete = deletePatterns.some((pattern) => pattern.test(entry.name))
-          if (shouldDelete) {
-            try {
-              await fs.unlink(fullPath)
-            } catch {
-              // Ignore errors
-            }
-          }
-        }
-      }
-    } catch {
-      // Ignore errors
-    }
-  }
-
-  private async removeEmptyDirectories(dir: string): Promise<boolean> {
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true })
-
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const subPath = path.join(dir, entry.name)
-          await this.removeEmptyDirectories(subPath)
-        }
-      }
-
-      const remainingEntries = await fs.readdir(dir)
-      if (remainingEntries.length === 0) {
-        await fs.rmdir(dir)
-        return true
-      }
-    } catch {
-      // Ignore errors
-    }
-
-    return false
   }
 }
 

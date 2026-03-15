@@ -704,6 +704,35 @@ export default class QueueController {
   }
 
   /**
+   * Get completed/importing/failed downloads that may need user attention
+   */
+  async completed({ response }: HttpContext) {
+    const downloads = await Download.query()
+      .whereIn('status', ['completed', 'importing', 'failed'])
+      .preload('downloadClient')
+      .preload('album')
+      .preload('movie')
+      .preload('tvShow')
+      .preload('episode')
+      .preload('book')
+      .orderBy('updatedAt', 'desc')
+
+    return response.json(
+      downloads.map((d) => ({
+        id: d.id,
+        title: d.title,
+        status: d.status,
+        size: d.sizeBytes,
+        mediaType: d.mediaType,
+        errorMessage: d.errorMessage,
+        downloadClient: d.downloadClient?.name ?? null,
+        completedAt: d.completedAt?.toISO() ?? null,
+        outputPath: d.outputPath,
+      }))
+    )
+  }
+
+  /**
    * Get requested search task status
    */
   async requestedStatus({ response }: HttpContext) {

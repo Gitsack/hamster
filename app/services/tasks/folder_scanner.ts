@@ -21,6 +21,10 @@ import { openLibraryService } from '#services/metadata/openlibrary_service'
 import { mediaInfoService } from '#services/media/media_info_service'
 import { probeFile, checkFfmpegAvailable } from '#utils/ffmpeg_utils'
 import { DateTime } from 'luxon'
+import UnmatchedFile from '#models/unmatched_file'
+import type { ParsedInfo } from '#models/unmatched_file'
+import { isUpgrade } from '#services/quality/quality_scorer'
+import type { QualityItem } from '#models/quality_profile'
 
 type MediaType = 'music' | 'movies' | 'tv' | 'books'
 
@@ -38,6 +42,8 @@ interface ScanResults {
   skipped: number
   errors: string[]
 }
+
+export type ProgressCallback = (action: string, message: string) => void
 
 /**
  * Service that directly scans download folders on the filesystem
@@ -87,6 +93,7 @@ class FolderScanner {
     '.nzb',
     '_unpack',
     '_failed',
+    'unmatched',
   ])
 
   /**
@@ -126,6 +133,21 @@ class FolderScanner {
 
   private static isExcludedFolder(name: string): boolean {
     return FolderScanner.EXCLUDED_FOLDERS.has(name.toLowerCase())
+  }
+
+  /**
+   * Delete a download folder after it has been processed or is no longer needed.
+   */
+  private async cleanupFolder(folderPath: string, reason: string): Promise<void> {
+    try {
+      await fs.rm(folderPath, { recursive: true, force: true })
+      console.log(`[FolderScanner] Cleaned up "${path.basename(folderPath)}" - ${reason}`)
+    } catch (error) {
+      console.error(
+        `[FolderScanner] Failed to clean up "${path.basename(folderPath)}":`,
+        error instanceof Error ? error.message : 'Unknown error'
+      )
+    }
   }
 
   private static isExcludedFile(name: string): boolean {
@@ -233,7 +255,7 @@ class FolderScanner {
   /**
    * Scan all configured download client folders for importable media
    */
-  async scan(): Promise<ScanResults> {
+  async scan(onProgress?: ProgressCallback): Promise<ScanResults> {
     if (this.isRunning) {
       console.log('[FolderScanner] Already running, skipping...')
       return { processed: 0, imported: 0, created: 0, skipped: 0, errors: [] }
@@ -244,13 +266,14 @@ class FolderScanner {
 
     try {
       console.log('[FolderScanner] Scanning download folders...')
+      onProgress?.('info', 'Scanning download folders...')
 
       // Get all download clients to find their complete directories
       const clients = await DownloadClient.query().where('enabled', true)
 
       for (const client of clients) {
         try {
-          const clientResults = await this.scanClientFolder(client)
+          const clientResults = await this.scanClientFolder(client, onProgress)
           results.processed += clientResults.processed
           results.imported += clientResults.imported
           results.created += clientResults.created
@@ -263,9 +286,11 @@ class FolderScanner {
         }
       }
 
+      const summary = `Folder scan: ${results.imported} imported, ${results.created} created, ${results.skipped} skipped`
       console.log(
         `[FolderScanner] Scan complete: ${results.processed} folders processed, ${results.created} created, ${results.imported} imported, ${results.skipped} skipped (invalid media)`
       )
+      onProgress?.('info', summary)
     } finally {
       this.isRunning = false
     }
@@ -276,7 +301,10 @@ class FolderScanner {
   /**
    * Scan a specific download client's complete folder
    */
-  private async scanClientFolder(client: DownloadClient): Promise<ScanResults> {
+  private async scanClientFolder(
+    client: DownloadClient,
+    onProgress?: ProgressCallback
+  ): Promise<ScanResults> {
     const results: ScanResults = { processed: 0, imported: 0, created: 0, skipped: 0, errors: [] }
 
     // Get the local path for the complete folder
@@ -302,6 +330,17 @@ class FolderScanner {
     console.log(
       `[FolderScanner] Found ${folders.length} folders and ${looseFiles.length} files in ${localPath}`
     )
+
+    // Clean up loose non-media files (e.g. .DS_Store, .nfo) in the download root
+    for (const file of looseFiles) {
+      if (FolderScanner.isExcludedFile(file.name)) {
+        try {
+          await fs.unlink(path.join(localPath, file.name))
+        } catch {
+          // ignore
+        }
+      }
+    }
 
     // Also scan subdirectories (SABnzbd may use category subfolders)
     const allFolders: Array<{ name: string; path: string }> = []
@@ -334,6 +373,16 @@ class FolderScanner {
           console.log(
             `[FolderScanner] "${folder.name}" looks like a category folder, scanning ${subFolders.length} subfolders`
           )
+          // Clean loose junk files inside category folders (e.g. .DS_Store)
+          for (const f of subEntries) {
+            if (f.isFile() && FolderScanner.isExcludedFile(f.name)) {
+              try {
+                await fs.unlink(path.join(subPath, f.name))
+              } catch {
+                // ignore
+              }
+            }
+          }
           for (const sub of subFolders) {
             if (FolderScanner.isExcludedFolder(sub.name)) {
               console.log(`[FolderScanner] Skipping excluded subfolder: "${sub.name}"`)
@@ -358,15 +407,31 @@ class FolderScanner {
 
       try {
         // Check if this folder was already imported or is being processed
+        // Check by path (local and remote equivalent) or by title
+        const possiblePaths = [folderPath]
+        if (client.settings?.remotePath && client.settings?.localPath) {
+          const remotePath = folderPath.replace(
+            client.settings.localPath,
+            client.settings.remotePath
+          )
+          if (remotePath !== folderPath) {
+            possiblePaths.push(remotePath)
+          }
+        }
         const existingDownload = await Download.query()
-          .where('outputPath', folderPath)
+          .where((q) => {
+            q.whereIn('outputPath', possiblePaths).orWhere('title', folder.name)
+          })
           .whereIn('status', ['completed', 'importing'])
           .first()
 
         if (existingDownload) {
-          console.log(
-            `[FolderScanner] Skipping "${folder.name}" - already ${existingDownload.status}`
-          )
+          if (existingDownload.status === 'completed') {
+            await this.cleanupFolder(folderPath, 'already completed')
+            onProgress?.('cleaned', `Cleaned up "${folder.name}" (already completed)`)
+          } else {
+            console.log(`[FolderScanner] Skipping "${folder.name}" - currently importing`)
+          }
           continue
         }
 
@@ -375,16 +440,30 @@ class FolderScanner {
         let isNewEntry = false
 
         if (!match) {
+          // Before trying to create, check if folder has any media files at all
+          // If empty/only junk files, clean it up
+          const noMediaError = await this.validateMediaFiles(folderPath)
+          if (noMediaError) {
+            await this.cleanupFolder(folderPath, 'no library match and no valid media files')
+            onProgress?.('cleaned', `Cleaned up "${folder.name}" (no media files)`)
+            continue
+          }
+
           // No existing library match - try to detect media type and create entry
           const createResult = await this.createEntryForFolder(folderPath, folder.name)
 
           if (createResult.error) {
             results.errors.push(`${folder.name}: ${createResult.error}`)
+            // Still create an unmatched file record for errors
+            await this.createUnmatchedFileRecord(folderPath, folder.name, localPath)
+            onProgress?.('moved', `Moved "${folder.name}" to unmatched`)
             continue
           }
 
           if (!createResult.match) {
             console.log(`[FolderScanner] Skipping "${folder.name}" - could not identify media`)
+            await this.createUnmatchedFileRecord(folderPath, folder.name, localPath)
+            onProgress?.('moved', `Moved "${folder.name}" to unmatched`)
             continue
           }
 
@@ -400,10 +479,17 @@ class FolderScanner {
         if (!isNewEntry) {
           const hasFile = await this.checkIfAlreadyHasFile(match)
           if (hasFile) {
-            console.log(
-              `[FolderScanner] Skipping "${folder.name}" - library item already has files`
-            )
-            continue
+            const upgradeResult = await this.checkForUpgrade(match, folder.name)
+            if (upgradeResult) {
+              console.log(
+                `[FolderScanner] "${folder.name}" is a quality upgrade for ${match.type} "${match.title}" - proceeding with import`
+              )
+              onProgress?.('upgrade', `Upgrading "${match.title}" from "${folder.name}"`)
+            } else {
+              await this.cleanupFolder(folderPath, 'library item already has files, not an upgrade')
+              onProgress?.('cleaned', `Cleaned up "${folder.name}" (not an upgrade)`)
+              continue
+            }
           }
         }
 
@@ -414,10 +500,20 @@ class FolderScanner {
         // Validate that media files are playable before importing
         const validationError = await this.validateMediaFiles(folderPath)
         if (validationError) {
-          console.log(
-            `[FolderScanner] Skipping "${folder.name}" - invalid media: ${validationError}`
-          )
-          results.skipped++
+          // If the folder matched a library item but has no valid media files,
+          // the files were likely already imported — clean up the leftover folder
+          if (match) {
+            await this.cleanupFolder(
+              folderPath,
+              `matched "${match.title}" but no valid media files remain`
+            )
+            onProgress?.('cleaned', `Cleaned up "${folder.name}" (no media files)`)
+          } else {
+            console.log(
+              `[FolderScanner] Skipping "${folder.name}" - invalid media: ${validationError}`
+            )
+            results.skipped++
+          }
           continue
         }
 
@@ -427,8 +523,10 @@ class FolderScanner {
         if (importResult.success) {
           results.imported++
           console.log(`[FolderScanner] Successfully imported: ${folder.name}`)
+          onProgress?.('imported', `Imported "${match.title}"`)
         } else if (importResult.error) {
           results.errors.push(`${folder.name}: ${importResult.error}`)
+          onProgress?.('error', `Failed to import "${folder.name}"`)
         }
       } catch (error) {
         results.errors.push(
@@ -1089,6 +1187,198 @@ class FolderScanner {
     return `${last}, ${parts.join(' ')}`
   }
 
+  /**
+   * Create an UnmatchedFile record for a folder that couldn't be matched to any library item
+   */
+  private async createUnmatchedFileRecord(
+    folderPath: string,
+    folderName: string,
+    scanRoot: string
+  ): Promise<void> {
+    try {
+      const relativePath = path.relative(scanRoot, folderPath)
+
+      // Detect media type from file extensions
+      const mediaType = await this.detectMediaTypeForUnmatched(folderPath, folderName)
+
+      // Calculate total size of files in folder
+      const fileSizeBytes = await this.calculateFolderSize(folderPath)
+
+      // Extract parsed metadata from folder name
+      const parsedInfo = this.extractParsedInfo(folderName)
+
+      // Find appropriate root folder for this media type
+      const rootFolder = await this.getRootFolderForType(mediaType)
+      if (!rootFolder) {
+        console.log(
+          `[FolderScanner] No root folder for type "${mediaType}", cannot create unmatched file record for "${folderName}"`
+        )
+        return
+      }
+
+      // Move folder to unmatched/ subdirectory to keep the main folder clean
+      const unmatchedDir = path.join(scanRoot, 'unmatched')
+      const destPath = path.join(unmatchedDir, folderName)
+      let newRelativePath = path.join('unmatched', folderName)
+
+      try {
+        await fs.mkdir(unmatchedDir, { recursive: true })
+        try {
+          await fs.access(destPath)
+          // Destination already exists (from a previous run), just delete the source
+          await fs.rm(folderPath, { recursive: true, force: true })
+          console.log(
+            `[FolderScanner] Removed duplicate "${folderName}" - already exists in unmatched/`
+          )
+        } catch {
+          // Destination doesn't exist, move the folder
+          await fs.rename(folderPath, destPath)
+          console.log(`[FolderScanner] Moved "${folderName}" to unmatched/`)
+        }
+      } catch (error) {
+        console.error(
+          `[FolderScanner] Failed to move "${folderName}" to unmatched/:`,
+          error instanceof Error ? error.message : 'Unknown error'
+        )
+        // Keep original path if move fails
+        newRelativePath = relativePath
+      }
+
+      await UnmatchedFile.updateOrCreate(
+        { fileName: folderName },
+        {
+          rootFolderId: rootFolder.id,
+          relativePath: newRelativePath,
+          fileName: folderName,
+          mediaType,
+          fileSizeBytes,
+          parsedInfo,
+          status: 'pending',
+        }
+      )
+
+      console.log(
+        `[FolderScanner] Created unmatched file record for "${folderName}" (type: ${mediaType})`
+      )
+    } catch (error) {
+      console.error(
+        `[FolderScanner] Failed to create unmatched file record for "${folderName}":`,
+        error instanceof Error ? error.message : 'Unknown error'
+      )
+    }
+  }
+
+  /**
+   * Detect media type for an unmatched folder based on file extensions
+   */
+  private async detectMediaTypeForUnmatched(
+    folderPath: string,
+    folderName: string
+  ): Promise<MediaType> {
+    const detected = await this.detectMediaType(folderPath, folderName)
+    return detected || 'movies'
+  }
+
+  /**
+   * Calculate the total size of all files in a folder recursively
+   */
+  private async calculateFolderSize(folderPath: string): Promise<number> {
+    let totalSize = 0
+    try {
+      const files = await this.listFilesRecursive(folderPath)
+      for (const file of files) {
+        try {
+          const stat = await fs.stat(file)
+          totalSize += stat.size
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    } catch {
+      // Return 0 if folder can't be read
+    }
+    return totalSize
+  }
+
+  /**
+   * Extract parsed metadata from a folder name for unmatched file records
+   */
+  private extractParsedInfo(folderName: string): ParsedInfo {
+    const info: ParsedInfo = {}
+
+    const cleaned = folderName
+      .replace(/-xpost$/i, '')
+      .replace(/\./g, ' ')
+      .replace(/_/g, ' ')
+      .trim()
+
+    // Extract year
+    const yearMatch = cleaned.match(/\b(19\d{2}|20\d{2})\b/)
+    if (yearMatch) {
+      info.year = Number.parseInt(yearMatch[1])
+    }
+
+    // Try TV pattern
+    const tvMatch = cleaned.match(/(.+?)\s*(?:S(\d{1,2})E(\d{1,2})|(\d{1,2})x(\d{1,2}))/i)
+    if (tvMatch) {
+      info.showTitle = tvMatch[1].trim()
+      info.seasonNumber = Number.parseInt(tvMatch[2] || tvMatch[4])
+      info.episodeNumber = Number.parseInt(tvMatch[3] || tvMatch[5])
+      info.title = info.showTitle
+      return info
+    }
+
+    // Try music pattern (Artist - Album)
+    const musicMatch = cleaned.match(
+      /^(.+?)\s*-\s*(.+?)(?:\s+(?:CD|LP|EP|FLAC|MP3|WEB|Vinyl|\d{4}))/i
+    )
+    if (musicMatch) {
+      info.artistName = musicMatch[1].trim()
+      info.albumTitle = musicMatch[2].trim()
+      info.title = info.albumTitle
+      return info
+    }
+
+    // Try book pattern
+    const bookByMatch = cleaned.match(/^(.+?)\s+by\s+(.+?)(?:\s+epub|\s+mobi|\s+pdf)?$/i)
+    const bookDashMatch = cleaned.match(/^(.+?)\s*-\s*(.+?)(?:\s+epub|\s+mobi|\s+pdf)?$/i)
+    if ((bookByMatch || bookDashMatch) && /epub|mobi|pdf|audiobook|ebook/i.test(cleaned)) {
+      const match = bookByMatch || bookDashMatch
+      if (match) {
+        info.bookTitle = (bookByMatch ? match[1] : match[2])?.trim()
+        info.authorName = (bookByMatch ? match[2] : match[1])?.trim()
+        info.title = info.bookTitle
+        return info
+      }
+    }
+
+    // Extract quality info
+    const qualityMatch = cleaned.match(
+      /\b(720p|1080p|2160p|4K|UHD|BLURAY|BLU-RAY|BDRIP|WEBRIP|WEB-DL|HDTV|DVDRIP|REMUX)\b/i
+    )
+    if (qualityMatch) {
+      info.quality = qualityMatch[1]
+    }
+
+    // Extract release group
+    const groupMatch = folderName.match(/-([A-Za-z0-9]+)$/)
+    if (groupMatch && !/xpost/i.test(groupMatch[1])) {
+      info.releaseGroup = groupMatch[1]
+    }
+
+    // Extract title (movie-style, before quality/codec info)
+    const titleMatch = cleaned.match(
+      /^(.+?)(?:\s+(?:REMASTERED|COMPLETE|EXTENDED|DIRECTORS|UNCUT|THEATRICAL|PROPER|RERIP|BLURAY|BLU-RAY|BDRIP|HDRIP|DVDRIP|WEBRIP|WEB-DL|HDTV|720p|1080p|2160p|4K|UHD|x264|x265|HEVC|H\.?264|H\.?265|AAC|DTS|AC3|ATMOS|REMUX|NF|AMZN|DSNP|ATVP))/i
+    )
+    if (titleMatch) {
+      info.title = titleMatch[1].replace(/\b\d{4}\b/, '').trim()
+    } else {
+      info.title = cleaned.split(/\s+\d{4}\s+|\s+-\s+/)[0].trim()
+    }
+
+    return info
+  }
+
   // --- Existing methods below ---
 
   /**
@@ -1115,6 +1405,87 @@ class FolderScanner {
       default:
         return false
     }
+  }
+
+  /**
+   * Check if a folder represents a quality upgrade over the existing file.
+   * Returns true if it's an upgrade and should be imported, false otherwise.
+   */
+  private async checkForUpgrade(
+    match: { type: string; id: string },
+    folderName: string
+  ): Promise<boolean> {
+    let qualityName: string | null = null
+    let profile: { items: QualityItem[]; cutoff: number; upgradeAllowed: boolean } | null = null
+    let mediaType: 'movies' | 'tv' | 'music' | 'books' = 'movies'
+
+    switch (match.type) {
+      case 'movie': {
+        const movie = await Movie.query()
+          .where('id', match.id)
+          .preload('qualityProfile')
+          .preload('movieFile')
+          .first()
+        if (movie) {
+          qualityName = movie.movieFile?.quality ?? null
+          profile = movie.qualityProfile ?? null
+          mediaType = 'movies'
+        }
+        break
+      }
+      case 'episode': {
+        const episode = await Episode.query()
+          .where('id', match.id)
+          .preload('tvShow', (q) => q.preload('qualityProfile'))
+          .preload('episodeFile')
+          .first()
+        if (episode) {
+          qualityName = episode.episodeFile?.quality ?? null
+          profile = episode.tvShow?.qualityProfile ?? null
+          mediaType = 'tv'
+        }
+        break
+      }
+      case 'album': {
+        const album = await Album.query()
+          .where('id', match.id)
+          .preload('artist', (q) => q.preload('qualityProfile'))
+          .preload('trackFiles')
+          .first()
+        if (album) {
+          qualityName = album.trackFiles?.[0]?.quality ?? null
+          profile = album.artist?.qualityProfile ?? null
+          mediaType = 'music'
+        }
+        break
+      }
+      case 'book': {
+        const book = await Book.query()
+          .where('id', match.id)
+          .preload('author', (q) => q.preload('qualityProfile'))
+          .preload('bookFile')
+          .first()
+        if (book) {
+          qualityName = book.bookFile?.quality ?? null
+          profile = book.author?.qualityProfile ?? null
+          mediaType = 'books'
+        }
+        break
+      }
+    }
+
+    if (!profile) {
+      return false
+    }
+
+    return isUpgrade(
+      qualityName,
+      folderName,
+      mediaType,
+      profile.items,
+      profile.cutoff,
+      profile.upgradeAllowed
+    )
   }
 
   /**

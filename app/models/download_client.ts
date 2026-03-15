@@ -19,6 +19,9 @@ export interface DownloadClientSettings {
   // Remote path mapping (for Docker setups)
   remotePath?: string // Path as seen by the download client (e.g., /downloads)
   localPath?: string // Path as seen by Hamster (e.g., /mnt/downloads)
+  // Separate temp folder for in-progress downloads (e.g., local disk instead of NAS)
+  remoteTempPath?: string // Temp/incomplete path as seen by the download client
+  localTempPath?: string // Temp/incomplete path as seen by Hamster
 
   // Usenet specific
   apiKey?: string

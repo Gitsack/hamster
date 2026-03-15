@@ -63,6 +63,8 @@ interface DownloadClient {
   removeFailedDownloads: boolean
   remotePath: string
   localPath: string
+  remoteTempPath: string
+  localTempPath: string
 }
 
 type FormData = Omit<DownloadClient, 'id'>
@@ -111,6 +113,8 @@ const defaultFormData: FormData = {
   removeFailedDownloads: true,
   remotePath: '',
   localPath: '',
+  remoteTempPath: '',
+  localTempPath: '',
 }
 
 export default function DownloadClients() {
@@ -128,9 +132,11 @@ export default function DownloadClients() {
     error?: string
     remotePath?: string
     pathAccessible?: boolean
+    remoteTempPath?: string
   } | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [showFolderBrowser, setShowFolderBrowser] = useState(false)
+  const [showTempFolderBrowser, setShowTempFolderBrowser] = useState(false)
   const [browseDialogOpen, setBrowseDialogOpen] = useState(false)
   const [browsingClient, setBrowsingClient] = useState<DownloadClient | null>(null)
   const [downloadItems, setDownloadItems] = useState<DownloadItem[]>([])
@@ -278,6 +284,7 @@ export default function DownloadClients() {
     setFormData(defaultFormData)
     setTestResult(null)
     setShowFolderBrowser(false)
+    setShowTempFolderBrowser(false)
     setDialogOpen(true)
   }
 
@@ -300,9 +307,12 @@ export default function DownloadClients() {
       removeFailedDownloads: client.removeFailedDownloads,
       remotePath: client.remotePath || '',
       localPath: client.localPath || '',
+      remoteTempPath: client.remoteTempPath || '',
+      localTempPath: client.localTempPath || '',
     })
     setTestResult(null)
     setShowFolderBrowser(false)
+    setShowTempFolderBrowser(false)
     setDialogOpen(true)
   }
 
@@ -346,6 +356,14 @@ export default function DownloadClients() {
               remotePath: prev.remotePath || result.remotePath,
             }))
           }
+        }
+
+        // Auto-fill temp path if detected
+        if (result.remoteTempPath) {
+          setFormData((prev) => ({
+            ...prev,
+            remoteTempPath: prev.remoteTempPath || result.remoteTempPath,
+          }))
         }
       } else {
         toast.error(result.error || 'Connection failed')
@@ -521,7 +539,7 @@ export default function DownloadClients() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className={showFolderBrowser ? 'max-w-2xl' : 'max-w-lg'}>
+        <DialogContent className={showFolderBrowser || showTempFolderBrowser ? 'max-w-2xl' : 'max-w-lg'}>
           <DialogHeader>
             <DialogTitle>
               {editingClient ? 'Edit Download Client' : 'Add Download Client'}
@@ -664,20 +682,20 @@ export default function DownloadClients() {
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="remotePath">Remote Path</Label>
+                <Label htmlFor="remotePath">Remote Path (Complete)</Label>
                 <Input
                   id="remotePath"
                   value={formData.remotePath}
                   onChange={(e) => setFormData({ ...formData, remotePath: e.target.value })}
-                  placeholder="/downloads"
+                  placeholder="/downloads/complete"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Path as SABnzbd sees it (auto-detected when you test connection)
+                  Completed downloads path as the download client sees it (auto-detected on test)
                 </p>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="localPath">Local Path</Label>
+                  <Label htmlFor="localPath">Local Path (Complete)</Label>
                   <Button
                     type="button"
                     variant="ghost"
@@ -702,9 +720,57 @@ export default function DownloadClients() {
                       id="localPath"
                       value={formData.localPath}
                       onChange={(e) => setFormData({ ...formData, localPath: e.target.value })}
-                      placeholder="/mnt/downloads"
+                      placeholder="/mnt/downloads/complete"
                     />
-                    <p className="text-xs text-muted-foreground">Path as Hamster sees it</p>
+                    <p className="text-xs text-muted-foreground">Completed downloads path as Hamster sees it</p>
+                  </>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="remoteTempPath">Remote Path (Temporary)</Label>
+                <Input
+                  id="remoteTempPath"
+                  value={formData.remoteTempPath}
+                  onChange={(e) => setFormData({ ...formData, remoteTempPath: e.target.value })}
+                  placeholder="/downloads/incomplete"
+                />
+                <p className="text-xs text-muted-foreground">
+                  In-progress downloads path as the download client sees it (auto-detected on test)
+                </p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="localTempPath">Local Path (Temporary)</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowTempFolderBrowser(!showTempFolderBrowser)}
+                    className="h-7 text-xs"
+                  >
+                    {showTempFolderBrowser ? 'Hide Browser' : 'Browse...'}
+                  </Button>
+                </div>
+                {showTempFolderBrowser ? (
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <FolderBrowser
+                      value={formData.localTempPath}
+                      onChange={(path) => setFormData({ ...formData, localTempPath: path })}
+                      hideSelectButton
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      id="localTempPath"
+                      value={formData.localTempPath}
+                      onChange={(e) => setFormData({ ...formData, localTempPath: e.target.value })}
+                      placeholder="/tmp/downloads"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      In-progress downloads path as Hamster sees it. Use a local disk for better performance instead of NAS.
+                    </p>
                   </>
                 )}
               </div>
@@ -757,13 +823,21 @@ export default function DownloadClients() {
                   </span>
                 </div>
                 {testResult.success && testResult.remotePath && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Complete folder: </span>
-                    <code className="bg-muted px-1 rounded">{testResult.remotePath}</code>
-                    {testResult.pathAccessible ? (
-                      <span className="text-green-600 ml-2">(accessible)</span>
-                    ) : (
-                      <span className="text-orange-500 ml-2">(needs path mapping)</span>
+                  <div className="text-sm space-y-1">
+                    <div>
+                      <span className="text-muted-foreground">Complete folder: </span>
+                      <code className="bg-muted px-1 rounded">{testResult.remotePath}</code>
+                      {testResult.pathAccessible ? (
+                        <span className="text-green-600 ml-2">(accessible)</span>
+                      ) : (
+                        <span className="text-orange-500 ml-2">(needs path mapping)</span>
+                      )}
+                    </div>
+                    {testResult.remoteTempPath && (
+                      <div>
+                        <span className="text-muted-foreground">Temporary folder: </span>
+                        <code className="bg-muted px-1 rounded">{testResult.remoteTempPath}</code>
+                      </div>
                     )}
                   </div>
                 )}
