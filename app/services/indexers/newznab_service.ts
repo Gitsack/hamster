@@ -1,5 +1,16 @@
 import { XMLParser } from 'fast-xml-parser'
 
+/**
+ * Error thrown when an indexer returns HTTP 429 (Too Many Requests).
+ * Callers should back off and skip further requests to this indexer.
+ */
+export class RateLimitError extends Error {
+  constructor(indexerName?: string) {
+    super(`Rate limited${indexerName ? ` by ${indexerName}` : ''}`)
+    this.name = 'RateLimitError'
+  }
+}
+
 export interface NewznabCapabilities {
   searching: {
     search: boolean
@@ -193,6 +204,7 @@ export class NewznabService {
 
     const response = await this.fetchWithTimeout(searchUrl)
     if (!response.ok) {
+      if (response.status === 429) throw new RateLimitError(config.name)
       throw new Error(`Search failed: ${response.status}`)
     }
 
@@ -230,6 +242,7 @@ export class NewznabService {
 
     const response = await this.fetchWithTimeout(searchUrl)
     if (!response.ok) {
+      if (response.status === 429) throw new RateLimitError(config.name)
       throw new Error(`Search failed: ${response.status}`)
     }
 
@@ -287,6 +300,7 @@ export class NewznabService {
 
     const response = await this.fetchWithTimeout(searchUrl)
     if (!response.ok) {
+      if (response.status === 429) throw new RateLimitError(config.name)
       throw new Error(`TV search failed: ${response.status}`)
     }
 

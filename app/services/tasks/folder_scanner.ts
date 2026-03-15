@@ -4,14 +4,40 @@ import DownloadClient from '#models/download_client'
 import Movie from '#models/movie'
 import TvShow from '#models/tv_show'
 import Episode from '#models/episode'
+import Season from '#models/season'
 import Album from '#models/album'
+import Artist from '#models/artist'
 import Book from '#models/book'
+import Author from '#models/author'
 import Download from '#models/download'
+import RootFolder from '#models/root_folder'
 import { movieImportService } from '#services/media/movie_import_service'
 import { episodeImportService } from '#services/media/episode_import_service'
 import { downloadImportService } from '#services/media/download_import_service'
 import { bookImportService } from '#services/media/book_import_service'
+import { fileNamingService } from '#services/media/file_naming_service'
+import { tmdbService, type TmdbMovie, type TmdbTvShow } from '#services/metadata/tmdb_service'
+import { openLibraryService } from '#services/metadata/openlibrary_service'
+import { mediaInfoService } from '#services/media/media_info_service'
+import { probeFile, checkFfmpegAvailable } from '#utils/ffmpeg_utils'
 import { DateTime } from 'luxon'
+
+type MediaType = 'music' | 'movies' | 'tv' | 'books'
+
+interface MatchResult {
+  type: 'movie' | 'episode' | 'album' | 'book'
+  id: string
+  title: string
+  tvShowId?: string
+}
+
+interface ScanResults {
+  processed: number
+  imported: number
+  created: number
+  skipped: number
+  errors: string[]
+}
 
 /**
  * Service that directly scans download folders on the filesystem
@@ -21,21 +47,200 @@ import { DateTime } from 'luxon'
  * - Works even if download client is offline
  * - Catches manually added files
  * - Works if download client history was cleared
+ * - Can create new library entries for unrecognized media
  */
 class FolderScanner {
   private isRunning = false
 
   /**
+   * Folder names that should be skipped during scanning.
+   * Includes NAS system folders, recycle bins, metadata dirs, and OS junk.
+   */
+  private static readonly EXCLUDED_FOLDERS = new Set([
+    // NAS recycle bins
+    '#recycle',
+    '@recycle',
+    '#recyclbin',
+    '$recycle.bin',
+    '.recycle',
+    // Synology
+    '@eadir',
+    '@tmp',
+    '@sharebin',
+    '#snapshot',
+    // QNAP
+    '.@__thumb',
+    '.@__qini',
+    '@recently-snapshot',
+    // General system/metadata
+    '.ds_store',
+    '.thumbs',
+    '@thumb',
+    'thumbs.db',
+    '.syncthing',
+    '.stversions',
+    // OS/filesystem
+    'system volume information',
+    'lost+found',
+    '$recycle.bin',
+    // Torrent/Usenet client internals
+    '.nzb',
+    '_unpack',
+    '_failed',
+  ])
+
+  /**
+   * File name patterns that should be excluded from media detection and import.
+   * Matched case-insensitively against the full filename.
+   */
+  private static readonly EXCLUDED_FILE_PATTERNS = [
+    // Sample/proof files
+    /^sample[.\-_]/i,
+    /[\-_.]sample\./i,
+    /^proof[.\-_]/i,
+    // NAS/OS metadata files
+    /^thumbs\.db$/i,
+    /^desktop\.ini$/i,
+    /^\.ds_store$/i,
+    /^ehthumbs\.db$/i,
+    /^ehthumbs_vista\.db$/i,
+    // Synology metadata
+    /^@eadir$/i,
+    /^synofile_thumb/i,
+    // Usenet/torrent artifacts
+    /\.par2$/i,
+    /\.nzb$/i,
+    /\.srr$/i,
+    /\.srs$/i,
+    /\.sfv$/i,
+    /\.nfo$/i,
+    // Incomplete/temp files
+    /\.part$/i,
+    /\.!ut$/i,
+    /\.downloading$/i,
+    /^_padding_file/i,
+    // Rarbg/release junk
+    /^rarbg\b/i,
+    /^www\./i,
+  ]
+
+  private static isExcludedFolder(name: string): boolean {
+    return FolderScanner.EXCLUDED_FOLDERS.has(name.toLowerCase())
+  }
+
+  private static isExcludedFile(name: string): boolean {
+    return FolderScanner.EXCLUDED_FILE_PATTERNS.some((pattern) => pattern.test(name))
+  }
+
+  /**
+   * Validate that a folder contains playable/valid media files.
+   * Uses ffprobe for video, music-metadata for audio, and file size for books.
+   * Returns an error message if validation fails, or null if valid.
+   */
+  private async validateMediaFiles(folderPath: string): Promise<string | null> {
+    const files = await this.listFilesRecursive(folderPath)
+    if (files.length === 0) {
+      return 'No files found in folder'
+    }
+
+    const videoFiles = files.filter((f) => fileNamingService.isVideoFile(path.basename(f)))
+    const audioFiles = files.filter((f) => fileNamingService.isAudioFile(path.basename(f)))
+    const bookFiles = files.filter((f) => fileNamingService.isBookFile(path.basename(f)))
+
+    const mediaFiles = [...videoFiles, ...audioFiles, ...bookFiles]
+    if (mediaFiles.length === 0) {
+      return 'No media files found in folder'
+    }
+
+    // Validate video files with ffprobe
+    if (videoFiles.length > 0) {
+      const { ffprobe } = await checkFfmpegAvailable()
+      if (ffprobe) {
+        // Check the largest video file (most likely the main content)
+        const mainVideo = await this.getLargestFile(videoFiles)
+        if (mainVideo) {
+          try {
+            const analysis = await probeFile(mainVideo)
+            if (!analysis.videoCodec && !analysis.audioCodec) {
+              return `Video file "${path.basename(mainVideo)}" has no valid streams`
+            }
+            if (analysis.duration <= 0) {
+              return `Video file "${path.basename(mainVideo)}" has no valid duration`
+            }
+          } catch {
+            return `Video file "${path.basename(mainVideo)}" could not be read by ffprobe (corrupted or incomplete)`
+          }
+        }
+      }
+    }
+
+    // Validate audio files with music-metadata
+    if (audioFiles.length > 0 && videoFiles.length === 0) {
+      let validCount = 0
+      // Check a sample of audio files (up to 3)
+      const sampled = audioFiles.slice(0, 3)
+      for (const audioFile of sampled) {
+        const info = await mediaInfoService.getMediaInfo(audioFile)
+        if (info && info.duration > 0) {
+          validCount++
+        }
+      }
+      if (validCount === 0) {
+        return `Audio files could not be parsed (corrupted or incomplete)`
+      }
+    }
+
+    // Validate book files by checking they are not empty/truncated
+    if (bookFiles.length > 0 && videoFiles.length === 0 && audioFiles.length === 0) {
+      const MIN_BOOK_SIZE = 1024 // 1KB minimum
+      for (const bookFile of bookFiles) {
+        try {
+          const stat = await fs.stat(bookFile)
+          if (stat.size < MIN_BOOK_SIZE) {
+            return `Book file "${path.basename(bookFile)}" is too small (${stat.size} bytes), likely corrupted`
+          }
+        } catch {
+          return `Book file "${path.basename(bookFile)}" could not be read`
+        }
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Find the largest file from a list (most likely the main content, not extras)
+   */
+  private async getLargestFile(files: string[]): Promise<string | null> {
+    let largest: string | null = null
+    let largestSize = 0
+
+    for (const file of files) {
+      try {
+        const stat = await fs.stat(file)
+        if (stat.size > largestSize) {
+          largestSize = stat.size
+          largest = file
+        }
+      } catch {
+        // skip unreadable files
+      }
+    }
+
+    return largest
+  }
+
+  /**
    * Scan all configured download client folders for importable media
    */
-  async scan(): Promise<{ processed: number; imported: number; errors: string[] }> {
+  async scan(): Promise<ScanResults> {
     if (this.isRunning) {
       console.log('[FolderScanner] Already running, skipping...')
-      return { processed: 0, imported: 0, errors: [] }
+      return { processed: 0, imported: 0, created: 0, skipped: 0, errors: [] }
     }
 
     this.isRunning = true
-    const results = { processed: 0, imported: 0, errors: [] as string[] }
+    const results: ScanResults = { processed: 0, imported: 0, created: 0, skipped: 0, errors: [] }
 
     try {
       console.log('[FolderScanner] Scanning download folders...')
@@ -48,6 +253,8 @@ class FolderScanner {
           const clientResults = await this.scanClientFolder(client)
           results.processed += clientResults.processed
           results.imported += clientResults.imported
+          results.created += clientResults.created
+          results.skipped += clientResults.skipped
           results.errors.push(...clientResults.errors)
         } catch (error) {
           const msg = `Failed to scan folder for ${client.name}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -57,7 +264,7 @@ class FolderScanner {
       }
 
       console.log(
-        `[FolderScanner] Scan complete: ${results.processed} folders processed, ${results.imported} imported`
+        `[FolderScanner] Scan complete: ${results.processed} folders processed, ${results.created} created, ${results.imported} imported, ${results.skipped} skipped (invalid media)`
       )
     } finally {
       this.isRunning = false
@@ -69,10 +276,8 @@ class FolderScanner {
   /**
    * Scan a specific download client's complete folder
    */
-  private async scanClientFolder(
-    client: DownloadClient
-  ): Promise<{ processed: number; imported: number; errors: string[] }> {
-    const results = { processed: 0, imported: 0, errors: [] as string[] }
+  private async scanClientFolder(client: DownloadClient): Promise<ScanResults> {
+    const results: ScanResults = { processed: 0, imported: 0, created: 0, skipped: 0, errors: [] }
 
     // Get the local path for the complete folder
     const localPath = client.settings?.localPath
@@ -89,46 +294,132 @@ class FolderScanner {
       return results
     }
 
-    // List all folders in the complete directory
+    // List all entries in the complete directory
     const entries = await fs.readdir(localPath, { withFileTypes: true })
     const folders = entries.filter((e) => e.isDirectory())
+    const looseFiles = entries.filter((e) => e.isFile())
 
-    console.log(`[FolderScanner] Found ${folders.length} folders in ${localPath}`)
+    console.log(
+      `[FolderScanner] Found ${folders.length} folders and ${looseFiles.length} files in ${localPath}`
+    )
+
+    // Also scan subdirectories (SABnzbd may use category subfolders)
+    const allFolders: Array<{ name: string; path: string }> = []
 
     for (const folder of folders) {
+      if (FolderScanner.isExcludedFolder(folder.name)) {
+        console.log(`[FolderScanner] Skipping excluded folder: "${folder.name}"`)
+        continue
+      }
+
+      const subPath = path.join(localPath, folder.name)
+
+      // Check if this looks like a category folder (contains subfolders with media)
+      try {
+        const subEntries = await fs.readdir(subPath, { withFileTypes: true })
+        const subFolders = subEntries.filter((e) => e.isDirectory())
+        const subFiles = subEntries.filter(
+          (e) => e.isFile() && !FolderScanner.isExcludedFile(e.name)
+        )
+
+        // If folder has subfolders and few/no media files, treat it as a category folder
+        const hasMediaFiles = subFiles.some(
+          (f) =>
+            fileNamingService.isVideoFile(f.name) ||
+            fileNamingService.isAudioFile(f.name) ||
+            fileNamingService.isBookFile(f.name)
+        )
+
+        if (subFolders.length > 0 && !hasMediaFiles) {
+          console.log(
+            `[FolderScanner] "${folder.name}" looks like a category folder, scanning ${subFolders.length} subfolders`
+          )
+          for (const sub of subFolders) {
+            if (FolderScanner.isExcludedFolder(sub.name)) {
+              console.log(`[FolderScanner] Skipping excluded subfolder: "${sub.name}"`)
+              continue
+            }
+            allFolders.push({ name: sub.name, path: path.join(subPath, sub.name) })
+          }
+        } else {
+          // Regular download folder
+          allFolders.push({ name: folder.name, path: subPath })
+        }
+      } catch {
+        allFolders.push({ name: folder.name, path: subPath })
+      }
+    }
+
+    console.log(`[FolderScanner] Total folders to process: ${allFolders.length}`)
+
+    for (const folder of allFolders) {
       results.processed++
-      const folderPath = path.join(localPath, folder.name)
+      const folderPath = folder.path
 
       try {
-        // Check if this folder was already imported
+        // Check if this folder was already imported or is being processed
         const existingDownload = await Download.query()
           .where('outputPath', folderPath)
-          .where('status', 'completed')
+          .whereIn('status', ['completed', 'importing'])
           .first()
 
         if (existingDownload) {
-          // Already imported, skip
+          console.log(
+            `[FolderScanner] Skipping "${folder.name}" - already ${existingDownload.status}`
+          )
           continue
         }
 
-        // Try to match to a library item
-        const match = await this.matchToLibrary(folder.name)
+        // Try to match to an existing library item
+        let match = await this.matchToLibrary(folder.name)
+        let isNewEntry = false
 
         if (!match) {
-          // Can't match, skip silently
-          continue
+          // No existing library match - try to detect media type and create entry
+          const createResult = await this.createEntryForFolder(folderPath, folder.name)
+
+          if (createResult.error) {
+            results.errors.push(`${folder.name}: ${createResult.error}`)
+            continue
+          }
+
+          if (!createResult.match) {
+            console.log(`[FolderScanner] Skipping "${folder.name}" - could not identify media`)
+            continue
+          }
+
+          match = createResult.match
+          isNewEntry = true
+          results.created++
+          console.log(
+            `[FolderScanner] Created new library entry: ${match.type} "${match.title}" for folder: ${folder.name}`
+          )
         }
 
-        // Check if library item already has files
-        const hasFile = await this.checkIfAlreadyHasFile(match)
-        if (hasFile) {
-          // Already has file, skip
-          continue
+        // Check if library item already has files (skip for newly created entries)
+        if (!isNewEntry) {
+          const hasFile = await this.checkIfAlreadyHasFile(match)
+          if (hasFile) {
+            console.log(
+              `[FolderScanner] Skipping "${folder.name}" - library item already has files`
+            )
+            continue
+          }
         }
 
         console.log(
           `[FolderScanner] Found importable folder: ${folder.name} -> ${match.type} (${match.title})`
         )
+
+        // Validate that media files are playable before importing
+        const validationError = await this.validateMediaFiles(folderPath)
+        if (validationError) {
+          console.log(
+            `[FolderScanner] Skipping "${folder.name}" - invalid media: ${validationError}`
+          )
+          results.skipped++
+          continue
+        }
 
         // Create a download record and import
         const importResult = await this.importFolder(folderPath, match, client)
@@ -148,6 +439,657 @@ class FolderScanner {
 
     return results
   }
+
+  /**
+   * Detect media type and create a new library entry for an unmatched folder
+   */
+  private async createEntryForFolder(
+    folderPath: string,
+    folderName: string
+  ): Promise<{ match: MatchResult | null; error?: string }> {
+    const mediaType = await this.detectMediaType(folderPath, folderName)
+    if (!mediaType) {
+      console.log(`[FolderScanner] Could not detect media type for: ${folderName}`)
+      return { match: null }
+    }
+
+    const rootFolder = await this.getRootFolderForType(mediaType)
+    if (!rootFolder) {
+      return {
+        match: null,
+        error: `No root folder configured for ${mediaType}. Add a ${mediaType} root folder in settings.`,
+      }
+    }
+
+    try {
+      switch (mediaType) {
+        case 'movies':
+          return { match: await this.createMovieEntry(folderName, rootFolder) }
+        case 'tv':
+          return { match: await this.createTvShowEntry(folderName, rootFolder) }
+        case 'music':
+          return { match: await this.createMusicEntry(folderPath, folderName, rootFolder) }
+        case 'books':
+          return { match: await this.createBookEntry(folderName, rootFolder) }
+        default:
+          return { match: null }
+      }
+    } catch (error) {
+      return {
+        match: null,
+        error: `Failed to create library entry: ${error instanceof Error ? error.message : 'Unknown'}`,
+      }
+    }
+  }
+
+  /**
+   * Detect media type based on file contents and folder name heuristics
+   */
+  private async detectMediaType(folderPath: string, folderName: string): Promise<MediaType | null> {
+    const files = await this.listFilesRecursive(folderPath)
+
+    let videoCount = 0
+    let audioCount = 0
+    let bookCount = 0
+
+    for (const file of files) {
+      const name = path.basename(file)
+      if (fileNamingService.isVideoFile(name)) videoCount++
+      if (fileNamingService.isAudioFile(name)) audioCount++
+      if (fileNamingService.isBookFile(name)) bookCount++
+    }
+
+    // Determine dominant media type
+    if (videoCount > 0 && videoCount >= audioCount && videoCount >= bookCount) {
+      // Check folder name for TV patterns
+      const tvPattern = /S\d{1,2}E\d{1,2}|\d{1,2}x\d{1,2}/i
+      if (tvPattern.test(folderName)) {
+        return 'tv'
+      }
+      return 'movies'
+    }
+
+    if (audioCount > 0 && audioCount >= videoCount && audioCount >= bookCount) {
+      return 'music'
+    }
+
+    if (bookCount > 0) {
+      return 'books'
+    }
+
+    return null
+  }
+
+  /**
+   * List all files recursively in a directory
+   */
+  private async listFilesRecursive(dir: string, maxDepth = 3, depth = 0): Promise<string[]> {
+    if (depth >= maxDepth) return []
+
+    const results: string[] = []
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue
+        const fullPath = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          if (FolderScanner.isExcludedFolder(entry.name)) continue
+          const subFiles = await this.listFilesRecursive(fullPath, maxDepth, depth + 1)
+          results.push(...subFiles)
+        } else if (entry.isFile()) {
+          if (FolderScanner.isExcludedFile(entry.name)) continue
+          results.push(fullPath)
+        }
+      }
+    } catch {
+      // Ignore permission errors
+    }
+    return results
+  }
+
+  /**
+   * Get the first root folder for a given media type
+   */
+  private async getRootFolderForType(mediaType: MediaType): Promise<RootFolder | null> {
+    return RootFolder.query().where('mediaType', mediaType).first()
+  }
+
+  /**
+   * Create a new movie entry by looking up metadata
+   */
+  private async createMovieEntry(
+    folderName: string,
+    rootFolder: RootFolder
+  ): Promise<MatchResult | null> {
+    const parsed = this.parseTitleAndYear(folderName)
+    if (!parsed.title) return null
+
+    // Check if movie already exists by title/year
+    const existing = await this.findExistingMovieByTitle(parsed.title, parsed.year)
+    if (existing) {
+      return { type: 'movie', id: existing.id, title: existing.title }
+    }
+
+    // Look up on TMDB
+    const tmdbResult = await this.lookupMovieTmdb(parsed.title, parsed.year)
+
+    let movie: Movie
+    if (tmdbResult) {
+      // Check if movie with this TMDB ID already exists
+      const existingByTmdb = await Movie.query().where('tmdbId', String(tmdbResult.id)).first()
+      if (existingByTmdb) {
+        return { type: 'movie', id: existingByTmdb.id, title: existingByTmdb.title }
+      }
+
+      movie = await Movie.create({
+        tmdbId: String(tmdbResult.id),
+        imdbId: tmdbResult.imdbId,
+        title: tmdbResult.title,
+        originalTitle: tmdbResult.originalTitle,
+        sortTitle: this.generateSortTitle(tmdbResult.title),
+        overview: tmdbResult.overview,
+        releaseDate: tmdbResult.releaseDate ? DateTime.fromISO(tmdbResult.releaseDate) : null,
+        year: tmdbResult.year,
+        runtime: tmdbResult.runtime,
+        status: tmdbResult.status,
+        posterUrl: tmdbResult.posterPath,
+        backdropUrl: tmdbResult.backdropPath,
+        rating: tmdbResult.voteAverage,
+        votes: tmdbResult.voteCount,
+        genres: tmdbResult.genres,
+        requested: false,
+        hasFile: false,
+        needsReview: false,
+        rootFolderId: rootFolder.id,
+        addedAt: DateTime.now(),
+      })
+    } else {
+      movie = await Movie.create({
+        title: parsed.title,
+        sortTitle: this.generateSortTitle(parsed.title),
+        year: parsed.year,
+        requested: false,
+        hasFile: false,
+        needsReview: true,
+        rootFolderId: rootFolder.id,
+        addedAt: DateTime.now(),
+        genres: [],
+      })
+    }
+
+    return { type: 'movie', id: movie.id, title: movie.title }
+  }
+
+  /**
+   * Create a new TV show entry by looking up metadata
+   */
+  private async createTvShowEntry(
+    folderName: string,
+    rootFolder: RootFolder
+  ): Promise<MatchResult | null> {
+    // Parse TV pattern from folder name
+    const tvMatch = folderName.match(
+      /(.+?)[\s._-]*(?:S(\d{1,2})E(\d{1,2})|(\d{1,2})x(\d{1,2}))/i
+    )
+    if (!tvMatch) return null
+
+    const showTitle = tvMatch[1]
+      .replace(/\./g, ' ')
+      .replace(/_/g, ' ')
+      .replace(/-/g, ' ')
+      .trim()
+    const seasonNum = Number.parseInt(tvMatch[2] || tvMatch[4])
+    const episodeNum = Number.parseInt(tvMatch[3] || tvMatch[5])
+    const yearMatch = showTitle.match(/\b(19\d{2}|20\d{2})\b/)
+    const year = yearMatch ? Number.parseInt(yearMatch[1]) : undefined
+
+    // Strip year from title for cleaner matching (e.g. "Scrubs 2026" -> "Scrubs")
+    const titleWithoutYear = year
+      ? showTitle.replace(/\b(19\d{2}|20\d{2})\b/, '').trim()
+      : showTitle
+
+    // Check if show already exists
+    const existingShow = await this.findExistingTvShowByTitle(titleWithoutYear, year)
+    if (existingShow) {
+      // Find or create season and episode
+      const episode = await this.findOrCreateEpisode(existingShow, seasonNum, episodeNum)
+      if (episode) {
+        return {
+          type: 'episode',
+          id: episode.id,
+          title: `${existingShow.title} S${String(seasonNum).padStart(2, '0')}E${String(episodeNum).padStart(2, '0')}`,
+          tvShowId: existingShow.id,
+        }
+      }
+    }
+
+    // Look up on TMDB
+    let tvShow: TvShow
+    const tmdbResult = await this.lookupTvShowTmdb(titleWithoutYear, year)
+
+    if (tmdbResult) {
+      const existingByTmdb = await TvShow.query().where('tmdbId', String(tmdbResult.id)).first()
+      if (existingByTmdb) {
+        const episode = await this.findOrCreateEpisode(existingByTmdb, seasonNum, episodeNum)
+        if (episode) {
+          return {
+            type: 'episode',
+            id: episode.id,
+            title: `${existingByTmdb.title} S${String(seasonNum).padStart(2, '0')}E${String(episodeNum).padStart(2, '0')}`,
+            tvShowId: existingByTmdb.id,
+          }
+        }
+      }
+
+      const alternateTitles = await tmdbService
+        .getTvShowAlternateTitles(tmdbResult.id)
+        .catch(() => [] as string[])
+      const seriesType = tmdbService.detectSeriesType(tmdbResult)
+
+      tvShow = await TvShow.create({
+        tmdbId: String(tmdbResult.id),
+        title: tmdbResult.name,
+        originalTitle: tmdbResult.originalName,
+        sortTitle: this.generateSortTitle(tmdbResult.name),
+        overview: tmdbResult.overview,
+        firstAired: tmdbResult.firstAirDate ? DateTime.fromISO(tmdbResult.firstAirDate) : null,
+        year: tmdbResult.year,
+        status: this.mapTmdbStatus(tmdbResult.status),
+        network: tmdbResult.networks[0] || null,
+        posterUrl: tmdbResult.posterPath,
+        backdropUrl: tmdbResult.backdropPath,
+        rating: tmdbResult.voteAverage,
+        votes: tmdbResult.voteCount,
+        genres: tmdbResult.genres,
+        seasonCount: tmdbResult.numberOfSeasons,
+        episodeCount: tmdbResult.numberOfEpisodes,
+        imdbId: tmdbResult.imdbId,
+        tvdbId: tmdbResult.tvdbId,
+        requested: false,
+        needsReview: false,
+        rootFolderId: rootFolder.id,
+        addedAt: DateTime.now(),
+        alternateTitles,
+        seriesType,
+      })
+    } else {
+      tvShow = await TvShow.create({
+        title: showTitle,
+        sortTitle: this.generateSortTitle(showTitle),
+        year,
+        status: 'unknown',
+        seasonCount: 0,
+        episodeCount: 0,
+        requested: false,
+        needsReview: true,
+        rootFolderId: rootFolder.id,
+        addedAt: DateTime.now(),
+        genres: [],
+      })
+    }
+
+    // Create season and episode
+    const episode = await this.findOrCreateEpisode(tvShow, seasonNum, episodeNum)
+    if (!episode) return null
+
+    return {
+      type: 'episode',
+      id: episode.id,
+      title: `${tvShow.title} S${String(seasonNum).padStart(2, '0')}E${String(episodeNum).padStart(2, '0')}`,
+      tvShowId: tvShow.id,
+    }
+  }
+
+  /**
+   * Create a new music entry by reading metadata or parsing folder name
+   */
+  private async createMusicEntry(
+    folderPath: string,
+    folderName: string,
+    rootFolder: RootFolder
+  ): Promise<MatchResult | null> {
+    let artistName: string | undefined
+    let albumTitle: string | undefined
+
+    // Try to read metadata from first audio file
+    const files = await this.listFilesRecursive(folderPath)
+    const audioFile = files.find((f) => fileNamingService.isAudioFile(path.basename(f)))
+
+    if (audioFile) {
+      const info = await mediaInfoService.getMediaInfo(audioFile)
+      if (info?.artist) artistName = info.artist
+      if (info?.album) albumTitle = info.album
+    }
+
+    // Fall back to folder name parsing ("Artist - Album" pattern)
+    if (!artistName || !albumTitle) {
+      const musicMatch = folderName.match(/^(.+?)\s*-\s*(.+?)(?:\s+(?:CD|LP|EP|FLAC|MP3|WEB|Vinyl|\d{4}).*)?$/i)
+      if (musicMatch) {
+        if (!artistName) artistName = musicMatch[1].replace(/\./g, ' ').trim()
+        if (!albumTitle) albumTitle = musicMatch[2].replace(/\./g, ' ').trim()
+      }
+    }
+
+    if (!artistName || !albumTitle) {
+      console.log(`[FolderScanner] Could not determine artist/album for: ${folderName}`)
+      return null
+    }
+
+    // Find or create artist
+    let artist = await Artist.query()
+      .whereILike('name', artistName)
+      .first()
+
+    if (!artist) {
+      artist = await Artist.create({
+        rootFolderId: rootFolder.id,
+        name: artistName,
+        status: 'continuing',
+        monitored: true,
+      })
+    }
+
+    // Find or create album
+    let album = await Album.query()
+      .where('artistId', artist.id)
+      .whereILike('title', albumTitle)
+      .first()
+
+    if (!album) {
+      const yearMatch = folderName.match(/\b(19\d{2}|20\d{2})\b/)
+      const year = yearMatch ? Number.parseInt(yearMatch[1]) : undefined
+
+      album = await Album.create({
+        artistId: artist.id,
+        title: albumTitle,
+        releaseDate: year ? DateTime.fromObject({ year }) : null,
+        monitored: true,
+      })
+    }
+
+    return {
+      type: 'album',
+      id: album.id,
+      title: `${artist.name} - ${album.title}`,
+    }
+  }
+
+  /**
+   * Create a new book entry by looking up metadata
+   */
+  private async createBookEntry(
+    folderName: string,
+    rootFolder: RootFolder
+  ): Promise<MatchResult | null> {
+    // Parse "Author - Title" or "Title by Author" from folder name
+    let authorName: string | undefined
+    let bookTitle: string | undefined
+
+    const byMatch = folderName.match(/^(.+?)\s+by\s+(.+?)(?:\s+(?:epub|mobi|pdf).*)?$/i)
+    const dashMatch = folderName.match(/^(.+?)\s*-\s*(.+?)(?:\s+(?:epub|mobi|pdf).*)?$/i)
+
+    if (byMatch) {
+      bookTitle = byMatch[1].replace(/\./g, ' ').trim()
+      authorName = byMatch[2].replace(/\./g, ' ').trim()
+    } else if (dashMatch) {
+      authorName = dashMatch[1].replace(/\./g, ' ').trim()
+      bookTitle = dashMatch[2].replace(/\./g, ' ').trim()
+    }
+
+    if (!authorName || !bookTitle) {
+      console.log(`[FolderScanner] Could not determine author/title for: ${folderName}`)
+      return null
+    }
+
+    // Try OpenLibrary search
+    let author: Author | null = null
+    let book: Book | null = null
+
+    try {
+      const searchResults = await openLibraryService.searchBooks(`${bookTitle} ${authorName}`, 5)
+      const olBook = searchResults[0]
+
+      if (olBook) {
+        // Find or create author
+        const olAuthorName = olBook.authorName?.[0] || authorName
+        author = await Author.query().whereILike('name', olAuthorName).first()
+
+        if (!author) {
+          const olAuthorKey = olBook.authorKey?.[0]
+          if (olAuthorKey) {
+            const olAuthor = await openLibraryService.getAuthor(olAuthorKey).catch(() => null)
+            if (olAuthor) {
+              author = await Author.create({
+                name: olAuthor.name,
+                sortName: this.generateSortName(olAuthor.name),
+                openlibraryId: olAuthor.key,
+                imageUrl: openLibraryService.getAuthorPhotoUrl(olAuthor.photoId, 'L'),
+                requested: false,
+                needsReview: false,
+                rootFolderId: rootFolder.id,
+                addedAt: DateTime.now(),
+              })
+            }
+          }
+        }
+
+        if (!author) {
+          author = await Author.create({
+            name: olAuthorName,
+            sortName: this.generateSortName(olAuthorName),
+            requested: false,
+            needsReview: true,
+            rootFolderId: rootFolder.id,
+            addedAt: DateTime.now(),
+          })
+        }
+
+        book = await Book.create({
+          authorId: author.id,
+          title: olBook.title,
+          sortTitle: this.generateSortTitle(olBook.title),
+          openlibraryId: olBook.key,
+          isbn: olBook.isbn?.[0] || null,
+          releaseDate: olBook.firstPublishYear
+            ? DateTime.fromObject({ year: olBook.firstPublishYear })
+            : null,
+          coverUrl: openLibraryService.getCoverUrl(olBook.coverId, 'L'),
+          genres: olBook.subject?.slice(0, 5) || [],
+          requested: false,
+          hasFile: false,
+          addedAt: DateTime.now(),
+        })
+      }
+    } catch (error) {
+      console.log(
+        `[FolderScanner] OpenLibrary lookup failed for "${bookTitle}": ${error instanceof Error ? error.message : 'Unknown'}`
+      )
+    }
+
+    // Fall back to creating from parsed info
+    if (!author) {
+      author = await Author.create({
+        name: authorName,
+        sortName: this.generateSortName(authorName),
+        requested: false,
+        needsReview: true,
+        rootFolderId: rootFolder.id,
+        addedAt: DateTime.now(),
+      })
+    }
+
+    if (!book) {
+      book = await Book.create({
+        authorId: author.id,
+        title: bookTitle,
+        sortTitle: this.generateSortTitle(bookTitle),
+        requested: false,
+        hasFile: false,
+        addedAt: DateTime.now(),
+        genres: [],
+      })
+    }
+
+    return {
+      type: 'book',
+      id: book.id,
+      title: `${author.name} - ${book.title}`,
+    }
+  }
+
+  // --- Helper methods for entry creation ---
+
+  private parseTitleAndYear(folderName: string): { title: string; year?: number } {
+    let cleaned = folderName
+      .replace(/-xpost$/i, '')
+      .replace(/\./g, ' ')
+      .replace(/_/g, ' ')
+      .trim()
+
+    const yearMatch = cleaned.match(/\b(19\d{2}|20\d{2})\b/)
+    const year = yearMatch ? Number.parseInt(yearMatch[1]) : undefined
+
+    // Extract title before quality/codec info
+    const titleMatch = cleaned.match(
+      /^(.+?)(?:\s+(?:REMASTERED|COMPLETE|EXTENDED|DIRECTORS|UNCUT|THEATRICAL|PROPER|RERIP|BLURAY|BLU-RAY|BDRIP|HDRIP|DVDRIP|WEBRIP|WEB-DL|HDTV|720p|1080p|2160p|4K|UHD|x264|x265|HEVC|H\.?264|H\.?265|AAC|DTS|AC3|ATMOS|REMUX|NF|AMZN|DSNP|ATVP))/i
+    )
+
+    let title: string
+    if (titleMatch) {
+      title = titleMatch[1].replace(/\b\d{4}\b/, '').trim()
+    } else {
+      title = cleaned.split(/\s+\d{4}\s+|\s+-\s+/)[0].trim()
+    }
+
+    return { title, year }
+  }
+
+  private async findExistingMovieByTitle(title: string, year?: number): Promise<Movie | null> {
+    const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const movies = await Movie.query()
+
+    for (const movie of movies) {
+      const movieNorm = movie.title.toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (this.isSimilar(normalizedTitle, movieNorm)) {
+        if (year && movie.year && Math.abs(year - movie.year) > 1) continue
+        return movie
+      }
+    }
+    return null
+  }
+
+  private async findExistingTvShowByTitle(
+    title: string,
+    year?: number
+  ): Promise<TvShow | null> {
+    const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const shows = await TvShow.query()
+
+    for (const show of shows) {
+      const showNorm = show.title.toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (this.isSimilar(normalizedTitle, showNorm)) {
+        // If we have a year from the filename, skip shows with a different year
+        // (e.g. "Scrubs 2026" should not match original "Scrubs" from 2001)
+        if (year && show.year && Math.abs(year - show.year) > 1) continue
+        return show
+      }
+    }
+    return null
+  }
+
+  private async findOrCreateEpisode(
+    tvShow: TvShow,
+    seasonNum: number,
+    episodeNum: number
+  ): Promise<Episode | null> {
+    // Find existing episode
+    const existing = await Episode.query()
+      .where('tvShowId', tvShow.id)
+      .where('seasonNumber', seasonNum)
+      .where('episodeNumber', episodeNum)
+      .first()
+
+    if (existing) return existing
+
+    // Find or create season
+    let season = await Season.query()
+      .where('tvShowId', tvShow.id)
+      .where('seasonNumber', seasonNum)
+      .first()
+
+    if (!season) {
+      season = await Season.create({
+        tvShowId: tvShow.id,
+        seasonNumber: seasonNum,
+      })
+    }
+
+    // Create episode
+    return Episode.create({
+      tvShowId: tvShow.id,
+      seasonId: season.id,
+      seasonNumber: seasonNum,
+      episodeNumber: episodeNum,
+      title: `Episode ${episodeNum}`,
+      hasFile: false,
+    })
+  }
+
+  private async lookupMovieTmdb(title: string, year?: number): Promise<TmdbMovie | null> {
+    try {
+      let results = await tmdbService.searchMovies(title, year)
+      if (results.length === 0 && year) {
+        results = await tmdbService.searchMovies(title)
+      }
+      return results[0] || null
+    } catch {
+      return null
+    }
+  }
+
+  private async lookupTvShowTmdb(title: string, year?: number): Promise<TmdbTvShow | null> {
+    try {
+      let results = await tmdbService.searchTvShows(title, year)
+      if (results.length === 0 && year) {
+        results = await tmdbService.searchTvShows(title)
+      }
+      return results[0] || null
+    } catch {
+      return null
+    }
+  }
+
+  private mapTmdbStatus(status: string): string {
+    const statusMap: Record<string, string> = {
+      'Returning Series': 'continuing',
+      'In Production': 'continuing',
+      'Planned': 'upcoming',
+      'Ended': 'ended',
+      'Canceled': 'ended',
+      'Pilot': 'upcoming',
+    }
+    return statusMap[status] || 'unknown'
+  }
+
+  private generateSortTitle(title: string): string {
+    const articles = ['the ', 'a ', 'an ']
+    const lowerTitle = title.toLowerCase()
+    for (const article of articles) {
+      if (lowerTitle.startsWith(article)) {
+        return title.substring(article.length)
+      }
+    }
+    return title
+  }
+
+  private generateSortName(name: string): string {
+    const parts = name.trim().split(/\s+/)
+    if (parts.length <= 1) return name
+    const last = parts.pop()!
+    return `${last}, ${parts.join(' ')}`
+  }
+
+  // --- Existing methods below ---
 
   /**
    * Check if a library item already has files
@@ -459,6 +1401,10 @@ class FolderScanner {
     const season = Number.parseInt(tvMatch[1] || tvMatch[3])
     const episode = Number.parseInt(tvMatch[2] || tvMatch[4])
 
+    // Extract year from folder name if present (e.g. "Scrubs 2026 S01E01")
+    const folderYearMatch = original.match(/\b(19\d{2}|20\d{2})\b/)
+    const folderYear = folderYearMatch ? Number.parseInt(folderYearMatch[1]) : undefined
+
     // TvShow doesn't have hasFile - it's at episode level
     const shows = await TvShow.query().where('requested', true)
 
@@ -467,6 +1413,9 @@ class FolderScanner {
       const folderNorm = normalized.replace(/[^a-z0-9]/g, '')
 
       if (this.isSimilar(folderNorm, showNorm) || folderNorm.includes(showNorm)) {
+        // Skip shows with a different year to avoid matching reboots to originals
+        if (folderYear && show.year && Math.abs(folderYear - show.year) > 1) continue
+
         // Found show, now find episode
         const ep = await Episode.query()
           .where('tvShowId', show.id)

@@ -2,6 +2,7 @@ import Indexer from '#models/indexer'
 import ProwlarrConfig from '#models/prowlarr_config'
 import {
   newznabService,
+  RateLimitError,
   type NewznabSearchResult,
   type NewznabIndexerConfig,
 } from './newznab_service.js'
@@ -56,6 +57,7 @@ export interface TvSearchOptions {
   title: string
   season?: number
   episode?: number
+  year?: number
   tvdbId?: string
   imdbId?: string
   alternateTitles?: string[]
@@ -73,6 +75,30 @@ export interface BookSearchOptions {
 }
 
 export class IndexerManager {
+  // Track rate-limited indexers with cooldown timestamps (5 minute cooldown)
+  private rateLimitCooldowns = new Map<string, number>()
+  private static RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000
+
+  /**
+   * Check if an indexer is currently in rate limit cooldown
+   */
+  private isIndexerRateLimited(indexerId: string): boolean {
+    const cooldownUntil = this.rateLimitCooldowns.get(indexerId)
+    if (!cooldownUntil) return false
+    if (Date.now() >= cooldownUntil) {
+      this.rateLimitCooldowns.delete(indexerId)
+      return false
+    }
+    return true
+  }
+
+  /**
+   * Mark an indexer as rate-limited with cooldown
+   */
+  private markIndexerRateLimited(indexerId: string): void {
+    this.rateLimitCooldowns.set(indexerId, Date.now() + IndexerManager.RATE_LIMIT_COOLDOWN_MS)
+  }
+
   /**
    * Search across all configured indexers
    */
@@ -489,14 +515,29 @@ export class IndexerManager {
       alternateTitles: options.alternateTitles,
     })
 
+    // Track rate-limited indexers to skip them for subsequent alternate titles
+    const rateLimitedIndexers = new Set<string>()
+
     let isFirstTitle = true
     for (const title of allTitles) {
       const titleResults = await this._searchTvShowsSingleTitle(
         { ...options, title },
-        !isFirstTitle // skip Prowlarr for alternate titles (it uses IDs internally)
+        !isFirstTitle, // skip Prowlarr for alternate titles (it uses IDs internally)
+        rateLimitedIndexers
       )
       allResults.push(...titleResults)
       isFirstTitle = false
+
+      // If all indexers are rate-limited, stop trying alternate titles
+      if (rateLimitedIndexers.size > 0) {
+        const directIndexers = await Indexer.query().where('enabled', true)
+        if (rateLimitedIndexers.size >= directIndexers.length) {
+          console.log(
+            `[IndexerManager] All indexers rate-limited, stopping alternate title search after "${title}"`
+          )
+          break
+        }
+      }
     }
 
     // Deduplicate by downloadUrl
@@ -532,7 +573,8 @@ export class IndexerManager {
 
   private async _searchTvShowsSingleTitle(
     options: TvSearchOptions,
-    skipProwlarr: boolean
+    skipProwlarr: boolean,
+    rateLimitedIndexers: Set<string> = new Set()
   ): Promise<UnifiedSearchResult[]> {
     const results: UnifiedSearchResult[] = []
 
@@ -600,6 +642,11 @@ export class IndexerManager {
     const directIndexers = await Indexer.query().where('enabled', true)
 
     const directSearches = directIndexers.map(async (indexer) => {
+      // Skip indexers that are already rate-limited (per-call or class-level cooldown)
+      if (rateLimitedIndexers.has(indexer.id) || this.isIndexerRateLimited(indexer.id)) {
+        return []
+      }
+
       try {
         const config: NewznabIndexerConfig = {
           id: indexer.id,
@@ -629,6 +676,13 @@ export class IndexerManager {
               `[IndexerManager] ${indexer.name}: tvsearch by ID returned ${tvSearchResults.length} results`
             )
           } catch (err) {
+            // If rate-limited, don't try fallback searches
+            if (err instanceof RateLimitError) {
+              console.log(`[IndexerManager] ${indexer.name}: rate limited (429), skipping`)
+              rateLimitedIndexers.add(indexer.id)
+              this.markIndexerRateLimited(indexer.id)
+              return []
+            }
             console.log(
               `[IndexerManager] ${indexer.name}: tvsearch by ID failed:`,
               err instanceof Error ? err.message : err
@@ -649,24 +703,45 @@ export class IndexerManager {
             console.log(
               `[IndexerManager] ${indexer.name}: text tvsearch returned ${tvSearchResults.length} results`
             )
-          } catch {
+          } catch (err) {
+            if (err instanceof RateLimitError) {
+              console.log(`[IndexerManager] ${indexer.name}: rate limited (429), skipping`)
+              rateLimitedIndexers.add(indexer.id)
+              this.markIndexerRateLimited(indexer.id)
+              return []
+            }
             // tvsearch not supported, fall back to general search
             console.log(
               `[IndexerManager] ${indexer.name}: tvsearch not supported, using general search`
             )
-            const searchResults = await newznabService.search(config, query, {
-              categories: tvCategories,
-              limit: options.limit || 50,
-            })
-            console.log(
-              `[IndexerManager] ${indexer.name}: general search returned ${searchResults.length} results`
-            )
-            return this.mapNewznabTvResults(searchResults)
+            try {
+              const searchResults = await newznabService.search(config, query, {
+                categories: tvCategories,
+                limit: options.limit || 50,
+              })
+              console.log(
+                `[IndexerManager] ${indexer.name}: general search returned ${searchResults.length} results`
+              )
+              return this.mapNewznabTvResults(searchResults)
+            } catch (generalErr) {
+              if (generalErr instanceof RateLimitError) {
+                console.log(`[IndexerManager] ${indexer.name}: rate limited (429), skipping`)
+                rateLimitedIndexers.add(indexer.id)
+                this.markIndexerRateLimited(indexer.id)
+                return []
+              }
+              throw generalErr
+            }
           }
         }
 
         return this.mapNewznabTvResults(tvSearchResults)
       } catch (error) {
+        if (error instanceof RateLimitError) {
+          rateLimitedIndexers.add(indexer.id)
+          this.markIndexerRateLimited(indexer.id)
+          return []
+        }
         console.error(`TV search failed for indexer ${indexer.name}:`, error)
         return []
       }
@@ -683,6 +758,10 @@ export class IndexerManager {
    */
   private _buildTvSearchQuery(options: TvSearchOptions): string {
     let query = options.title
+    // Include year to disambiguate reboots/remakes (e.g. "Scrubs 2026" vs "Scrubs")
+    if (options.year) {
+      query = `${query} ${options.year}`
+    }
     if (options.seriesType === 'daily' && options.airDate) {
       // Daily shows: "Title 2024 01 15"
       query = `${query} ${options.airDate.replace(/-/g, ' ')}`

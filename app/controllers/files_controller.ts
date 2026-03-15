@@ -252,11 +252,17 @@ export default class FilesController {
   async scanFolders({ response }: HttpContext) {
     const results = await folderScanner.scan()
 
+    const parts = []
+    if (results.created > 0) parts.push(`${results.created} new entries created`)
+    if (results.imported > 0) parts.push(`${results.imported} imported`)
+    if (results.created === 0 && results.imported === 0) parts.push('no new media found')
+
     return response.json({
       success: true,
-      message: 'Folder scan finished',
+      message: `Folder scan finished: ${parts.join(', ')}`,
       processed: results.processed,
       imported: results.imported,
+      created: results.created,
       errors: results.errors,
     })
   }

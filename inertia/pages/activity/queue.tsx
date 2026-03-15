@@ -33,6 +33,7 @@ import {
   FolderSearchIcon,
   Search01Icon,
   CleanIcon,
+  Download04Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
@@ -59,6 +60,7 @@ export default function Queue() {
   const [scanning, setScanning] = useState(false)
   const [searchingRequested, setSearchingRequested] = useState(false)
   const [deduplicating, setDeduplicating] = useState(false)
+  const [scanningFolders, setScanningFolders] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -165,6 +167,25 @@ export default function Queue() {
     }
   }
 
+  const scanDownloadFolders = async () => {
+    setScanningFolders(true)
+    try {
+      const response = await fetch('/api/v1/files/scan-folders', { method: 'POST' })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(data.message || 'Download folder scan completed')
+        fetchQueue(false)
+      } else {
+        toast.error(data.error || 'Scan failed')
+      }
+    } catch (err) {
+      console.error('Failed to scan download folders:', err)
+      toast.error('Failed to scan download folders')
+    } finally {
+      setScanningFolders(false)
+    }
+  }
+
   const cancelDownload = async () => {
     if (!deleteId) return
 
@@ -260,6 +281,13 @@ export default function Queue() {
               className={`h-4 w-4 md:mr-2 ${scanning ? 'animate-pulse' : ''}`}
             />
             <span className="hidden md:inline">{scanning ? 'Scanning...' : 'Import Completed'}</span>
+          </Button>
+          <Button onClick={scanDownloadFolders} disabled={scanningFolders} variant="outline" size="sm">
+            <HugeiconsIcon
+              icon={Download04Icon}
+              className={`h-4 w-4 md:mr-2 ${scanningFolders ? 'animate-pulse' : ''}`}
+            />
+            <span className="hidden md:inline">{scanningFolders ? 'Scanning...' : 'Scan & Import New'}</span>
           </Button>
           <Button onClick={refreshQueue} disabled={refreshing} size="sm">
             <HugeiconsIcon
