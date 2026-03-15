@@ -401,8 +401,8 @@ export default class QueueController {
         return response.notFound({ error: 'Download not found or has no output path' })
       }
 
-      if (download.status !== 'failed') {
-        return response.badRequest({ error: 'Only failed downloads can be retried' })
+      if (download.status !== 'failed' && download.status !== 'importing') {
+        return response.badRequest({ error: 'Only failed or stuck imports can be retried' })
       }
 
       // Reset status to importing

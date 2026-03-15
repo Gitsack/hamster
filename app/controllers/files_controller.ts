@@ -320,12 +320,16 @@ export default class FilesController {
         emit('folder', action, message)
       })
 
-      emit('done', 'complete', JSON.stringify({
-        apiImported: apiResults.imported,
-        folderImported: folderResults.imported,
-        folderCreated: folderResults.created,
-        totalImported: apiResults.imported + folderResults.imported,
-      }))
+      emit(
+        'done',
+        'complete',
+        JSON.stringify({
+          apiImported: apiResults.imported,
+          folderImported: folderResults.imported,
+          folderCreated: folderResults.created,
+          totalImported: apiResults.imported + folderResults.imported,
+        })
+      )
     } catch (error) {
       emit('done', 'error', error instanceof Error ? error.message : 'Scan failed')
     }
@@ -457,9 +461,7 @@ export default class FilesController {
     const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
     // Build normalized sets for fuzzy matching
-    const normalizedTrackedTitles = new Set(
-      [...trackedTitles].map((t) => normalize(t))
-    )
+    const normalizedTrackedTitles = new Set([...trackedTitles].map((t) => normalize(t)))
 
     const filteredEntries = allEntries.filter(
       (e) =>
@@ -492,6 +494,12 @@ export default class FilesController {
       progress: d.progress,
       outputPath: d.outputPath,
       errorMessage: d.errorMessage,
+      mediaType: d.mediaType,
+      movieId: d.movieId,
+      episodeId: d.episodeId,
+      bookId: d.bookId,
+      albumId: d.albumId,
+      startedAt: d.startedAt?.toISO() ?? null,
       completedAt: d.completedAt?.toISO() ?? null,
       downloadClient: d.downloadClient?.name ?? null,
     }))
@@ -551,7 +559,9 @@ export default class FilesController {
             deleted++
             freedBytes += size
           } catch (err) {
-            errors.push(`Failed to delete ${fullPath}: ${err instanceof Error ? err.message : String(err)}`)
+            errors.push(
+              `Failed to delete ${fullPath}: ${err instanceof Error ? err.message : String(err)}`
+            )
           }
           continue
         }
@@ -568,7 +578,9 @@ export default class FilesController {
             deleted++
             freedBytes += size
           } catch (err) {
-            errors.push(`Failed to delete ${fullPath}: ${err instanceof Error ? err.message : String(err)}`)
+            errors.push(
+              `Failed to delete ${fullPath}: ${err instanceof Error ? err.message : String(err)}`
+            )
           }
         }
       }

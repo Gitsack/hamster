@@ -92,8 +92,14 @@ export class EpisodeImportService {
         return result
       }
 
-      // Get the TV show
-      const tvShow = download.tvShowId ? await TvShow.find(download.tvShowId) : null
+      // Get the TV show (from tvShowId directly, or via the episode)
+      let tvShow = download.tvShowId ? await TvShow.find(download.tvShowId) : null
+      if (!tvShow && download.episodeId) {
+        const episode = await Episode.find(download.episodeId)
+        if (episode) {
+          tvShow = await TvShow.find(episode.tvShowId)
+        }
+      }
       if (!tvShow) {
         result.errors.push('TV show not found for download')
         return result

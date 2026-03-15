@@ -429,8 +429,7 @@ export class DownloadManager {
   async grab(request: DownloadRequest): Promise<Download> {
     // Only run duplicate/hasFile checks when downloading for a specific media item.
     // Direct downloads (no media ID) skip these checks since there's no media item to deduplicate against.
-    const hasMediaId =
-      request.episodeId || request.movieId || request.albumId || request.bookId
+    const hasMediaId = request.episodeId || request.movieId || request.albumId || request.bookId
 
     if (hasMediaId) {
       // Check for existing active downloads for the same media item
@@ -827,258 +826,289 @@ export class DownloadManager {
           }
         }
 
-        // Check history for completed downloads (reduced limit to 50 for performance)
-        const history = await sabnzbdService.getHistory(config, 50)
+        // Check history for completed downloads
+        const history = await sabnzbdService.getHistory(config, 200)
         logger.debug({ count: history.slots.length }, 'DownloadManager: Checking SABnzbd history')
 
         for (const slot of history.slots) {
           foundExternalIds.add(slot.nzo_id)
 
-          const download = downloadsByExternalId.get(slot.nzo_id)
+          try {
+            const download = downloadsByExternalId.get(slot.nzo_id)
 
-          if (download) {
-            logger.debug(
-              {
-                title: download.title,
-                sabStatus: slot.status,
-                dbStatus: download.status,
-                outputPath: download.outputPath || 'none',
-              },
-              'DownloadManager: Found download in history'
-            )
-          }
-
-          if (download && download.status !== 'completed' && download.status !== 'failed') {
-            if (slot.status === 'Completed') {
-              logger.info({ title: download.title }, 'DownloadManager: SABnzbd shows Completed')
-
-              // Check if import is stuck (status is 'importing' for more than 2 minutes)
-              const isStuck =
-                download.status === 'importing' &&
-                download.completedAt &&
-                download.completedAt < DateTime.now().minus({ minutes: 2 })
-
-              // Check if already being imported or max retries exceeded
-              const isInFlight = this.importsInFlight.has(download.id)
-              const attempts = this.importAttempts.get(download.id) || 0
-              const maxRetriesExceeded = attempts >= DownloadManager.MAX_IMPORT_ATTEMPTS
-
-              if (maxRetriesExceeded && download.status === 'importing') {
-                logger.error(
-                  { title: download.title, attempts },
-                  'DownloadManager: Max import retries exceeded, marking as failed'
-                )
-                download.status = 'failed'
-                download.errorMessage = `Import failed after ${attempts} attempts`
-                await download.save()
-                this.importAttempts.delete(download.id)
-                continue
-              }
-
-              // Trigger import if we haven't already OR if it's stuck (and not already in-flight)
-              const shouldTriggerImport = (!download.outputPath || isStuck) && !isInFlight
+            if (download) {
               logger.debug(
-                { shouldTriggerImport, isStuck, isInFlight, attempts, storagePath: slot.storage },
-                'DownloadManager: Import trigger check'
+                {
+                  title: download.title,
+                  sabStatus: slot.status,
+                  dbStatus: download.status,
+                  outputPath: download.outputPath || 'none',
+                },
+                'DownloadManager: Found download in history'
               )
+            }
 
-              // Apply remote path mapping to get the local path
-              let localPath = slot.storage
-              if (client.settings?.remotePath && client.settings?.localPath) {
-                if (localPath.startsWith(client.settings.remotePath)) {
-                  localPath = localPath.replace(
-                    client.settings.remotePath,
-                    client.settings.localPath
+            if (download && download.status !== 'completed' && download.status !== 'failed') {
+              if (slot.status === 'Completed') {
+                logger.info({ title: download.title }, 'DownloadManager: SABnzbd shows Completed')
+
+                // Check if import is stuck (status is 'importing' for more than 2 minutes)
+                const isStuck =
+                  download.status === 'importing' &&
+                  download.completedAt &&
+                  download.completedAt < DateTime.now().minus({ minutes: 2 })
+
+                // Check if already being imported or max retries exceeded
+                let isInFlight = this.importsInFlight.has(download.id)
+                const attempts = this.importAttempts.get(download.id) || 0
+                const maxRetriesExceeded = attempts >= DownloadManager.MAX_IMPORT_ATTEMPTS
+
+                if (maxRetriesExceeded && download.status === 'importing') {
+                  logger.error(
+                    { title: download.title, attempts },
+                    'DownloadManager: Max import retries exceeded, marking as failed'
                   )
+                  download.status = 'failed'
+                  download.errorMessage = `Import failed after ${attempts} attempts`
+                  await download.save()
+                  this.importAttempts.delete(download.id)
+                  this.importsInFlight.delete(download.id)
+                  continue
                 }
-              }
 
-              // Check if the path is accessible BEFORE triggering import
-              // Use a short timeout to avoid blocking on unmounted network paths
-              let pathAccessible = false
-              let pathError = ''
-              try {
-                await Promise.race([
-                  fs.access(localPath),
-                  new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Path check timeout')), 3000)
-                  ),
-                ])
-                pathAccessible = true
-              } catch (error) {
-                const isTimeout = error instanceof Error && error.message === 'Path check timeout'
-                if (isTimeout) {
-                  pathError = `Download path not responding: "${localPath}". The network storage may not be mounted or is unresponsive.`
-                } else {
-                  // Check if parent directory exists (also with timeout)
-                  const parentDir = path.dirname(localPath)
-                  try {
-                    await Promise.race([
-                      fs.access(parentDir),
-                      new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('timeout')), 2000)
-                      ),
-                    ])
-                    pathError = `File not found: "${path.basename(localPath)}". The download folder exists but the file is missing.`
-                  } catch {
-                    // Parent directory doesn't exist either - likely a mount/path mapping issue
-                    pathError = `Download path not accessible: "${localPath}". This usually means the network storage is not mounted or the Remote Path Mapping in Download Client settings is incorrect.`
+                // If stuck for > 2 minutes and still marked as in-flight, the import
+                // promise likely hung (e.g. unresponsive file I/O). Clear the stale
+                // flag so the retry can proceed.
+                if (isStuck && isInFlight) {
+                  logger.warn(
+                    { title: download.title, attempts },
+                    'DownloadManager: Clearing stale in-flight flag for stuck import'
+                  )
+                  this.importsInFlight.delete(download.id)
+                  isInFlight = false
+                }
+
+                // Trigger import if:
+                // - outputPath not yet set (first detection), OR
+                // - import is stuck (status='importing' for >2 min), OR
+                // - status is 'importing' but no import is running (e.g. after server restart)
+                // ...and no import is currently in-flight
+                const needsImport =
+                  !download.outputPath ||
+                  isStuck ||
+                  (download.status === 'importing' && !isInFlight)
+                const shouldTriggerImport = needsImport && !isInFlight
+                logger.debug(
+                  { shouldTriggerImport, isStuck, isInFlight, attempts, storagePath: slot.storage },
+                  'DownloadManager: Import trigger check'
+                )
+
+                // Apply remote path mapping to get the local path
+                let localPath = slot.storage
+                if (client.settings?.remotePath && client.settings?.localPath) {
+                  if (localPath.startsWith(client.settings.remotePath)) {
+                    localPath = localPath.replace(
+                      client.settings.remotePath,
+                      client.settings.localPath
+                    )
                   }
                 }
-              }
 
-              // Mark as importing and save the output path
-              download.status = 'importing'
-              download.progress = 100
-              if (!download.completedAt) {
-                download.completedAt = DateTime.now()
-              }
-              download.outputPath = slot.storage
-              await download.save()
-
-              // Emit download completed event
-              const dlMediaType = download.movieId
-                ? 'movies'
-                : download.tvShowId || download.episodeId
-                  ? 'tv'
-                  : download.bookId
-                    ? 'books'
-                    : 'music'
-              eventEmitter
-                .emitDownloadCompleted({
-                  media: {
-                    id:
-                      download.movieId ||
-                      download.episodeId ||
-                      download.bookId ||
-                      download.albumId ||
-                      '',
-                    title: download.title,
-                    mediaType: dlMediaType,
-                  },
-                  release: {
-                    title: download.title,
-                    indexer: download.nzbInfo?.indexer || 'unknown',
-                    size: download.sizeBytes ? Number(download.sizeBytes) : undefined,
-                    protocol: 'usenet',
-                  },
-                  downloadClient: client.name,
-                  downloadId: download.externalId || download.id,
-                  outputPath: localPath,
-                })
-                .catch((err) =>
-                  logger.error({ err }, 'DownloadManager: Failed to emit download completed event')
-                )
-
-              // If path is not accessible, fail immediately with a clear error
-              if (!pathAccessible) {
-                logger.error(
-                  { title: download.title, pathError },
-                  'DownloadManager: Path not accessible'
-                )
-                download.status = 'failed'
-                download.errorMessage = pathError
-                await download.save()
-                continue
-              }
-
-              // Trigger import in background
-              if (shouldTriggerImport) {
-                const attempt = (this.importAttempts.get(download.id) || 0) + 1
-                this.importAttempts.set(download.id, attempt)
-                this.importsInFlight.add(download.id)
-
-                logger.info(
-                  { title: download.title, retry: isStuck, attempt },
-                  'DownloadManager: Triggering import'
-                )
-                this.triggerImport(download)
-                  .catch((error) => {
-                    logger.error(
-                      { downloadId: download.id, err: error },
-                      'DownloadManager: Failed to import download'
-                    )
-                  })
-                  .finally(() => {
-                    this.importsInFlight.delete(download.id)
-                  })
-              } else {
-                logger.debug(
-                  { title: download.title, isInFlight },
-                  'DownloadManager: Import recently triggered or in-flight'
-                )
-              }
-            } else if (slot.status === 'Failed') {
-              const errorMessage = slot.fail_message || 'Download failed'
-              download.status = 'failed'
-              download.errorMessage = errorMessage
-              await download.save()
-
-              // Blacklist the release if it's a genuine download failure (not a config issue)
-              if (blacklistService.shouldBlacklist(errorMessage)) {
-                const guid = download.nzbInfo?.guid || download.externalId || ''
-                const indexer = download.nzbInfo?.indexer || 'unknown'
-
-                logger.info(
-                  { title: download.title, guid, indexer },
-                  'DownloadManager: Blacklisting failed release'
-                )
-
-                await blacklistService.blacklist({
-                  guid,
-                  indexer,
-                  title: download.title,
-                  movieId: download.movieId,
-                  episodeId: download.episodeId,
-                  albumId: download.albumId,
-                  bookId: download.bookId,
-                  reason: errorMessage,
-                  failureType: blacklistService.determineFailureType(errorMessage),
-                })
-
-                // Check if we've exceeded the retry limit (3 retries max)
-                const hasExceeded = await blacklistService.hasExceededRetries({
-                  movieId: download.movieId,
-                  episodeId: download.episodeId,
-                  albumId: download.albumId,
-                  bookId: download.bookId,
-                })
-
-                if (!hasExceeded) {
-                  // Trigger search for alternative release
-                  logger.info(
-                    { title: download.title },
-                    'DownloadManager: Searching for alternative release'
-                  )
-                  this.triggerAlternativeSearch(download).catch((error) => {
-                    logger.error(
-                      { title: download.title, err: error },
-                      'DownloadManager: Failed to find alternative'
-                    )
-                  })
-                } else {
-                  logger.info(
-                    { title: download.title },
-                    'DownloadManager: Max retries exceeded, not searching for alternatives'
-                  )
+                // Check if the path is accessible BEFORE triggering import
+                // Use a short timeout to avoid blocking on unmounted network paths
+                let pathAccessible = false
+                let pathError = ''
+                try {
+                  await Promise.race([
+                    fs.access(localPath),
+                    new Promise((_, reject) =>
+                      setTimeout(() => reject(new Error('Path check timeout')), 3000)
+                    ),
+                  ])
+                  pathAccessible = true
+                } catch (error) {
+                  const isTimeout = error instanceof Error && error.message === 'Path check timeout'
+                  if (isTimeout) {
+                    pathError = `Download path not responding: "${localPath}". The network storage may not be mounted or is unresponsive.`
+                  } else {
+                    // Check if parent directory exists (also with timeout)
+                    const parentDir = path.dirname(localPath)
+                    try {
+                      await Promise.race([
+                        fs.access(parentDir),
+                        new Promise((_, reject) =>
+                          setTimeout(() => reject(new Error('timeout')), 2000)
+                        ),
+                      ])
+                      pathError = `File not found: "${path.basename(localPath)}". The download folder exists but the file is missing.`
+                    } catch {
+                      // Parent directory doesn't exist either - likely a mount/path mapping issue
+                      pathError = `Download path not accessible: "${localPath}". This usually means the network storage is not mounted or the Remote Path Mapping in Download Client settings is incorrect.`
+                    }
+                  }
                 }
-              }
-            } else {
-              // Post-processing statuses (Extracting, Verifying, Repairing, Moving, Running)
-              logger.debug(
-                { title: download.title, status: slot.status },
-                'DownloadManager: SABnzbd post-processing'
-              )
-              if (download.status !== 'importing') {
+
+                // Mark as importing and save the output path
                 download.status = 'importing'
                 download.progress = 100
+                if (!download.completedAt) {
+                  download.completedAt = DateTime.now()
+                }
+                download.outputPath = slot.storage
                 await download.save()
+
+                // Emit download completed event
+                const dlMediaType = download.movieId
+                  ? 'movies'
+                  : download.tvShowId || download.episodeId
+                    ? 'tv'
+                    : download.bookId
+                      ? 'books'
+                      : 'music'
+                eventEmitter
+                  .emitDownloadCompleted({
+                    media: {
+                      id:
+                        download.movieId ||
+                        download.episodeId ||
+                        download.bookId ||
+                        download.albumId ||
+                        '',
+                      title: download.title,
+                      mediaType: dlMediaType,
+                    },
+                    release: {
+                      title: download.title,
+                      indexer: download.nzbInfo?.indexer || 'unknown',
+                      size: download.sizeBytes ? Number(download.sizeBytes) : undefined,
+                      protocol: 'usenet',
+                    },
+                    downloadClient: client.name,
+                    downloadId: download.externalId || download.id,
+                    outputPath: localPath,
+                  })
+                  .catch((err) =>
+                    logger.error(
+                      { err },
+                      'DownloadManager: Failed to emit download completed event'
+                    )
+                  )
+
+                // If path is not accessible, fail immediately with a clear error
+                if (!pathAccessible) {
+                  logger.error(
+                    { title: download.title, pathError },
+                    'DownloadManager: Path not accessible'
+                  )
+                  download.status = 'failed'
+                  download.errorMessage = pathError
+                  await download.save()
+                  continue
+                }
+
+                // Trigger import in background
+                if (shouldTriggerImport) {
+                  const attempt = (this.importAttempts.get(download.id) || 0) + 1
+                  this.importAttempts.set(download.id, attempt)
+                  this.importsInFlight.add(download.id)
+
+                  logger.info(
+                    { title: download.title, retry: isStuck, attempt },
+                    'DownloadManager: Triggering import'
+                  )
+                  this.triggerImport(download)
+                    .catch((error) => {
+                      logger.error(
+                        { downloadId: download.id, err: error },
+                        'DownloadManager: Failed to import download'
+                      )
+                    })
+                    .finally(() => {
+                      this.importsInFlight.delete(download.id)
+                    })
+                } else {
+                  logger.debug(
+                    { title: download.title, isInFlight },
+                    'DownloadManager: Import recently triggered or in-flight'
+                  )
+                }
+              } else if (slot.status === 'Failed') {
+                const errorMessage = slot.fail_message || 'Download failed'
+                download.status = 'failed'
+                download.errorMessage = errorMessage
+                await download.save()
+
+                // Blacklist the release if it's a genuine download failure (not a config issue)
+                if (blacklistService.shouldBlacklist(errorMessage)) {
+                  const guid = download.nzbInfo?.guid || download.externalId || ''
+                  const indexer = download.nzbInfo?.indexer || 'unknown'
+
+                  logger.info(
+                    { title: download.title, guid, indexer },
+                    'DownloadManager: Blacklisting failed release'
+                  )
+
+                  await blacklistService.blacklist({
+                    guid,
+                    indexer,
+                    title: download.title,
+                    movieId: download.movieId,
+                    episodeId: download.episodeId,
+                    albumId: download.albumId,
+                    bookId: download.bookId,
+                    reason: errorMessage,
+                    failureType: blacklistService.determineFailureType(errorMessage),
+                  })
+
+                  // Check if we've exceeded the retry limit (3 retries max)
+                  const hasExceeded = await blacklistService.hasExceededRetries({
+                    movieId: download.movieId,
+                    episodeId: download.episodeId,
+                    albumId: download.albumId,
+                    bookId: download.bookId,
+                  })
+
+                  if (!hasExceeded) {
+                    // Trigger search for alternative release
+                    logger.info(
+                      { title: download.title },
+                      'DownloadManager: Searching for alternative release'
+                    )
+                    this.triggerAlternativeSearch(download).catch((error) => {
+                      logger.error(
+                        { title: download.title, err: error },
+                        'DownloadManager: Failed to find alternative'
+                      )
+                    })
+                  } else {
+                    logger.info(
+                      { title: download.title },
+                      'DownloadManager: Max retries exceeded, not searching for alternatives'
+                    )
+                  }
+                }
+              } else {
+                // Post-processing statuses (Extracting, Verifying, Repairing, Moving, Running)
+                logger.debug(
+                  { title: download.title, status: slot.status },
+                  'DownloadManager: SABnzbd post-processing'
+                )
+                if (download.status !== 'importing') {
+                  download.status = 'importing'
+                  download.progress = 100
+                  await download.save()
+                }
               }
             }
+          } catch (slotError) {
+            logger.error(
+              { nzoId: slot.nzo_id, err: slotError },
+              'DownloadManager: Error processing SABnzbd history slot'
+            )
           }
         }
 
-        // Remove orphaned downloads that no longer exist in SABnzbd
+        // Handle orphaned downloads that no longer exist in SABnzbd
         // These are downloads with an externalId that wasn't found in queue or history
         const orphanedDownloads = await Download.query()
           .where('downloadClientId', client.id)
@@ -1087,11 +1117,72 @@ export class DownloadManager {
 
         for (const orphan of orphanedDownloads) {
           if (orphan.externalId && !foundExternalIds.has(orphan.externalId)) {
-            logger.info(
-              { title: orphan.title, externalId: orphan.externalId },
-              'DownloadManager: Removing orphaned download'
-            )
-            await orphan.delete()
+            // Before deleting, check if completed files exist on disk
+            // (SABnzbd history may have rotated out but the files are still there)
+            const hasMediaAssociation =
+              orphan.movieId || orphan.episodeId || orphan.albumId || orphan.bookId
+            let foundOnDisk = false
+
+            if (hasMediaAssociation && client.settings?.localPath) {
+              const basePath = client.settings.localPath
+              // Check common complete subdirectories and the base path itself
+              const scanPaths = [
+                path.join(basePath, 'complete'),
+                path.join(basePath, 'completed'),
+                basePath,
+              ]
+
+              for (const scanDir of scanPaths) {
+                try {
+                  const entries = await fs.readdir(scanDir)
+                  // Match by download title (SABnzbd uses the NZB name as folder name)
+                  const normalizedTitle = orphan.title.toLowerCase().replace(/\s+/g, ' ').trim()
+                  const match = entries.find((entry) => {
+                    const normalizedEntry = entry.toLowerCase().replace(/\s+/g, ' ').trim()
+                    return (
+                      normalizedEntry === normalizedTitle ||
+                      normalizedEntry.startsWith(normalizedTitle) ||
+                      normalizedTitle.startsWith(normalizedEntry)
+                    )
+                  })
+
+                  if (match) {
+                    const outputPath = path.join(scanDir, match)
+                    logger.info(
+                      { title: orphan.title, outputPath },
+                      'DownloadManager: Found completed files for orphaned download, triggering import'
+                    )
+                    orphan.status = 'importing'
+                    orphan.progress = 100
+                    orphan.outputPath = outputPath
+                    if (!orphan.completedAt) {
+                      orphan.completedAt = DateTime.now()
+                    }
+                    await orphan.save()
+                    foundOnDisk = true
+
+                    // Trigger import in background
+                    this.triggerImport(orphan).catch((error) => {
+                      logger.error(
+                        { downloadId: orphan.id, err: error },
+                        'DownloadManager: Failed to import orphaned download'
+                      )
+                    })
+                    break
+                  }
+                } catch {
+                  // Directory doesn't exist, continue
+                }
+              }
+            }
+
+            if (!foundOnDisk) {
+              logger.info(
+                { title: orphan.title, externalId: orphan.externalId },
+                'DownloadManager: Removing orphaned download'
+              )
+              await orphan.delete()
+            }
           }
         }
 
@@ -1833,81 +1924,90 @@ export class DownloadManager {
     if (download.externalId && download.downloadClient) {
       const client = download.downloadClient
 
-      switch (client.type) {
-        case 'sabnzbd': {
-          const config: SabnzbdConfig = {
-            host: client.settings.host || 'localhost',
-            port: client.settings.port || 8080,
-            apiKey: client.settings.apiKey || '',
-            useSsl: client.settings.useSsl || false,
+      // For imports that already completed in the download client, deletion may fail
+      // (item no longer in queue). That's fine — we still remove the DB record below.
+      try {
+        switch (client.type) {
+          case 'sabnzbd': {
+            const config: SabnzbdConfig = {
+              host: client.settings.host || 'localhost',
+              port: client.settings.port || 8080,
+              apiKey: client.settings.apiKey || '',
+              useSsl: client.settings.useSsl || false,
+            }
+
+            await sabnzbdService.delete(config, download.externalId, deleteFiles)
+            break
           }
 
-          await sabnzbdService.delete(config, download.externalId, deleteFiles)
-          break
+          case 'nzbget': {
+            const config: NzbgetConfig = {
+              host: client.settings.host || 'localhost',
+              port: client.settings.port || 6789,
+              username: client.settings.username,
+              password: client.settings.password,
+              useSsl: client.settings.useSsl || false,
+            }
+
+            const nzbId = Number.parseInt(download.externalId, 10)
+            // Try to delete from queue first, then from history
+            try {
+              await nzbgetService.deleteFromQueue(config, nzbId)
+            } catch {
+              await nzbgetService.deleteFromHistory(config, nzbId, deleteFiles)
+            }
+            break
+          }
+
+          case 'qbittorrent': {
+            const config: QBittorrentConfig = {
+              host: client.settings.host || 'localhost',
+              port: client.settings.port || 8080,
+              username: client.settings.username,
+              password: client.settings.password,
+              useSsl: client.settings.useSsl || false,
+            }
+
+            await qbittorrentService.delete(config, download.externalId, deleteFiles)
+            break
+          }
+
+          case 'transmission': {
+            const config: TransmissionConfig = {
+              host: client.settings.host || 'localhost',
+              port: client.settings.port || 9091,
+              username: client.settings.username,
+              password: client.settings.password,
+              useSsl: client.settings.useSsl || false,
+              urlBase: client.settings.urlBase,
+            }
+
+            // Find the torrent by hash to get its numeric ID
+            const torrents = await transmissionService.getTorrents(config)
+            const torrent = torrents.find((t) => t.hashString === download.externalId)
+            if (torrent) {
+              await transmissionService.remove(config, torrent.id, deleteFiles)
+            }
+            break
+          }
+
+          case 'deluge': {
+            const config: DelugeConfig = {
+              host: client.settings.host || 'localhost',
+              port: client.settings.port || 8112,
+              password: client.settings.password || '',
+              useSsl: client.settings.useSsl || false,
+            }
+
+            await delugeService.remove(config, download.externalId, deleteFiles)
+            break
+          }
         }
-
-        case 'nzbget': {
-          const config: NzbgetConfig = {
-            host: client.settings.host || 'localhost',
-            port: client.settings.port || 6789,
-            username: client.settings.username,
-            password: client.settings.password,
-            useSsl: client.settings.useSsl || false,
-          }
-
-          const nzbId = Number.parseInt(download.externalId, 10)
-          // Try to delete from queue first, then from history
-          try {
-            await nzbgetService.deleteFromQueue(config, nzbId)
-          } catch {
-            await nzbgetService.deleteFromHistory(config, nzbId, deleteFiles)
-          }
-          break
-        }
-
-        case 'qbittorrent': {
-          const config: QBittorrentConfig = {
-            host: client.settings.host || 'localhost',
-            port: client.settings.port || 8080,
-            username: client.settings.username,
-            password: client.settings.password,
-            useSsl: client.settings.useSsl || false,
-          }
-
-          await qbittorrentService.delete(config, download.externalId, deleteFiles)
-          break
-        }
-
-        case 'transmission': {
-          const config: TransmissionConfig = {
-            host: client.settings.host || 'localhost',
-            port: client.settings.port || 9091,
-            username: client.settings.username,
-            password: client.settings.password,
-            useSsl: client.settings.useSsl || false,
-            urlBase: client.settings.urlBase,
-          }
-
-          // Find the torrent by hash to get its numeric ID
-          const torrents = await transmissionService.getTorrents(config)
-          const torrent = torrents.find((t) => t.hashString === download.externalId)
-          if (torrent) {
-            await transmissionService.remove(config, torrent.id, deleteFiles)
-          }
-          break
-        }
-
-        case 'deluge': {
-          const config: DelugeConfig = {
-            host: client.settings.host || 'localhost',
-            port: client.settings.port || 8112,
-            password: client.settings.password || '',
-            useSsl: client.settings.useSsl || false,
-          }
-
-          await delugeService.remove(config, download.externalId, deleteFiles)
-          break
-        }
+      } catch (error) {
+        logger.warn(
+          { downloadId, err: error },
+          'DownloadManager: Failed to remove from download client (may already be completed)'
+        )
       }
     }
 

@@ -91,6 +91,12 @@ interface ImportingItem {
   progress: number
   outputPath: string | null
   errorMessage: string | null
+  mediaType: string | null
+  movieId: string | null
+  episodeId: string | null
+  bookId: string | null
+  albumId: string | null
+  startedAt: string | null
   completedAt: string | null
   downloadClient: string | null
 }
@@ -167,6 +173,15 @@ function formatDate(dateStr: string | null): string {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return ''
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
+  return `${Math.floor(seconds / 86400)}d ago`
 }
 
 function getStatusBadge(status: string) {
@@ -359,23 +374,26 @@ export default function Activity() {
     }
   }, [])
 
-  const fetchUnmatched = useCallback(async (showLoading = true) => {
-    if (showLoading) setUnmatchedLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (unmatchedMediaFilter !== 'all') params.append('mediaType', unmatchedMediaFilter)
-      if (unmatchedStatusFilter !== 'all') params.append('status', unmatchedStatusFilter)
-      const response = await fetch(`/api/v1/unmatched?${params}`)
-      if (response.ok) {
-        const data = await response.json()
-        setUnmatched(Array.isArray(data) ? data : data.data ?? [])
+  const fetchUnmatched = useCallback(
+    async (showLoading = true) => {
+      if (showLoading) setUnmatchedLoading(true)
+      try {
+        const params = new URLSearchParams()
+        if (unmatchedMediaFilter !== 'all') params.append('mediaType', unmatchedMediaFilter)
+        if (unmatchedStatusFilter !== 'all') params.append('status', unmatchedStatusFilter)
+        const response = await fetch(`/api/v1/unmatched?${params}`)
+        if (response.ok) {
+          const data = await response.json()
+          setUnmatched(Array.isArray(data) ? data : (data.data ?? []))
+        }
+      } catch {
+        console.error('Failed to fetch unmatched files')
+      } finally {
+        setUnmatchedLoading(false)
       }
-    } catch {
-      console.error('Failed to fetch unmatched files')
-    } finally {
-      setUnmatchedLoading(false)
-    }
-  }, [unmatchedMediaFilter, unmatchedStatusFilter])
+    },
+    [unmatchedMediaFilter, unmatchedStatusFilter]
+  )
 
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true)
@@ -593,6 +611,36 @@ export default function Activity() {
     }
   }
 
+  // Importing item actions
+  const retryImport = async (id: string) => {
+    try {
+      const response = await fetch(`/api/v1/queue/${id}/retry`, { method: 'POST' })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(data.message || 'Import retried')
+        fetchCompleted(false)
+      } else {
+        toast.error(data.error || 'Retry failed')
+      }
+    } catch {
+      toast.error('Retry failed')
+    }
+  }
+
+  const removeImport = async (id: string) => {
+    try {
+      const response = await fetch(`/api/v1/queue/${id}`, { method: 'DELETE' })
+      if (response.ok) {
+        setImportingItems((prev) => prev.filter((item) => item.id !== id))
+        toast.success('Download removed')
+      } else {
+        toast.error('Failed to remove download')
+      }
+    } catch {
+      toast.error('Failed to remove download')
+    }
+  }
+
   // Unmatched tab actions
   const ignoreUnmatched = async (id: string) => {
     setActioningId(id)
@@ -723,7 +771,9 @@ export default function Activity() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onClick={() => postAction('/api/v1/queue/search-requested', 'Searching for requested items...')}
+                onClick={() =>
+                  postAction('/api/v1/queue/search-requested', 'Searching for requested items...')
+                }
               >
                 <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
                 Search Requested
@@ -792,7 +842,7 @@ export default function Activity() {
           </TabsTrigger>
           <TabsTrigger value="completed">
             Pending Import
-            {(completedEntries.length + importingItems.length) > 0 && (
+            {completedEntries.length + importingItems.length > 0 && (
               <Badge variant="secondary" className="ml-1.5 text-xs px-1.5 py-0">
                 {completedEntries.length + importingItems.length}
               </Badge>
@@ -875,11 +925,7 @@ export default function Activity() {
                             {formatEta(item.eta)}
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setCancelId(item.id)}
-                            >
+                            <Button variant="ghost" size="sm" onClick={() => setCancelId(item.id)}>
                               <HugeiconsIcon
                                 icon={Delete01Icon}
                                 className="h-4 w-4 text-destructive"
@@ -906,7 +952,9 @@ export default function Activity() {
                 <div className="flex flex-wrap gap-2">
                   <Select
                     value={completedFilter}
-                    onValueChange={(v) => setCompletedFilter(v as 'all' | 'duplicates' | 'unpacking')}
+                    onValueChange={(v) =>
+                      setCompletedFilter(v as 'all' | 'duplicates' | 'unpacking')
+                    }
                   >
                     <SelectTrigger className="w-36">
                       <SelectValue placeholder="Filter" />
@@ -930,7 +978,10 @@ export default function Activity() {
                     disabled={cleaningUp}
                     className="text-destructive"
                   >
-                    <HugeiconsIcon icon={CleanIcon} className={`h-4 w-4 mr-2 ${cleaningUp ? 'animate-pulse' : ''}`} />
+                    <HugeiconsIcon
+                      icon={CleanIcon}
+                      className={`h-4 w-4 mr-2 ${cleaningUp ? 'animate-pulse' : ''}`}
+                    />
                     {cleaningUp ? 'Cleaning...' : `Cleanup ${duplicateCount} duplicates & temp`}
                   </Button>
                 )}
@@ -957,8 +1008,10 @@ export default function Activity() {
                         <TableHeader>
                           <TableRow>
                             <TableHead>Name</TableHead>
+                            <TableHead className="w-24">Type</TableHead>
                             <TableHead className="w-32">Status</TableHead>
-                            <TableHead className="w-40">Client</TableHead>
+                            <TableHead className="w-40">Time</TableHead>
+                            <TableHead className="w-24"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -968,10 +1021,22 @@ export default function Activity() {
                                 <div className="font-medium truncate" title={item.title}>
                                   {item.title}
                                 </div>
-                                {item.completedAt && (
-                                  <div className="text-xs text-muted-foreground">
-                                    Completed {formatDate(item.completedAt)}
-                                  </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {item.downloadClient ?? 'Unknown client'}
+                                  {item.errorMessage && (
+                                    <span className="text-destructive ml-2">
+                                      {item.errorMessage}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {item.mediaType ? (
+                                  getMediaTypeBadge(
+                                    item.mediaType as 'tv' | 'music' | 'movies' | 'books'
+                                  )
+                                ) : (
+                                  <Badge variant="outline">?</Badge>
                                 )}
                               </TableCell>
                               <TableCell>
@@ -980,8 +1045,41 @@ export default function Activity() {
                                   Importing
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-muted-foreground">
-                                {item.downloadClient ?? '-'}
+                              <TableCell className="text-muted-foreground text-sm">
+                                {item.completedAt ? (
+                                  <div title={formatDate(item.completedAt)}>
+                                    Downloaded {timeAgo(item.completedAt)}
+                                  </div>
+                                ) : item.startedAt ? (
+                                  <div title={formatDate(item.startedAt)}>
+                                    Started {timeAgo(item.startedAt)}
+                                  </div>
+                                ) : (
+                                  '-'
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => retryImport(item.id)}
+                                    title="Retry import"
+                                  >
+                                    <HugeiconsIcon icon={RefreshIcon} className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeImport(item.id)}
+                                    title="Remove"
+                                  >
+                                    <HugeiconsIcon
+                                      icon={Delete01Icon}
+                                      className="h-4 w-4 text-destructive"
+                                    />
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -991,10 +1089,7 @@ export default function Activity() {
                   )}
 
                   {filteredCompleted.length === 0 && completedEntries.length > 0 ? (
-                    <EmptyState
-                      title="No matching entries"
-                      subtitle="Try a different filter."
-                    />
+                    <EmptyState title="No matching entries" subtitle="Try a different filter." />
                   ) : filteredCompleted.length > 0 ? (
                     <div className="overflow-x-auto -mx-6 px-6">
                       <Table>
@@ -1012,9 +1107,7 @@ export default function Activity() {
                             <TableRow
                               key={entry.name}
                               className={
-                                entry.isDuplicate || entry.isUnpacking
-                                  ? 'opacity-60'
-                                  : undefined
+                                entry.isDuplicate || entry.isUnpacking ? 'opacity-60' : undefined
                               }
                             >
                               <TableCell className="max-w-md">
@@ -1038,12 +1131,18 @@ export default function Activity() {
                               <TableCell>
                                 <div className="flex gap-1">
                                   {entry.isDuplicate && (
-                                    <Badge variant="outline" className="text-yellow-600 border-yellow-600 text-xs">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-yellow-600 border-yellow-600 text-xs"
+                                    >
                                       dup
                                     </Badge>
                                   )}
                                   {entry.isUnpacking && (
-                                    <Badge variant="outline" className="text-orange-600 border-orange-600 text-xs">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-orange-600 border-orange-600 text-xs"
+                                    >
                                       temp
                                     </Badge>
                                   )}
