@@ -156,13 +156,16 @@ function filterTvResultsByTitle(
 }
 
 /**
- * Filter movie search results to only include those matching the expected title
+ * Filter movie search results to only include those matching the expected title(s)
  */
 function filterMovieResultsByTitle(
   results: UnifiedSearchResult[],
-  expectedTitle: string
+  expectedTitles: string | string[]
 ): UnifiedSearchResult[] {
-  return results.filter((result) => doesMovieReleaseTitleMatch(result.title, expectedTitle))
+  const titles = Array.isArray(expectedTitles) ? expectedTitles : [expectedTitles]
+  return results.filter((result) =>
+    titles.some((title) => doesMovieReleaseTitleMatch(result.title, title))
+  )
 }
 
 /**
@@ -188,9 +191,16 @@ function selectBestRelease(
     // so we still grab something rather than nothing
   }
 
-  // Fallback: sort by size descending
-  const sorted = [...results].sort((a, b) => b.size - a.size)
-  return sorted[0]
+  // Fallback: sort by size descending, but still respect size limits
+  let fallback = [...results]
+  if (sizeOptions?.minSizeBytes) {
+    fallback = fallback.filter((r) => r.size >= sizeOptions.minSizeBytes!)
+  }
+  if (sizeOptions?.maxSizeBytes) {
+    fallback = fallback.filter((r) => r.size <= sizeOptions.maxSizeBytes!)
+  }
+  fallback.sort((a, b) => b.size - a.size)
+  return fallback[0] ?? null
 }
 
 /**
@@ -477,15 +487,19 @@ class RequestedSearchTask {
       result.movies.searched++
 
       try {
+        const movieAlternateTitles =
+          movie.originalTitle && movie.originalTitle !== movie.title ? [movie.originalTitle] : []
         const searchResults = await indexerManager.searchMovies({
           title: movie.title,
           year: movie.year || undefined,
           imdbId: movie.imdbId || undefined,
+          alternateTitles: movieAlternateTitles,
           limit: 25,
         })
 
         // Filter results to only include those that actually match the movie title
-        const matchingResults = filterMovieResultsByTitle(searchResults, movie.title)
+        const allMovieTitles = [movie.title, ...movieAlternateTitles]
+        const matchingResults = filterMovieResultsByTitle(searchResults, allMovieTitles)
 
         // Filter out blacklisted releases
         const availableResults = await blacklistService.filterBlacklisted(matchingResults)
@@ -745,7 +759,12 @@ class RequestedSearchTask {
       try {
         const tvShow = episode.tvShow
         const seriesType = tvShow.seriesType || 'standard'
-        const alternateTitles = tvShow.alternateTitles || []
+        const alternateTitles = [
+          ...(tvShow.alternateTitles || []),
+          ...(tvShow.originalTitle && tvShow.originalTitle !== tvShow.title
+            ? [tvShow.originalTitle]
+            : []),
+        ]
         const airDate =
           seriesType === 'daily' && episode.airDate ? episode.airDate.toISODate() : undefined
 
@@ -967,15 +986,19 @@ class RequestedSearchTask {
         return { found: false, grabbed: false, error: 'Already has active download' }
       }
 
+      const movieAlternateTitles =
+        movie.originalTitle && movie.originalTitle !== movie.title ? [movie.originalTitle] : []
       const searchResults = await indexerManager.searchMovies({
         title: movie.title,
         year: movie.year || undefined,
         imdbId: movie.imdbId || undefined,
+        alternateTitles: movieAlternateTitles,
         limit: 25,
       })
 
       // Filter results to only include those that actually match the movie title
-      const matchingResults = filterMovieResultsByTitle(searchResults, movie.title)
+      const allMovieTitles = [movie.title, ...movieAlternateTitles]
+      const matchingResults = filterMovieResultsByTitle(searchResults, allMovieTitles)
 
       // Filter out blacklisted releases
       const availableResults = await blacklistService.filterBlacklisted(matchingResults)
@@ -1262,7 +1285,12 @@ class RequestedSearchTask {
         try {
           const tvShow = episode.tvShow
           const seriesType = tvShow.seriesType || 'standard'
-          const alternateTitles = tvShow.alternateTitles || []
+          const alternateTitles = [
+          ...(tvShow.alternateTitles || []),
+          ...(tvShow.originalTitle && tvShow.originalTitle !== tvShow.title
+            ? [tvShow.originalTitle]
+            : []),
+        ]
           const airDate =
             seriesType === 'daily' && episode.airDate ? episode.airDate.toISODate() : undefined
 
@@ -1348,6 +1376,42 @@ class RequestedSearchTask {
     }
 
     return result
+  }
+
+  /**
+   * Select the best release for a movie using its quality profile and size limits.
+   * Used by the movies controller for manual downloads.
+   */
+  async selectBestReleaseForMovie(
+    movie: Movie,
+    results: UnifiedSearchResult[]
+  ): Promise<UnifiedSearchResult | null> {
+    const profile = await loadQualityProfile(movie.qualityProfileId)
+    return selectBestRelease(
+      results,
+      'movies',
+      profile?.items ?? null,
+      profile?.cutoff ?? null,
+      buildSizeOptions(profile)
+    )
+  }
+
+  /**
+   * Select the best release for a book using its author's quality profile and size limits.
+   * Used by the books controller for manual downloads.
+   */
+  async selectBestReleaseForBook(
+    book: Book,
+    results: UnifiedSearchResult[]
+  ): Promise<UnifiedSearchResult | null> {
+    const profile = await loadQualityProfile(book.author?.qualityProfileId ?? null)
+    return selectBestRelease(
+      results,
+      'books',
+      profile?.items ?? null,
+      profile?.cutoff ?? null,
+      buildSizeOptions(profile)
+    )
   }
 
   /**

@@ -430,6 +430,8 @@ export default class BooksController {
       const { indexerManager } = await import('#services/indexers/indexer_manager')
       const { downloadManager } = await import('#services/download_clients/download_manager')
 
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
+
       const results = await indexerManager.searchBooks({
         title: book.title,
         author: book.author?.name,
@@ -440,8 +442,12 @@ export default class BooksController {
         return response.notFound({ error: 'No releases found for this book' })
       }
 
-      // Best result is already sorted by size
-      const bestResult = results[0]
+      // Select best release using quality profile and size limits
+      const bestResult = await requestedSearchTask.selectBestReleaseForBook(book, results)
+
+      if (!bestResult) {
+        return response.notFound({ error: 'No releases matching quality profile and size limits' })
+      }
 
       const download = await downloadManager.grab({
         title: bestResult.title,

@@ -49,6 +49,7 @@ export interface MovieSearchOptions {
   year?: number
   imdbId?: string
   tmdbId?: string
+  alternateTitles?: string[]
   indexerIds?: string[]
   limit?: number
 }
@@ -384,54 +385,100 @@ export class IndexerManager {
   }
 
   /**
-   * Search for movies across Prowlarr and direct indexers
+   * Search for movies across Prowlarr and direct indexers.
+   * Supports alternate titles (e.g. original language title) — if the primary
+   * title returns no results from direct indexers, each alternate title is tried.
    */
   async searchMovies(options: MovieSearchOptions): Promise<UnifiedSearchResult[]> {
+    const allTitles = [options.title, ...(options.alternateTitles || [])]
+    const allResults: UnifiedSearchResult[] = []
+
+    let isFirstTitle = true
+    for (const title of allTitles) {
+      const titleResults = await this._searchMoviesSingleTitle(
+        { ...options, title },
+        !isFirstTitle // skip Prowlarr for alternate titles (it uses IDs internally)
+      )
+      allResults.push(...titleResults)
+      isFirstTitle = false
+    }
+
+    // Deduplicate by downloadUrl
+    const seen = new Map<string, UnifiedSearchResult>()
+    for (const result of allResults) {
+      const key = result.downloadUrl
+      if (!seen.has(key)) {
+        seen.set(key, result)
+      }
+    }
+
+    const deduped = Array.from(seen.values())
+
+    if (deduped.length === 0) {
+      const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
+      const directIndexers = await Indexer.query().where('enabled', true)
+      if (!prowlarrConfig && directIndexers.length === 0) {
+        throw new Error(
+          'No indexers configured. Please configure Prowlarr or add indexers in settings.'
+        )
+      }
+    }
+
+    // Sort by size (larger = better quality usually)
+    return deduped.sort((a, b) => b.size - a.size)
+  }
+
+  private async _searchMoviesSingleTitle(
+    options: MovieSearchOptions,
+    skipProwlarr: boolean
+  ): Promise<UnifiedSearchResult[]> {
     const results: UnifiedSearchResult[] = []
 
     // Movie categories: 2000 (Movies), 2010 (Foreign), 2020 (Other), 2030 (SD), 2040 (HD), 2045 (UHD), 2050 (BluRay), 2060 (3D)
     const movieCategories = [2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060]
 
-    // Try Prowlarr first if configured
-    const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
+    // Try Prowlarr first if configured and not skipped
+    if (!skipProwlarr) {
+      const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
 
-    if (prowlarrConfig) {
-      try {
-        const prowlarrResults = await prowlarrService.searchMovies(
-          {
-            url: prowlarrConfig.baseUrl,
-            apiKey: prowlarrConfig.apiKey,
-          },
-          {
-            title: options.title,
-            year: options.year,
-            imdbId: options.imdbId,
-            tmdbId: options.tmdbId,
-            // Don't pass indexerIds to Prowlarr - our UUIDs don't match Prowlarr's numeric IDs
-            limit: options.limit || 50,
-          }
-        )
+      if (prowlarrConfig) {
+        try {
+          const prowlarrResults = await prowlarrService.searchMovies(
+            {
+              url: prowlarrConfig.baseUrl,
+              apiKey: prowlarrConfig.apiKey,
+            },
+            {
+              title: options.title,
+              year: options.year,
+              imdbId: options.imdbId,
+              tmdbId: options.tmdbId,
+              // Don't pass indexerIds to Prowlarr - our UUIDs don't match Prowlarr's numeric IDs
+              limit: options.limit || 50,
+            }
+          )
 
-        results.push(
-          ...prowlarrResults.map((result) => ({
-            id: result.guid,
-            title: result.title,
-            indexer: result.indexer,
-            indexerId: String(result.indexerId),
-            size: result.size,
-            publishDate: result.publishDate,
-            downloadUrl: result.downloadUrl,
-            infoUrl: result.infoUrl,
-            grabs: result.grabs,
-            seeders: result.seeders,
-            peers: result.leechers,
-            protocol: result.protocol,
-            source: 'prowlarr' as const,
-            quality: this.detectVideoQuality(result.title),
-          }))
-        )
-      } catch (error) {
-        console.error('Prowlarr movie search failed:', error)
+          results.push(
+            ...prowlarrResults.map((result) => ({
+              id: result.guid,
+              title: result.title,
+              indexer: result.indexer,
+              indexerId: String(result.indexerId),
+              size: result.size,
+              publishDate: result.publishDate,
+              downloadUrl: result.downloadUrl,
+              infoUrl: result.infoUrl,
+              grabs: result.grabs,
+              seeders: result.seeders,
+              peers: result.leechers,
+              protocol: result.protocol,
+              source: 'prowlarr' as const,
+              quality: this.detectVideoQuality(result.title),
+            }))
+          )
+        } catch (error) {
+          console.error('Prowlarr movie search failed:', error)
+        }
       }
     }
 
@@ -485,14 +532,7 @@ export class IndexerManager {
     const directResults = await Promise.all(directSearches)
     results.push(...directResults.flat())
 
-    if (results.length === 0 && !prowlarrConfig && directIndexers.length === 0) {
-      throw new Error(
-        'No indexers configured. Please configure Prowlarr or add indexers in settings.'
-      )
-    }
-
-    // Sort by size (larger = better quality usually)
-    return results.sort((a, b) => b.size - a.size)
+    return results
   }
 
   /**

@@ -539,12 +539,16 @@ export default class MoviesController {
     try {
       const { indexerManager } = await import('#services/indexers/indexer_manager')
       const { downloadManager } = await import('#services/download_clients/download_manager')
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
 
+      const alternateTitles =
+        movie.originalTitle && movie.originalTitle !== movie.title ? [movie.originalTitle] : []
       const results = await indexerManager.searchMovies({
         title: movie.title,
         year: movie.year ?? undefined,
         imdbId: movie.imdbId ?? undefined,
         tmdbId: movie.tmdbId ?? undefined,
+        alternateTitles,
         limit: 25,
       })
 
@@ -552,8 +556,12 @@ export default class MoviesController {
         return response.notFound({ error: 'No releases found for this movie' })
       }
 
-      // Best result is already sorted by size (larger = better quality)
-      const bestResult = results[0]
+      // Select best release using quality profile and size limits
+      const bestResult = await requestedSearchTask.selectBestReleaseForMovie(movie, results)
+
+      if (!bestResult) {
+        return response.notFound({ error: 'No releases matching quality profile and size limits' })
+      }
 
       const download = await downloadManager.grab({
         title: bestResult.title,
