@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
+import { useState, useRef, useEffect, useCallback, type ReactNode, type MouseEvent } from 'react'
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
 
 interface MediaGalleryProps {
   trailerUrl?: string | null
@@ -19,6 +20,9 @@ export function MediaGallery({ trailerUrl, images, title, className, children }:
   const [activeIndex, setActiveIndex] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
   const slideRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  // Drag state
+  const dragState = useRef({ isDown: false, startX: 0, scrollLeft: 0, dragged: false })
 
   const youtubeKey = trailerUrl ? extractYouTubeKey(trailerUrl) : null
   const hasTrailer = !!youtubeKey
@@ -63,95 +67,162 @@ export function MediaGallery({ trailerUrl, images, title, className, children }:
     })
   }
 
+  const goToSlide = (direction: 'prev' | 'next') => {
+    const next = direction === 'next'
+      ? (activeIndex + 1) % totalSlides
+      : (activeIndex - 1 + totalSlides) % totalSlides
+    scrollToSlide(next)
+  }
+
+  // Mouse drag handlers
+  const onMouseDown = (e: MouseEvent) => {
+    const el = scrollRef.current
+    if (!el) return
+    dragState.current = { isDown: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft, dragged: false }
+    el.style.cursor = 'grabbing'
+    el.style.scrollSnapType = 'none'
+  }
+
+  const onMouseMove = (e: MouseEvent) => {
+    const ds = dragState.current
+    if (!ds.isDown) return
+    e.preventDefault()
+    const el = scrollRef.current!
+    const x = e.pageX - el.offsetLeft
+    const walk = x - ds.startX
+    if (Math.abs(walk) > 5) ds.dragged = true
+    el.scrollLeft = ds.scrollLeft - walk
+  }
+
+  const onMouseUp = () => {
+    const el = scrollRef.current
+    if (!el) return
+    dragState.current.isDown = false
+    el.style.cursor = ''
+    el.style.scrollSnapType = ''
+  }
+
   if (totalSlides === 0) return null
 
   const sizeClass = className || 'aspect-video'
 
   return (
-    <div className={`relative overflow-hidden rounded-lg ${sizeClass}`}>
-      <div
-        ref={scrollRef}
-        className="flex h-full overflow-x-auto snap-x snap-mandatory"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-      >
-        {/* Trailer slide */}
-        {hasTrailer && (
-          <div
-            ref={setSlideRef(0)}
-            className="min-w-full h-full snap-start bg-muted relative flex-shrink-0"
-          >
-            {playingTrailer ? (
-              <iframe
-                src={`${trailerUrl}?autoplay=1`}
-                title="Trailer"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="w-full h-full"
-              />
-            ) : (
-              <button
-                onClick={() => setPlayingTrailer(true)}
-                className="w-full h-full relative group cursor-pointer"
-              >
-                <img
-                  src={`https://img.youtube.com/vi/${youtubeKey}/maxresdefault.jpg`}
-                  alt={`${title} trailer`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    const img = e.target as HTMLImageElement
-                    if (img.src.includes('maxresdefault')) {
-                      img.src = `https://img.youtube.com/vi/${youtubeKey}/hqdefault.jpg`
-                    }
-                  }}
-                />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
-                  <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      className="w-8 h-8 text-black ml-1"
-                    >
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </div>
-                </div>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Image slides */}
-        {imageList.map((url, i) => {
-          const slideIndex = hasTrailer ? i + 1 : i
-          return (
+    <div>
+      <div className={`relative overflow-hidden rounded-lg ${sizeClass} group/gallery`}>
+        <div
+          ref={scrollRef}
+          className="flex h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory cursor-grab select-none"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseUp}
+        >
+          {/* Trailer slide */}
+          {hasTrailer && (
             <div
-              key={url}
-              ref={setSlideRef(slideIndex)}
+              ref={setSlideRef(0)}
               className="min-w-full h-full snap-start bg-muted relative flex-shrink-0"
             >
-              <img
-                src={url}
-                alt={`${title} backdrop ${i + 1}`}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
+              {playingTrailer ? (
+                <iframe
+                  src={`${trailerUrl}?autoplay=1`}
+                  title="Trailer"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
+              ) : (
+                <button
+                  onClick={(e) => {
+                    if (dragState.current.dragged) {
+                      e.preventDefault()
+                      return
+                    }
+                    setPlayingTrailer(true)
+                  }}
+                  className="w-full h-full relative group cursor-pointer"
+                >
+                  <img
+                    src={`https://img.youtube.com/vi/${youtubeKey}/maxresdefault.jpg`}
+                    alt={`${title} trailer`}
+                    className="w-full h-full object-cover pointer-events-none"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement
+                      if (img.src.includes('maxresdefault')) {
+                        img.src = `https://img.youtube.com/vi/${youtubeKey}/hqdefault.jpg`
+                      }
+                    }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                    <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="w-8 h-8 text-black ml-1"
+                      >
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                </button>
+              )}
             </div>
-          )
-        })}
+          )}
+
+          {/* Image slides */}
+          {imageList.map((url, i) => {
+            const slideIndex = hasTrailer ? i + 1 : i
+            return (
+              <div
+                key={url}
+                ref={setSlideRef(slideIndex)}
+                className="min-w-full h-full snap-start bg-muted relative flex-shrink-0"
+              >
+                <img
+                  src={url}
+                  alt={`${title} backdrop ${i + 1}`}
+                  className="w-full h-full object-cover pointer-events-none"
+                  loading="lazy"
+                />
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Overlay children */}
+        {children}
+
+        {/* Prev / Next buttons */}
+        {totalSlides > 1 && (
+          <>
+            <button
+              onClick={() => goToSlide('prev')}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/gallery:opacity-100 transition-opacity cursor-pointer"
+              aria-label="Previous slide"
+            >
+              <ChevronLeftIcon className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => goToSlide('next')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/gallery:opacity-100 transition-opacity cursor-pointer"
+              aria-label="Next slide"
+            >
+              <ChevronRightIcon className="w-5 h-5" />
+            </button>
+          </>
+        )}
       </div>
 
-      {/* Overlay children (e.g. MediaStatusBadge) */}
-      {children}
-
-      {/* Dot indicators */}
+      {/* Dot indicators (outside the carousel) */}
       {totalSlides > 1 && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+        <div className="flex justify-center gap-1.5 mt-3">
           {Array.from({ length: totalSlides }).map((_, i) => (
             <button
               key={i}
               onClick={() => scrollToSlide(i)}
               className={`w-2 h-2 rounded-full transition-colors ${
-                i === activeIndex ? 'bg-white' : 'bg-white/50'
+                i === activeIndex ? 'bg-foreground' : 'bg-foreground/25'
               }`}
               aria-label={`Go to slide ${i + 1}`}
             />
