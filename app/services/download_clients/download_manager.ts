@@ -2011,6 +2011,32 @@ export class DownloadManager {
       }
     }
 
+    // For completed/importing downloads, also delete the output files from disk
+    if (deleteFiles && download.outputPath) {
+      let localPath = download.outputPath
+      if (
+        download.downloadClient?.settings?.remotePath &&
+        download.downloadClient?.settings?.localPath
+      ) {
+        if (localPath.startsWith(download.downloadClient.settings.remotePath)) {
+          localPath = localPath.replace(
+            download.downloadClient.settings.remotePath,
+            download.downloadClient.settings.localPath
+          )
+        }
+      }
+
+      try {
+        await fs.rm(localPath, { recursive: true, force: true })
+        logger.info({ path: localPath }, 'DownloadManager: Deleted output files')
+      } catch (error) {
+        logger.warn(
+          { path: localPath, err: error },
+          'DownloadManager: Failed to delete output files'
+        )
+      }
+    }
+
     await download.delete()
   }
 

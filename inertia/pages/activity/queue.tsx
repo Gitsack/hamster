@@ -627,12 +627,15 @@ export default function Activity() {
     }
   }
 
-  const removeImport = async (id: string) => {
+  const removeImport = async (id: string, deleteFiles = true) => {
     try {
-      const response = await fetch(`/api/v1/queue/${id}`, { method: 'DELETE' })
+      const response = await fetch(`/api/v1/queue/${id}?deleteFiles=${deleteFiles}`, {
+        method: 'DELETE',
+      })
       if (response.ok) {
         setImportingItems((prev) => prev.filter((item) => item.id !== id))
         toast.success('Download removed')
+        fetchCompleted(false)
       } else {
         toast.error('Failed to remove download')
       }

@@ -63,7 +63,8 @@ export default class QueueController {
    * Cancel a download
    */
   async destroy({ params, request, response }: HttpContext) {
-    const deleteFiles = request.input('deleteFiles', false)
+    const deleteFilesInput = request.input('deleteFiles', false)
+    const deleteFiles = deleteFilesInput === true || deleteFilesInput === 'true'
 
     try {
       await downloadManager.cancel(params.id, deleteFiles)
