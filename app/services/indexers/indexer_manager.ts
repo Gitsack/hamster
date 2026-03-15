@@ -496,16 +496,23 @@ export class IndexerManager {
           enabled: indexer.enabled,
         }
 
-        // Build search query
+        // Use movie-specific search with IMDB ID when available for precise matching
         let query = options.title
         if (options.year) {
           query = `${query} ${options.year}`
         }
 
-        const searchResults = await newznabService.search(config, query, {
-          categories: movieCategories,
-          limit: options.limit || 50,
-        })
+        const searchResults = options.imdbId
+          ? await newznabService.searchMovies(config, {
+              query,
+              imdbId: options.imdbId,
+              categories: movieCategories,
+              limit: options.limit || 50,
+            })
+          : await newznabService.search(config, query, {
+              categories: movieCategories,
+              limit: options.limit || 50,
+            })
 
         return searchResults.map((result) => ({
           id: result.guid,

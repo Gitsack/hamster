@@ -309,6 +309,50 @@ export class NewznabService {
   }
 
   /**
+   * Search for movies using Newznab movie search (t=movie)
+   * Supports IMDB ID for precise matching regardless of title variations
+   */
+  async searchMovies(
+    config: NewznabIndexerConfig,
+    options: {
+      query?: string
+      imdbId?: string
+      categories?: number[]
+      limit?: number
+      offset?: number
+    } = {}
+  ): Promise<NewznabSearchResult[]> {
+    const movieCategories = [2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060]
+
+    const params = new URLSearchParams({
+      t: 'movie',
+      apikey: config.apiKey,
+      limit: String(options.limit || 100),
+      offset: String(options.offset || 0),
+      extended: '1',
+    })
+
+    if (options.query) params.set('q', options.query)
+    if (options.imdbId) params.set('imdbid', options.imdbId)
+
+    const categories = options.categories || config.categories || movieCategories
+    if (categories.length > 0) {
+      params.set('cat', categories.join(','))
+    }
+
+    const searchUrl = `${this.normalizeUrl(config.url)}/api?${params.toString()}`
+
+    const response = await this.fetchWithTimeout(searchUrl)
+    if (!response.ok) {
+      if (response.status === 429) throw new RateLimitError(config.name)
+      throw new Error(`Movie search failed: ${response.status}`)
+    }
+
+    const xml = await response.text()
+    return this.parseSearchResults(xml, config)
+  }
+
+  /**
    * Get NZB download URL
    */
   getNzbUrl(config: NewznabIndexerConfig, guid: string): string {

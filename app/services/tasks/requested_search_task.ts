@@ -16,10 +16,16 @@ import type { MediaType } from '#services/quality/quality_parser'
  * Normalize a title for comparison by:
  * - Converting to lowercase
  * - Replacing dots, underscores, hyphens with spaces
+ * - Removing remaining non-alphanumeric characters (e.g. *, ', &)
  * - Removing extra whitespace
  */
 function normalizeTitle(title: string): string {
-  return title.toLowerCase().replace(/[._-]/g, ' ').replace(/\s+/g, ' ').trim()
+  return title
+    .toLowerCase()
+    .replace(/[._-]/g, ' ')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /**
