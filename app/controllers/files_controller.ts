@@ -399,10 +399,10 @@ export default class FilesController {
         const baseName = isDuplicate ? dupMatch![1] : name
 
         // Guess media type
-        const mediaType = this.#guessMediaType(name)
+        const mediaType = this.guessMediaType(name)
 
         // Parse title and year
-        const { title, year } = this.#parseTitleAndYear(name)
+        const { title, year } = this.parseTitleAndYear(name)
 
         // Get size for files, null for directories
         let sizeBytes: number | null = null
@@ -432,21 +432,16 @@ export default class FilesController {
       }
     }
 
-    // Group by baseName and set duplicateCount
-    const baseNameCounts = new Map<string, number>()
-    for (const entry of allEntries) {
-      baseNameCounts.set(entry.baseName, (baseNameCounts.get(entry.baseName) || 0) + 1)
-    }
-    for (const entry of allEntries) {
-      entry.duplicateCount = baseNameCounts.get(entry.baseName) || 1
-    }
-
     // Filter out entries that are already tracked as completed downloads or unmatched files
     const { default: Download } = await import('#models/download')
     const { default: UnmatchedFile } = await import('#models/unmatched_file')
 
-    const [completedDownloads, unmatchedFiles] = await Promise.all([
+    const [completedDownloads, importingDownloads, unmatchedFiles] = await Promise.all([
       Download.query().whereIn('status', ['completed', 'importing']).select('title', 'outputPath'),
+      Download.query()
+        .where('status', 'importing')
+        .preload('downloadClient')
+        .orderBy('completedAt', 'desc'),
       UnmatchedFile.query().select('fileName'),
     ])
 
@@ -458,8 +453,19 @@ export default class FilesController {
     }
     const unmatchedNames = new Set(unmatchedFiles.map((u) => u.fileName))
 
+    // Normalize a string for comparison (lowercase, strip non-alphanumeric)
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+    // Build normalized sets for fuzzy matching
+    const normalizedTrackedTitles = new Set(
+      [...trackedTitles].map((t) => normalize(t))
+    )
+
     const filteredEntries = allEntries.filter(
-      (e) => !trackedPaths.has(e.path) && !trackedTitles.has(e.name) && !unmatchedNames.has(e.name)
+      (e) =>
+        !trackedPaths.has(e.path) &&
+        !normalizedTrackedTitles.has(normalize(e.name)) &&
+        !unmatchedNames.has(e.name)
     )
 
     // Group by baseName and set duplicateCount
@@ -478,7 +484,19 @@ export default class FilesController {
       return a.name.localeCompare(b.name)
     })
 
-    return response.json({ entries: filteredEntries })
+    // Include importing downloads as separate list for the Pending Import tab
+    const importing = importingDownloads.map((d) => ({
+      id: d.id,
+      title: d.title,
+      status: d.status,
+      progress: d.progress,
+      outputPath: d.outputPath,
+      errorMessage: d.errorMessage,
+      completedAt: d.completedAt?.toISO() ?? null,
+      downloadClient: d.downloadClient?.name ?? null,
+    }))
+
+    return response.json({ entries: filteredEntries, importing })
   }
 
   /**
@@ -528,7 +546,7 @@ export default class FilesController {
         // Delete _UNPACK_ folders
         if (name.startsWith('_UNPACK_')) {
           try {
-            const size = await this.#getEntrySize(fullPath)
+            const size = await this.getEntrySize(fullPath)
             await fs.rm(fullPath, { recursive: true, force: true })
             deleted++
             freedBytes += size
@@ -545,7 +563,7 @@ export default class FilesController {
 
         if (isDuplicate) {
           try {
-            const size = await this.#getEntrySize(fullPath)
+            const size = await this.getEntrySize(fullPath)
             await fs.rm(fullPath, { recursive: true, force: true })
             deleted++
             freedBytes += size
@@ -562,7 +580,7 @@ export default class FilesController {
   /**
    * Guess media type from a folder/file name
    */
-  #guessMediaType(name: string): 'tv' | 'music' | 'movies' | 'books' {
+  private guessMediaType(name: string): 'tv' | 'music' | 'movies' | 'books' {
     // TV: has S01E01 pattern
     if (/S\d+E\d+/i.test(name)) return 'tv'
 
@@ -582,7 +600,7 @@ export default class FilesController {
   /**
    * Parse title and year from a release name
    */
-  #parseTitleAndYear(name: string): { title: string; year: string | null } {
+  private parseTitleAndYear(name: string): { title: string; year: string | null } {
     // Remove _UNPACK_ prefix if present
     let cleanName = name.replace(/^_UNPACK_/, '')
 
@@ -616,7 +634,7 @@ export default class FilesController {
   /**
    * Get total size of a file or directory
    */
-  async #getEntrySize(entryPath: string): Promise<number> {
+  private async getEntrySize(entryPath: string): Promise<number> {
     try {
       const stat = await fs.stat(entryPath)
       if (stat.isFile()) return stat.size
@@ -626,7 +644,7 @@ export default class FilesController {
       const entries = await fs.readdir(entryPath, { withFileTypes: true })
       for (const entry of entries) {
         const childPath = path.join(entryPath, entry.name)
-        total += await this.#getEntrySize(childPath)
+        total += await this.getEntrySize(childPath)
       }
       return total
     } catch {

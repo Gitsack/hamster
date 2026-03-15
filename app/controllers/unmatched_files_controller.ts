@@ -1,6 +1,9 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import UnmatchedFile from '#models/unmatched_file'
+import RootFolder from '#models/root_folder'
 import vine from '@vinejs/vine'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 
 const updateStatusValidator = vine.compile(
   vine.object({
@@ -23,6 +26,9 @@ export default class UnmatchedFilesController {
    * List unmatched files with optional filtering
    */
   async index({ request, response }: HttpContext) {
+    // Prune stale unmatched file records whose paths no longer exist on disk
+    await this.pruneStaleRecords()
+
     const query = await request.validateUsing(queryValidator)
     const page = query.page || 1
     const limit = query.limit || 50
@@ -172,5 +178,65 @@ export default class UnmatchedFilesController {
         {} as Record<string, number>
       ),
     })
+  }
+
+  /**
+   * Remove unmatched file records whose files no longer exist on disk.
+   * Checks both the relativePath (joined with root folder path) and the
+   * raw relativePath (which may be an absolute SABnzbd storage path).
+   */
+  private async pruneStaleRecords(): Promise<void> {
+    const files = await UnmatchedFile.query()
+      .where('status', 'pending')
+      .preload('rootFolder')
+
+    if (files.length === 0) return
+
+    // Cache root folder paths
+    const rootFolders = await RootFolder.all()
+    const rootFolderPaths = new Map<string, string>()
+    for (const rf of rootFolders) {
+      rootFolderPaths.set(rf.id, rf.path)
+    }
+
+    const staleIds: string[] = []
+
+    for (const file of files) {
+      const rootPath = rootFolderPaths.get(file.rootFolderId)
+
+      // Build candidate paths to check
+      const candidates: string[] = []
+      if (file.relativePath) {
+        // If relativePath is absolute, check it directly
+        if (path.isAbsolute(file.relativePath)) {
+          candidates.push(file.relativePath)
+        }
+        // Also try joining with root folder path
+        if (rootPath) {
+          candidates.push(path.join(rootPath, file.relativePath))
+        }
+      }
+
+      // Check if any candidate path exists
+      let exists = false
+      for (const candidate of candidates) {
+        try {
+          await fs.access(candidate)
+          exists = true
+          break
+        } catch {
+          // not accessible
+        }
+      }
+
+      if (!exists) {
+        staleIds.push(file.id)
+      }
+    }
+
+    if (staleIds.length > 0) {
+      await UnmatchedFile.query().whereIn('id', staleIds).delete()
+      console.log(`[UnmatchedFiles] Pruned ${staleIds.length} stale records (files no longer on disk)`)
+    }
   }
 }

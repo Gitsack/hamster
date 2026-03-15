@@ -84,6 +84,17 @@ interface CompletedEntry {
   duplicateCount: number
 }
 
+interface ImportingItem {
+  id: string
+  title: string
+  status: string
+  progress: number
+  outputPath: string | null
+  errorMessage: string | null
+  completedAt: string | null
+  downloadClient: string | null
+}
+
 interface ParsedInfo {
   title?: string
   year?: number
@@ -274,6 +285,7 @@ export default function Activity() {
 
   // Completed folder state
   const [completedEntries, setCompletedEntries] = useState<CompletedEntry[]>([])
+  const [importingItems, setImportingItems] = useState<ImportingItem[]>([])
   const [completedLoading, setCompletedLoading] = useState(true)
   const [completedFilter, setCompletedFilter] = useState<'all' | 'duplicates' | 'unpacking'>('all')
   const [cleaningUp, setCleaningUp] = useState(false)
@@ -338,6 +350,7 @@ export default function Activity() {
       if (response.ok) {
         const data = await response.json()
         setCompletedEntries(data.entries ?? [])
+        setImportingItems(data.importing ?? [])
       }
     } catch {
       console.error('Failed to fetch completed folder')
@@ -779,9 +792,9 @@ export default function Activity() {
           </TabsTrigger>
           <TabsTrigger value="completed">
             Pending Import
-            {completedEntries.length > 0 && (
+            {(completedEntries.length + importingItems.length) > 0 && (
               <Badge variant="secondary" className="ml-1.5 text-xs px-1.5 py-0">
-                {completedEntries.length}
+                {completedEntries.length + importingItems.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -925,7 +938,7 @@ export default function Activity() {
 
               {completedLoading ? (
                 <TableSkeleton rows={5} />
-              ) : completedEntries.length === 0 ? (
+              ) : completedEntries.length === 0 && importingItems.length === 0 ? (
                 <EmptyState
                   icon={
                     <HugeiconsIcon
@@ -933,72 +946,115 @@ export default function Activity() {
                       className="h-12 w-12 text-muted-foreground"
                     />
                   }
-                  title="Download folder is empty"
+                  title="Nothing pending"
                   subtitle="Downloads waiting to be imported will appear here."
                 />
-              ) : filteredCompleted.length === 0 ? (
-                <EmptyState
-                  title="No matching entries"
-                  subtitle="Try a different filter."
-                />
               ) : (
-                <div className="overflow-x-auto -mx-6 px-6">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead className="w-24">Type</TableHead>
-                        <TableHead className="w-48">Parsed</TableHead>
-                        <TableHead className="w-16 text-center">Dups</TableHead>
-                        <TableHead className="w-24">Flags</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredCompleted.map((entry) => (
-                        <TableRow
-                          key={entry.name}
-                          className={
-                            entry.isDuplicate || entry.isUnpacking
-                              ? 'opacity-60'
-                              : undefined
-                          }
-                        >
-                          <TableCell className="max-w-md">
-                            <div className="font-medium truncate" title={entry.name}>
-                              {entry.name}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {entry.downloadClientName}
-                            </div>
-                          </TableCell>
-                          <TableCell>{getMediaTypeBadge(entry.mediaType)}</TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {entry.title}
-                            {entry.year ? ` (${entry.year})` : ''}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {entry.duplicateCount > 1 && (
-                              <Badge variant="secondary">{entry.duplicateCount}</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              {entry.isDuplicate && (
-                                <Badge variant="outline" className="text-yellow-600 border-yellow-600 text-xs">
-                                  dup
+                <div className="space-y-6">
+                  {importingItems.length > 0 && (
+                    <div className="overflow-x-auto -mx-6 px-6">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead className="w-32">Status</TableHead>
+                            <TableHead className="w-40">Client</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {importingItems.map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell className="max-w-md">
+                                <div className="font-medium truncate" title={item.title}>
+                                  {item.title}
+                                </div>
+                                {item.completedAt && (
+                                  <div className="text-xs text-muted-foreground">
+                                    Completed {formatDate(item.completedAt)}
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className="bg-purple-500">
+                                  <Spinner className="h-3 w-3 mr-1" />
+                                  Importing
                                 </Badge>
-                              )}
-                              {entry.isUnpacking && (
-                                <Badge variant="outline" className="text-orange-600 border-orange-600 text-xs">
-                                  temp
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {item.downloadClient ?? '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  {filteredCompleted.length === 0 && completedEntries.length > 0 ? (
+                    <EmptyState
+                      title="No matching entries"
+                      subtitle="Try a different filter."
+                    />
+                  ) : filteredCompleted.length > 0 ? (
+                    <div className="overflow-x-auto -mx-6 px-6">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Name</TableHead>
+                            <TableHead className="w-24">Type</TableHead>
+                            <TableHead className="w-48">Parsed</TableHead>
+                            <TableHead className="w-16 text-center">Dups</TableHead>
+                            <TableHead className="w-24">Flags</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredCompleted.map((entry) => (
+                            <TableRow
+                              key={entry.name}
+                              className={
+                                entry.isDuplicate || entry.isUnpacking
+                                  ? 'opacity-60'
+                                  : undefined
+                              }
+                            >
+                              <TableCell className="max-w-md">
+                                <div className="font-medium truncate" title={entry.name}>
+                                  {entry.name}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {entry.downloadClientName}
+                                </div>
+                              </TableCell>
+                              <TableCell>{getMediaTypeBadge(entry.mediaType)}</TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {entry.title}
+                                {entry.year ? ` (${entry.year})` : ''}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {entry.duplicateCount > 1 && (
+                                  <Badge variant="secondary">{entry.duplicateCount}</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  {entry.isDuplicate && (
+                                    <Badge variant="outline" className="text-yellow-600 border-yellow-600 text-xs">
+                                      dup
+                                    </Badge>
+                                  )}
+                                  {entry.isUnpacking && (
+                                    <Badge variant="outline" className="text-orange-600 border-orange-600 text-xs">
+                                      temp
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </CardContent>

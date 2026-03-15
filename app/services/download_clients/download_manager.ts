@@ -58,6 +58,14 @@ export interface QueueItem {
 }
 
 export class DownloadManager {
+  // Track downloads currently being imported to prevent parallel imports
+  private importsInFlight = new Set<string>()
+
+  // Track import attempt counts to prevent infinite retries
+  private importAttempts = new Map<string, number>()
+
+  private static MAX_IMPORT_ATTEMPTS = 3
+
   /**
    * Check if a media item already has a file in the library
    * Returns true if file exists (and updates hasFile flag if needed), false otherwise
@@ -710,7 +718,7 @@ export class DownloadManager {
    */
   async getQueue(): Promise<QueueItem[]> {
     const downloads = await Download.query()
-      .whereIn('status', ['queued', 'downloading', 'paused', 'importing'])
+      .whereIn('status', ['queued', 'downloading', 'paused'])
       .preload('downloadClient')
       .orderBy('createdAt', 'asc')
 
@@ -783,7 +791,7 @@ export class DownloadManager {
         for (const slot of queue.slots) {
           foundExternalIds.add(slot.nzo_id)
 
-          const download = downloadsByExternalId.get(slot.nzo_id)
+          let download = downloadsByExternalId.get(slot.nzo_id)
 
           if (download) {
             download.progress = Number.parseFloat(slot.percentage)
@@ -791,6 +799,24 @@ export class DownloadManager {
             download.remainingBytes = Math.floor(Number.parseFloat(slot.mbleft) * 1024 * 1024)
             download.etaSeconds = this.parseTimeLeft(slot.timeleft)
             await download.save()
+          } else {
+            // Create a tracking record for SABnzbd items not initiated by Hamster
+            // so they appear in the queue UI
+            logger.info(
+              { nzoId: slot.nzo_id, filename: slot.filename },
+              'DownloadManager: Found untracked SABnzbd queue item, creating record'
+            )
+            download = await Download.create({
+              downloadClientId: client.id,
+              externalId: slot.nzo_id,
+              title: slot.filename,
+              status: this.mapSabnzbdStatus(slot.status),
+              progress: Number.parseFloat(slot.percentage),
+              sizeBytes: Math.floor(Number.parseFloat(slot.mb) * 1024 * 1024),
+              remainingBytes: Math.floor(Number.parseFloat(slot.mbleft) * 1024 * 1024),
+              etaSeconds: this.parseTimeLeft(slot.timeleft),
+            })
+            downloadsByExternalId.set(slot.nzo_id, download)
           }
         }
 
@@ -825,10 +851,27 @@ export class DownloadManager {
                 download.completedAt &&
                 download.completedAt < DateTime.now().minus({ minutes: 2 })
 
-              // Trigger import if we haven't already OR if it's stuck
-              const shouldTriggerImport = !download.outputPath || isStuck
+              // Check if already being imported or max retries exceeded
+              const isInFlight = this.importsInFlight.has(download.id)
+              const attempts = this.importAttempts.get(download.id) || 0
+              const maxRetriesExceeded = attempts >= DownloadManager.MAX_IMPORT_ATTEMPTS
+
+              if (maxRetriesExceeded && download.status === 'importing') {
+                logger.error(
+                  { title: download.title, attempts },
+                  'DownloadManager: Max import retries exceeded, marking as failed'
+                )
+                download.status = 'failed'
+                download.errorMessage = `Import failed after ${attempts} attempts`
+                await download.save()
+                this.importAttempts.delete(download.id)
+                continue
+              }
+
+              // Trigger import if we haven't already OR if it's stuck (and not already in-flight)
+              const shouldTriggerImport = (!download.outputPath || isStuck) && !isInFlight
               logger.debug(
-                { shouldTriggerImport, isStuck, storagePath: slot.storage },
+                { shouldTriggerImport, isStuck, isInFlight, attempts, storagePath: slot.storage },
                 'DownloadManager: Import trigger check'
               )
 
@@ -934,20 +977,28 @@ export class DownloadManager {
 
               // Trigger import in background
               if (shouldTriggerImport) {
+                const attempt = (this.importAttempts.get(download.id) || 0) + 1
+                this.importAttempts.set(download.id, attempt)
+                this.importsInFlight.add(download.id)
+
                 logger.info(
-                  { title: download.title, retry: isStuck },
+                  { title: download.title, retry: isStuck, attempt },
                   'DownloadManager: Triggering import'
                 )
-                this.triggerImport(download).catch((error) => {
-                  logger.error(
-                    { downloadId: download.id, err: error },
-                    'DownloadManager: Failed to import download'
-                  )
-                })
+                this.triggerImport(download)
+                  .catch((error) => {
+                    logger.error(
+                      { downloadId: download.id, err: error },
+                      'DownloadManager: Failed to import download'
+                    )
+                  })
+                  .finally(() => {
+                    this.importsInFlight.delete(download.id)
+                  })
               } else {
                 logger.debug(
-                  { title: download.title },
-                  'DownloadManager: Import recently triggered'
+                  { title: download.title, isInFlight },
+                  'DownloadManager: Import recently triggered or in-flight'
                 )
               }
             } else if (slot.status === 'Failed') {
@@ -1564,6 +1615,7 @@ export class DownloadManager {
           'DownloadManager: Import completed'
         )
         download.status = 'completed'
+        this.importAttempts.delete(download.id)
       } else {
         logger.error(
           { title: download.title, errors: result.errors },

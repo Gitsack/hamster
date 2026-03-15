@@ -418,12 +418,24 @@ class FolderScanner {
             possiblePaths.push(remotePath)
           }
         }
-        const existingDownload = await Download.query()
-          .where((q) => {
-            q.whereIn('outputPath', possiblePaths).orWhere('title', folder.name)
-          })
+        // Check by path (local and remote equivalent) first
+        let existingDownload = await Download.query()
+          .whereIn('outputPath', possiblePaths)
           .whereIn('status', ['completed', 'importing'])
           .first()
+
+        // If not found by path, try normalized title match
+        // (handles special chars like + being stored differently by download clients)
+        if (!existingDownload) {
+          const normalizedName = folder.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+          const candidates = await Download.query()
+            .whereIn('status', ['completed', 'importing'])
+            .select('id', 'title', 'status')
+          existingDownload =
+            candidates.find(
+              (d) => d.title.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedName
+            ) ?? null
+        }
 
         if (existingDownload) {
           if (existingDownload.status === 'completed') {
