@@ -15,7 +15,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
       errors: ctx.inertia.always(this.getValidationErrors(ctx)),
       user: ctx.inertia.always(() => {
         const user = auth?.user
-        if (!user) return null
+        if (!user) return undefined
         return {
           id: user.id,
           fullName: user.fullName,
@@ -23,10 +23,10 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
           isAdmin: user.isAdmin,
         }
       }),
-      flash: ctx.inertia.always({
-        error: session?.flashMessages.get('error'),
-        success: session?.flashMessages.get('success'),
-      }),
+      flash: ctx.inertia.always(() => ({
+        error: session?.flashMessages.get('error') ?? undefined,
+        success: session?.flashMessages.get('success') ?? undefined,
+      })),
     }
   }
 
