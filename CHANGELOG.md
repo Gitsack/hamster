@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.2](https://github.com/Gitsack/hamster/compare/hamster-v1.21.1...hamster-v1.21.2) (2026-03-28)
+
+
+### Bug Fixes
+
+* tests ([51c0cc3](https://github.com/Gitsack/hamster/commit/51c0cc3f057a1621e02ce9fea66fa1e971341e9c))
+
 ## [1.21.1](https://github.com/Gitsack/hamster/compare/hamster-v1.21.0...hamster-v1.21.1) (2026-03-28)
 
 
