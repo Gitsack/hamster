@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.21.0](https://github.com/Gitsack/hamster/compare/hamster-v1.20.3...hamster-v1.21.0) (2026-03-23)
+
+
+### Features
+
+* download processing management improvements ([b989573](https://github.com/Gitsack/hamster/commit/b9895733c68f94514518a16f799d1bf720680997))
+* new media hero structure ([1077065](https://github.com/Gitsack/hamster/commit/107706501ed2195194766ab58a3e09793693ea6c))
+* scan download files and import ([e379520](https://github.com/Gitsack/hamster/commit/e379520d38a5da039c70a95340419e1b702cdd37))
+* upgraded to new adonis and vite v7 ([fabb87e](https://github.com/Gitsack/hamster/commit/fabb87eea5d56a3ab58d3ace9ca10a788b573728))
+
+
+### Bug Fixes
+
+* added different search way for movies ([934e86c](https://github.com/Gitsack/hamster/commit/934e86c0565adaf17bd0d7dc5505830c4f211881))
+* apostrophes in search queries ([f20860c](https://github.com/Gitsack/hamster/commit/f20860cbbff7e093c62ade84ee13f16425d9c1c8))
+* delete file on remove button for importing items ([052668f](https://github.com/Gitsack/hamster/commit/052668fb106aa6cb65edc533f16503ee23da8657))
+* direct download ([cb4885f](https://github.com/Gitsack/hamster/commit/cb4885f7628a5c73b06beb1414589a4ff7e45c59))
+* filesize maximum, original titles ([36cbdf2](https://github.com/Gitsack/hamster/commit/36cbdf2c3610bcaf2230d683a2b0620ffca2888c))
+* fixes for queue and activity tabs ([5ad4e0a](https://github.com/Gitsack/hamster/commit/5ad4e0a08c08a158744018b2ace475c7a56a7993))
+* handle stuck importing entries ([219c52e](https://github.com/Gitsack/hamster/commit/219c52e7c76c9986cc7a9c4a5756a58bd5b741ce))
+* null error ([47c30d5](https://github.com/Gitsack/hamster/commit/47c30d52adfc0b59ff9d534911ad28a06171bac2))
+
 ## [1.20.3](https://github.com/Gitsack/hamster/compare/hamster-v1.20.2...hamster-v1.20.3) (2026-02-25)
 
 
