@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.1](https://github.com/Gitsack/hamster/compare/hamster-v1.21.0...hamster-v1.21.1) (2026-03-28)
+
+
+### Bug Fixes
+
+* bun lockfile ([f0f45fa](https://github.com/Gitsack/hamster/commit/f0f45fa938a31b03dc356d4bbbe7284a1f69f3ba))
+
 ## [1.21.0](https://github.com/Gitsack/hamster/compare/hamster-v1.20.3...hamster-v1.21.0) (2026-03-23)
 
 
