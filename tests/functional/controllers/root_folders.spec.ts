@@ -280,9 +280,12 @@ test.group('RootFoldersController', (group) => {
     const updateDir = path.join(os.tmpdir(), `hamster-test-update-${Date.now()}`)
     await fs.mkdir(updateDir, { recursive: true })
 
+    const updateFromDir = path.join(os.tmpdir(), `hamster-test-update-from-${Date.now()}`)
+    await fs.mkdir(updateFromDir, { recursive: true })
+
     const toUpdate = await RootFolderFactory.create({
       name: 'Root Test Update Me',
-      path: tempDir,
+      path: updateFromDir,
       mediaType: 'music',
     })
 
@@ -318,6 +321,7 @@ test.group('RootFoldersController', (group) => {
     await toUpdate.delete()
     try {
       await fs.rm(updateDir, { recursive: true })
+      await fs.rm(updateFromDir, { recursive: true })
     } catch {
       // Ignore
     }
@@ -348,9 +352,12 @@ test.group('RootFoldersController', (group) => {
   })
 
   test('update returns badRequest for non-existent path', async ({ assert }) => {
+    const badUpdateDir = path.join(os.tmpdir(), `hamster-test-bad-update-${Date.now()}`)
+    await fs.mkdir(badUpdateDir, { recursive: true })
+
     const toUpdate = await RootFolderFactory.create({
       name: 'Root Test Bad Update',
-      path: tempDir,
+      path: badUpdateDir,
       mediaType: 'music',
     })
 
@@ -377,6 +384,11 @@ test.group('RootFoldersController', (group) => {
     assert.property(badRequestResult, 'error')
 
     await toUpdate.delete()
+    try {
+      await fs.rm(badUpdateDir, { recursive: true })
+    } catch {
+      // Ignore
+    }
   })
 
   // ---- destroy ----

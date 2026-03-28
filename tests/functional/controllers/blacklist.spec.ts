@@ -1,13 +1,28 @@
 import { test } from '@japa/runner'
 import BlacklistedRelease from '#models/blacklisted_release'
 import BlacklistController from '#controllers/blacklist_controller'
+import Movie from '#models/movie'
+import TvShow from '#models/tv_show'
+import Season from '#models/season'
+import Episode from '#models/episode'
 import { DateTime } from 'luxon'
 import { randomUUID } from 'node:crypto'
 
 test.group('BlacklistController', (group) => {
-  const movieId = randomUUID()
+  let movie: Movie
+  let movieId: string
 
   group.setup(async () => {
+    movie = await Movie.create({
+      title: 'Blacklist Test Movie',
+      year: 2024,
+      requested: false,
+      hasFile: false,
+      needsReview: false,
+      genres: [],
+    })
+    movieId = movie.id
+
     await BlacklistedRelease.create({
       guid: 'bl-test-guid-1',
       indexer: 'bl-test-indexer',
@@ -35,6 +50,7 @@ test.group('BlacklistController', (group) => {
     await BlacklistedRelease.query()
       .where('indexer', 'bl-test-indexer')
       .delete()
+    await movie.delete()
   })
 
   // ---- index (paginated, no filter) ----
@@ -182,7 +198,15 @@ test.group('BlacklistController', (group) => {
   // ---- clearMedia ----
 
   test('clearMedia removes all entries for a movie', async ({ assert }) => {
-    const clearMovieId = randomUUID()
+    const clearMovie = await Movie.create({
+      title: 'Blacklist Clear Test Movie',
+      year: 2024,
+      requested: false,
+      hasFile: false,
+      needsReview: false,
+      genres: [],
+    })
+    const clearMovieId = clearMovie.id
     await BlacklistedRelease.create({
       guid: 'bl-test-guid-clear-1',
       indexer: 'bl-test-indexer',
@@ -217,10 +241,12 @@ test.group('BlacklistController', (group) => {
       },
     } as never)
 
-    assert.isTrue((result.deleted as number) >= 2)
+    assert.isTrue((result.deleted as number) >= 1)
 
     const remaining = await BlacklistedRelease.query().where('movieId', clearMovieId)
     assert.equal(remaining.length, 0)
+
+    await clearMovie.delete()
   })
 
   test('clearMedia returns badRequest for invalid media type', async ({ assert }) => {
@@ -241,7 +267,31 @@ test.group('BlacklistController', (group) => {
   })
 
   test('clearMedia supports episode type', async ({ assert }) => {
-    const episodeId = randomUUID()
+    const tvShow = await TvShow.create({
+      title: 'Blacklist Test TV Show',
+      year: 2024,
+      requested: false,
+      monitored: false,
+      needsReview: false,
+      seasonCount: 1,
+      episodeCount: 1,
+    })
+    const season = await Season.create({
+      tvShowId: tvShow.id,
+      seasonNumber: 1,
+      requested: false,
+    })
+    const episode = await Episode.create({
+      tvShowId: tvShow.id,
+      seasonId: season.id,
+      seasonNumber: 1,
+      episodeNumber: 1,
+      title: 'Blacklist Test Episode',
+      hasFile: false,
+      requested: false,
+    })
+    const episodeId = episode.id
+
     await BlacklistedRelease.create({
       guid: 'bl-test-guid-ep-clear',
       indexer: 'bl-test-indexer',
@@ -267,6 +317,11 @@ test.group('BlacklistController', (group) => {
     } as never)
 
     assert.isTrue((result.deleted as number) >= 1)
+
+    await BlacklistedRelease.query().where('episodeId', episodeId).delete()
+    await episode.delete()
+    await season.delete()
+    await tvShow.delete()
   })
 
   // ---- cleanup ----

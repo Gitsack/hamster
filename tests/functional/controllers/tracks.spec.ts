@@ -12,7 +12,7 @@ test.group('TracksController', (group) => {
   group.setup(async () => {
     artist = await ArtistFactory.create({
       name: 'Tracks Test Artist',
-      musicbrainzId: 'tracks-test-artist-mbid',
+      musicbrainzId: 'b0000000-0000-0000-0000-000000000001',
     })
 
     album = await AlbumFactory.create({
@@ -22,7 +22,7 @@ test.group('TracksController', (group) => {
 
     await Track.create({
       albumId: album.id,
-      musicbrainzId: 'tracks-test-recording-001',
+      musicbrainzId: 'b0000000-0000-0000-0000-000000000011',
       title: 'Tracks Test Song Alpha',
       discNumber: 1,
       trackNumber: 1,
@@ -33,7 +33,7 @@ test.group('TracksController', (group) => {
 
     await Track.create({
       albumId: album.id,
-      musicbrainzId: 'tracks-test-recording-002',
+      musicbrainzId: 'b0000000-0000-0000-0000-000000000012',
       title: 'Tracks Test Song Beta',
       discNumber: 1,
       trackNumber: 2,

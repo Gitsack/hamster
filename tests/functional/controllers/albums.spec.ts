@@ -15,7 +15,7 @@ test.group('AlbumsController', (group) => {
   group.setup(async () => {
     artist = await ArtistFactory.create({
       name: 'Albums Test Artist',
-      musicbrainzId: 'albums-test-artist-mbid',
+      musicbrainzId: 'a0000000-0000-0000-0000-000000000001',
     })
 
     album1 = await AlbumFactory.create({
@@ -403,7 +403,7 @@ test.group('AlbumsController', (group) => {
       artistId: artist.id,
       title: 'Albums Test Existing',
     })
-    existingAlbum.musicbrainzReleaseGroupId = 'albums-test-existing-rg'
+    existingAlbum.musicbrainzReleaseGroupId = 'a0000000-0000-0000-0000-000000000099'
     await existingAlbum.save()
 
     const controller = new AlbumsController()
@@ -412,8 +412,8 @@ test.group('AlbumsController', (group) => {
     await controller.store({
       request: {
         validateUsing: async () => ({
-          musicbrainzId: 'albums-test-existing-rg',
-          artistMusicbrainzId: 'albums-test-artist-mbid',
+          musicbrainzId: 'a0000000-0000-0000-0000-000000000099',
+          artistMusicbrainzId: 'a0000000-0000-0000-0000-000000000001',
           qualityProfileId: '00000000-0000-0000-0000-000000000001',
         }),
         body: () => ({}),
@@ -525,7 +525,7 @@ test.group('AlbumsController', (group) => {
     const enrichedAlbum = await AlbumFactory.create({
       artistId: artist.id,
       title: 'Albums Test Already Enriched',
-      musicbrainzId: 'already-has-mbid',
+      musicbrainzId: 'a0000000-0000-0000-0000-00000000aa01',
     })
 
     const controller = new AlbumsController()

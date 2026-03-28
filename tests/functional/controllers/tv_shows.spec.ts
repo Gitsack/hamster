@@ -2,6 +2,7 @@ import { test } from '@japa/runner'
 import TvShow from '#models/tv_show'
 import Season from '#models/season'
 import Episode from '#models/episode'
+import RootFolder from '#models/root_folder'
 import TvShowsController from '#controllers/tv_shows_controller'
 import { TvShowFactory } from '../../../database/factories/tv_show_factory.js'
 import { SeasonFactory } from '../../../database/factories/season_factory.js'
@@ -11,8 +12,16 @@ test.group('TvShowsController', (group) => {
   let show1: TvShow
   let show2: TvShow
   let season1: Season
+  let rootFolder: RootFolder
 
   group.setup(async () => {
+    rootFolder = await RootFolder.create({
+      name: 'TvShows Test Root',
+      path: `/tmp/tvshows-test-root-${Date.now()}`,
+      mediaType: 'tv',
+      accessible: true,
+      scanStatus: 'idle',
+    })
     show1 = await TvShowFactory.create({
       title: 'TvShows Test Alpha',
       year: 2020,
@@ -55,6 +64,7 @@ test.group('TvShowsController', (group) => {
     await Season.query().where('tvShowId', show1.id).delete()
     await TvShow.query().whereIn('id', [show1.id, show2.id]).delete()
     await TvShow.query().where('title', 'like', 'TvShows Test%').delete()
+    await rootFolder.delete()
   })
 
   // ---- index ----
@@ -287,7 +297,7 @@ test.group('TvShowsController', (group) => {
       request: {
         validateUsing: async () => ({
           title: 'TvShows Test New Show',
-          rootFolderId: '00000000-0000-0000-0000-000000000001',
+          rootFolderId: rootFolder.id,
           requested: true,
           monitored: false,
           searchOnAdd: false,
@@ -322,7 +332,7 @@ test.group('TvShowsController', (group) => {
         validateUsing: async () => ({
           tmdbId: '88801',
           title: 'Duplicate Show',
-          rootFolderId: '00000000-0000-0000-0000-000000000001',
+          rootFolderId: rootFolder.id,
         }),
       },
       response: {

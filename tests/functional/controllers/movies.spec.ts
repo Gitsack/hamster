@@ -1,13 +1,22 @@
 import { test } from '@japa/runner'
 import Movie from '#models/movie'
+import RootFolder from '#models/root_folder'
 import MoviesController from '#controllers/movies_controller'
 import { MovieFactory } from '../../../database/factories/movie_factory.js'
 
 test.group('MoviesController', (group) => {
   let movie1: Movie
   let movie2: Movie
+  let rootFolder: RootFolder
 
   group.setup(async () => {
+    rootFolder = await RootFolder.create({
+      name: 'Movies Test Root',
+      path: `/tmp/movies-test-root-${Date.now()}`,
+      mediaType: 'movies',
+      accessible: true,
+      scanStatus: 'idle',
+    })
     movie1 = await MovieFactory.create({
       title: 'Movies Test Alpha',
       year: 2020,
@@ -27,6 +36,7 @@ test.group('MoviesController', (group) => {
   group.teardown(async () => {
     await Movie.query().whereIn('id', [movie1.id, movie2.id]).delete()
     await Movie.query().where('title', 'like', 'Movies Test%').delete()
+    await rootFolder.delete()
   })
 
   // ---- index ----
@@ -224,7 +234,7 @@ test.group('MoviesController', (group) => {
       request: {
         validateUsing: async () => ({
           title: 'Movies Test New Movie',
-          rootFolderId: '00000000-0000-0000-0000-000000000001',
+          rootFolderId: rootFolder.id,
           requested: true,
           monitored: false,
           searchOnAdd: false,
@@ -261,7 +271,7 @@ test.group('MoviesController', (group) => {
         validateUsing: async () => ({
           tmdbId: '99901',
           title: 'Duplicate Movie',
-          rootFolderId: '00000000-0000-0000-0000-000000000001',
+          rootFolderId: rootFolder.id,
         }),
         body: () => ({}),
       },

@@ -1,6 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
-import type { InferSharedProps } from '@adonisjs/inertia/types'
 import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import { readFileSync } from 'node:fs'
 
@@ -13,7 +12,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
     return {
       version: packageJson.version,
       errors: ctx.inertia.always(this.getValidationErrors(ctx)),
-      user: ctx.inertia.always(() => {
+      user: () => {
         const user = auth?.user
         if (!user) return undefined
         return {
@@ -22,11 +21,11 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
           email: user.email,
           isAdmin: user.isAdmin,
         }
-      }),
-      flash: ctx.inertia.always(() => ({
+      },
+      flash: () => ({
         error: session?.flashMessages.get('error') ?? undefined,
         success: session?.flashMessages.get('success') ?? undefined,
-      })),
+      }),
     }
   }
 
@@ -41,6 +40,10 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
 }
 
 declare module '@adonisjs/inertia/types' {
-  type MiddlewareSharedProps = InferSharedProps<InertiaMiddleware>
-  export interface SharedProps extends MiddlewareSharedProps {}
+  export interface SharedProps {
+    version: string
+    errors: Record<string, string> | { [errorBag: string]: Record<string, string> }
+    user?: { id: string; fullName: string | null; email: string; isAdmin: boolean }
+    flash: { error?: string; success?: string }
+  }
 }

@@ -323,7 +323,7 @@ test.group('QueueController', (group) => {
       },
     } as never)
 
-    assert.equal(badRequestResult.error, 'Only failed downloads can be retried')
+    assert.equal(badRequestResult.error, 'Only failed or stuck imports can be retried')
   })
 
   test('retryImport returns badRequest for failed download without media association', async ({

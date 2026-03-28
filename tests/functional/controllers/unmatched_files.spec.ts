@@ -2,14 +2,25 @@ import { test } from '@japa/runner'
 import UnmatchedFile from '#models/unmatched_file'
 import RootFolder from '#models/root_folder'
 import UnmatchedFilesController from '#controllers/unmatched_files_controller'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 
 test.group('UnmatchedFilesController', (group) => {
   let rootFolder: RootFolder
   let file1: UnmatchedFile
+  let tempDir: string
   group.setup(async () => {
+    tempDir = `/tmp/unmatched-test-${Date.now()}`
+    await fs.mkdir(tempDir, { recursive: true })
+
+    // Create real files so pruneStaleRecords won't delete them
+    await fs.writeFile(path.join(tempDir, 'unknown_movie.mkv'), '')
+    await fs.writeFile(path.join(tempDir, 'unknown_episode.mkv'), '')
+    await fs.writeFile(path.join(tempDir, 'ignored_file.mkv'), '')
+
     rootFolder = await RootFolder.create({
       name: 'UnmatchedTest Root',
-      path: '/tmp/unmatched-test',
+      path: tempDir,
       mediaType: 'movies',
       accessible: true,
       scanStatus: 'idle',
@@ -46,6 +57,11 @@ test.group('UnmatchedFilesController', (group) => {
   group.teardown(async () => {
     await UnmatchedFile.query().where('rootFolderId', rootFolder.id).delete()
     await rootFolder.delete()
+    try {
+      await fs.rm(tempDir, { recursive: true })
+    } catch {
+      // Ignore
+    }
   })
 
   // ---- index ----

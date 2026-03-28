@@ -134,7 +134,7 @@ test.group('ScheduledTasksController', () => {
     let result: Record<string, unknown> = {}
 
     await controller.update({
-      params: { id: 'non-existent-task-id' },
+      params: { id: '00000000-0000-0000-0000-000000000000' },
       request: {
         only: () => ({ intervalMinutes: undefined, enabled: true }),
       },
@@ -164,7 +164,7 @@ test.group('ScheduledTasksController', () => {
     let result: Record<string, unknown> = {}
 
     await controller.run({
-      params: { id: 'non-existent-task-id' },
+      params: { id: '00000000-0000-0000-0000-000000000000' },
       response: {
         status(code: number) {
           statusCode = code

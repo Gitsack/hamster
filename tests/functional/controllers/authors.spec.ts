@@ -1,6 +1,7 @@
 import { test } from '@japa/runner'
 import Author from '#models/author'
 import Book from '#models/book'
+import RootFolder from '#models/root_folder'
 import AuthorsController from '#controllers/authors_controller'
 import { AuthorFactory } from '../../../database/factories/author_factory.js'
 import { BookFactory } from '../../../database/factories/book_factory.js'
@@ -8,7 +9,15 @@ import { BookFactory } from '../../../database/factories/book_factory.js'
 test.group('AuthorsController', (group) => {
   let author1: Author
   let author2: Author
+  let rootFolder: RootFolder
   group.setup(async () => {
+    rootFolder = await RootFolder.create({
+      name: 'Authors Test Root',
+      path: `/tmp/authors-test-root-${Date.now()}`,
+      mediaType: 'books',
+      accessible: true,
+      scanStatus: 'idle',
+    })
     author1 = await AuthorFactory.create({
       name: 'Authors Test Alice',
       openlibraryId: 'OL9999901A',
@@ -35,6 +44,7 @@ test.group('AuthorsController', (group) => {
     await Book.query().whereIn('authorId', [author1.id, author2.id]).delete()
     await Author.query().whereIn('id', [author1.id, author2.id]).delete()
     await Author.query().where('name', 'like', 'Authors Test%').delete()
+    await rootFolder.delete()
   })
 
   // ---- index ----
@@ -157,7 +167,7 @@ test.group('AuthorsController', (group) => {
       request: {
         validateUsing: async () => ({
           name: 'Authors Test New Author',
-          rootFolderId: '00000000-0000-0000-0000-000000000001',
+          rootFolderId: rootFolder.id,
           requested: true,
           monitored: false,
         }),
@@ -191,7 +201,7 @@ test.group('AuthorsController', (group) => {
         validateUsing: async () => ({
           openlibraryId: 'OL9999901A',
           name: 'Duplicate Author',
-          rootFolderId: '00000000-0000-0000-0000-000000000001',
+          rootFolderId: rootFolder.id,
         }),
       },
       response: {

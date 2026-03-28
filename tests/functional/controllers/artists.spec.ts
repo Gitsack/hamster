@@ -11,7 +11,7 @@ test.group('ArtistsController', (group) => {
     artist1 = await ArtistFactory.create({
       name: 'Artists Test Alpha',
       sortName: 'Artists Test Alpha',
-      musicbrainzId: 'mb-test-001',
+      musicbrainzId: '00000000-0000-0000-0000-000000000001',
       status: 'continuing',
       requested: true,
       monitored: true,
@@ -19,7 +19,7 @@ test.group('ArtistsController', (group) => {
     artist2 = await ArtistFactory.create({
       name: 'Artists Test Beta',
       sortName: 'Artists Test Beta',
-      musicbrainzId: 'mb-test-002',
+      musicbrainzId: '00000000-0000-0000-0000-000000000002',
       status: 'ended',
       requested: false,
       monitored: false,
@@ -66,7 +66,7 @@ test.group('ArtistsController', (group) => {
     const artist = result.find((a: any) => a.id === artist1.id) as Record<string, unknown>
     assert.isNotNull(artist)
     assert.equal(artist.name, 'Artists Test Alpha')
-    assert.equal(artist.musicbrainzId, 'mb-test-001')
+    assert.equal(artist.musicbrainzId, '00000000-0000-0000-0000-000000000001')
     assert.equal(artist.status, 'continuing')
     assert.equal(artist.requested, true)
     assert.equal(artist.monitored, true)
@@ -90,7 +90,7 @@ test.group('ArtistsController', (group) => {
 
     assert.equal(result.id, artist1.id)
     assert.equal(result.name, 'Artists Test Alpha')
-    assert.equal(result.musicbrainzId, 'mb-test-001')
+    assert.equal(result.musicbrainzId, '00000000-0000-0000-0000-000000000001')
     assert.isArray(result.albums)
   })
 

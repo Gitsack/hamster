@@ -5,7 +5,7 @@ import { loginValidator, registerValidator } from '#validators/auth'
 
 export default class AuthController {
   async showLogin({ inertia }: HttpContext) {
-    return inertia.render('auth/login')
+    return inertia.render('auth/login', {})
   }
 
   async login({ request, auth, response, session }: HttpContext) {
@@ -35,7 +35,7 @@ export default class AuthController {
     if (!allowed) {
       return response.redirect('/login')
     }
-    return inertia.render('auth/register')
+    return inertia.render('auth/register', {})
   }
 
   async register({ request, auth, response }: HttpContext) {

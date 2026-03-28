@@ -3,8 +3,10 @@
   "compilerOptions": {
     "rootDir": "./",
     "outDir": "./build",
-    "rewriteRelativeImportExtensions": true
+    "rewriteRelativeImportExtensions": true,
+    "jsx": "react-jsx"
   },
+  "include": ["**/*.ts", ".adonisjs/**/*.ts"],
   "exclude": ["./inertia/**/*", "node_modules", "build"],
   "references": [{ "path": "./tsconfig.inertia.json" }]
 }

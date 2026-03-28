@@ -55,8 +55,8 @@ router.get('/health', [SystemController, 'health'])
 // Public routes (with silent auth to check if user is logged in)
 router
   .group(() => {
-    router.on('/').renderInertia('home')
-    router.on('/getting-started').renderInertia('getting-started')
+    router.on('/').renderInertia('home', {})
+    router.on('/getting-started').renderInertia('getting-started', {})
   })
   .use(middleware.silentAuth())
 
@@ -86,18 +86,18 @@ router
 router
   .group(() => {
     // Library
-    router.on('/library').renderInertia('library/index').as('library')
-    router.on('/library/add').renderInertia('library/add').as('library.add')
+    router.on('/library').renderInertia('library/index', {}).as('library')
+    router.on('/library/add').renderInertia('library/add', {}).as('library.add')
     // Music
-    router.on('/artist/:id').renderInertia('library/artist/[id]').as('artist')
-    router.on('/album/:id').renderInertia('library/album/[id]').as('album')
+    router.on('/artist/:id').renderInertia('library/artist/[id]', {}).as('artist')
+    router.on('/album/:id').renderInertia('library/album/[id]', {}).as('album')
     // Movies
-    router.on('/movie/:id').renderInertia('library/movie/[id]').as('movie')
+    router.on('/movie/:id').renderInertia('library/movie/[id]', {}).as('movie')
     // TV
-    router.on('/tvshow/:id').renderInertia('library/tvshow/[id]').as('tvshow')
+    router.on('/tvshow/:id').renderInertia('library/tvshow/[id]', {}).as('tvshow')
     // Books
-    router.on('/author/:id').renderInertia('library/author/[id]').as('author')
-    router.on('/book/:id').renderInertia('library/book/[id]').as('book')
+    router.on('/author/:id').renderInertia('library/author/[id]', {}).as('author')
+    router.on('/book/:id').renderInertia('library/book/[id]', {}).as('book')
 
     // Search & Discover
     router
@@ -109,7 +109,7 @@ router
         })
       })
       .as('search')
-    router.on('/discover/:type/:category').renderInertia('search/discover')
+    router.on('/discover/:type/:category').renderInertia('search/discover', {})
 
     // Requests - redirect to library missing tab
     router.get('/requests', async ({ response }) => response.redirect('/library?tab=missing'))
@@ -118,18 +118,18 @@ router
     )
 
     // Calendar
-    router.on('/calendar').renderInertia('calendar/index').as('calendar')
+    router.on('/calendar').renderInertia('calendar/index', {}).as('calendar')
 
     // Activity
-    router.on('/activity/queue').renderInertia('activity/queue').as('activity.queue')
+    router.on('/activity/queue').renderInertia('activity/queue', {}).as('activity.queue')
     router.get('/activity/history', ({ response }) => response.redirect('/activity/queue'))
 
     // System
-    router.on('/system/status').renderInertia('system/status').as('system.status')
-    router.on('/system/events').renderInertia('system/events').as('system.events')
+    router.on('/system/status').renderInertia('system/status', {}).as('system.status')
+    router.on('/system/events').renderInertia('system/events', {}).as('system.events')
 
     // Profile settings (accessible to all authenticated users)
-    router.on('/settings/profile').renderInertia('settings/ui').as('settings.profile')
+    router.on('/settings/profile').renderInertia('settings/ui', {}).as('settings.profile')
     router.get('/settings/ui', async ({ response }) => response.redirect('/settings/profile'))
 
     // Settings pages (admin only)
@@ -140,20 +140,29 @@ router
         )
         router
           .on('/settings/media-management')
-          .renderInertia('settings/media-management')
+          .renderInertia('settings/media-management', {})
           .as('settings.media-management')
-        router.on('/settings/indexers').renderInertia('settings/indexers').as('settings.indexers')
+        router
+          .on('/settings/indexers')
+          .renderInertia('settings/indexers', {})
+          .as('settings.indexers')
         router
           .on('/settings/download-clients')
-          .renderInertia('settings/download-clients')
+          .renderInertia('settings/download-clients', {})
           .as('settings.download-clients')
-        router.on('/settings/playback').renderInertia('settings/playback').as('settings.playback')
+        router
+          .on('/settings/playback')
+          .renderInertia('settings/playback', {})
+          .as('settings.playback')
         router
           .on('/settings/notifications')
-          .renderInertia('settings/notifications')
+          .renderInertia('settings/notifications', {})
           .as('settings.notifications')
-        router.on('/settings/webhooks').renderInertia('settings/webhooks').as('settings.webhooks')
-        router.on('/settings/users').renderInertia('settings/users').as('settings.users')
+        router
+          .on('/settings/webhooks')
+          .renderInertia('settings/webhooks', {})
+          .as('settings.webhooks')
+        router.on('/settings/users').renderInertia('settings/users', {}).as('settings.users')
       })
       .use(middleware.admin())
   })
