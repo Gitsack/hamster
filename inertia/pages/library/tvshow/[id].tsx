@@ -21,14 +21,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -46,7 +38,6 @@ import {
   FileDownloadIcon,
   Search01Icon,
   Add01Icon,
-  Search01Icon,
   PlayIcon,
   Refresh01Icon,
   Notification01Icon,
@@ -674,23 +665,6 @@ export default function TvShowDetail() {
     }
   }
 
-  const searchEpisodeReleases = async (episodeId: number) => {
-    setEpisodeSearchResults((prev) => ({ ...prev, [episodeId]: [] }))
-    setSearchingEpisode(episodeId)
-    try {
-      const response = await fetch(`/api/v1/tvshows/${showId}/episodes/${episodeId}/releases`)
-      if (response.ok) {
-        const data = await response.json()
-        setEpisodeSearchResults((prev) => ({ ...prev, [episodeId]: data }))
-      }
-    } catch (error) {
-      console.error('Failed to search releases:', error)
-      toast.error('Failed to search releases')
-    } finally {
-      setSearchingEpisode(null)
-    }
-  }
-
   const searchReleases = async () => {
     if (!show) return
     setSearching(true)
@@ -881,6 +855,25 @@ export default function TvShowDetail() {
               <TooltipContent>{show.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={searchReleases}
+                  disabled={searching}
+                >
+                  {searching ? (
+                    <Spinner className="md:mr-2" />
+                  ) : (
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                  )}
+                  <span className="hidden md:inline">{searching ? 'Searching...' : 'Browse releases'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" aria-label="More actions">
@@ -892,13 +885,24 @@ export default function TvShowDetail() {
                 <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
                 {searching ? 'Searching...' : 'Manual Search'}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={refreshMetadata} disabled={enriching || refreshing}>
-                <HugeiconsIcon
-                  icon={Refresh01Icon}
-                  className={`h-4 w-4 mr-2 ${enriching || refreshing ? 'animate-spin' : ''}`}
-                />
-                {enriching || refreshing ? 'Refreshing...' : 'Refresh metadata'}
-              </DropdownMenuItem>
+              {!show.tmdbId && (
+                <DropdownMenuItem onClick={refreshMetadata} disabled={enriching}>
+                  <HugeiconsIcon
+                    icon={Search01Icon}
+                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                  />
+                  {enriching ? 'Enriching...' : 'Enrich from TMDB'}
+                </DropdownMenuItem>
+              )}
+              {show.tmdbId && (
+                <DropdownMenuItem onClick={refreshMetadata} disabled={refreshing}>
+                  <HugeiconsIcon
+                    icon={Refresh01Icon}
+                    className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
+                  />
+                  {refreshing ? 'Refreshing...' : 'Refresh metadata'}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
@@ -1108,6 +1112,8 @@ export default function TvShowDetail() {
                           <div className="space-y-2">
                             {getVisibleEpisodes(season.seasonNumber).map((episode) => (
                               <div
+                                role="group"
+                                aria-label={`Episode ${episode.episodeNumber}: ${episode.title}`}
                                 className="flex items-center gap-2 sm:gap-4 p-3 rounded-lg bg-muted/50"
                               >
                                 <div className="w-6 sm:w-8 text-center font-mono text-muted-foreground text-sm sm:text-base flex-shrink-0">
