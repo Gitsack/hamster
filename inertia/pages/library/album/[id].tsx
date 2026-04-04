@@ -44,6 +44,7 @@ import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { useShowMore } from '@/hooks/use_show_more'
+import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
 
 interface Track {
   id: number
@@ -114,6 +115,8 @@ export default function AlbumDetail() {
   const { getForAlbum } = useActiveDownloads()
   const albumDownloads = albumId ? getForAlbum(albumId) : []
   const tracksPage = useShowMore(album?.tracks ?? [])
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteFileDialogOpen, setDeleteFileDialogOpen] = useState(false)
 
   useEffect(() => {
     fetchAlbum()
@@ -142,9 +145,9 @@ export default function AlbumDetail() {
 
     const wasRequested = album.requested
 
-    // If unrequesting an album with files, show error (files must be deleted first)
+    // If unrequesting an album with files, show delete dialog
     if (wasRequested && album.trackFiles.length > 0) {
-      toast.error('Album has downloaded files. Delete files first before unrequesting.')
+      setDeleteDialogOpen(true)
       return
     }
 
@@ -167,7 +170,7 @@ export default function AlbumDetail() {
           toast.success(wasRequested ? 'Album unrequested' : 'Album requested')
         }
       } else if (data.hasFile) {
-        toast.error('Album has downloaded files. Delete files first before unrequesting.')
+        setDeleteDialogOpen(true)
       } else {
         toast.error(data.error || 'Failed to update album')
       }
@@ -175,6 +178,36 @@ export default function AlbumDetail() {
       console.error('Failed to update album:', error)
       toast.error('Failed to update album')
     }
+  }
+
+  const deleteAlbum = async (deleteFiles: boolean) => {
+    const url = deleteFiles
+      ? `/api/v1/albums/${albumId}?deleteFile=true`
+      : `/api/v1/albums/${albumId}`
+
+    const response = await fetch(url, { method: 'DELETE' })
+    if (response.ok) {
+      toast.success(deleteFiles ? 'Album and files deleted' : 'Album deleted')
+      router.visit('/library?tab=music')
+    } else {
+      const error = await response.json()
+      toast.error(error.error || 'Failed to delete')
+    }
+    setDeleteDialogOpen(false)
+  }
+
+  const deleteAlbumFiles = async () => {
+    if (!album) return
+
+    const response = await fetch(`/api/v1/albums/${albumId}/file`, { method: 'DELETE' })
+    if (response.ok) {
+      toast.success('Files deleted successfully')
+      setAlbum({ ...album, trackFiles: [] })
+    } else {
+      const error = await response.json()
+      toast.error(error.error || 'Failed to delete files')
+    }
+    setDeleteFileDialogOpen(false)
   }
 
   const searchReleases = async () => {
@@ -405,7 +438,25 @@ export default function AlbumDetail() {
                 {searching ? 'Searching...' : 'Manual Search'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive" onClick={toggleRequested}>
+              {album.trackFiles.length > 0 && (
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => setDeleteFileDialogOpen(true)}
+                >
+                  <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                  Delete Files
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={() => {
+                  if (album.trackFiles.length > 0) {
+                    setDeleteDialogOpen(true)
+                  } else {
+                    toggleRequested()
+                  }
+                }}
+              >
                 <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
                 Remove from Library
               </DropdownMenuItem>
@@ -717,6 +768,26 @@ export default function AlbumDetail() {
           )}
         </Tabs>
       </div>
+
+      <DeleteMediaDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title={album.title}
+        mediaType="album"
+        hasFile={album.trackFiles.length > 0}
+        mode="remove"
+        onConfirm={deleteAlbum}
+      />
+
+      <DeleteMediaDialog
+        open={deleteFileDialogOpen}
+        onOpenChange={setDeleteFileDialogOpen}
+        title={album.title}
+        mediaType="album"
+        hasFile={album.trackFiles.length > 0}
+        mode="deleteFile"
+        onConfirm={deleteAlbumFiles}
+      />
     </AppLayout>
   )
 }

@@ -12,14 +12,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
@@ -37,6 +29,7 @@ import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
+import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
 
 interface Author {
   id: number
@@ -82,8 +75,6 @@ export default function BookDetail() {
   const [loading, setLoading] = useState(true)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteFileDialogOpen, setDeleteFileDialogOpen] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [deletingFile, setDeletingFile] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
 
@@ -168,29 +159,20 @@ export default function BookDetail() {
     }
   }
 
-  const deleteBook = async (withFile: boolean = false) => {
-    setDeleting(true)
-    try {
-      const url = withFile ? `/api/v1/books/${bookId}?deleteFile=true` : `/api/v1/books/${bookId}`
+  const deleteBook = async (deleteFiles: boolean) => {
+    const url = deleteFiles
+      ? `/api/v1/books/${bookId}?deleteFile=true`
+      : `/api/v1/books/${bookId}`
 
-      const response = await fetch(url, {
-        method: 'DELETE',
-      })
-      if (response.ok) {
-        toast.success(withFile ? 'Book and files deleted' : 'Book deleted')
-        // Author may have been deleted too - navigate to library
-        router.visit('/library?tab=books')
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to delete')
-      }
-    } catch (error) {
-      console.error('Failed to delete book:', error)
-      toast.error('Failed to delete book')
-    } finally {
-      setDeleting(false)
-      setDeleteDialogOpen(false)
+    const response = await fetch(url, { method: 'DELETE' })
+    if (response.ok) {
+      toast.success(deleteFiles ? 'Book and files deleted' : 'Book deleted')
+      router.visit('/library?tab=books')
+    } else {
+      const error = await response.json()
+      toast.error(error.error || 'Failed to delete')
     }
+    setDeleteDialogOpen(false)
   }
 
   const downloadBook = async () => {
@@ -219,25 +201,15 @@ export default function BookDetail() {
   const deleteFile = async () => {
     if (!book) return
 
-    setDeletingFile(true)
-    try {
-      const response = await fetch(`/api/v1/books/${bookId}/file`, {
-        method: 'DELETE',
-      })
-      if (response.ok) {
-        toast.success('File deleted successfully')
-        setBook({ ...book, hasFile: false, bookFile: null })
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to delete file')
-      }
-    } catch (error) {
-      console.error('Failed to delete file:', error)
-      toast.error('Failed to delete file')
-    } finally {
-      setDeletingFile(false)
-      setDeleteFileDialogOpen(false)
+    const response = await fetch(`/api/v1/books/${bookId}/file`, { method: 'DELETE' })
+    if (response.ok) {
+      toast.success('File deleted successfully')
+      setBook({ ...book, hasFile: false, bookFile: null })
+    } else {
+      const error = await response.json()
+      toast.error(error.error || 'Failed to delete file')
     }
+    setDeleteFileDialogOpen(false)
   }
 
   const formatFileSize = (bytes: number) => {
@@ -496,70 +468,25 @@ export default function BookDetail() {
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {book.hasFile ? 'Remove from library?' : `Delete ${book.title}?`}
-            </DialogTitle>
-            <DialogDescription>
-              {book.hasFile
-                ? 'This will permanently delete the downloaded files from disk and remove the book from your library.'
-                : 'This will remove the book from your library.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteBook(book.hasFile)}
-              disabled={deleting}
-            >
-              {deleting ? (
-                <>
-                  <Spinner className="mr-2" />
-                  Deleting...
-                </>
-              ) : book.hasFile ? (
-                'Delete Files & Remove'
-              ) : (
-                'Delete'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteMediaDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title={book.title}
+        mediaType="book"
+        hasFile={book.hasFile}
+        mode="remove"
+        onConfirm={deleteBook}
+      />
 
-      {/* Delete file confirmation dialog */}
-      <Dialog open={deleteFileDialogOpen} onOpenChange={setDeleteFileDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete book file?</DialogTitle>
-            <DialogDescription>
-              This will permanently delete the book file from disk. The book will remain in your
-              library but will need to be downloaded again.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteFileDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={deleteFile} disabled={deletingFile}>
-              {deletingFile ? (
-                <>
-                  <Spinner className="mr-2" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete File'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteMediaDialog
+        open={deleteFileDialogOpen}
+        onOpenChange={setDeleteFileDialogOpen}
+        title={book.title}
+        mediaType="book"
+        hasFile={book.hasFile}
+        mode="deleteFile"
+        onConfirm={deleteFile}
+      />
     </AppLayout>
   )
 }

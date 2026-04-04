@@ -8,6 +8,8 @@ import { musicBrainzService } from '#services/metadata/musicbrainz_service'
 import { coverArtService } from '#services/metadata/cover_art_service'
 import { DateTime } from 'luxon'
 import { libraryCleanupService } from '#services/library/library_cleanup_service'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
 
 const addAlbumValidator = vine.compile(
   vine.object({
@@ -590,8 +592,21 @@ export default class AlbumsController {
       const results = await indexerManager.search(searchQuery)
 
       if (results.length === 0) {
+        const { default: Indexer } = await import('#models/indexer')
+        const { default: ProwlarrConfig } = await import('#models/prowlarr_config')
+        const directIndexers = await Indexer.query().where('enabled', true)
+        const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
+        const indexerNames = directIndexers.map((i) => i.name)
+        if (prowlarrConfig) indexerNames.unshift('Prowlarr')
+
         const searchType = trackId ? 'track' : 'album'
-        return response.notFound({ error: `No releases found for this ${searchType}` })
+        return response.notFound({
+          error: `No releases found for this ${searchType}`,
+          details: {
+            indexersSearched: indexerNames,
+            totalResults: 0,
+          },
+        })
       }
 
       // Sort by size (prefer larger files, usually better quality) and grab the first
@@ -793,6 +808,128 @@ export default class AlbumsController {
       title: album.title,
       musicbrainzId: album.musicbrainzId,
       enriched: true,
+    })
+  }
+
+  /**
+   * Delete an album from the library, optionally deleting files from disk
+   */
+  async destroy({ params, request, response }: HttpContext) {
+    const album = await Album.query()
+      .where('id', params.id)
+      .preload('artist', (query) => query.preload('rootFolder'))
+      .preload('trackFiles')
+      .first()
+
+    if (!album) {
+      return response.notFound({ error: 'Album not found' })
+    }
+
+    const deleteFile = request.input('deleteFile') === 'true'
+    let filesDeleted = false
+    const artistId = album.artistId
+
+    if (deleteFile && album.trackFiles.length > 0 && album.artist?.rootFolder) {
+      const rootPath = album.artist.rootFolder.path
+      const foldersToCheck = new Set<string>()
+
+      for (const trackFile of album.trackFiles) {
+        const absolutePath = path.join(rootPath, trackFile.relativePath)
+        foldersToCheck.add(path.dirname(absolutePath))
+
+        try {
+          await fs.unlink(absolutePath)
+          console.log(`[AlbumsController] Deleted track file: ${absolutePath}`)
+        } catch (error) {
+          console.error(`[AlbumsController] Failed to delete file: ${absolutePath}`, error)
+        }
+      }
+
+      // Try to remove empty folders (deepest first)
+      const sortedFolders = [...foldersToCheck].sort((a, b) => b.length - a.length)
+      for (const folder of sortedFolders) {
+        try {
+          const remainingFiles = await fs.readdir(folder)
+          if (remainingFiles.length === 0) {
+            await fs.rmdir(folder)
+            console.log(`[AlbumsController] Removed empty folder: ${folder}`)
+          }
+        } catch {
+          // Folder might not be empty or other error, ignore
+        }
+      }
+
+      // Delete all TrackFile records
+      await TrackFile.query().where('albumId', album.id).delete()
+      filesDeleted = true
+    }
+
+    await album.delete()
+
+    // Check if artist should be removed
+    await libraryCleanupService.removeArtistIfEmpty(artistId)
+
+    return response.json({ id: album.id, deleted: true, filesDeleted })
+  }
+
+  /**
+   * Delete only the files for an album (album record stays in library)
+   */
+  async deleteFile({ params, response }: HttpContext) {
+    const album = await Album.query()
+      .where('id', params.id)
+      .preload('artist', (query) => query.preload('rootFolder'))
+      .preload('trackFiles')
+      .first()
+
+    if (!album) {
+      return response.notFound({ error: 'Album not found' })
+    }
+
+    if (album.trackFiles.length === 0) {
+      return response.notFound({ error: 'Album has no files' })
+    }
+
+    if (!album.artist?.rootFolder) {
+      return response.badRequest({ error: 'Artist has no root folder configured' })
+    }
+
+    const rootPath = album.artist.rootFolder.path
+    const foldersToCheck = new Set<string>()
+
+    for (const trackFile of album.trackFiles) {
+      const absolutePath = path.join(rootPath, trackFile.relativePath)
+      foldersToCheck.add(path.dirname(absolutePath))
+
+      try {
+        await fs.unlink(absolutePath)
+        console.log(`[AlbumsController] Deleted track file: ${absolutePath}`)
+      } catch (error) {
+        console.error(`[AlbumsController] Failed to delete file: ${absolutePath}`, error)
+      }
+    }
+
+    // Try to remove empty folders (deepest first)
+    const sortedFolders = [...foldersToCheck].sort((a, b) => b.length - a.length)
+    for (const folder of sortedFolders) {
+      try {
+        const remainingFiles = await fs.readdir(folder)
+        if (remainingFiles.length === 0) {
+          await fs.rmdir(folder)
+          console.log(`[AlbumsController] Removed empty folder: ${folder}`)
+        }
+      } catch {
+        // Folder might not be empty or other error, ignore
+      }
+    }
+
+    // Delete all TrackFile records
+    await TrackFile.query().where('albumId', album.id).delete()
+
+    return response.json({
+      id: album.id,
+      filesDeleted: true,
+      message: 'Album files deleted. Album remains in library.',
     })
   }
 }

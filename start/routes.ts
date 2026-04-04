@@ -229,6 +229,8 @@ router
     router.post('/albums/:id/search', [AlbumsController, 'searchNow'])
     router.post('/albums/:id/enrich', [AlbumsController, 'enrich'])
     router.get('/albums/:id/files', [AlbumsController, 'files'])
+    router.delete('/albums/:id', [AlbumsController, 'destroy'])
+    router.delete('/albums/:id/file', [AlbumsController, 'deleteFile'])
 
     // Tracks
     router.get('/tracks/search', [TracksController, 'search'])
