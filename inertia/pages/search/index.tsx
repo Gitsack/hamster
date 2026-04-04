@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -1964,7 +1965,7 @@ export default function SearchPage({
                           Loading albums...
                         </div>
                       ) : albums.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No albums found</p>
+                        <EmptyState title="No albums found" message="No albums were found for this artist." className="py-6" />
                       ) : (
                         <div className="space-y-2">
                           {albums.map((album) => {
@@ -2044,9 +2045,7 @@ export default function SearchPage({
                                         Loading tracks...
                                       </div>
                                     ) : tracks.length === 0 ? (
-                                      <p className="text-xs text-muted-foreground">
-                                        No tracks found
-                                      </p>
+                                      <EmptyState title="No tracks found" message="Track listing is not available for this album." className="py-4" />
                                     ) : (
                                       <div className="space-y-1">
                                         {tracks.map((track, idx) => (
@@ -2178,7 +2177,7 @@ export default function SearchPage({
                           Loading tracks...
                         </div>
                       ) : tracks.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No tracks found</p>
+                        <EmptyState title="No tracks found" message="No tracks were found for this album." className="py-6" />
                       ) : (
                         <div className="space-y-1">
                           {tracks.map((track, idx) => (

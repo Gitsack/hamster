@@ -2,6 +2,7 @@ import { Head, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Spinner } from '@/components/ui/spinner'
 import {
   Select,
@@ -565,6 +566,12 @@ export default function DiscoverPage() {
               <Skeleton key={i} className="aspect-[2/3] rounded-lg" />
             ))}
           </div>
+        ) : items.length === 0 ? (
+          <EmptyState
+            title="No recommendations available"
+            message="Try selecting a different genre or category."
+            className="py-16"
+          />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {items.map((item) => {
