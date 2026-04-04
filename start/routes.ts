@@ -11,6 +11,7 @@ import router from '@adonisjs/core/services/router'
 import { middleware } from './kernel.js'
 
 const AuthController = () => import('#controllers/auth_controller')
+const PasswordResetsController = () => import('#controllers/password_resets_controller')
 const RootFoldersController = () => import('#controllers/root_folders_controller')
 const QualityProfilesController = () => import('#controllers/quality_profiles_controller')
 const IndexersController = () => import('#controllers/indexers_controller')
@@ -72,6 +73,14 @@ router
     router.get('/register', [AuthController, 'showRegister']).as('register')
     router
       .post('/register', [AuthController, 'register'])
+      .use(middleware.rateLimit({ store: 'auth', maxAttempts: 5, windowSeconds: 60 }))
+    router.get('/forgot-password', [PasswordResetsController, 'forgotPassword'])
+    router
+      .post('/forgot-password', [PasswordResetsController, 'sendResetLink'])
+      .use(middleware.rateLimit({ store: 'auth', maxAttempts: 5, windowSeconds: 60 }))
+    router.get('/reset-password', [PasswordResetsController, 'showResetForm'])
+    router
+      .post('/reset-password', [PasswordResetsController, 'resetPassword'])
       .use(middleware.rateLimit({ store: 'auth', maxAttempts: 5, windowSeconds: 60 }))
   })
   .use(middleware.guest())

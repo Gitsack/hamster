@@ -14,8 +14,10 @@ declare module '@adonisjs/inertia/types' {
   export interface InertiaPages {
     'activity/history': ExtractProps<(typeof import('../../inertia/pages/activity/history.tsx'))['default']>
     'activity/queue': ExtractProps<(typeof import('../../inertia/pages/activity/queue.tsx'))['default']>
+    'auth/forgot_password': ExtractProps<(typeof import('../../inertia/pages/auth/forgot_password.tsx'))['default']>
     'auth/login': ExtractProps<(typeof import('../../inertia/pages/auth/login.tsx'))['default']>
     'auth/register': ExtractProps<(typeof import('../../inertia/pages/auth/register.tsx'))['default']>
+    'auth/reset_password': ExtractProps<(typeof import('../../inertia/pages/auth/reset_password.tsx'))['default']>
     'calendar/index': ExtractProps<(typeof import('../../inertia/pages/calendar/index.tsx'))['default']>
     'dashboard': ExtractProps<(typeof import('../../inertia/pages/dashboard.tsx'))['default']>
     'errors/not_found': ExtractProps<(typeof import('../../inertia/pages/errors/not_found.tsx'))['default']>

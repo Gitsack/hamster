@@ -6,36 +6,36 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-interface LoginProps {
+interface ForgotPasswordProps {
   errors?: {
     email?: string
-    password?: string
   }
 }
 
-export default function Login({ errors = {} }: LoginProps) {
+export default function ForgotPassword({ errors = {} }: ForgotPasswordProps) {
   const { flash } = usePage<{ flash: { success?: string } }>().props
   const { data, setData, post, processing } = useForm({
     email: '',
-    password: '',
   })
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    post('/login')
+    post('/forgot-password')
   }
 
   return (
     <>
-      <Head title="Login" />
+      <Head title="Forgot Password" />
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4">
               <HamsterLogo size="lg" showText={false} />
             </div>
-            <CardTitle className="text-2xl">Welcome back</CardTitle>
-            <CardDescription>Sign in to your Hamster account</CardDescription>
+            <CardTitle className="text-2xl">Forgot your password?</CardTitle>
+            <CardDescription>
+              Enter your email address and we'll send you a link to reset your password.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {flash?.success && (
@@ -58,32 +58,14 @@ export default function Login({ errors = {} }: LoginProps) {
                 />
                 {errors?.email && <p className="text-sm text-destructive">{errors.email}</p>}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={data.password}
-                  onChange={(e) => setData('password', e.target.value)}
-                  required
-                  autoComplete="current-password"
-                />
-                {errors?.password && <p className="text-sm text-destructive">{errors.password}</p>}
-              </div>
-              <div className="flex justify-end">
-                <Link href="/forgot-password" className="text-sm text-primary hover:underline">
-                  Forgot your password?
-                </Link>
-              </div>
               <Button type="submit" className="w-full" disabled={processing}>
-                {processing ? 'Signing in...' : 'Sign in'}
+                {processing ? 'Sending...' : 'Send Reset Link'}
               </Button>
             </form>
             <div className="mt-6 text-center text-sm text-muted-foreground">
-              Don't have an account?{' '}
-              <Link href="/register" className="text-primary hover:underline">
-                Create one
+              Remember your password?{' '}
+              <Link href="/login" className="text-primary hover:underline">
+                Sign in
               </Link>
             </div>
           </CardContent>
