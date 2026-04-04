@@ -42,6 +42,7 @@ import { toast } from 'sonner'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
+import { useShowMore } from '@/hooks/use_show_more'
 
 interface Track {
   id: number
@@ -109,6 +110,7 @@ export default function AlbumDetail() {
   const [enriching, setEnriching] = useState(false)
   const { getForAlbum } = useActiveDownloads()
   const albumDownloads = albumId ? getForAlbum(albumId) : []
+  const tracksPage = useShowMore(album?.tracks ?? [])
 
   useEffect(() => {
     fetchAlbum()
@@ -491,7 +493,7 @@ export default function AlbumDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {album.tracks.map((track, index) => {
+                    {tracksPage.visibleItems.map((track, index) => {
                       const isCurrentTrack = player.currentTrack?.trackId === track.id
                       const isPlaying = isCurrentTrack && player.isPlaying
 
@@ -564,6 +566,13 @@ export default function AlbumDetail() {
                   </TableBody>
                 </Table>
                 </div>
+                {tracksPage.hasMore && (
+                  <div className="flex justify-center py-3">
+                    <Button variant="outline" onClick={tracksPage.showMore}>
+                      Show more ({tracksPage.shownCount} of {tracksPage.totalCount})
+                    </Button>
+                  </div>
+                )}
               </Card>
             )}
           </TabsContent>
