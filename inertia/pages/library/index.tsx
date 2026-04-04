@@ -1456,20 +1456,13 @@ export default function Library() {
 
     const handleSearchAll = async () => {
       setSearchAllInProgress(true)
-      let grabbed = 0
-      let failed = 0
-      for (const item of [...missingItems]) {
-        const success = await handleSearch(item)
-        if (success) grabbed++
-        else failed++
+      const items = [...missingItems]
+      const BATCH_SIZE = 3
+      for (let i = 0; i < items.length; i += BATCH_SIZE) {
+        const batch = items.slice(i, i + BATCH_SIZE)
+        await Promise.allSettled(batch.map((item) => handleSearch(item)))
       }
       setSearchAllInProgress(false)
-      if (grabbed > 0) {
-        toast.success(`Started ${grabbed} download${grabbed > 1 ? 's' : ''}`)
-      }
-      if (failed > 0 && grabbed === 0) {
-        toast.info('No results found for any items')
-      }
     }
 
     return (

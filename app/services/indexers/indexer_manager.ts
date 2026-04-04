@@ -13,7 +13,10 @@ import { prowlarrService, type ProwlarrSearchResult } from './prowlarr_service.j
  * that can interfere with indexer text search (e.g. apostrophes, asterisks).
  */
 function sanitizeSearchQuery(title: string): string {
-  return title.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, ' ').trim()
+  return title
+    .replace(/[^a-zA-Z0-9\s-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 export type MediaType = 'movie' | 'tv' | 'music' | 'book' | 'other'
@@ -60,7 +63,7 @@ function classifyMediaType(categoryId: number | undefined): MediaType | undefine
     case 7:
       return 'book'
     case 8:
-      return 'book'
+      return categoryId >= 8010 ? 'book' : 'other'
     default:
       return 'other'
   }
@@ -366,22 +369,22 @@ export class IndexerManager {
         title: result.title,
         indexer: result.indexer,
         indexerId: String(result.indexerId),
-      size: result.size,
-      publishDate: result.publishDate,
-      downloadUrl: result.downloadUrl,
-      infoUrl: result.infoUrl,
-      grabs: result.grabs,
-      seeders: result.seeders,
-      peers: result.leechers,
-      protocol: result.protocol,
-      source: 'prowlarr' as const,
-      category: primaryCat?.name,
-      categoryId: primaryCat?.id,
-      mediaType: classifyMediaType(primaryCat?.id),
-      artist: result.artist,
-      album: result.album,
-      year: result.year,
-      quality: this.detectQuality(result.title),
+        size: result.size,
+        publishDate: result.publishDate,
+        downloadUrl: result.downloadUrl,
+        infoUrl: result.infoUrl,
+        grabs: result.grabs,
+        seeders: result.seeders,
+        peers: result.leechers,
+        protocol: result.protocol,
+        source: 'prowlarr' as const,
+        category: primaryCat?.name,
+        categoryId: primaryCat?.id,
+        mediaType: classifyMediaType(primaryCat?.id),
+        artist: result.artist,
+        album: result.album,
+        year: result.year,
+        quality: this.detectQuality(result.title),
       }
     })
   }

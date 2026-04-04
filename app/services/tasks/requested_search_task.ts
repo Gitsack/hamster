@@ -949,8 +949,7 @@ class RequestedSearchTask {
       )
 
       if (!bestResult) {
-        const allowedQualities =
-          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+        const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
         return {
           found: true,
           grabbed: false,
@@ -1038,8 +1037,7 @@ class RequestedSearchTask {
       )
 
       if (!bestResult) {
-        const allowedQualities =
-          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+        const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
         return {
           found: true,
           grabbed: false,
@@ -1176,8 +1174,7 @@ class RequestedSearchTask {
       )
 
       if (!bestResult) {
-        const allowedQualities =
-          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+        const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
         return {
           found: true,
           grabbed: false,
@@ -1258,8 +1255,7 @@ class RequestedSearchTask {
       )
 
       if (!bestResult) {
-        const allowedQualities =
-          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+        const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
         return {
           found: true,
           grabbed: false,
@@ -1332,11 +1328,11 @@ class RequestedSearchTask {
           const tvShow = episode.tvShow
           const seriesType = tvShow.seriesType || 'standard'
           const alternateTitles = [
-          ...(tvShow.alternateTitles || []),
-          ...(tvShow.originalTitle && tvShow.originalTitle !== tvShow.title
-            ? [tvShow.originalTitle]
-            : []),
-        ]
+            ...(tvShow.alternateTitles || []),
+            ...(tvShow.originalTitle && tvShow.originalTitle !== tvShow.title
+              ? [tvShow.originalTitle]
+              : []),
+          ]
           const airDate =
             seriesType === 'daily' && episode.airDate ? episode.airDate.toISODate() : undefined
 
