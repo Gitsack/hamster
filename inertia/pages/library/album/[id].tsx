@@ -78,6 +78,8 @@ interface Album {
   imageUrl: string | null
   requested: boolean
   anyReleaseOk: boolean
+  qualityProfile: { name: string } | null
+  rootFolder: { path: string } | null
   tracks: Track[]
   trackFiles: TrackFile[]
 }
@@ -453,6 +455,16 @@ export default function AlbumDetail() {
                 </Badge>
               ))}
             </div>
+
+            {/* Quality and folder info */}
+            {(album.qualityProfile || album.rootFolder) && (
+              <div className="flex flex-wrap gap-2 text-sm">
+                {album.qualityProfile && (
+                  <Badge variant="secondary">{album.qualityProfile.name}</Badge>
+                )}
+                {album.rootFolder && <Badge variant="secondary">{album.rootFolder.path}</Badge>}
+              </div>
+            )}
           </div>
         </div>
 

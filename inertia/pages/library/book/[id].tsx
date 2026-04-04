@@ -68,6 +68,8 @@ interface Book {
   requested: boolean
   hasFile: boolean
   author: Author
+  qualityProfile: { name: string } | null
+  rootFolder: { path: string } | null
   bookFile: BookFile | null
 }
 
@@ -406,6 +408,16 @@ export default function BookDetail() {
                     {genre}
                   </Badge>
                 ))}
+              </div>
+            )}
+
+            {/* Quality and folder info */}
+            {(book.qualityProfile || book.rootFolder) && (
+              <div className="flex flex-wrap gap-2 text-sm">
+                {book.qualityProfile && (
+                  <Badge variant="secondary">{book.qualityProfile.name}</Badge>
+                )}
+                {book.rootFolder && <Badge variant="secondary">{book.rootFolder.path}</Badge>}
               </div>
             )}
           </div>

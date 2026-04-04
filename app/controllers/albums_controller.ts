@@ -300,7 +300,9 @@ export default class AlbumsController {
   async show({ params, response }: HttpContext) {
     let album = await Album.query()
       .where('id', params.id)
-      .preload('artist')
+      .preload('artist', (query) => {
+        query.preload('qualityProfile').preload('rootFolder')
+      })
       .preload('tracks', (trackQuery) => {
         trackQuery.orderBy('discNumber', 'asc').orderBy('trackNumber', 'asc')
       })
@@ -317,7 +319,9 @@ export default class AlbumsController {
       // Reload tracks after fetching
       album = await Album.query()
         .where('id', params.id)
-        .preload('artist')
+        .preload('artist', (query) => {
+          query.preload('qualityProfile').preload('rootFolder')
+        })
         .preload('tracks', (trackQuery) => {
           trackQuery.orderBy('discNumber', 'asc').orderBy('trackNumber', 'asc')
         })
@@ -330,6 +334,10 @@ export default class AlbumsController {
       title: album.title,
       artistId: album.artistId,
       artistName: album.artist?.name,
+      qualityProfile: album.artist?.qualityProfile
+        ? { name: album.artist.qualityProfile.name }
+        : null,
+      rootFolder: album.artist?.rootFolder ? { path: album.artist.rootFolder.path } : null,
       musicbrainzId: album.musicbrainzId,
       musicbrainzReleaseGroupId: album.musicbrainzReleaseGroupId,
       overview: album.overview,
