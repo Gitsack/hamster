@@ -40,6 +40,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useMemo } from 'react'
 import { useShowMore } from '@/hooks/use_show_more'
 import { toast } from 'sonner'
+import { useOperationTrackerContext } from '@/hooks/use_operation_tracker'
 import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 
 // Book from library (database)
@@ -98,6 +99,7 @@ export default function AuthorDetail() {
   const [togglingBooks, setTogglingBooks] = useState<Set<number>>(new Set())
   const [addingBooks, setAddingBooks] = useState<Set<string>>(new Set())
   const [requestingAll, setRequestingAll] = useState(false)
+  const { runBulk } = useOperationTrackerContext()
 
   useEffect(() => {
     fetchAuthor()
@@ -376,18 +378,24 @@ export default function AuthorDetail() {
     setRequestingAll(true)
 
     try {
-      // Request all books in parallel
-      const results = await Promise.all(
-        booksToRequest.map((book) =>
-          fetch(`/api/v1/books/${book.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ requested: true }),
-          })
-        )
+      const results = await runBulk(
+        `Requesting ${booksToRequest.length} books`,
+        booksToRequest.map((book) => ({
+          id: String(book.id),
+          label: book.title,
+          execute: async () => {
+            const res = await fetch(`/api/v1/books/${book.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ requested: true }),
+            })
+            if (!res.ok) throw new Error('Request failed')
+            return res.json()
+          },
+        }))
       )
 
-      const failedCount = results.filter((r) => !r.ok).length
+      const failedCount = results.filter((r) => r.status === 'error').length
       if (failedCount === 0) {
         toast.success(`Requested ${booksToRequest.length} books`)
       } else if (failedCount < booksToRequest.length) {
@@ -396,7 +404,6 @@ export default function AuthorDetail() {
         )
       } else {
         toast.error('Failed to request books')
-        // Revert on complete failure
         fetchAuthor()
       }
     } catch (error) {

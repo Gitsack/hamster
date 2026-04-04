@@ -45,6 +45,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
+import { useOperationTrackerContext } from '@/hooks/use_operation_tracker'
 import {
   MediaStatusBadge,
   getMediaItemStatus,
@@ -231,6 +232,7 @@ export default function Library() {
 
   // Library scan state
   const [scanning, setScanning] = useState(false)
+  const { runBulk } = useOperationTrackerContext()
 
   // Enriching state
   const [enrichingItems, setEnrichingItems] = useState<Set<string>>(new Set())
@@ -476,57 +478,45 @@ export default function Library() {
         return
       }
 
-      toast.info(`Scanning ${foldersToScan.length} folder(s)...`)
-
-      // Start scan for each root folder
-      const scanPromises: Promise<void>[] = []
-      let errors: string[] = []
-
-      for (const folder of foldersToScan) {
-        const scanPromise = (async () => {
-          try {
-            // Start the scan
+      const results = await runBulk(
+        `Scanning ${MEDIA_TYPE_CONFIG[activeTab].label} library`,
+        foldersToScan.map((folder: { id: number; path: string }) => ({
+          id: String(folder.id),
+          label: folder.path,
+          execute: async () => {
             const scanRes = await fetch(`/api/v1/rootfolders/${folder.id}/scan`, {
               method: 'POST',
             })
 
             if (!scanRes.ok) {
               const error = await scanRes.json()
-              errors.push(error.error || `Failed to start scan for: ${folder.path}`)
-              return
+              throw new Error(error.error || `Failed to start scan for: ${folder.path}`)
             }
 
             // Poll for completion
             let isScanning = true
             while (isScanning) {
-              await new Promise((resolve) => setTimeout(resolve, 1000)) // Wait 1 second
+              await new Promise((resolve) => setTimeout(resolve, 1000))
 
               const statusRes = await fetch(`/api/v1/rootfolders/${folder.id}/scan-status`)
               if (statusRes.ok) {
                 const status = await statusRes.json()
                 isScanning = status.isScanning
               } else {
-                // If we can't get status, assume it's done
                 isScanning = false
               }
             }
-          } catch (err) {
-            errors.push(
-              `Error scanning ${folder.path}: ${err instanceof Error ? err.message : 'Unknown error'}`
-            )
-          }
-        })()
+          },
+        }))
+      )
 
-        scanPromises.push(scanPromise)
-      }
-
-      // Wait for all scans to complete
-      await Promise.all(scanPromises)
-
-      // Show results
-      if (errors.length > 0) {
-        console.error('Scan errors:', errors)
-        toast.warning(`Scan completed with ${errors.length} error(s)`)
+      const failedCount = results.filter((r) => r.status === 'error').length
+      if (failedCount > 0) {
+        console.error(
+          'Scan errors:',
+          results.filter((r) => r.status === 'error')
+        )
+        toast.warning(`Scan completed with ${failedCount} error(s)`)
       } else {
         toast.success('Library scan complete!')
       }

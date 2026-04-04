@@ -42,6 +42,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
+import { useOperationTrackerContext } from '@/hooks/use_operation_tracker'
 import { cn } from '@/lib/utils'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaHero } from '@/components/media-hero'
@@ -169,6 +170,7 @@ export default function TvShowDetail() {
   } | null>(null)
   const [removingWithFile, setRemovingWithFile] = useState(false)
   const [requestingAllSeasons, setRequestingAllSeasons] = useState(false)
+  const { runBulk } = useOperationTrackerContext()
   const [enriching, setEnriching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
@@ -718,21 +720,30 @@ export default function TvShowDetail() {
     setRequestingAllSeasons(true)
 
     try {
-      // Request all seasons in parallel
-      const results = await Promise.all(
-        seasonsToRequest.map((season) =>
-          fetch(`/api/v1/tvshows/${showId}/season/${season.seasonNumber}/request`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ requested: true }),
-          })
-        )
+      const results = await runBulk(
+        `Requesting ${seasonsToRequest.length} seasons`,
+        seasonsToRequest.map((season) => ({
+          id: String(season.seasonNumber),
+          label: `Season ${season.seasonNumber}`,
+          execute: async () => {
+            const res = await fetch(
+              `/api/v1/tvshows/${showId}/season/${season.seasonNumber}/request`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requested: true }),
+              }
+            )
+            if (!res.ok) throw new Error('Request failed')
+            return res.json()
+          },
+        }))
       )
 
-      const failedCount = results.filter((r) => !r.ok).length
+      const failedCount = results.filter((r) => r.status === 'error').length
       if (failedCount === 0) {
         toast.success(`Requested ${seasonsToRequest.length} seasons`)
-        fetchShow() // Refresh to get updated counts
+        fetchShow()
       } else if (failedCount < seasonsToRequest.length) {
         toast.warning(
           `Requested ${seasonsToRequest.length - failedCount} seasons, ${failedCount} failed`
@@ -740,7 +751,7 @@ export default function TvShowDetail() {
         fetchShow()
       } else {
         toast.error('Failed to request seasons')
-        fetchShow() // Revert
+        fetchShow()
       }
     } catch (error) {
       console.error('Failed to request all seasons:', error)
