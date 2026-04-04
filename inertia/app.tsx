@@ -9,6 +9,7 @@ import { AudioPlayerProvider } from '@/contexts/audio_player_context'
 import { MediaPreviewProvider } from '@/contexts/media_preview_context'
 import { AudioPlayer } from '@/components/player/audio_player'
 import { OperationTrackerProvider } from '@/components/operation-tracker'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { Toaster } from 'sonner'
 import { useState, useEffect } from 'react'
 
@@ -33,15 +34,17 @@ createInertiaApp({
   setup({ el, App, props }) {
     hydrateRoot(
       el,
-      <AudioPlayerProvider>
-        <OperationTrackerProvider>
-          <MediaPreviewProvider>
-            <App {...props} />
-            <AudioPlayer />
-            <ClientOnlyToaster />
-          </MediaPreviewProvider>
-        </OperationTrackerProvider>
-      </AudioPlayerProvider>
+      <ErrorBoundary fullPage>
+        <AudioPlayerProvider>
+          <OperationTrackerProvider>
+            <MediaPreviewProvider>
+              <App {...props} />
+              <AudioPlayer />
+              <ClientOnlyToaster />
+            </MediaPreviewProvider>
+          </OperationTrackerProvider>
+        </AudioPlayerProvider>
+      </ErrorBoundary>
     )
   },
 })
