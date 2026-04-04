@@ -11,14 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
@@ -95,11 +90,8 @@ export default function MovieDetail() {
 
   const [movie, setMovie] = useState<Movie | null>(null)
   const [loading, setLoading] = useState(true)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleteFileDialogOpen, setDeleteFileDialogOpen] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [deletingFile, setDeletingFile] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const confirmDialog = useConfirmDialog()
   const [toggling, setToggling] = useState(false)
   const [activeDownload, setActiveDownload] = useState<{ progress: number; status: string } | null>(
     null
@@ -190,7 +182,25 @@ export default function MovieDetail() {
 
     // If unrequesting a movie with a file, show confirmation dialog
     if (wasRequested && movie.hasFile) {
-      setDeleteDialogOpen(true)
+      confirmDialog.confirm({
+        title: 'Remove from library?',
+        description:
+          'This will permanently delete the downloaded files from disk and remove the movie from your library.',
+        confirmLabel: 'Delete Files & Remove',
+        loadingLabel: 'Deleting...',
+        onConfirm: async () => {
+          const response = await fetch(`/api/v1/movies/${movieId}?deleteFile=true`, {
+            method: 'DELETE',
+          })
+          if (response.ok) {
+            toast.success('Movie and files deleted')
+            router.visit('/library?tab=movies')
+          } else {
+            const err = await response.json()
+            toast.error(err.error || 'Failed to delete')
+          }
+        },
+      })
       return
     }
 
@@ -218,7 +228,25 @@ export default function MovieDetail() {
       } else if (data.hasFile) {
         // Movie has a file - show confirmation dialog
         setMovie({ ...movie, requested: wasRequested }) // Revert
-        setDeleteDialogOpen(true)
+        confirmDialog.confirm({
+          title: 'Remove from library?',
+          description:
+            'This will permanently delete the downloaded files from disk and remove the movie from your library.',
+          confirmLabel: 'Delete Files & Remove',
+          loadingLabel: 'Deleting...',
+          onConfirm: async () => {
+            const response = await fetch(`/api/v1/movies/${movieId}?deleteFile=true`, {
+              method: 'DELETE',
+            })
+            if (response.ok) {
+              toast.success('Movie and files deleted')
+              router.visit('/library?tab=movies')
+            } else {
+              const err = await response.json()
+              toast.error(err.error || 'Failed to delete')
+            }
+          },
+        })
       } else {
         // Revert on error
         setMovie({ ...movie, requested: wasRequested })
@@ -231,32 +259,6 @@ export default function MovieDetail() {
       toast.error('Failed to update movie')
     } finally {
       setToggling(false)
-    }
-  }
-
-  const deleteMovie = async (withFile: boolean = false) => {
-    setDeleting(true)
-    try {
-      const url = withFile
-        ? `/api/v1/movies/${movieId}?deleteFile=true`
-        : `/api/v1/movies/${movieId}`
-
-      const response = await fetch(url, {
-        method: 'DELETE',
-      })
-      if (response.ok) {
-        toast.success(withFile ? 'Movie and files deleted' : 'Movie deleted')
-        router.visit('/library?tab=movies')
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to delete')
-      }
-    } catch (error) {
-      console.error('Failed to delete movie:', error)
-      toast.error('Failed to delete movie')
-    } finally {
-      setDeleting(false)
-      setDeleteDialogOpen(false)
     }
   }
 
@@ -308,30 +310,6 @@ export default function MovieDetail() {
       toast.error('Failed to enrich movie')
     } finally {
       setEnriching(false)
-    }
-  }
-
-  const deleteFile = async () => {
-    if (!movie) return
-
-    setDeletingFile(true)
-    try {
-      const response = await fetch(`/api/v1/movies/${movieId}/file`, {
-        method: 'DELETE',
-      })
-      if (response.ok) {
-        toast.success('File deleted successfully')
-        setMovie({ ...movie, hasFile: false, movieFile: null })
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to delete file')
-      }
-    } catch (error) {
-      console.error('Failed to delete file:', error)
-      toast.error('Failed to delete file')
-    } finally {
-      setDeletingFile(false)
-      setDeleteFileDialogOpen(false)
     }
   }
 
@@ -424,7 +402,33 @@ export default function MovieDetail() {
               {!movie.tmdbId && <DropdownMenuSeparator />}
               <DropdownMenuItem
                 className="text-destructive"
-                onClick={() => setDeleteDialogOpen(true)}
+                onClick={() =>
+                  confirmDialog.confirm({
+                    title: movie.hasFile
+                      ? 'Remove from library?'
+                      : `Delete ${movie.title}?`,
+                    description: movie.hasFile
+                      ? 'This will permanently delete the downloaded files from disk and remove the movie from your library.'
+                      : 'This will remove the movie from your library.',
+                    confirmLabel: movie.hasFile ? 'Delete Files & Remove' : 'Delete',
+                    loadingLabel: 'Deleting...',
+                    onConfirm: async () => {
+                      const deleteUrl = movie.hasFile
+                        ? `/api/v1/movies/${movieId}?deleteFile=true`
+                        : `/api/v1/movies/${movieId}`
+                      const response = await fetch(deleteUrl, { method: 'DELETE' })
+                      if (response.ok) {
+                        toast.success(
+                          movie.hasFile ? 'Movie and files deleted' : 'Movie deleted'
+                        )
+                        router.visit('/library?tab=movies')
+                      } else {
+                        const err = await response.json()
+                        toast.error(err.error || 'Failed to delete')
+                      }
+                    },
+                  })
+                }
               >
                 <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
                 Remove from Library
@@ -580,7 +584,29 @@ export default function MovieDetail() {
                     variant="outline"
                     size="sm"
                     className="text-destructive hover:text-destructive"
-                    onClick={() => setDeleteFileDialogOpen(true)}
+                    onClick={() =>
+                      confirmDialog.confirm({
+                        title: 'Delete movie file?',
+                        description:
+                          'This will permanently delete the movie file from disk. The movie will remain in your library but will need to be downloaded again.',
+                        confirmLabel: 'Delete File',
+                        loadingLabel: 'Deleting...',
+                        onConfirm: async () => {
+                          const response = await fetch(`/api/v1/movies/${movieId}/file`, {
+                            method: 'DELETE',
+                          })
+                          if (response.ok) {
+                            toast.success('File deleted successfully')
+                            setMovie((prev) =>
+                              prev ? { ...prev, hasFile: false, movieFile: null } : prev
+                            )
+                          } else {
+                            const err = await response.json()
+                            toast.error(err.error || 'Failed to delete file')
+                          }
+                        },
+                      })
+                    }
                   >
                     <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 sm:mr-2" />
                     <span className="hidden sm:inline">Delete</span>
@@ -596,70 +622,12 @@ export default function MovieDetail() {
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {movie.hasFile ? 'Remove from library?' : `Delete ${movie.title}?`}
-            </DialogTitle>
-            <DialogDescription>
-              {movie.hasFile
-                ? 'This will permanently delete the downloaded files from disk and remove the movie from your library.'
-                : 'This will remove the movie from your library.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteMovie(movie.hasFile)}
-              disabled={deleting}
-            >
-              {deleting ? (
-                <>
-                  <Spinner className="mr-2" />
-                  Deleting...
-                </>
-              ) : movie.hasFile ? (
-                'Delete Files & Remove'
-              ) : (
-                'Delete'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete file confirmation dialog */}
-      <Dialog open={deleteFileDialogOpen} onOpenChange={setDeleteFileDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete movie file?</DialogTitle>
-            <DialogDescription>
-              This will permanently delete the movie file from disk. The movie will remain in your
-              library but will need to be downloaded again.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteFileDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={deleteFile} disabled={deletingFile}>
-              {deletingFile ? (
-                <>
-                  <Spinner className="mr-2" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete File'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        state={confirmDialog.state}
+        close={confirmDialog.close}
+        loading={confirmDialog.loading}
+        handleConfirm={confirmDialog.handleConfirm}
+      />
 
       {/* Video player dialog */}
       <Dialog open={videoPlayerOpen} onOpenChange={setVideoPlayerOpen}>

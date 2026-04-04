@@ -11,14 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -144,8 +139,6 @@ export default function TvShowDetail() {
 
   const [show, setShow] = useState<TvShow | null>(null)
   const [loading, setLoading] = useState(true)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const [seasonDetails, setSeasonDetails] = useState<Record<number, SeasonDetail>>({})
   const [loadingSeasons, setLoadingSeasons] = useState<Set<number>>(new Set())
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null)
@@ -154,22 +147,8 @@ export default function TvShowDetail() {
   >(new Map())
   const [togglingSeasons, setTogglingSeasons] = useState<Set<number>>(new Set())
   const [togglingEpisodes, setTogglingEpisodes] = useState<Set<number>>(new Set())
-  const [deleteFileDialogOpen, setDeleteFileDialogOpen] = useState(false)
-  const [deletingFile, setDeletingFile] = useState(false)
-  const [selectedEpisodeForDelete, setSelectedEpisodeForDelete] = useState<{
-    id: number
-    title: string
-    seasonNumber: number
-  } | null>(null)
-  const [removeWithFileDialogOpen, setRemoveWithFileDialogOpen] = useState(false)
-  const [episodeToRemove, setEpisodeToRemove] = useState<{
-    id: number
-    title: string
-    seasonNumber: number
-    hasFile: boolean
-  } | null>(null)
-  const [removingWithFile, setRemovingWithFile] = useState(false)
   const [requestingAllSeasons, setRequestingAllSeasons] = useState(false)
+  const confirmDialog = useConfirmDialog()
   const { runBulk } = useOperationTrackerContext()
   const [enriching, setEnriching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -339,28 +318,6 @@ export default function TvShowDetail() {
     }
   }
 
-  const deleteShow = async () => {
-    setDeleting(true)
-    try {
-      const response = await fetch(`/api/v1/tvshows/${showId}`, {
-        method: 'DELETE',
-      })
-      if (response.ok) {
-        toast.success('TV show deleted')
-        router.visit('/library?tab=tv')
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to delete')
-      }
-    } catch (error) {
-      console.error('Failed to delete show:', error)
-      toast.error('Failed to delete TV show')
-    } finally {
-      setDeleting(false)
-      setDeleteDialogOpen(false)
-    }
-  }
-
   const toggleSeason = (seasonNumber: number) => {
     if (expandedSeason === seasonNumber) {
       setExpandedSeason(null)
@@ -485,8 +442,26 @@ export default function TvShowDetail() {
 
     // If unrequesting an episode with a file, show confirmation dialog
     if (currentlyRequested && hasFile) {
-      setEpisodeToRemove({ id: episodeId, title: title || 'Episode', seasonNumber, hasFile: true })
-      setRemoveWithFileDialogOpen(true)
+      const episodeTitle = title || 'Episode'
+      confirmDialog.confirm({
+        title: 'Remove from library?',
+        description: `"${episodeTitle}" has downloaded files. This will permanently delete the files from disk and remove the episode from your library.`,
+        confirmLabel: 'Delete Files & Remove',
+        loadingLabel: 'Removing...',
+        onConfirm: async () => {
+          const response = await fetch(
+            `/api/v1/tvshows/${showId}/episodes/${episodeId}?deleteFile=true`,
+            { method: 'DELETE' }
+          )
+          if (response.ok) {
+            toast.success('Episode and files removed from library')
+            fetchShow()
+          } else {
+            const data = await response.json()
+            toast.error(data.error || 'Failed to remove episode')
+          }
+        },
+      })
       return
     }
 
@@ -533,13 +508,26 @@ export default function TvShowDetail() {
             ),
           },
         }))
-        setEpisodeToRemove({
-          id: episodeId,
-          title: title || 'Episode',
-          seasonNumber,
-          hasFile: true,
+        const episodeTitle = title || 'Episode'
+        confirmDialog.confirm({
+          title: 'Remove from library?',
+          description: `"${episodeTitle}" has downloaded files. This will permanently delete the files from disk and remove the episode from your library.`,
+          confirmLabel: 'Delete Files & Remove',
+          loadingLabel: 'Removing...',
+          onConfirm: async () => {
+            const response = await fetch(
+              `/api/v1/tvshows/${showId}/episodes/${episodeId}?deleteFile=true`,
+              { method: 'DELETE' }
+            )
+            if (response.ok) {
+              toast.success('Episode and files removed from library')
+              fetchShow()
+            } else {
+              const data = await response.json()
+              toast.error(data.error || 'Failed to remove episode')
+            }
+          },
         })
-        setRemoveWithFileDialogOpen(true)
       } else {
         // Revert on error
         setSeasonDetails((prev) => ({
@@ -575,71 +563,6 @@ export default function TvShowDetail() {
     }
   }
 
-  const removeEpisodeWithFile = async () => {
-    if (!episodeToRemove) return
-
-    setRemovingWithFile(true)
-    try {
-      const response = await fetch(
-        `/api/v1/tvshows/${showId}/episodes/${episodeToRemove.id}?deleteFile=true`,
-        { method: 'DELETE' }
-      )
-
-      if (response.ok) {
-        toast.success('Episode and files removed from library')
-        setRemoveWithFileDialogOpen(false)
-        setEpisodeToRemove(null)
-        fetchShow()
-      } else {
-        const data = await response.json()
-        toast.error(data.error || 'Failed to remove episode')
-      }
-    } catch (error) {
-      console.error('Failed to remove episode:', error)
-      toast.error('Failed to remove episode')
-    } finally {
-      setRemovingWithFile(false)
-    }
-  }
-
-  const deleteEpisodeFile = async () => {
-    if (!selectedEpisodeForDelete) return
-
-    setDeletingFile(true)
-    try {
-      const response = await fetch(
-        `/api/v1/tvshows/${showId}/episodes/${selectedEpisodeForDelete.id}/file`,
-        { method: 'DELETE' }
-      )
-      if (response.ok) {
-        toast.success('Episode file deleted successfully')
-        // Update local state
-        setSeasonDetails((prev) => ({
-          ...prev,
-          [selectedEpisodeForDelete.seasonNumber]: {
-            ...prev[selectedEpisodeForDelete.seasonNumber],
-            episodes: prev[selectedEpisodeForDelete.seasonNumber].episodes.map((ep) =>
-              ep.id === selectedEpisodeForDelete.id
-                ? { ...ep, hasFile: false, episodeFile: null }
-                : ep
-            ),
-          },
-        }))
-        // Refresh show to update season counts
-        fetchShow()
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to delete file')
-      }
-    } catch (error) {
-      console.error('Failed to delete episode file:', error)
-      toast.error('Failed to delete file')
-    } finally {
-      setDeletingFile(false)
-      setDeleteFileDialogOpen(false)
-      setSelectedEpisodeForDelete(null)
-    }
-  }
 
   const enrichTvShow = async () => {
     if (!show) return
@@ -837,7 +760,27 @@ export default function TvShowDetail() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
-                onClick={() => setDeleteDialogOpen(true)}
+                onClick={() =>
+                  confirmDialog.confirm({
+                    title: `Delete ${show.title}?`,
+                    description:
+                      'This will remove the TV show and all seasons/episodes from your library. Files on disk will not be deleted.',
+                    confirmLabel: 'Delete',
+                    loadingLabel: 'Deleting...',
+                    onConfirm: async () => {
+                      const response = await fetch(`/api/v1/tvshows/${showId}`, {
+                        method: 'DELETE',
+                      })
+                      if (response.ok) {
+                        toast.success('TV show deleted')
+                        router.visit('/library?tab=tv')
+                      } else {
+                        const err = await response.json()
+                        toast.error(err.error || 'Failed to delete')
+                      }
+                    },
+                  })
+                }
               >
                 <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
                 Remove from Library
@@ -1129,12 +1072,43 @@ export default function TvShowDetail() {
                                             size="icon"
                                             className="h-7 w-7 text-destructive hover:text-destructive"
                                             onClick={() => {
-                                              setSelectedEpisodeForDelete({
-                                                id: episode.id,
-                                                title: episode.title,
-                                                seasonNumber: season.seasonNumber,
+                                              const epId = episode.id
+                                              const epSeasonNumber = season.seasonNumber
+                                              confirmDialog.confirm({
+                                                title: 'Delete episode file?',
+                                                description: `This will permanently delete the file for "${episode.title}" from disk. The episode will remain in your library but will need to be downloaded again.`,
+                                                confirmLabel: 'Delete File',
+                                                loadingLabel: 'Deleting...',
+                                                onConfirm: async () => {
+                                                  const response = await fetch(
+                                                    `/api/v1/tvshows/${showId}/episodes/${epId}/file`,
+                                                    { method: 'DELETE' }
+                                                  )
+                                                  if (response.ok) {
+                                                    toast.success('Episode file deleted successfully')
+                                                    setSeasonDetails((prev) => ({
+                                                      ...prev,
+                                                      [epSeasonNumber]: {
+                                                        ...prev[epSeasonNumber],
+                                                        episodes: prev[epSeasonNumber].episodes.map(
+                                                          (ep) =>
+                                                            ep.id === epId
+                                                              ? {
+                                                                  ...ep,
+                                                                  hasFile: false,
+                                                                  episodeFile: null,
+                                                                }
+                                                              : ep
+                                                        ),
+                                                      },
+                                                    }))
+                                                    fetchShow()
+                                                  } else {
+                                                    const err = await response.json()
+                                                    toast.error(err.error || 'Failed to delete file')
+                                                  }
+                                                },
                                               })
-                                              setDeleteFileDialogOpen(true)
                                             }}
                                           >
                                             <HugeiconsIcon
@@ -1198,111 +1172,12 @@ export default function TvShowDetail() {
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete {show.title}?</DialogTitle>
-            <DialogDescription>
-              This will remove the TV show and all seasons/episodes from your library. Files on disk
-              will not be deleted.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={deleteShow} disabled={deleting}>
-              {deleting ? (
-                <>
-                  <Spinner className="mr-2" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete episode file confirmation dialog */}
-      <Dialog
-        open={deleteFileDialogOpen}
-        onOpenChange={(open) => {
-          setDeleteFileDialogOpen(open)
-          if (!open) setSelectedEpisodeForDelete(null)
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete episode file?</DialogTitle>
-            <DialogDescription>
-              This will permanently delete the file for "{selectedEpisodeForDelete?.title}" from
-              disk. The episode will remain in your library but will need to be downloaded again.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteFileDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={deleteEpisodeFile} disabled={deletingFile}>
-              {deletingFile ? (
-                <>
-                  <Spinner className="mr-2" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete File'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Remove episode with file confirmation dialog */}
-      <Dialog
-        open={removeWithFileDialogOpen}
-        onOpenChange={(open) => {
-          setRemoveWithFileDialogOpen(open)
-          if (!open) setEpisodeToRemove(null)
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Remove from library?</DialogTitle>
-            <DialogDescription>
-              "{episodeToRemove?.title}" has downloaded files. This will permanently delete the
-              files from disk and remove the episode from your library.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setRemoveWithFileDialogOpen(false)
-                setEpisodeToRemove(null)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={removeEpisodeWithFile}
-              disabled={removingWithFile}
-            >
-              {removingWithFile ? (
-                <>
-                  <Spinner className="mr-2" />
-                  Removing...
-                </>
-              ) : (
-                'Delete Files & Remove'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        state={confirmDialog.state}
+        close={confirmDialog.close}
+        loading={confirmDialog.loading}
+        handleConfirm={confirmDialog.handleConfirm}
+      />
 
       {/* Video player dialog */}
       <Dialog
