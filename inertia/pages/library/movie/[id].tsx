@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
@@ -360,28 +361,49 @@ export default function MovieDetail() {
       title={movie.title}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" asChild>
-            <Link href="/library?tab=movies">
-              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Back</span>
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" onClick={toggleMonitored}>
-            <HugeiconsIcon
-              icon={movie.monitored ? Notification01Icon : NotificationOff01Icon}
-              className="h-4 w-4 md:mr-2"
-            />
-            <span className="hidden md:inline">{movie.monitored ? 'Monitored' : 'Monitor'}</span>
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" asChild>
+                  <Link href="/library?tab=movies">
+                    <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Back</span>
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Back</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={toggleMonitored}>
+                  <HugeiconsIcon
+                    icon={movie.monitored ? Notification01Icon : NotificationOff01Icon}
+                    className="h-4 w-4 md:mr-2"
+                  />
+                  <span className="hidden md:inline">{movie.monitored ? 'Monitored' : 'Monitor'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{movie.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {!movie.hasFile && (
-            <Button onClick={downloadMovie} disabled={downloading}>
-              {downloading ? (
-                <Spinner className="md:mr-2" />
-              ) : (
-                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
-              )}
-              <span className="hidden md:inline">Search releases</span>
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={downloadMovie} disabled={downloading}>
+                    {downloading ? (
+                      <Spinner className="md:mr-2" />
+                    ) : (
+                      <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                    )}
+                    <span className="hidden md:inline">Search releases</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Search releases</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

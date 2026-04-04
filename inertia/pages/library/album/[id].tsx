@@ -21,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
@@ -336,26 +337,47 @@ export default function AlbumDetail() {
       title={album.title}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" asChild>
-            <Link href={`/artist/${album.artistId}`}>
-              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Back to Artist</span>
-            </Link>
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" asChild>
+                  <Link href={`/artist/${album.artistId}`}>
+                    <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Back to Artist</span>
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Back to Artist</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {tracksWithFiles > 0 && (
-            <Button variant="outline" onClick={playAlbum}>
-              <HugeiconsIcon icon={PlayIcon} className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Play</span>
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" onClick={playAlbum}>
+                    <HugeiconsIcon icon={PlayIcon} className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Play</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Play</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
-          <Button onClick={searchAndDownload} disabled={downloading || percentComplete === 100}>
-            {downloading ? (
-              <Spinner className="md:mr-2" />
-            ) : (
-              <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
-            )}
-            <span className="hidden md:inline">{downloading ? 'Searching...' : 'Search releases'}</span>
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={searchAndDownload} disabled={downloading || percentComplete === 100}>
+                  {downloading ? (
+                    <Spinner className="md:mr-2" />
+                  ) : (
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                  )}
+                  <span className="hidden md:inline">{downloading ? 'Searching...' : 'Search releases'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{downloading ? 'Searching...' : 'Search releases'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon">

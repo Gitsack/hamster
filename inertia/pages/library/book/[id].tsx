@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -299,21 +300,35 @@ export default function BookDetail() {
       title={book.title}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" asChild>
-            <Link href={book.author ? `/author/${book.author.id}` : '/library'}>
-              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Back</span>
-            </Link>
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" asChild>
+                  <Link href={book.author ? `/author/${book.author.id}` : '/library'}>
+                    <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Back</span>
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Back</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {!book.hasFile && (
-            <Button onClick={downloadBook} disabled={downloading}>
-              {downloading ? (
-                <Spinner className="md:mr-2" />
-              ) : (
-                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
-              )}
-              <span className="hidden md:inline">Search releases</span>
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={downloadBook} disabled={downloading}>
+                    {downloading ? (
+                      <Spinner className="md:mr-2" />
+                    ) : (
+                      <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                    )}
+                    <span className="hidden md:inline">Search releases</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Search releases</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

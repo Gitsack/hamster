@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -510,19 +511,33 @@ export default function AuthorDetail() {
       title={author.name}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" asChild>
-            <Link href="/library?tab=books">
-              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
-              <span className="hidden md:inline">Back</span>
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" onClick={toggleMonitored}>
-            <HugeiconsIcon
-              icon={author.monitored ? Notification01Icon : NotificationOff01Icon}
-              className="h-4 w-4 md:mr-2"
-            />
-            <span className="hidden md:inline">{author.monitored ? 'Monitored' : 'Monitor'}</span>
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" asChild>
+                  <Link href="/library?tab=books">
+                    <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
+                    <span className="hidden md:inline">Back</span>
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Back</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={toggleMonitored}>
+                  <HugeiconsIcon
+                    icon={author.monitored ? Notification01Icon : NotificationOff01Icon}
+                    className="h-4 w-4 md:mr-2"
+                  />
+                  <span className="hidden md:inline">{author.monitored ? 'Monitored' : 'Monitor'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{author.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon">
