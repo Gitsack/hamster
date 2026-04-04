@@ -86,6 +86,7 @@ export default function BookDetail() {
   const [deletingFile, setDeletingFile] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
+  const [enriching, setEnriching] = useState(false)
 
   const { getForBook } = useActiveDownloads()
   const activeDownload = bookId ? getForBook(bookId) : null
@@ -216,6 +217,34 @@ export default function BookDetail() {
     }
   }
 
+  const enrichBook = async () => {
+    if (!book) return
+
+    setEnriching(true)
+    try {
+      const response = await fetch(`/api/v1/books/${bookId}/enrich`, {
+        method: 'POST',
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.enriched) {
+          toast.success('Book enriched with OpenLibrary data')
+          fetchBook()
+        } else {
+          toast.warning(data.message || 'No matching book found')
+        }
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to enrich')
+      }
+    } catch (error) {
+      console.error('Failed to enrich book:', error)
+      toast.error('Failed to enrich book')
+    } finally {
+      setEnriching(false)
+    }
+  }
+
   const deleteFile = async () => {
     if (!book) return
 
@@ -318,6 +347,14 @@ export default function BookDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={enrichBook} disabled={enriching}>
+                <HugeiconsIcon
+                  icon={Search01Icon}
+                  className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                />
+                {enriching ? 'Refreshing...' : 'Refresh metadata'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}

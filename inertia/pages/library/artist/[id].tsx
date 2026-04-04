@@ -179,56 +179,58 @@ export default function ArtistDetail() {
     }
   }
 
-  const refreshArtist = async () => {
-    setRefreshing(true)
-    try {
-      const response = await fetch(`/api/v1/artists/${artistId}/refresh`, {
-        method: 'POST',
-      })
-      if (response.ok) {
-        toast.success('Artist metadata refreshed')
-        fetchArtist()
-        // Re-fetch discography as well
-        if (artist?.musicbrainzId) {
-          fetchDiscography(artist.musicbrainzId)
-        }
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to refresh')
-      }
-    } catch (error) {
-      console.error('Failed to refresh artist:', error)
-      toast.error('Failed to refresh artist')
-    } finally {
-      setRefreshing(false)
-    }
-  }
-
-  const enrichArtist = async () => {
+  const refreshMetadata = async () => {
     if (!artist) return
 
-    setEnriching(true)
-    try {
-      const response = await fetch(`/api/v1/artists/${artistId}/enrich`, {
-        method: 'POST',
-      })
-      if (response.ok) {
-        const data = await response.json()
-        if (data.enriched) {
-          toast.success('Artist enriched with MusicBrainz data')
+    if (artist.musicbrainzId) {
+      // Already linked - refresh
+      setRefreshing(true)
+      try {
+        const response = await fetch(`/api/v1/artists/${artistId}/refresh`, {
+          method: 'POST',
+        })
+        if (response.ok) {
+          toast.success('Artist metadata refreshed')
           fetchArtist()
+          // Re-fetch discography as well
+          if (artist.musicbrainzId) {
+            fetchDiscography(artist.musicbrainzId)
+          }
         } else {
-          toast.warning(data.message || 'No matching artist found')
+          const error = await response.json()
+          toast.error(error.error || 'Failed to refresh')
         }
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to enrich')
+      } catch (error) {
+        console.error('Failed to refresh artist:', error)
+        toast.error('Failed to refresh artist')
+      } finally {
+        setRefreshing(false)
       }
-    } catch (error) {
-      console.error('Failed to enrich artist:', error)
-      toast.error('Failed to enrich artist')
-    } finally {
-      setEnriching(false)
+    } else {
+      // No MusicBrainz ID - enrich
+      setEnriching(true)
+      try {
+        const response = await fetch(`/api/v1/artists/${artistId}/enrich`, {
+          method: 'POST',
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.enriched) {
+            toast.success('Artist enriched with MusicBrainz data')
+            fetchArtist()
+          } else {
+            toast.warning(data.message || 'No matching artist found')
+          }
+        } else {
+          const error = await response.json()
+          toast.error(error.error || 'Failed to enrich')
+        }
+      } catch (error) {
+        console.error('Failed to enrich artist:', error)
+        toast.error('Failed to enrich artist')
+      } finally {
+        setEnriching(false)
+      }
     }
   }
 
@@ -512,22 +514,13 @@ export default function ArtistDetail() {
                 />
                 {artist.requested ? 'Unrequest' : 'Request'}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={refreshArtist} disabled={refreshing}>
+              <DropdownMenuItem onClick={refreshMetadata} disabled={refreshing || enriching}>
                 <HugeiconsIcon
                   icon={RefreshIcon}
-                  className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
+                  className={`h-4 w-4 mr-2 ${refreshing || enriching ? 'animate-spin' : ''}`}
                 />
-                Refresh
+                {refreshing || enriching ? 'Refreshing...' : 'Refresh metadata'}
               </DropdownMenuItem>
-              {!artist.musicbrainzId && (
-                <DropdownMenuItem onClick={enrichArtist} disabled={enriching}>
-                  <HugeiconsIcon
-                    icon={Search01Icon}
-                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
-                  />
-                  {enriching ? 'Enriching...' : 'Enrich from MusicBrainz'}
-                </DropdownMenuItem>
-              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"

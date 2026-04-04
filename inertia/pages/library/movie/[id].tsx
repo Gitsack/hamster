@@ -390,16 +390,14 @@ export default function MovieDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {!movie.tmdbId && (
-                <DropdownMenuItem onClick={enrichMovie} disabled={enriching}>
-                  <HugeiconsIcon
-                    icon={Search01Icon}
-                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
-                  />
-                  {enriching ? 'Enriching...' : 'Enrich from TMDB'}
-                </DropdownMenuItem>
-              )}
-              {!movie.tmdbId && <DropdownMenuSeparator />}
+              <DropdownMenuItem onClick={enrichMovie} disabled={enriching}>
+                <HugeiconsIcon
+                  icon={Search01Icon}
+                  className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                />
+                {enriching ? 'Refreshing...' : 'Refresh metadata'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={() =>
