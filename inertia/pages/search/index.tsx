@@ -1783,8 +1783,8 @@ export default function SearchPage({
           }
         }}
       >
-        <CardContent className="flex items-center gap-4 p-4">
-          <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden">
+        <CardContent className="flex items-center gap-3 p-2.5">
+          <div className="h-10 w-10 rounded bg-muted flex-shrink-0 overflow-hidden">
             {showImage ? (
               <img
                 src={item.imageUrl!}
@@ -1794,25 +1794,25 @@ export default function SearchPage({
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon icon={icon} className="h-8 w-8 text-muted-foreground/50" />
+                <HugeiconsIcon icon={icon} className="h-5 w-5 text-muted-foreground/50" />
               </div>
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium">{item.name}</h3>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+            <h3 className="text-sm font-medium truncate">{item.name}</h3>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               {item.subtitle && <span>{item.subtitle}</span>}
               {item.extra && (
                 <>
-                  <span>•</span>
+                  <span>·</span>
                   <span>{item.extra}</span>
                 </>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {item.inLibrary ? (
-              <Badge variant="outline" className="gap-1">
+              <Badge variant="outline" className="gap-1 text-xs">
                 <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
                 In Library
               </Badge>
@@ -1845,16 +1845,16 @@ export default function SearchPage({
   const renderMusicResults = () => {
     if (searching) {
       return (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {Array.from({ length: 5 }).map((_, i) => (
             <Card key={i}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <Skeleton className="h-16 w-16 rounded" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-1/3" />
+              <CardContent className="flex items-center gap-3 p-2.5">
+                <Skeleton className="h-10 w-10 rounded" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3.5 w-1/3" />
                   <Skeleton className="h-3 w-1/2" />
                 </div>
-                <Skeleton className="h-9 w-20" />
+                <Skeleton className="h-8 w-16" />
               </CardContent>
             </Card>
           ))}
@@ -1864,8 +1864,8 @@ export default function SearchPage({
 
     if (musicSearchType === 'artist' && artistResults.length > 0) {
       return (
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">
+        <div className="space-y-1.5">
+          <div className="text-xs text-muted-foreground mb-2">
             Found {artistResults.length} artists
           </div>
           {artistResults.map((artist) => {
@@ -1875,29 +1875,29 @@ export default function SearchPage({
 
             return (
               <Card key={artist.musicbrainzId} className={artist.inLibrary ? 'opacity-60' : ''}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                <CardContent className="p-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
                       <HugeiconsIcon
                         icon={MusicNote01Icon}
-                        className="h-8 w-8 text-muted-foreground/50"
+                        className="h-5 w-5 text-muted-foreground/50"
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium">{artist.name}</h3>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                      <h3 className="text-sm font-medium truncate">{artist.name}</h3>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         {artist.type && <span>{artist.type}</span>}
                         {artist.country && (
                           <>
-                            <span>•</span>
+                            <span>·</span>
                             <span>{artist.country}</span>
                           </>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       {artist.inLibrary ? (
-                        <Badge variant="outline" className="gap-1">
+                        <Badge variant="outline" className="gap-1 text-xs">
                           <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
                           In Library
                         </Badge>
@@ -1920,7 +1920,7 @@ export default function SearchPage({
 
                   {/* Expanded albums section */}
                   {isExpanded && (
-                    <div className="mt-4 pt-4 border-t">
+                    <div className="mt-3 pt-3 border-t">
                       <h4 className="text-sm font-medium mb-3">Albums</h4>
                       {isLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1940,8 +1940,8 @@ export default function SearchPage({
 
                             return (
                               <div key={album.musicbrainzId} className="border rounded-md">
-                                <div className="flex items-center gap-3 p-3">
-                                  <div className="h-12 w-12 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                                <div className="flex items-center gap-2.5 p-2">
+                                  <div className="h-9 w-9 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
                                     {!failedImages.has(imageKey) ? (
                                       <img
                                         src={coverUrl}
@@ -2063,8 +2063,8 @@ export default function SearchPage({
 
     if (musicSearchType === 'album' && albumResults.length > 0) {
       return (
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">
+        <div className="space-y-1.5">
+          <div className="text-xs text-muted-foreground mb-2">
             Found {albumResults.length} albums
           </div>
           {albumResults.map((album) => {
@@ -2074,17 +2074,17 @@ export default function SearchPage({
 
             return (
               <Card key={album.musicbrainzId} className={album.inLibrary ? 'opacity-60' : ''}>
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                <CardContent className="p-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
                       <HugeiconsIcon
                         icon={Album01Icon}
-                        className="h-8 w-8 text-muted-foreground/50"
+                        className="h-5 w-5 text-muted-foreground/50"
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-medium">{album.title}</h3>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                      <h3 className="text-sm font-medium truncate">{album.title}</h3>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <button
                           className="hover:text-primary hover:underline transition-colors"
                           onClick={() =>
@@ -2095,15 +2095,15 @@ export default function SearchPage({
                         </button>
                         {album.releaseDate && (
                           <>
-                            <span>•</span>
+                            <span>·</span>
                             <span>{album.releaseDate}</span>
                           </>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       {album.inLibrary ? (
-                        <Badge variant="outline" className="gap-1">
+                        <Badge variant="outline" className="gap-1 text-xs">
                           <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
                           In Library
                         </Badge>
@@ -2134,11 +2134,11 @@ export default function SearchPage({
 
                   {/* Expanded tracks section */}
                   {isExpanded && (
-                    <div className="mt-4 pt-4 border-t">
-                      <h4 className="text-sm font-medium mb-3">Tracks</h4>
+                    <div className="mt-3 pt-3 border-t">
+                      <h4 className="text-sm font-medium mb-2">Tracks</h4>
                       {isLoading ? (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Spinner />
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Spinner className="size-3" />
                           Loading tracks...
                         </div>
                       ) : tracks.length === 0 ? (
@@ -2175,22 +2175,22 @@ export default function SearchPage({
 
     if (musicSearchType === 'track' && trackResults.length > 0) {
       return (
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">
+        <div className="space-y-1.5">
+          <div className="text-xs text-muted-foreground mb-2">
             Found {trackResults.length} tracks
           </div>
           {trackResults.map((track) => (
             <Card key={track.musicbrainzId} className={track.inLibrary ? 'opacity-60' : ''}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+              <CardContent className="flex items-center gap-3 p-2.5">
+                <div className="h-10 w-10 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
                   <HugeiconsIcon
                     icon={MusicNoteSquare01Icon}
-                    className="h-8 w-8 text-muted-foreground/50"
+                    className="h-5 w-5 text-muted-foreground/50"
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium">{track.title}</h3>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                  <h3 className="text-sm font-medium truncate">{track.title}</h3>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <button
                       className="hover:text-primary hover:underline transition-colors"
                       onClick={() => navigateToArtist(track.artistName, track.artistMusicbrainzId)}
@@ -2199,7 +2199,7 @@ export default function SearchPage({
                     </button>
                     {track.albumTitle && track.albumMusicbrainzId && (
                       <>
-                        <span>•</span>
+                        <span>·</span>
                         <button
                           className="hover:text-primary hover:underline transition-colors"
                           onClick={() =>
@@ -2212,15 +2212,15 @@ export default function SearchPage({
                     )}
                     {track.duration && (
                       <>
-                        <span>•</span>
+                        <span>·</span>
                         <span>{formatDuration(track.duration)}</span>
                       </>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {track.inLibrary ? (
-                    <Badge variant="outline" className="gap-1">
+                    <Badge variant="outline" className="gap-1 text-xs">
                       <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
                       In Library
                     </Badge>
@@ -2268,8 +2268,8 @@ export default function SearchPage({
     // Show search results if there are any
     if (movieResults.length > 0) {
       return (
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">
+        <div className="space-y-1.5">
+          <div className="text-xs text-muted-foreground mb-2">
             Found {movieResults.length} movies
           </div>
           {movieResults.map((movie) =>
@@ -2408,8 +2408,8 @@ export default function SearchPage({
     // Show search results if there are any
     if (tvShowResults.length > 0) {
       return (
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">
+        <div className="space-y-1.5">
+          <div className="text-xs text-muted-foreground mb-2">
             Found {tvShowResults.length} TV shows
           </div>
           {tvShowResults.map((show) =>
@@ -2545,8 +2545,8 @@ export default function SearchPage({
 
     if (booksSearchType === 'author' && authorResults.length > 0) {
       return (
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">
+        <div className="space-y-1.5">
+          <div className="text-xs text-muted-foreground mb-2">
             Found {authorResults.length} authors
           </div>
           {authorResults.map((author) =>
@@ -2567,8 +2567,8 @@ export default function SearchPage({
 
     if (booksSearchType === 'book' && bookResults.length > 0) {
       return (
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground mb-4">Found {bookResults.length} books</div>
+        <div className="space-y-1.5">
+          <div className="text-xs text-muted-foreground mb-2">Found {bookResults.length} books</div>
           {bookResults.map((book) =>
             renderResultCard(
               {
@@ -2747,16 +2747,16 @@ export default function SearchPage({
   )
 
   const SearchingSkeleton = () => (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {Array.from({ length: 5 }).map((_, i) => (
         <Card key={i}>
-          <CardContent className="flex items-center gap-4 p-4">
-            <Skeleton className="h-16 w-16 rounded" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-1/3" />
+          <CardContent className="flex items-center gap-3 p-2.5">
+            <Skeleton className="h-10 w-10 rounded" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3.5 w-1/3" />
               <Skeleton className="h-3 w-1/2" />
             </div>
-            <Skeleton className="h-9 w-20" />
+            <Skeleton className="h-8 w-16" />
           </CardContent>
         </Card>
       ))}
