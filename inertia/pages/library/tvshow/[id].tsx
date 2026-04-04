@@ -1009,38 +1009,14 @@ export default function TvShowDetail() {
                           )}
                         </div>
                       </div>
-                      {togglingSeasons.has(season.seasonNumber) ? (
-                        <Badge variant="secondary" className="bg-muted text-muted-foreground">
-                          <Spinner className="size-3 mr-1" />
-                          {season.requested ? 'Requesting...' : 'Unrequesting...'}
-                        </Badge>
-                      ) : season.requested ? (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge
-                                variant="secondary"
-                                className="cursor-pointer bg-yellow-600 hover:bg-destructive text-white transition-colors group"
-                                onClick={(e) => toggleSeasonRequested(season.seasonNumber, true, e)}
-                              >
-                                <span className="group-hover:hidden">Requested</span>
-                                <span className="hidden group-hover:inline">Unrequest</span>
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent>Click to unrequest</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          onClick={(e) => toggleSeasonRequested(season.seasonNumber, false, e)}
-                        >
-                          <HugeiconsIcon icon={Add01Icon} className="h-3 w-3 mr-1" />
-                          Request
-                        </Button>
-                      )}
+                      <MediaStatusBadge
+                        status={season.requested ? 'requested' : 'none'}
+                        isToggling={togglingSeasons.has(season.seasonNumber)}
+                        onToggleRequest={() => {
+                          const syntheticEvent = { stopPropagation: () => {} } as React.MouseEvent
+                          toggleSeasonRequested(season.seasonNumber, season.requested, syntheticEvent)
+                        }}
+                      />
                       <HugeiconsIcon
                         icon={
                           expandedSeason === season.seasonNumber ? ArrowUp01Icon : ArrowDown01Icon
