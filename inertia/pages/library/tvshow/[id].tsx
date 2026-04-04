@@ -658,6 +658,7 @@ export default function TvShowDetail() {
   }
 
   const searchEpisodeReleases = async (episodeId: number) => {
+    setEpisodeSearchResults((prev) => ({ ...prev, [episodeId]: [] }))
     setSearchingEpisode(episodeId)
     try {
       const response = await fetch(`/api/v1/tvshows/${showId}/episodes/${episodeId}/releases`)

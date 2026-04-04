@@ -2,7 +2,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Table,
@@ -300,6 +300,7 @@ export default function MovieDetail() {
   }
 
   const searchReleases = async () => {
+    setSearchResults([])
     setSearching(true)
     try {
       const response = await fetch(`/api/v1/movies/${movieId}/releases`)
@@ -656,8 +657,10 @@ export default function MovieDetail() {
         {/* Search results */}
         {searchResults.length > 0 && (
           <Card>
-            <CardContent className="pt-6">
-              <h2 className="font-semibold mb-4">Search Results ({searchResults.length})</h2>
+            <CardHeader>
+              <CardTitle>Search Results ({searchResults.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>

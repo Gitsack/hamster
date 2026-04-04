@@ -426,7 +426,7 @@ export default class BooksController {
       const results = await indexerManager.searchBooks({
         title: book.title,
         author: book.author?.name,
-        limit: request.input('limit', 100),
+        limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
       })
 
       return response.json(results)

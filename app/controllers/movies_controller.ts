@@ -535,7 +535,7 @@ export default class MoviesController {
         imdbId: movie.imdbId ?? undefined,
         tmdbId: movie.tmdbId ?? undefined,
         alternateTitles,
-        limit: request.input('limit', 100),
+        limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
       })
 
       return response.json(results)

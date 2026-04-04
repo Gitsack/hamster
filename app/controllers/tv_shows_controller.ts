@@ -918,7 +918,7 @@ export default class TvShowsController {
         tvdbId: tvShow.tvdbId || undefined,
         imdbId: tvShow.imdbId || undefined,
         alternateTitles,
-        limit: request.input('limit', 100),
+        limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
       })
 
       return response.json(results)

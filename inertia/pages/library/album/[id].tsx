@@ -211,6 +211,7 @@ export default function AlbumDetail() {
   }
 
   const searchReleases = async () => {
+    setSearchResults([])
     setSearching(true)
     try {
       const response = await fetch(`/api/v1/albums/${albumId}/releases`)
