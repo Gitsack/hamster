@@ -122,6 +122,8 @@ class ErrorBoundary extends Component<
 type MediaType = 'music' | 'movies' | 'tv' | 'books'
 type MusicSearchType = 'artist' | 'album' | 'track'
 
+type ResultMediaType = 'movie' | 'tv' | 'music' | 'book' | 'other'
+
 interface IndexerSearchResult {
   id: string
   title: string
@@ -133,10 +135,28 @@ interface IndexerSearchResult {
   infoUrl?: string
   guid: string
   category?: string
+  categoryId?: number
+  mediaType?: ResultMediaType
   seeders?: number
   leechers?: number
   grabs?: number
   protocol?: 'usenet' | 'torrent'
+}
+
+const MEDIA_TYPE_LABELS: Record<ResultMediaType, string> = {
+  movie: 'Movies',
+  tv: 'TV',
+  music: 'Music',
+  book: 'Books',
+  other: 'Other',
+}
+
+const MEDIA_TYPE_ICONS: Record<ResultMediaType, typeof Film01Icon> = {
+  movie: Film01Icon,
+  tv: Tv01Icon,
+  music: MusicNote01Icon,
+  book: Book01Icon,
+  other: Globe02Icon,
 }
 
 interface ArtistSearchResult {
@@ -517,6 +537,7 @@ export default function SearchPage({
   const [indexers, setIndexers] = useState<Indexer[]>([])
   const [selectedIndexers, setSelectedIndexers] = useState<number[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedMediaTypes, setSelectedMediaTypes] = useState<Set<ResultMediaType>>(new Set())
 
   // Sorting (direct search)
   const [sortField, setSortField] = useState<SortField>('age')
@@ -741,9 +762,23 @@ export default function SearchPage({
       .finally(() => setLoadingOptions(false))
   }, [])
 
+  // Compute available media types from current results
+  const availableMediaTypes = useMemo(() => {
+    const counts = new Map<ResultMediaType, number>()
+    for (const r of indexerResults) {
+      const mt = r.mediaType || 'other'
+      counts.set(mt, (counts.get(mt) || 0) + 1)
+    }
+    return counts
+  }, [indexerResults])
+
   // Filtered and sorted results for direct search
   const filteredIndexerResults = useMemo(() => {
     let results = [...indexerResults]
+
+    if (selectedMediaTypes.size > 0) {
+      results = results.filter((r) => selectedMediaTypes.has(r.mediaType || 'other'))
+    }
 
     if (selectedCategories.length > 0) {
       results = results.filter((r) => {
@@ -778,7 +813,7 @@ export default function SearchPage({
     })
 
     return results
-  }, [indexerResults, selectedCategories, sortField, sortDirection])
+  }, [indexerResults, selectedCategories, selectedMediaTypes, sortField, sortDirection])
 
   // Search function
   const search = async () => {
@@ -787,6 +822,7 @@ export default function SearchPage({
     setSearching(true)
     setHasSearched(true)
     setSelectedResults(new Set())
+    setSelectedMediaTypes(new Set())
 
     try {
       if (searchMode === 'direct') {
@@ -2601,7 +2637,8 @@ export default function SearchPage({
           <CardContent className="pt-6 min-w-0">
             <div className="text-sm text-muted-foreground mb-4">
               Found {filteredIndexerResults.length} results
-              {selectedCategories.length > 0 && ` (filtered from ${indexerResults.length})`}
+              {(selectedCategories.length > 0 || selectedMediaTypes.size > 0) &&
+                ` (filtered from ${indexerResults.length})`}
             </div>
             <div className="overflow-x-auto -mx-6 px-6">
               <Table className="w-full">
@@ -2695,11 +2732,22 @@ export default function SearchPage({
                       )}
                       {isColumnVisible('category') && (
                         <TableCell>
-                          {result.category && (
-                            <Badge variant="outline" className="text-xs">
-                              {result.category}
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {result.mediaType && (
+                              <Badge variant="secondary" className="text-xs gap-1 shrink-0">
+                                <HugeiconsIcon
+                                  icon={MEDIA_TYPE_ICONS[result.mediaType]}
+                                  className="h-3 w-3"
+                                />
+                                {MEDIA_TYPE_LABELS[result.mediaType]}
+                              </Badge>
+                            )}
+                            {result.category && (
+                              <Badge variant="outline" className="text-xs">
+                                {result.category}
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                       )}
                       {isColumnVisible('actions') && (
@@ -2924,6 +2972,55 @@ export default function SearchPage({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
+
+                      {/* Media type filter pills */}
+                      {availableMediaTypes.size > 1 && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm text-muted-foreground">Type:</span>
+                          {(
+                            ['movie', 'tv', 'music', 'book', 'other'] as ResultMediaType[]
+                          )
+                            .filter((mt) => availableMediaTypes.has(mt))
+                            .map((mt) => {
+                              const active = selectedMediaTypes.has(mt)
+                              return (
+                                <Button
+                                  key={mt}
+                                  variant={active ? 'default' : 'outline'}
+                                  size="sm"
+                                  className="gap-1.5 h-7 text-xs"
+                                  onClick={() => {
+                                    setSelectedMediaTypes((prev) => {
+                                      const next = new Set(prev)
+                                      if (next.has(mt)) next.delete(mt)
+                                      else next.add(mt)
+                                      return next
+                                    })
+                                  }}
+                                >
+                                  <HugeiconsIcon
+                                    icon={MEDIA_TYPE_ICONS[mt]}
+                                    className="h-3.5 w-3.5"
+                                  />
+                                  {MEDIA_TYPE_LABELS[mt]}
+                                  <span className="text-[10px] opacity-70">
+                                    {availableMediaTypes.get(mt)}
+                                  </span>
+                                </Button>
+                              )
+                            })}
+                          {selectedMediaTypes.size > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs px-2"
+                              onClick={() => setSelectedMediaTypes(new Set())}
+                            >
+                              <HugeiconsIcon icon={Cancel01Icon} className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
 
                       <div className="ml-auto flex items-center gap-2">
                         <DropdownMenu>
