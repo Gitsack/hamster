@@ -410,6 +410,33 @@ export default class BooksController {
     })
   }
 
+  /**
+   * Search for releases on indexers for this book
+   */
+  async searchReleases({ params, request, response }: HttpContext) {
+    const book = await Book.query().where('id', params.id).preload('author').first()
+
+    if (!book) {
+      return response.notFound({ error: 'Book not found' })
+    }
+
+    try {
+      const { indexerManager } = await import('#services/indexers/indexer_manager')
+
+      const results = await indexerManager.searchBooks({
+        title: book.title,
+        author: book.author?.name,
+        limit: request.input('limit', 100),
+      })
+
+      return response.json(results)
+    } catch (error) {
+      return response.badRequest({
+        error: error instanceof Error ? error.message : 'Failed to search releases',
+      })
+    }
+  }
+
   async download({ params, response }: HttpContext) {
     const book = await Book.query().where('id', params.id).preload('author').first()
 
