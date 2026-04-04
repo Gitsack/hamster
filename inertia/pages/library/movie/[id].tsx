@@ -21,7 +21,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
 
@@ -111,6 +121,20 @@ interface Movie {
   addedAt: string | null
 }
 
+interface SearchResult {
+  id: string
+  title: string
+  indexer: string
+  indexerId: number
+  size: number
+  publishDate: string
+  downloadUrl: string
+  quality?: string
+  seeders?: number
+  grabs?: number
+  protocol: string
+}
+
 export default function MovieDetail() {
   const { url } = usePage()
   const movieId = url.split('/').pop()
@@ -126,6 +150,10 @@ export default function MovieDetail() {
   const [searching, setSearching] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [grabbing, setGrabbing] = useState<string | null>(null)
+  const [releasePickerOpen, setReleasePickerOpen] = useState(false)
   const audioPlayer = useAudioPlayer()
   const { getForMovie } = useActiveDownloads()
   const activeDownload = movieId ? getForMovie(movieId) : null
@@ -269,6 +297,56 @@ export default function MovieDetail() {
       toast.error('Failed to download movie')
     } finally {
       setDownloading(false)
+    }
+  }
+
+  const searchReleases = async () => {
+    setSearching(true)
+    setReleasePickerOpen(true)
+    try {
+      const response = await fetch(`/api/v1/movies/${movieId}/releases`)
+      if (response.ok) {
+        const data = await response.json()
+        setSearchResults(data)
+      } else {
+        toast.error('Failed to search releases')
+      }
+    } catch (error) {
+      console.error('Failed to search releases:', error)
+      toast.error('Failed to search releases')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const grabRelease = async (result: SearchResult) => {
+    setGrabbing(result.id)
+    try {
+      const response = await fetch('/api/v1/queue/grab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: result.title,
+          downloadUrl: result.downloadUrl,
+          size: result.size,
+          movieId: movie?.id,
+          indexerId: result.indexerId,
+          indexerName: result.indexer,
+          guid: result.id,
+        }),
+      })
+      if (response.ok) {
+        toast.success('Download started')
+        setReleasePickerOpen(false)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to grab release')
+      }
+    } catch (error) {
+      console.error('Failed to grab release:', error)
+      toast.error('Failed to grab release')
+    } finally {
+      setGrabbing(null)
     }
   }
 
@@ -472,6 +550,10 @@ export default function MovieDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={searchReleases} disabled={searching}>
+                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
+                {searching ? 'Searching...' : 'Manual Search'}
+              </DropdownMenuItem>
               {!movie.tmdbId && (
                 <DropdownMenuItem onClick={enrichMovie} disabled={enriching}>
                   <HugeiconsIcon
@@ -481,7 +563,7 @@ export default function MovieDetail() {
                   {enriching ? 'Enriching...' : 'Enrich from TMDB'}
                 </DropdownMenuItem>
               )}
-              {!movie.tmdbId && <DropdownMenuSeparator />}
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
@@ -757,6 +839,71 @@ export default function MovieDetail() {
         mode="deleteFile"
         onConfirm={deleteFile}
       />
+
+      {/* Release picker dialog */}
+      <Dialog open={releasePickerOpen} onOpenChange={setReleasePickerOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Manual Search — {movie.title}</DialogTitle>
+          </DialogHeader>
+          {searching ? (
+            <div className="flex items-center justify-center py-12">
+              <Spinner className="h-8 w-8" />
+              <span className="ml-3 text-muted-foreground">Searching indexers...</span>
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">No releases found</div>
+          ) : (
+            <div className="overflow-auto flex-1">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Release</TableHead>
+                    <TableHead className="w-32">Indexer</TableHead>
+                    <TableHead className="w-24">Quality</TableHead>
+                    <TableHead className="w-24 text-right">Size</TableHead>
+                    <TableHead className="w-24 text-right">Grabs</TableHead>
+                    <TableHead className="w-16"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {searchResults.map((result) => (
+                    <TableRow key={result.id}>
+                      <TableCell className="font-medium max-w-md truncate">
+                        {result.title}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
+                      <TableCell>
+                        {result.quality && <Badge variant="outline">{result.quality}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {formatFileSize(result.size)}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {result.grabs ?? result.seeders ?? '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => grabRelease(result)}
+                          disabled={grabbing === result.id}
+                        >
+                          {grabbing === result.id ? (
+                            <Spinner />
+                          ) : (
+                            <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Video player dialog */}
       <Dialog open={videoPlayerOpen} onOpenChange={setVideoPlayerOpen}>

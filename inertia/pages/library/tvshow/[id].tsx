@@ -20,7 +20,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -36,6 +46,7 @@ import {
   FileDownloadIcon,
   Search01Icon,
   Add01Icon,
+  Search01Icon,
   PlayIcon,
   Refresh01Icon,
   Notification01Icon,
@@ -187,6 +198,12 @@ export default function TvShowDetail() {
   const [searchingEpisode, setSearchingEpisode] = useState<number | null>(null)
   const [grabbingRelease, setGrabbingRelease] = useState<string | null>(null)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [grabbing, setGrabbing] = useState<string | null>(null)
+  const [releasePickerOpen, setReleasePickerOpen] = useState(false)
+  const [releasePickerTitle, setReleasePickerTitle] = useState('')
+  const [releasePickerEpisodeId, setReleasePickerEpisodeId] = useState<number | null>(null)
   const [playingEpisode, setPlayingEpisode] = useState<{
     id: number
     fileId: number
@@ -674,8 +691,51 @@ export default function TvShowDetail() {
     }
   }
 
-  const grabEpisodeRelease = async (result: SearchResult, episodeId: number) => {
-    setGrabbingRelease(result.id)
+  const searchReleases = async () => {
+    if (!show) return
+    setSearching(true)
+    setReleasePickerTitle(show.title)
+    setReleasePickerEpisodeId(null)
+    setReleasePickerOpen(true)
+    try {
+      const response = await fetch(`/api/v1/tvshows/${showId}/releases`)
+      if (response.ok) {
+        const data = await response.json()
+        setSearchResults(data)
+      } else {
+        toast.error('Failed to search releases')
+      }
+    } catch (error) {
+      console.error('Failed to search releases:', error)
+      toast.error('Failed to search releases')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const searchEpisodeReleases = async (episodeId: number, episodeLabel: string) => {
+    setSearching(true)
+    setReleasePickerTitle(episodeLabel)
+    setReleasePickerEpisodeId(episodeId)
+    setReleasePickerOpen(true)
+    try {
+      const response = await fetch(`/api/v1/tvshows/${showId}/episodes/${episodeId}/releases`)
+      if (response.ok) {
+        const data = await response.json()
+        setSearchResults(data)
+      } else {
+        toast.error('Failed to search releases')
+      }
+    } catch (error) {
+      console.error('Failed to search releases:', error)
+      toast.error('Failed to search releases')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const grabRelease = async (result: SearchResult) => {
+    setGrabbing(result.id)
     try {
       const response = await fetch('/api/v1/queue/grab', {
         method: 'POST',
@@ -685,7 +745,7 @@ export default function TvShowDetail() {
           downloadUrl: result.downloadUrl,
           size: result.size,
           tvShowId: show?.id,
-          episodeId,
+          ...(releasePickerEpisodeId ? { episodeId: releasePickerEpisodeId } : {}),
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
@@ -693,6 +753,7 @@ export default function TvShowDetail() {
       })
       if (response.ok) {
         toast.success('Download started')
+        setReleasePickerOpen(false)
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to grab release')
@@ -701,14 +762,14 @@ export default function TvShowDetail() {
       console.error('Failed to grab release:', error)
       toast.error('Failed to grab release')
     } finally {
-      setGrabbingRelease(null)
+      setGrabbing(null)
     }
   }
 
-  const formatSize = (bytes: number) => {
-    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`
-    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} MB`
-    return `${(bytes / 1024).toFixed(0)} KB`
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
   }
 
   const requestAllSeasons = async () => {
@@ -827,6 +888,10 @@ export default function TvShowDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={searchReleases} disabled={searching}>
+                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
+                {searching ? 'Searching...' : 'Manual Search'}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={refreshMetadata} disabled={enriching || refreshing}>
                 <HugeiconsIcon
                   icon={Refresh01Icon}
@@ -1137,23 +1202,25 @@ export default function TvShowDetail() {
                                     // All other statuses: Use unified MediaStatusBadge + manual search
                                     return (
                                       <>
-                                        <Button
-                                          variant="outline"
-                                          size="icon"
-                                          className="h-7 w-7"
-                                          onClick={() => searchEpisodeReleases(episode.id)}
-                                          disabled={searchingEpisode === episode.id}
-                                          title="Manual search"
-                                        >
-                                          {searchingEpisode === episode.id ? (
-                                            <Spinner className="size-3" />
-                                          ) : (
+                                        {(status === 'requested' || status === 'none') && (
+                                          <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            aria-label="Manual search"
+                                            onClick={() =>
+                                              searchEpisodeReleases(
+                                                episode.id,
+                                                `${show.title} - S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} - ${episode.title}`
+                                              )
+                                            }
+                                          >
                                             <HugeiconsIcon
                                               icon={Search01Icon}
                                               className="h-3.5 w-3.5"
                                             />
-                                          )}
-                                        </Button>
+                                          </Button>
+                                        )}
                                         <MediaStatusBadge
                                           status={status}
                                           progress={progress}
@@ -1301,6 +1368,72 @@ export default function TvShowDetail() {
         mode="remove"
         onConfirm={removeEpisodeWithFile}
       />
+
+      {/* Release picker dialog */}
+      <Dialog open={releasePickerOpen} onOpenChange={setReleasePickerOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Manual Search</DialogTitle>
+            <DialogDescription>{releasePickerTitle}</DialogDescription>
+          </DialogHeader>
+          {searching ? (
+            <div className="flex items-center justify-center py-12">
+              <Spinner className="h-8 w-8" />
+              <span className="ml-3 text-muted-foreground">Searching indexers...</span>
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">No releases found</div>
+          ) : (
+            <div className="overflow-auto flex-1">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Release</TableHead>
+                    <TableHead className="w-32">Indexer</TableHead>
+                    <TableHead className="w-24">Quality</TableHead>
+                    <TableHead className="w-24 text-right">Size</TableHead>
+                    <TableHead className="w-24 text-right">Grabs</TableHead>
+                    <TableHead className="w-16"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {searchResults.map((result) => (
+                    <TableRow key={result.id}>
+                      <TableCell className="font-medium max-w-md truncate">
+                        {result.title}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
+                      <TableCell>
+                        {result.quality && <Badge variant="outline">{result.quality}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {formatFileSize(result.size)}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {result.grabs ?? result.seeders ?? '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => grabRelease(result)}
+                          disabled={grabbing === result.id}
+                        >
+                          {grabbing === result.id ? (
+                            <Spinner />
+                          ) : (
+                            <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Video player dialog */}
       <Dialog
