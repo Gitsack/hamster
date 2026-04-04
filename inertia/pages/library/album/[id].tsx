@@ -45,6 +45,7 @@ import { DownloadProgressCard } from '@/components/library/download-progress-car
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { useShowMore } from '@/hooks/use_show_more'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
+import { MediaStatusBadge } from '@/components/library/media-status-badge'
 
 interface Track {
   id: number
@@ -504,6 +505,20 @@ export default function AlbumDetail() {
               >
                 {album.artistName}
               </Link>
+            </div>
+
+            {/* Status */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <MediaStatusBadge
+                status={
+                  album.trackFiles.length > 0 && tracksWithFiles === totalTracks
+                    ? 'downloaded'
+                    : album.requested
+                      ? 'requested'
+                      : 'none'
+                }
+                onToggleRequest={toggleRequested}
+              />
             </div>
 
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">

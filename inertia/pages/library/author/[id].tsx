@@ -22,8 +22,6 @@ import {
   ViewOffIcon,
   Add01Icon,
   RefreshIcon,
-  CheckmarkCircle01Icon,
-  Clock01Icon,
   Search01Icon,
   Notification01Icon,
   NotificationOff01Icon,
@@ -960,18 +958,12 @@ function MergedBookCard({
 
           {/* Status badge */}
           <div className="absolute top-2 right-2">
-            {isComplete && (
-              <Badge variant="default" className="bg-green-600 text-white">
-                <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3 mr-1" />
-                Downloaded
-              </Badge>
-            )}
-            {!isComplete && book.inLibrary && book.requested && (
-              <Badge variant="secondary" className="bg-yellow-600 text-white">
-                <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3 mr-1" />
-                Requested
-              </Badge>
-            )}
+            <CardStatusBadge
+              status={status as MediaItemStatus}
+              size="sm"
+              showOnHover={status === 'none'}
+              onToggleRequest={handleToggleRequest}
+            />
           </div>
 
           {/* Action button overlay */}
