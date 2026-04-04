@@ -1,3 +1,5 @@
+import { mapHost } from '#utils/host_mapping'
+
 export interface TransmissionConfig {
   host: string
   port: number
@@ -62,7 +64,7 @@ export class TransmissionService {
   private buildUrl(config: TransmissionConfig): string {
     const protocol = config.useSsl ? 'https' : 'http'
     const urlBase = config.urlBase?.replace(/\/$/, '') || '/transmission'
-    return `${protocol}://${config.host}:${config.port}${urlBase}/rpc`
+    return `${protocol}://${mapHost(config.host)}:${config.port}${urlBase}/rpc`
   }
 
   /**

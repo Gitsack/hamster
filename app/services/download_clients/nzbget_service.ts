@@ -1,3 +1,5 @@
+import { mapHost } from '#utils/host_mapping'
+
 export interface NzbgetConfig {
   host: string
   port: number
@@ -143,7 +145,7 @@ export class NzbgetService {
   private buildUrl(config: NzbgetConfig): string {
     const protocol = config.useSsl ? 'https' : 'http'
     const auth = config.username ? `${config.username}:${config.password || ''}@` : ''
-    return `${protocol}://${auth}${config.host}:${config.port}/jsonrpc`
+    return `${protocol}://${auth}${mapHost(config.host)}:${config.port}/jsonrpc`
   }
 
   /**

@@ -1,3 +1,5 @@
+import { mapHost } from '#utils/host_mapping'
+
 export interface QBittorrentConfig {
   host: string
   port: number
@@ -51,7 +53,7 @@ export class QBittorrentService {
 
   private buildUrl(config: QBittorrentConfig, path: string): string {
     const protocol = config.useSsl ? 'https' : 'http'
-    return `${protocol}://${config.host}:${config.port}/api/v2${path}`
+    return `${protocol}://${mapHost(config.host)}:${config.port}/api/v2${path}`
   }
 
   /**

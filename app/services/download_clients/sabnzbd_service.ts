@@ -1,3 +1,5 @@
+import { mapHost } from '#utils/host_mapping'
+
 export interface SabnzbdConfig {
   host: string
   port: number
@@ -67,7 +69,7 @@ export class SabnzbdService {
 
   private buildUrl(config: SabnzbdConfig, params: Record<string, string>): string {
     const protocol = config.useSsl ? 'https' : 'http'
-    const baseUrl = `${protocol}://${config.host}:${config.port}/api`
+    const baseUrl = `${protocol}://${mapHost(config.host)}:${config.port}/api`
     const queryParams = new URLSearchParams({
       ...params,
       apikey: config.apiKey,
@@ -214,7 +216,7 @@ export class SabnzbdService {
     } = {}
   ): Promise<{ nzo_ids: string[] }> {
     const protocol = config.useSsl ? 'https' : 'http'
-    const baseUrl = `${protocol}://${config.host}:${config.port}/api`
+    const baseUrl = `${protocol}://${mapHost(config.host)}:${config.port}/api`
 
     const formData = new FormData()
     formData.append('apikey', config.apiKey)

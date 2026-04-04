@@ -1,3 +1,5 @@
+import { mapHost } from '#utils/host_mapping'
+
 export interface MediaServerConfig {
   type: 'plex' | 'emby' | 'jellyfin'
   host: string
@@ -16,7 +18,7 @@ export class MediaServerService {
 
   private buildBaseUrl(config: MediaServerConfig): string {
     const protocol = config.useSsl ? 'https' : 'http'
-    return `${protocol}://${config.host}:${config.port}`
+    return `${protocol}://${mapHost(config.host)}:${config.port}`
   }
 
   /**

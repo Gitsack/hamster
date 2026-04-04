@@ -1,4 +1,5 @@
 import { XMLParser } from 'fast-xml-parser'
+import { mapUrl } from '#utils/host_mapping'
 
 /**
  * Error thrown when an indexer returns HTTP 429 (Too Many Requests).
@@ -360,7 +361,7 @@ export class NewznabService {
   }
 
   private normalizeUrl(url: string): string {
-    return url.replace(/\/+$/, '')
+    return mapUrl(url).replace(/\/+$/, '')
   }
 
   private parseSearchResults(xml: string, config: NewznabIndexerConfig): NewznabSearchResult[] {

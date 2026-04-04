@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { statfs } from 'node:fs/promises'
 import path from 'node:path'
 import { fileNamingService } from './file_naming_service.js'
 import { mediaInfoService, type MediaInfo } from './media_info_service.js'
@@ -420,8 +421,17 @@ export class FileScannerService {
   /**
    * Update root folder statistics
    */
-  private async updateRootFolderStats(_rootFolder: RootFolder): Promise<void> {
-    // TODO: Implement root folder statistics if needed
+  private async updateRootFolderStats(rootFolder: RootFolder): Promise<void> {
+    try {
+      const stats = await statfs(rootFolder.path)
+      rootFolder.freeSpaceBytes = stats.bfree * stats.bsize
+      rootFolder.totalSpaceBytes = stats.blocks * stats.bsize
+    } catch {
+      // Disk stats unavailable — leave existing values
+    }
+    rootFolder.lastScannedAt = DateTime.now()
+    rootFolder.scanStatus = 'completed'
+    await rootFolder.save()
   }
 
   /**

@@ -1,3 +1,5 @@
+import { mapUrl } from '#utils/host_mapping'
+
 export interface ProwlarrIndexer {
   id: number
   name: string
@@ -333,7 +335,7 @@ export class ProwlarrService {
   }
 
   private normalizeUrl(url: string): string {
-    return url.replace(/\/+$/, '')
+    return mapUrl(url).replace(/\/+$/, '')
   }
 }
 

@@ -1,3 +1,5 @@
+import { mapHost } from '#utils/host_mapping'
+
 export interface DelugeConfig {
   host: string
   port: number
@@ -33,7 +35,7 @@ export class DelugeService {
 
   private buildUrl(config: DelugeConfig): string {
     const protocol = config.useSsl ? 'https' : 'http'
-    return `${protocol}://${config.host}:${config.port}/json`
+    return `${protocol}://${mapHost(config.host)}:${config.port}/json`
   }
 
   /**
