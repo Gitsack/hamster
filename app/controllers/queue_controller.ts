@@ -116,17 +116,35 @@ export default class QueueController {
    * Grab a release
    */
   async grab({ request, response }: HttpContext) {
-    const { title, downloadUrl, size, albumId, releaseId, indexerId, indexerName, guid } =
-      request.only([
-        'title',
-        'downloadUrl',
-        'size',
-        'albumId',
-        'releaseId',
-        'indexerId',
-        'indexerName',
-        'guid',
-      ])
+    const {
+      title,
+      downloadUrl,
+      size,
+      albumId,
+      movieId,
+      tvShowId,
+      episodeId,
+      bookId,
+      releaseId,
+      indexerId,
+      indexerName,
+      guid,
+      downloadClientId,
+    } = request.only([
+      'title',
+      'downloadUrl',
+      'size',
+      'albumId',
+      'movieId',
+      'tvShowId',
+      'episodeId',
+      'bookId',
+      'releaseId',
+      'indexerId',
+      'indexerName',
+      'guid',
+      'downloadClientId',
+    ])
 
     if (!title || !downloadUrl) {
       return response.badRequest({ error: 'Title and download URL are required' })
@@ -138,10 +156,15 @@ export default class QueueController {
         downloadUrl,
         size,
         albumId,
+        movieId,
+        tvShowId,
+        episodeId,
+        bookId,
         releaseId,
         indexerId,
         indexerName,
         guid,
+        downloadClientId: downloadClientId ? Number(downloadClientId) : undefined,
       })
 
       return response.created({

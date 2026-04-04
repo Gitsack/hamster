@@ -66,6 +66,8 @@ import { useActiveDownloads, type ActiveDownloadInfo } from '@/hooks/use_active_
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { VideoPlayer } from '@/components/player/video_player'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
+import { DownloadClientIndicator } from '@/components/library/download-client-indicator'
+import { useDownloadClients } from '@/hooks/use_download_clients'
 
 interface QualityProfile {
   id: number
@@ -197,6 +199,8 @@ export default function TvShowDetail() {
   const [episodeSearchResults, setEpisodeSearchResults] = useState<Record<number, SearchResult[]>>({})
   const [searchingEpisode, setSearchingEpisode] = useState<number | null>(null)
   const [grabbingRelease, setGrabbingRelease] = useState<string | null>(null)
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
+  const { clients: downloadClients } = useDownloadClients()
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -749,6 +753,7 @@ export default function TvShowDetail() {
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
+          ...(selectedClientId && { downloadClientId: selectedClientId }),
         }),
       })
       if (response.ok) {
@@ -969,9 +974,14 @@ export default function TvShowDetail() {
             </div>
           )}
 
-          {/* Quality and folder info */}
+          {/* Quality, download client, and folder info */}
           <div className="flex flex-wrap gap-2 text-sm">
             {show.qualityProfile && <Badge variant="secondary">{show.qualityProfile.name}</Badge>}
+            <DownloadClientIndicator
+              clients={downloadClients}
+              selectedClientId={selectedClientId}
+              onClientChange={setSelectedClientId}
+            />
             {show.rootFolder && <Badge variant="secondary">{show.rootFolder.path}</Badge>}
           </div>
 

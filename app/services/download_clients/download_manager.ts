@@ -36,6 +36,7 @@ export interface DownloadRequest {
   indexerId?: string
   indexerName?: string
   guid?: string
+  downloadClientId?: number
 }
 
 export interface QueueItem {
@@ -528,11 +529,22 @@ export class DownloadManager {
       throw new Error('File already exists in library')
     }
 
-    // Get enabled download client
-    const client = await DownloadClient.query()
-      .where('enabled', true)
-      .orderBy('priority', 'asc')
-      .first()
+    // Get download client — use override if specified, otherwise pick by priority
+    let client: DownloadClient | null = null
+    if (request.downloadClientId) {
+      client = await DownloadClient.query()
+        .where('id', request.downloadClientId)
+        .where('enabled', true)
+        .first()
+      if (!client) {
+        throw new Error('Selected download client not found or is disabled')
+      }
+    } else {
+      client = await DownloadClient.query()
+        .where('enabled', true)
+        .orderBy('priority', 'asc')
+        .first()
+    }
 
     if (!client) {
       throw new Error('No enabled download client configured')

@@ -59,6 +59,8 @@ import { DownloadProgressCard } from '@/components/library/download-progress-car
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
+import { DownloadClientIndicator } from '@/components/library/download-client-indicator'
+import { useDownloadClients } from '@/hooks/use_download_clients'
 import { VideoPlayer } from '@/components/player/video_player'
 
 interface QualityProfile {
@@ -154,9 +156,11 @@ export default function MovieDetail() {
   const [searching, setSearching] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
   const [releasePickerOpen, setReleasePickerOpen] = useState(false)
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
   const audioPlayer = useAudioPlayer()
   const { getForMovie } = useActiveDownloads()
   const activeDownload = movieId ? getForMovie(movieId) : null
+  const { clients: downloadClients } = useDownloadClients()
 
   useEffect(() => {
     fetchMovie()
@@ -333,6 +337,7 @@ export default function MovieDetail() {
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
+          ...(selectedClientId && { downloadClientId: selectedClientId }),
         }),
       })
       if (response.ok) {
@@ -409,6 +414,7 @@ export default function MovieDetail() {
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
+          ...(selectedClientId && { downloadClientId: selectedClientId }),
         }),
       })
       if (response.ok) {
@@ -654,9 +660,14 @@ export default function MovieDetail() {
             </div>
           )}
 
-          {/* Quality and folder info */}
+          {/* Quality, download client, and folder info */}
           <div className="flex flex-wrap gap-2 text-sm">
             {movie.qualityProfile && <Badge variant="secondary">{movie.qualityProfile.name}</Badge>}
+            <DownloadClientIndicator
+              clients={downloadClients}
+              selectedClientId={selectedClientId}
+              onClientChange={setSelectedClientId}
+            />
             {movie.rootFolder && <Badge variant="secondary">{movie.rootFolder.path}</Badge>}
           </div>
 
