@@ -570,64 +570,64 @@ export default function TvShowDetail() {
     setSelectedEpisodeForDelete(null)
   }
 
-  const enrichTvShow = async () => {
+  const refreshMetadata = async () => {
     if (!show) return
 
-    setEnriching(true)
-    try {
-      const response = await fetch(`/api/v1/tvshows/${showId}/enrich`, {
-        method: 'POST',
-      })
-      if (response.ok) {
-        const data = await response.json()
-        if (data.enriched) {
-          toast.success(`TV show enriched with TMDB data (${data.seasonsEnriched} seasons updated)`)
+    if (show.tmdbId) {
+      // Already linked - refresh
+      setRefreshing(true)
+      try {
+        const response = await fetch(`/api/v1/tvshows/${showId}/refresh`, {
+          method: 'POST',
+        })
+        if (response.ok) {
+          const data = await response.json()
+          const messages = []
+          if (data.seasonsCreated > 0) messages.push(`${data.seasonsCreated} seasons added`)
+          if (data.episodesCreated > 0) messages.push(`${data.episodesCreated} episodes added`)
+          if (messages.length > 0) {
+            toast.success(`Refreshed: ${messages.join(', ')}`)
+          } else {
+            toast.success('Metadata refreshed (no new episodes)')
+          }
           fetchShow()
+          // Clear cached season details to force refetch
+          setSeasonDetails({})
         } else {
-          toast.warning(data.message || 'No matching TV show found')
+          const error = await response.json()
+          toast.error(error.error || 'Failed to refresh')
         }
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to enrich')
+      } catch (error) {
+        console.error('Failed to refresh TV show:', error)
+        toast.error('Failed to refresh TV show')
+      } finally {
+        setRefreshing(false)
       }
-    } catch (error) {
-      console.error('Failed to enrich TV show:', error)
-      toast.error('Failed to enrich TV show')
-    } finally {
-      setEnriching(false)
-    }
-  }
-
-  const refreshTvShow = async () => {
-    if (!show) return
-
-    setRefreshing(true)
-    try {
-      const response = await fetch(`/api/v1/tvshows/${showId}/refresh`, {
-        method: 'POST',
-      })
-      if (response.ok) {
-        const data = await response.json()
-        const messages = []
-        if (data.seasonsCreated > 0) messages.push(`${data.seasonsCreated} seasons added`)
-        if (data.episodesCreated > 0) messages.push(`${data.episodesCreated} episodes added`)
-        if (messages.length > 0) {
-          toast.success(`Refreshed: ${messages.join(', ')}`)
+    } else {
+      // No TMDB ID - enrich
+      setEnriching(true)
+      try {
+        const response = await fetch(`/api/v1/tvshows/${showId}/enrich`, {
+          method: 'POST',
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.enriched) {
+            toast.success(`TV show enriched with TMDB data (${data.seasonsEnriched} seasons updated)`)
+            fetchShow()
+          } else {
+            toast.warning(data.message || 'No matching TV show found')
+          }
         } else {
-          toast.success('Metadata refreshed (no new episodes)')
+          const error = await response.json()
+          toast.error(error.error || 'Failed to enrich')
         }
-        fetchShow()
-        // Clear cached season details to force refetch
-        setSeasonDetails({})
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to refresh')
+      } catch (error) {
+        console.error('Failed to enrich TV show:', error)
+        toast.error('Failed to enrich TV show')
+      } finally {
+        setEnriching(false)
       }
-    } catch (error) {
-      console.error('Failed to refresh TV show:', error)
-      toast.error('Failed to refresh TV show')
-    } finally {
-      setRefreshing(false)
     }
   }
 
@@ -759,24 +759,13 @@ export default function TvShowDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {!show.tmdbId && (
-                <DropdownMenuItem onClick={enrichTvShow} disabled={enriching}>
-                  <HugeiconsIcon
-                    icon={Add01Icon}
-                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
-                  />
-                  {enriching ? 'Enriching...' : 'Enrich from TMDB'}
-                </DropdownMenuItem>
-              )}
-              {show.tmdbId && (
-                <DropdownMenuItem onClick={refreshTvShow} disabled={refreshing}>
-                  <HugeiconsIcon
-                    icon={Refresh01Icon}
-                    className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
-                  />
-                  {refreshing ? 'Refreshing...' : 'Refresh from TMDB'}
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onClick={refreshMetadata} disabled={enriching || refreshing}>
+                <HugeiconsIcon
+                  icon={Refresh01Icon}
+                  className={`h-4 w-4 mr-2 ${enriching || refreshing ? 'animate-spin' : ''}`}
+                />
+                {enriching || refreshing ? 'Refreshing...' : 'Refresh metadata'}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"

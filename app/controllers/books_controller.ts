@@ -507,6 +507,87 @@ export default class BooksController {
   }
 
   /**
+   * Enrich book with OpenLibrary metadata
+   */
+  async enrich({ params, response }: HttpContext) {
+    const book = await Book.find(params.id)
+    if (!book) {
+      return response.notFound({ error: 'Book not found' })
+    }
+
+    if (book.openlibraryId) {
+      return response.badRequest({
+        error: 'Book already has an OpenLibrary ID. Use refresh instead.',
+      })
+    }
+
+    // Search OpenLibrary for this book
+    const results = await openLibraryService.searchBooks(book.title)
+    if (results.length === 0) {
+      return response.json({
+        id: book.id,
+        title: book.title,
+        enriched: false,
+        message: 'No matching book found on OpenLibrary',
+      })
+    }
+
+    // Find best match (exact title match preferred)
+    const exactMatch = results.find((r) => r.title.toLowerCase() === book.title.toLowerCase())
+    const best = exactMatch || results[0]
+
+    // Fetch full details from OpenLibrary
+    try {
+      const olData = await openLibraryService.getBook(best.key)
+      if (!olData) {
+        return response.json({
+          id: book.id,
+          title: book.title,
+          enriched: false,
+          message: 'Failed to fetch book details from OpenLibrary',
+        })
+      }
+
+      book.merge({
+        openlibraryId: olData.key,
+        overview: olData.description || book.overview,
+        coverUrl: openLibraryService.getCoverUrl(olData.coverId, 'L') || book.coverUrl,
+        genres: olData.subjects || book.genres,
+      })
+
+      // Try to get edition details (ISBN, page count, etc.)
+      const editions = await openLibraryService.getBookEditions(best.key, 1)
+      if (editions.length > 0) {
+        const edition = editions[0]
+        if (edition.isbn10) book.isbn = edition.isbn10
+        if (edition.isbn13) book.isbn13 = edition.isbn13
+        if (edition.numberOfPages) book.pageCount = edition.numberOfPages
+        if (edition.publishers?.[0]) book.publisher = edition.publishers[0]
+        if (edition.publishDate) {
+          const year = Number.parseInt(edition.publishDate.match(/\d{4}/)?.[0] || '0')
+          if (year > 0) {
+            book.releaseDate = DateTime.fromObject({ year })
+          }
+        }
+      }
+
+      await book.save()
+
+      return response.json({
+        id: book.id,
+        title: book.title,
+        openlibraryId: book.openlibraryId,
+        enriched: true,
+      })
+    } catch (error) {
+      console.error(`Failed to enrich book ${book.id}:`, error)
+      return response.internalServerError({
+        error: 'Failed to fetch book details from OpenLibrary',
+      })
+    }
+  }
+
+  /**
    * Delete the book file from disk and database
    */
   async deleteFile({ params, response }: HttpContext) {

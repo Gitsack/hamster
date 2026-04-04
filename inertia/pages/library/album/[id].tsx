@@ -424,15 +424,13 @@ export default function AlbumDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {!album.musicbrainzId && (
-                <DropdownMenuItem onClick={enrichAlbum} disabled={enriching}>
-                  <HugeiconsIcon
-                    icon={Search01Icon}
-                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
-                  />
-                  {enriching ? 'Enriching...' : 'Enrich from MusicBrainz'}
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onClick={enrichAlbum} disabled={enriching}>
+                <HugeiconsIcon
+                  icon={Search01Icon}
+                  className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                />
+                {enriching ? 'Refreshing...' : 'Refresh metadata'}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={searchReleases} disabled={searching}>
                 <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
                 {searching ? 'Searching...' : 'Manual Search'}

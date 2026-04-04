@@ -296,6 +296,7 @@ router
     router.put('/books/:id', [BooksController, 'update'])
     router.delete('/books/:id', [BooksController, 'destroy'])
     router.delete('/books/:id/file', [BooksController, 'deleteFile'])
+    router.post('/books/:id/enrich', [BooksController, 'enrich'])
     router.post('/books/:id/request', [BooksController, 'setWanted'])
     router.post('/books/:id/download', [BooksController, 'download'])
     router.post('/books/:id/search', [BooksController, 'searchNow'])

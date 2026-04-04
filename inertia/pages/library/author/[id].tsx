@@ -539,7 +539,7 @@ export default function AuthorDetail() {
                   icon={RefreshIcon}
                   className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
                 />
-                Refresh
+                {refreshing ? 'Refreshing...' : 'Refresh metadata'}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
