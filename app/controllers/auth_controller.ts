@@ -23,7 +23,7 @@ export default class AuthController {
       }
 
       await auth.use('web').login(user)
-      return response.redirect('/library')
+      return response.redirect('/dashboard')
     } catch {
       session.flash('errors', { email: 'Invalid email or password' })
       return response.redirect('/login')
@@ -65,7 +65,7 @@ export default class AuthController {
     }
 
     await auth.use('web').login(user)
-    return response.redirect('/library')
+    return response.redirect('/dashboard')
   }
 
   async logout({ auth, response }: HttpContext) {

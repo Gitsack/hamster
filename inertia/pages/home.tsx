@@ -27,7 +27,7 @@ export default function Home() {
             <div className="flex items-center gap-3">
               {isLoggedIn ? (
                 <Button asChild>
-                  <Link href="/library">Library</Link>
+                  <Link href="/dashboard">Dashboard</Link>
                 </Button>
               ) : (
                 <>
@@ -57,7 +57,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               {isLoggedIn ? (
                 <Button size="lg" asChild>
-                  <Link href="/library">Go to Library</Link>
+                  <Link href="/dashboard">Go to Dashboard</Link>
                 </Button>
               ) : (
                 <>
