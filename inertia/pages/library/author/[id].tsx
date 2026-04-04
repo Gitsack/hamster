@@ -38,6 +38,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useMemo } from 'react'
+import { useShowMore } from '@/hooks/use_show_more'
 import { toast } from 'sonner'
 import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 
@@ -456,6 +457,13 @@ export default function AuthorDetail() {
   const requestedBooksFiltered = mergedBooks.filter((b) => b.inLibrary && b.requested && !b.hasFile)
   const notInLibraryBooks = mergedBooks.filter((b) => !b.inLibrary)
 
+  // Paginate long lists with "show more"
+  const allBooksPage = useShowMore(mergedBooks)
+  const inLibraryPage = useShowMore(inLibraryBooks)
+  const downloadedPage = useShowMore(downloadedBooksFiltered)
+  const requestedPage = useShowMore(requestedBooksFiltered)
+  const availablePage = useShowMore(notInLibraryBooks)
+
   // Calculate statistics
   const totalBooks = author?.books.length || 0
   const downloadedBooks = author?.books.filter((b) => b.hasFile).length || 0
@@ -650,31 +658,40 @@ export default function AuthorDetail() {
                 }
               />
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {mergedBooks.map((book) => (
-                  <MergedBookCard
-                    key={book.openlibraryId || book.libraryId}
-                    book={book}
-                    downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
-                    isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
-                    isAdding={addingBooks.has(book.openlibraryId)}
-                    onToggleRequest={toggleBookRequested}
-                    onAdd={() =>
-                      addBook({
-                        openlibraryId: book.openlibraryId,
-                        title: book.title,
-                        description: book.description,
-                        coverUrl: book.coverUrl,
-                        subjects: null,
-                        inLibrary: book.inLibrary,
-                        bookId: book.libraryId || null,
-                        requested: book.requested,
-                        hasFile: book.hasFile,
-                      })
-                    }
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {allBooksPage.visibleItems.map((book) => (
+                    <MergedBookCard
+                      key={book.openlibraryId || book.libraryId}
+                      book={book}
+                      downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                      isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
+                      isAdding={addingBooks.has(book.openlibraryId)}
+                      onToggleRequest={toggleBookRequested}
+                      onAdd={() =>
+                        addBook({
+                          openlibraryId: book.openlibraryId,
+                          title: book.title,
+                          description: book.description,
+                          coverUrl: book.coverUrl,
+                          subjects: null,
+                          inLibrary: book.inLibrary,
+                          bookId: book.libraryId || null,
+                          requested: book.requested,
+                          hasFile: book.hasFile,
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+                {allBooksPage.hasMore && (
+                  <div className="flex justify-center pt-2">
+                    <Button variant="outline" onClick={allBooksPage.showMore}>
+                      Show more ({allBooksPage.shownCount} of {allBooksPage.totalCount})
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
 
@@ -682,19 +699,28 @@ export default function AuthorDetail() {
             {inLibraryBooks.length === 0 ? (
               <EmptyState message="No books in library yet" />
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {inLibraryBooks.map((book) => (
-                  <MergedBookCard
-                    key={book.openlibraryId || book.libraryId}
-                    book={book}
-                    downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
-                    isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
-                    isAdding={false}
-                    onToggleRequest={toggleBookRequested}
-                    onAdd={() => {}}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {inLibraryPage.visibleItems.map((book) => (
+                    <MergedBookCard
+                      key={book.openlibraryId || book.libraryId}
+                      book={book}
+                      downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                      isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
+                      isAdding={false}
+                      onToggleRequest={toggleBookRequested}
+                      onAdd={() => {}}
+                    />
+                  ))}
+                </div>
+                {inLibraryPage.hasMore && (
+                  <div className="flex justify-center pt-2">
+                    <Button variant="outline" onClick={inLibraryPage.showMore}>
+                      Show more ({inLibraryPage.shownCount} of {inLibraryPage.totalCount})
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
 
@@ -702,19 +728,28 @@ export default function AuthorDetail() {
             {downloadedBooksFiltered.length === 0 ? (
               <EmptyState message="No downloaded books yet" />
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {downloadedBooksFiltered.map((book) => (
-                  <MergedBookCard
-                    key={book.openlibraryId || book.libraryId}
-                    book={book}
-                    downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
-                    isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
-                    isAdding={false}
-                    onToggleRequest={toggleBookRequested}
-                    onAdd={() => {}}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {downloadedPage.visibleItems.map((book) => (
+                    <MergedBookCard
+                      key={book.openlibraryId || book.libraryId}
+                      book={book}
+                      downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                      isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
+                      isAdding={false}
+                      onToggleRequest={toggleBookRequested}
+                      onAdd={() => {}}
+                    />
+                  ))}
+                </div>
+                {downloadedPage.hasMore && (
+                  <div className="flex justify-center pt-2">
+                    <Button variant="outline" onClick={downloadedPage.showMore}>
+                      Show more ({downloadedPage.shownCount} of {downloadedPage.totalCount})
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
 
@@ -722,19 +757,28 @@ export default function AuthorDetail() {
             {requestedBooksFiltered.length === 0 ? (
               <EmptyState message="No requested books" />
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {requestedBooksFiltered.map((book) => (
-                  <MergedBookCard
-                    key={book.openlibraryId || book.libraryId}
-                    book={book}
-                    downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
-                    isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
-                    isAdding={false}
-                    onToggleRequest={toggleBookRequested}
-                    onAdd={() => {}}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {requestedPage.visibleItems.map((book) => (
+                    <MergedBookCard
+                      key={book.openlibraryId || book.libraryId}
+                      book={book}
+                      downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                      isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
+                      isAdding={false}
+                      onToggleRequest={toggleBookRequested}
+                      onAdd={() => {}}
+                    />
+                  ))}
+                </div>
+                {requestedPage.hasMore && (
+                  <div className="flex justify-center pt-2">
+                    <Button variant="outline" onClick={requestedPage.showMore}>
+                      Show more ({requestedPage.shownCount} of {requestedPage.totalCount})
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
 
@@ -742,31 +786,40 @@ export default function AuthorDetail() {
             {notInLibraryBooks.length === 0 ? (
               <EmptyState message="All books are in library" />
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {notInLibraryBooks.map((book) => (
-                  <MergedBookCard
-                    key={book.openlibraryId || book.libraryId}
-                    book={book}
-                    downloadInfo={undefined}
-                    isToggling={false}
-                    isAdding={addingBooks.has(book.openlibraryId)}
-                    onToggleRequest={toggleBookRequested}
-                    onAdd={() =>
-                      addBook({
-                        openlibraryId: book.openlibraryId,
-                        title: book.title,
-                        description: book.description,
-                        coverUrl: book.coverUrl,
-                        subjects: null,
-                        inLibrary: book.inLibrary,
-                        bookId: book.libraryId || null,
-                        requested: book.requested,
-                        hasFile: book.hasFile,
-                      })
-                    }
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {availablePage.visibleItems.map((book) => (
+                    <MergedBookCard
+                      key={book.openlibraryId || book.libraryId}
+                      book={book}
+                      downloadInfo={undefined}
+                      isToggling={false}
+                      isAdding={addingBooks.has(book.openlibraryId)}
+                      onToggleRequest={toggleBookRequested}
+                      onAdd={() =>
+                        addBook({
+                          openlibraryId: book.openlibraryId,
+                          title: book.title,
+                          description: book.description,
+                          coverUrl: book.coverUrl,
+                          subjects: null,
+                          inLibrary: book.inLibrary,
+                          bookId: book.libraryId || null,
+                          requested: book.requested,
+                          hasFile: book.hasFile,
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+                {availablePage.hasMore && (
+                  <div className="flex justify-center pt-2">
+                    <Button variant="outline" onClick={availablePage.showMore}>
+                      Show more ({availablePage.shownCount} of {availablePage.totalCount})
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
         </Tabs>
