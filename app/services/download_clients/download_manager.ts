@@ -482,7 +482,9 @@ export class DownloadManager {
           { title: request.title, completedId: recentlyCompleted.id },
           'DownloadManager: Skipping recently completed download'
         )
-        throw new Error('A download for this item completed recently')
+        throw new Error(
+          'A download completed recently and may still be importing. Please check back shortly.'
+        )
       }
     }
 

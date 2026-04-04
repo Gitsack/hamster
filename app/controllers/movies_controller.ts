@@ -553,14 +553,50 @@ export default class MoviesController {
       })
 
       if (results.length === 0) {
-        return response.notFound({ error: 'No releases found for this movie' })
+        const { default: IndexerModel } = await import('#models/indexer')
+        const { default: ProwlarrConfig } = await import('#models/prowlarr_config')
+        const directIndexers = await IndexerModel.query().where('enabled', true)
+        const prowlarrConfig = await ProwlarrConfig.query()
+          .where('syncEnabled', true)
+          .first()
+        const indexerNames = directIndexers.map((i) => i.name)
+        if (prowlarrConfig) indexerNames.unshift('Prowlarr')
+
+        return response.notFound({
+          error: 'No releases found for this movie',
+          details: {
+            indexersSearched: indexerNames,
+            totalResults: 0,
+          },
+        })
       }
 
       // Select best release using quality profile and size limits
       const bestResult = await requestedSearchTask.selectBestReleaseForMovie(movie, results)
 
       if (!bestResult) {
-        return response.notFound({ error: 'No releases matching quality profile and size limits' })
+        const { default: QualityProfile } = await import('#models/quality_profile')
+        const profile = movie.qualityProfileId
+          ? await QualityProfile.find(movie.qualityProfileId)
+          : null
+        const allowedQualities =
+          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+
+        return response.notFound({
+          error: 'No releases matching quality profile and size limits',
+          details: {
+            totalResults: results.length,
+            indexersSearched: [...new Set(results.map((r) => r.indexer))],
+            qualityProfile: profile?.name ?? 'None',
+            allowedQualities,
+            sizeLimits: profile
+              ? {
+                  minSizeMb: profile.minSizeMb ?? null,
+                  maxSizeMb: profile.maxSizeMb ?? null,
+                }
+              : null,
+          },
+        })
       }
 
       const download = await downloadManager.grab({
