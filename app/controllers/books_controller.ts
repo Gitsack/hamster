@@ -213,7 +213,9 @@ export default class BooksController {
   async show({ params, response }: HttpContext) {
     const book = await Book.query()
       .where('id', params.id)
-      .preload('author')
+      .preload('author', (query) => {
+        query.preload('qualityProfile').preload('rootFolder')
+      })
       .preload('bookFile')
       .first()
 
@@ -239,6 +241,10 @@ export default class BooksController {
       requested: book.requested,
       hasFile: book.hasFile,
       author: book.author,
+      qualityProfile: book.author?.qualityProfile
+        ? { name: book.author.qualityProfile.name }
+        : null,
+      rootFolder: book.author?.rootFolder ? { path: book.author.rootFolder.path } : null,
       bookFile: book.bookFile
         ? {
             id: book.bookFile.id,
