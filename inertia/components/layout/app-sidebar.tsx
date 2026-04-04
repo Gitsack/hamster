@@ -15,6 +15,7 @@ import {
   Calendar03Icon,
   Settings02Icon,
   UserMultipleIcon,
+  DashboardSquare01Icon,
 } from '@hugeicons/core-free-icons'
 import { HamsterIcon } from '@/components/icons/hamster-icon'
 import {
@@ -45,6 +46,11 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
+  {
+    title: 'Dashboard',
+    url: '/dashboard',
+    icon: DashboardSquare01Icon,
+  },
   {
     title: 'Library',
     url: '/library',

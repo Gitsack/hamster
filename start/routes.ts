@@ -47,6 +47,7 @@ const CustomFormatsController = () => import('#controllers/custom_formats_contro
 const ImportListsController = () => import('#controllers/import_lists_controller')
 const BulkController = () => import('#controllers/bulk_controller')
 const RenameController = () => import('#controllers/rename_controller')
+const DashboardController = () => import('#controllers/dashboard_controller')
 const AdminUsersController = () => import('#controllers/admin/users_controller')
 
 // Health check endpoint (enhanced for Docker/load balancers)
@@ -85,6 +86,9 @@ router
 // Protected app routes
 router
   .group(() => {
+    // Dashboard
+    router.get('/dashboard', [DashboardController, 'index']).as('dashboard')
+
     // Library
     router.on('/library').renderInertia('library/index', {}).as('library')
     router.on('/library/add').renderInertia('library/add', {}).as('library.add')
