@@ -40,6 +40,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
+import { useShowMore } from '@/hooks/use_show_more'
 
 interface Track {
   id: number
@@ -105,6 +106,7 @@ export default function AlbumDetail() {
   const [downloading, setDownloading] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
   const [enriching, setEnriching] = useState(false)
+  const tracksPage = useShowMore(album?.tracks ?? [])
 
   useEffect(() => {
     fetchAlbum()
@@ -483,7 +485,7 @@ export default function AlbumDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {album.tracks.map((track, index) => {
+                    {tracksPage.visibleItems.map((track, index) => {
                       const isCurrentTrack = player.currentTrack?.trackId === track.id
                       const isPlaying = isCurrentTrack && player.isPlaying
 
@@ -556,6 +558,13 @@ export default function AlbumDetail() {
                   </TableBody>
                 </Table>
                 </div>
+                {tracksPage.hasMore && (
+                  <div className="flex justify-center py-3">
+                    <Button variant="outline" onClick={tracksPage.showMore}>
+                      Show more ({tracksPage.shownCount} of {tracksPage.totalCount})
+                    </Button>
+                  </div>
+                )}
               </Card>
             )}
           </TabsContent>

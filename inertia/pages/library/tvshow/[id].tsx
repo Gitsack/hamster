@@ -40,7 +40,7 @@ import {
   NotificationOff01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
@@ -178,6 +178,35 @@ export default function TvShowDetail() {
     title: string
   } | null>(null)
   const audioPlayer = useAudioPlayer()
+  const EPISODES_PAGE_SIZE = 50
+  const [episodeVisibleCounts, setEpisodeVisibleCounts] = useState<Record<number, number>>({})
+
+  const getVisibleEpisodes = useCallback(
+    (seasonNumber: number) => {
+      const details = seasonDetails[seasonNumber]
+      if (!details) return []
+      const limit = episodeVisibleCounts[seasonNumber] ?? EPISODES_PAGE_SIZE
+      return details.episodes.slice(0, limit)
+    },
+    [seasonDetails, episodeVisibleCounts]
+  )
+
+  const hasMoreEpisodes = useCallback(
+    (seasonNumber: number) => {
+      const details = seasonDetails[seasonNumber]
+      if (!details) return false
+      const limit = episodeVisibleCounts[seasonNumber] ?? EPISODES_PAGE_SIZE
+      return details.episodes.length > limit
+    },
+    [seasonDetails, episodeVisibleCounts]
+  )
+
+  const showMoreEpisodes = useCallback((seasonNumber: number) => {
+    setEpisodeVisibleCounts((prev) => ({
+      ...prev,
+      [seasonNumber]: (prev[seasonNumber] ?? EPISODES_PAGE_SIZE) + EPISODES_PAGE_SIZE,
+    }))
+  }, [])
 
   useEffect(() => {
     fetchShow()
@@ -1010,7 +1039,7 @@ export default function TvShowDetail() {
                           </div>
                         ) : seasonDetails[season.seasonNumber] ? (
                           <div className="space-y-2">
-                            {seasonDetails[season.seasonNumber].episodes.map((episode) => (
+                            {getVisibleEpisodes(season.seasonNumber).map((episode) => (
                               <div
                                 key={episode.id}
                                 className="flex items-center gap-2 sm:gap-4 p-3 rounded-lg bg-muted/50"
@@ -1127,6 +1156,21 @@ export default function TvShowDetail() {
                                 </div>
                               </div>
                             ))}
+                            {hasMoreEpisodes(season.seasonNumber) && (
+                              <div className="flex justify-center pt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    showMoreEpisodes(season.seasonNumber)
+                                  }}
+                                >
+                                  Show more ({getVisibleEpisodes(season.seasonNumber).length} of{' '}
+                                  {seasonDetails[season.seasonNumber].episodes.length})
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         ) : null}
                       </div>
