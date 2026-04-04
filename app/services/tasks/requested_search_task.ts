@@ -381,7 +381,7 @@ class RequestedSearchTask {
       result.albums.searched++
 
       try {
-        const searchResults = await indexerManager.search({
+        const { results: searchResults } = await indexerManager.search({
           artist: album.artist?.name,
           album: album.title,
           year: album.releaseDate?.year,
@@ -916,7 +916,7 @@ class RequestedSearchTask {
         return { found: false, grabbed: false, error: 'Already has active download' }
       }
 
-      const searchResults = await indexerManager.search({
+      const { results: searchResults } = await indexerManager.search({
         artist: album.artist?.name,
         album: album.title,
         year: album.releaseDate?.year,

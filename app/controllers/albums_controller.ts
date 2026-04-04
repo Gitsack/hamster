@@ -243,7 +243,7 @@ export default class AlbumsController {
     const { indexerManager } = await import('#services/indexers/indexer_manager')
     const { downloadManager } = await import('#services/download_clients/download_manager')
 
-    const results = await indexerManager.search({
+    const { results } = await indexerManager.search({
       artist: album.artist?.name,
       album: album.title,
       year: album.releaseDate?.year,
@@ -589,7 +589,7 @@ export default class AlbumsController {
       const { indexerManager } = await import('#services/indexers/indexer_manager')
       const { downloadManager } = await import('#services/download_clients/download_manager')
 
-      const results = await indexerManager.search(searchQuery)
+      const { results } = await indexerManager.search(searchQuery)
 
       if (results.length === 0) {
         const { default: Indexer } = await import('#models/indexer')

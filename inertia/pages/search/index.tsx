@@ -57,6 +57,7 @@ import {
   ArrowLeft01Icon,
   ViewIcon,
   Cancel01Icon,
+  Alert02Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -533,6 +534,9 @@ export default function SearchPage({
 
   // Direct search results
   const [indexerResults, setIndexerResults] = useState<IndexerSearchResult[]>([])
+  const [skippedIndexers, setSkippedIndexers] = useState<
+    Array<{ indexerId: string; reason: string; availableAt: number | null }>
+  >([])
 
   // Filters (direct search)
   const [indexers, setIndexers] = useState<Indexer[]>([])
@@ -824,6 +828,7 @@ export default function SearchPage({
     setHasSearched(true)
     setSelectedResults(new Set())
     setSelectedMediaTypes(new Set())
+    setSkippedIndexers([])
 
     try {
       if (searchMode === 'direct') {
@@ -838,7 +843,15 @@ export default function SearchPage({
 
         const response = await fetch(`/api/v1/indexers/search?${params}`)
         if (response.ok) {
-          setIndexerResults(await response.json())
+          const data = await response.json()
+          if (Array.isArray(data)) {
+            // Backwards compatibility
+            setIndexerResults(data)
+            setSkippedIndexers([])
+          } else {
+            setIndexerResults(data.results)
+            setSkippedIndexers(data.skippedIndexers || [])
+          }
         } else {
           toast.error('Search failed')
         }
@@ -2634,6 +2647,25 @@ export default function SearchPage({
       return (
         <Card className="min-w-0 overflow-hidden">
           <CardContent className="pt-6 min-w-0">
+            {skippedIndexers.length > 0 && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/50 p-3 text-sm mb-4">
+                <HugeiconsIcon
+                  icon={Alert02Icon}
+                  className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+                />
+                <div>
+                  <p className="font-medium text-amber-800 dark:text-amber-200">
+                    {skippedIndexers.length}{' '}
+                    {skippedIndexers.length === 1 ? 'indexer was' : 'indexers were'} skipped due to
+                    rate limiting
+                  </p>
+                  <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
+                    {skippedIndexers.map((s) => `Indexer #${s.indexerId}`).join(', ')} — will be
+                    available again shortly
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="text-sm text-muted-foreground mb-4">
               Found {filteredIndexerResults.length} results
               {(selectedCategories.length > 0 || selectedMediaTypes.size > 0) &&
@@ -2781,7 +2813,32 @@ export default function SearchPage({
       )
     }
 
-    if (hasSearched) return <NoResults />
+    if (hasSearched) {
+      return (
+        <>
+          {skippedIndexers.length > 0 && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/50 p-3 text-sm mb-4">
+              <HugeiconsIcon
+                icon={Alert02Icon}
+                className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+              />
+              <div>
+                <p className="font-medium text-amber-800 dark:text-amber-200">
+                  {skippedIndexers.length}{' '}
+                  {skippedIndexers.length === 1 ? 'indexer was' : 'indexers were'} skipped due to
+                  rate limiting
+                </p>
+                <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
+                  {skippedIndexers.map((s) => `Indexer #${s.indexerId}`).join(', ')} — will be
+                  available again shortly
+                </p>
+              </div>
+            </div>
+          )}
+          <NoResults />
+        </>
+      )
+    }
     return <InitialSearchPrompt message="Search for releases across your indexers" />
   }
 
