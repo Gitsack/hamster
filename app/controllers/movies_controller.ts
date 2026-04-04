@@ -592,6 +592,37 @@ export default class MoviesController {
   }
 
   /**
+   * Search and return all releases for a movie (manual selection)
+   */
+  async searchReleases({ params, request, response }: HttpContext) {
+    const movie = await Movie.find(params.id)
+    if (!movie) {
+      return response.notFound({ error: 'Movie not found' })
+    }
+
+    try {
+      const { indexerManager } = await import('#services/indexers/indexer_manager')
+
+      const alternateTitles =
+        movie.originalTitle && movie.originalTitle !== movie.title ? [movie.originalTitle] : []
+      const results = await indexerManager.searchMovies({
+        title: movie.title,
+        year: movie.year ?? undefined,
+        imdbId: movie.imdbId ?? undefined,
+        tmdbId: movie.tmdbId ?? undefined,
+        alternateTitles,
+        limit: request.input('limit', 100),
+      })
+
+      return response.json(results)
+    } catch (error) {
+      return response.badRequest({
+        error: error instanceof Error ? error.message : 'Failed to search releases',
+      })
+    }
+  }
+
+  /**
    * Trigger immediate search for a movie
    */
   async searchNow({ params, response }: HttpContext) {

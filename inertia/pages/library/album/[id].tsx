@@ -350,9 +350,9 @@ export default function AlbumDetail() {
             {downloading ? (
               <Spinner className="md:mr-2" />
             ) : (
-              <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
             )}
-            <span className="hidden md:inline">{downloading ? 'Searching...' : 'Search releases'}</span>
+            <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

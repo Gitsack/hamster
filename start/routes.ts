@@ -234,6 +234,7 @@ router
     router.delete('/movies/:id/file', [MoviesController, 'deleteFile'])
     router.post('/movies/:id/request', [MoviesController, 'setWanted'])
     router.post('/movies/:id/download', [MoviesController, 'download'])
+    router.get('/movies/:id/releases', [MoviesController, 'searchReleases'])
     router.post('/movies/:id/search', [MoviesController, 'searchNow'])
     router.post('/movies/:id/enrich', [MoviesController, 'enrich'])
     router.get('/movies/:id/similar', [MoviesController, 'similar']).as('movies.similar.byId')

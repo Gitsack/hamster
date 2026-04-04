@@ -2,7 +2,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu,
@@ -34,6 +34,14 @@ import {
   Notification01Icon,
   NotificationOff01Icon,
 } from '@hugeicons/core-free-icons'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
@@ -89,6 +97,20 @@ interface Movie {
   addedAt: string | null
 }
 
+interface SearchResult {
+  id: string
+  title: string
+  indexer: string
+  indexerId: number
+  size: number
+  publishDate: string
+  downloadUrl: string
+  quality?: string
+  seeders?: number
+  grabs?: number
+  protocol: string
+}
+
 export default function MovieDetail() {
   const { url } = usePage()
   const movieId = url.split('/').pop()
@@ -105,6 +127,9 @@ export default function MovieDetail() {
     null
   )
   const [enriching, setEnriching] = useState(false)
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [grabbing, setGrabbing] = useState<string | null>(null)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
   const audioPlayer = useAudioPlayer()
 
@@ -283,6 +308,61 @@ export default function MovieDetail() {
     }
   }
 
+  const searchReleases = async () => {
+    if (!movie) return
+    setSearching(true)
+    try {
+      const response = await fetch(`/api/v1/movies/${movieId}/releases`)
+      if (response.ok) {
+        const data = await response.json()
+        setSearchResults(data)
+      } else {
+        toast.error('Failed to search releases')
+      }
+    } catch (error) {
+      console.error('Failed to search releases:', error)
+      toast.error('Failed to search releases')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const grabRelease = async (result: SearchResult) => {
+    setGrabbing(result.id)
+    try {
+      const response = await fetch('/api/v1/queue/grab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: result.title,
+          downloadUrl: result.downloadUrl,
+          size: result.size,
+          movieId: movie?.id,
+          indexerId: result.indexerId,
+          indexerName: result.indexer,
+          guid: result.id,
+        }),
+      })
+      if (response.ok) {
+        toast.success('Download started')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to grab release')
+      }
+    } catch (error) {
+      console.error('Failed to grab release:', error)
+      toast.error('Failed to grab release')
+    } finally {
+      setGrabbing(null)
+    }
+  }
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  }
+
   const enrichMovie = async () => {
     if (!movie) return
 
@@ -400,9 +480,9 @@ export default function MovieDetail() {
               {downloading ? (
                 <Spinner className="md:mr-2" />
               ) : (
-                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
               )}
-              <span className="hidden md:inline">Search releases</span>
+              <span className="hidden md:inline">Download</span>
             </Button>
           )}
           <DropdownMenu>
@@ -421,7 +501,11 @@ export default function MovieDetail() {
                   {enriching ? 'Enriching...' : 'Enrich from TMDB'}
                 </DropdownMenuItem>
               )}
-              {!movie.tmdbId && <DropdownMenuSeparator />}
+              <DropdownMenuItem onClick={searchReleases} disabled={searching}>
+                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
+                {searching ? 'Searching...' : 'Manual Search'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
@@ -586,6 +670,62 @@ export default function MovieDetail() {
                     <span className="hidden sm:inline">Delete</span>
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Search results */}
+        {searchResults.length > 0 && (
+          <Card>
+            <CardContent className="pt-6">
+              <h2 className="font-semibold mb-4">Search Results</h2>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Release</TableHead>
+                      <TableHead className="w-32">Indexer</TableHead>
+                      <TableHead className="w-24">Quality</TableHead>
+                      <TableHead className="w-24 text-right">Size</TableHead>
+                      <TableHead className="w-24 text-right">Grabs</TableHead>
+                      <TableHead className="w-24"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {searchResults.map((result) => (
+                      <TableRow key={result.id}>
+                        <TableCell className="font-medium max-w-md truncate">
+                          {result.title}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
+                        <TableCell>
+                          {result.quality && <Badge variant="outline">{result.quality}</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {formatSize(result.size)}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {result.grabs ?? result.seeders ?? '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => grabRelease(result)}
+                            disabled={grabbing === result.id}
+                          >
+                            {grabbing === result.id ? (
+                              <Spinner />
+                            ) : (
+                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </CardContent>
           </Card>
