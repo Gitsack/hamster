@@ -24,8 +24,32 @@ jobs:
           manifest-file: .release-please-manifest.json
           config-file: release-please-config.json
 
+  quality-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Frontend tests
+        run: npm run test:frontend
+
   build-and-push:
-    needs: release-please
+    needs: [release-please, quality-checks]
     if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     env:
