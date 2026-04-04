@@ -398,10 +398,10 @@ const DiscoverLane = memo(({
           )}
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => scroll('left')}>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => scroll('left')} aria-label="Scroll left">
             <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => scroll('right')}>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => scroll('right')} aria-label="Scroll right">
             <HugeiconsIcon icon={ArrowRight01Icon} className="h-4 w-4" />
           </Button>
         </div>
@@ -2753,7 +2753,7 @@ export default function SearchPage({
                         <TableCell>
                           <div className="flex items-center gap-1">
                             {result.infoUrl && (
-                              <Button variant="ghost" size="icon" asChild className="h-8 w-8">
+                              <Button variant="ghost" size="icon" asChild className="h-8 w-8" aria-label="View release info">
                                 <a href={result.infoUrl} target="_blank" rel="noopener noreferrer">
                                   <HugeiconsIcon icon={Link01Icon} className="h-4 w-4" />
                                 </a>
@@ -2764,6 +2764,7 @@ export default function SearchPage({
                               size="icon"
                               onClick={() => openDownloadDialog(result)}
                               className="h-8 w-8"
+                              aria-label="Download release"
                             >
                               <HugeiconsIcon icon={Download01Icon} className="h-4 w-4" />
                             </Button>
