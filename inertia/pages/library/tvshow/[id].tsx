@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -895,7 +896,11 @@ export default function TvShowDetail() {
               )}
             </div>
             {show.seasons.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No seasons found</p>
+              <EmptyState
+                icon={<HugeiconsIcon icon={Tv01Icon} className="h-12 w-12 text-muted-foreground" />}
+                title="No seasons found"
+                message="Try refreshing to fetch season data."
+              />
             ) : (
               <div className="space-y-2">
                 {show.seasons.map((season) => (
@@ -992,6 +997,13 @@ export default function TvShowDetail() {
                             ))}
                           </div>
                         ) : seasonDetails[season.seasonNumber] ? (
+                          seasonDetails[season.seasonNumber].episodes.length === 0 ? (
+                            <EmptyState
+                              title="No episodes found"
+                              message="Episode information may not be available yet."
+                              className="py-8"
+                            />
+                          ) : (
                           <div className="space-y-2">
                             {getVisibleEpisodes(season.seasonNumber).map((episode) => (
                               <div
@@ -1157,6 +1169,7 @@ export default function TvShowDetail() {
                               </div>
                             )}
                           </div>
+                          )
                         ) : null}
                       </div>
                     )}
