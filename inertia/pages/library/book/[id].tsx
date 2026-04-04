@@ -29,6 +29,7 @@ import {
   FileDownloadIcon,
   Search01Icon,
   UserIcon,
+  Cancel01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
@@ -556,8 +557,16 @@ export default function BookDetail() {
         {/* Search results */}
         {searchResults.length > 0 && (
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Search Results ({searchResults.length})</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearchResults([])}
+                aria-label="Dismiss search results"
+              >
+                <HugeiconsIcon icon={Cancel01Icon} className="h-4 w-4" />
+              </Button>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -569,7 +578,9 @@ export default function BookDetail() {
                       <TableHead className="w-24">Quality</TableHead>
                       <TableHead className="w-24 text-right">Size</TableHead>
                       <TableHead className="w-24 text-right">Grabs</TableHead>
-                      <TableHead className="w-24"></TableHead>
+                      <TableHead className="w-24">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -594,6 +605,7 @@ export default function BookDetail() {
                             variant="outline"
                             onClick={() => grabRelease(result)}
                             disabled={grabbing === result.id}
+                            aria-label={`Download ${result.title}`}
                           >
                             {grabbing === result.id ? (
                               <Spinner />
@@ -618,11 +630,12 @@ export default function BookDetail() {
               <h2 className="font-semibold mb-4">File</h2>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-3 min-w-0">
-                  <HugeiconsIcon icon={Book01Icon} className="h-8 w-8 text-muted-foreground flex-shrink-0" />
+                  <HugeiconsIcon
+                    icon={Book01Icon}
+                    className="h-8 w-8 text-muted-foreground flex-shrink-0"
+                  />
                   <div className="min-w-0">
-                    <p className="font-medium truncate">
-                      {book.bookFile.path.split('/').pop()}
-                    </p>
+                    <p className="font-medium truncate">{book.bookFile.path.split('/').pop()}</p>
                     <p className="text-sm text-muted-foreground">
                       {book.bookFile.format && `${book.bookFile.format.toUpperCase()} • `}
                       {formatFileSize(book.bookFile.size)}

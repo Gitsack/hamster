@@ -36,6 +36,7 @@ import {
   PlayIcon,
   Notification01Icon,
   NotificationOff01Icon,
+  Cancel01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
@@ -498,10 +499,18 @@ export default function MovieDetail() {
       <div className="space-y-6">
         <MediaHero
           trailerUrl={movie.trailerUrl}
-          images={movie.backdropImages?.length ? movie.backdropImages : movie.backdropUrl ? [movie.backdropUrl] : undefined}
+          images={
+            movie.backdropImages?.length
+              ? movie.backdropImages
+              : movie.backdropUrl
+                ? [movie.backdropUrl]
+                : undefined
+          }
           title={movie.title}
           posterUrl={movie.posterUrl}
-          posterFallback={<HugeiconsIcon icon={Film01Icon} className="h-16 w-16 text-muted-foreground/50" />}
+          posterFallback={
+            <HugeiconsIcon icon={Film01Icon} className="h-16 w-16 text-muted-foreground/50" />
+          }
           overview={movie.overview}
         >
           <div>
@@ -565,9 +574,7 @@ export default function MovieDetail() {
 
           {/* Quality and folder info */}
           <div className="flex flex-wrap gap-2 text-sm">
-            {movie.qualityProfile && (
-              <Badge variant="secondary">{movie.qualityProfile.name}</Badge>
-            )}
+            {movie.qualityProfile && <Badge variant="secondary">{movie.qualityProfile.name}</Badge>}
             {movie.rootFolder && <Badge variant="secondary">{movie.rootFolder.path}</Badge>}
           </div>
 
@@ -607,11 +614,12 @@ export default function MovieDetail() {
               <h2 className="font-semibold mb-4">File</h2>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-3 min-w-0">
-                  <HugeiconsIcon icon={Film01Icon} className="h-8 w-8 text-muted-foreground flex-shrink-0" />
+                  <HugeiconsIcon
+                    icon={Film01Icon}
+                    className="h-8 w-8 text-muted-foreground flex-shrink-0"
+                  />
                   <div className="min-w-0">
-                    <p className="font-medium truncate">
-                      {movie.movieFile.path.split('/').pop()}
-                    </p>
+                    <p className="font-medium truncate">{movie.movieFile.path.split('/').pop()}</p>
                     <p className="text-sm text-muted-foreground">
                       {movie.movieFile.quality && `${movie.movieFile.quality} • `}
                       {formatFileSize(movie.movieFile.size)}
@@ -657,8 +665,16 @@ export default function MovieDetail() {
         {/* Search results */}
         {searchResults.length > 0 && (
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Search Results ({searchResults.length})</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearchResults([])}
+                aria-label="Dismiss search results"
+              >
+                <HugeiconsIcon icon={Cancel01Icon} className="h-4 w-4" />
+              </Button>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -670,7 +686,9 @@ export default function MovieDetail() {
                       <TableHead className="w-24">Quality</TableHead>
                       <TableHead className="w-24 text-right">Size</TableHead>
                       <TableHead className="w-24 text-right">Grabs</TableHead>
-                      <TableHead className="w-24"></TableHead>
+                      <TableHead className="w-24">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -695,6 +713,7 @@ export default function MovieDetail() {
                             variant="outline"
                             onClick={() => grabRelease(result)}
                             disabled={grabbing === result.id}
+                            aria-label={`Download ${result.title}`}
                           >
                             {grabbing === result.id ? (
                               <Spinner />
