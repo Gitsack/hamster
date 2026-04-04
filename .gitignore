@@ -2,6 +2,7 @@
 node_modules
 build
 tmp
+.adonisjs
 
 # Secrets
 .env
@@ -18,6 +19,9 @@ tmp
 # Frontend assets compiled code
 public/assets
 .playwright-mcp
+
+# Storybook build output
+storybook-static
 
 # Build tools specific
 npm-debug.log
