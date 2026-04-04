@@ -32,6 +32,7 @@ declare module '@adonisjs/inertia/types' {
     'requests/index': ExtractProps<(typeof import('../../inertia/pages/requests/index.tsx'))['default']>
     'requests/search/[id]': ExtractProps<(typeof import('../../inertia/pages/requests/search/[id].tsx'))['default']>
     'search/discover': ExtractProps<(typeof import('../../inertia/pages/search/discover.tsx'))['default']>
+    'search/index.test': ExtractProps<(typeof import('../../inertia/pages/search/index.test.tsx'))['default']>
     'search/index': ExtractProps<(typeof import('../../inertia/pages/search/index.tsx'))['default']>
     'settings/download-clients': ExtractProps<(typeof import('../../inertia/pages/settings/download-clients.tsx'))['default']>
     'settings/indexers': ExtractProps<(typeof import('../../inertia/pages/settings/indexers.tsx'))['default']>
