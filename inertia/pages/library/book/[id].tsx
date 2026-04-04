@@ -2,7 +2,15 @@ import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu,
@@ -21,6 +29,7 @@ import {
   FileDownloadIcon,
   Search01Icon,
   UserIcon,
+  Cancel01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
@@ -30,6 +39,20 @@ import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
+
+interface SearchResult {
+  id: string
+  title: string
+  indexer: string
+  indexerId: number
+  size: number
+  publishDate: string
+  downloadUrl: string
+  quality?: string
+  seeders?: number
+  grabs?: number
+  protocol: string
+}
 
 interface Author {
   id: number
@@ -78,6 +101,9 @@ export default function BookDetail() {
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [enriching, setEnriching] = useState(false)
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [grabbing, setGrabbing] = useState<string | null>(null)
 
   const { getForBook } = useActiveDownloads()
   const activeDownload = bookId ? getForBook(bookId) : null
@@ -227,6 +253,59 @@ export default function BookDetail() {
     }
   }
 
+  const searchReleases = async () => {
+    setSearchResults([])
+    setSearching(true)
+    try {
+      const response = await fetch(`/api/v1/books/${bookId}/releases`)
+      if (response.ok) {
+        const data = await response.json()
+        setSearchResults(data)
+      }
+    } catch (error) {
+      console.error('Failed to search releases:', error)
+      toast.error('Failed to search releases')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const grabRelease = async (result: SearchResult) => {
+    setGrabbing(result.id)
+    try {
+      const response = await fetch('/api/v1/queue/grab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: result.title,
+          downloadUrl: result.downloadUrl,
+          size: result.size,
+          bookId: book?.id,
+          indexerId: result.indexerId,
+          indexerName: result.indexer,
+          guid: result.id,
+        }),
+      })
+      if (response.ok) {
+        toast.success('Download started')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to grab release')
+      }
+    } catch (error) {
+      console.error('Failed to grab release:', error)
+      toast.error('Failed to grab release')
+    } finally {
+      setGrabbing(null)
+    }
+  }
+
+  const formatSize = (bytes: number) => {
+    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} MB`
+    return `${(bytes / 1024).toFixed(0)} KB`
+  }
+
   const deleteFile = async () => {
     if (!book) return
 
@@ -298,15 +377,34 @@ export default function BookDetail() {
                     {downloading ? (
                       <Spinner className="md:mr-2" />
                     ) : (
-                      <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
                     )}
-                    <span className="hidden md:inline">Search releases</span>
+                    <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Search releases</TooltipContent>
+                <TooltipContent>{downloading ? 'Downloading...' : 'Download'}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={searchReleases}
+                  disabled={searching}
+                >
+                  {searching ? (
+                    <Spinner className="md:mr-2" />
+                  ) : (
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                  )}
+                  <span className="hidden md:inline">{searching ? 'Searching...' : 'Browse releases'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon">
@@ -456,6 +554,75 @@ export default function BookDetail() {
           </Card>
         )}
 
+        {/* Search results */}
+        {searchResults.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Search Results ({searchResults.length})</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearchResults([])}
+                aria-label="Dismiss search results"
+              >
+                <HugeiconsIcon icon={Cancel01Icon} className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Release</TableHead>
+                      <TableHead className="w-32">Indexer</TableHead>
+                      <TableHead className="w-24">Quality</TableHead>
+                      <TableHead className="w-24 text-right">Size</TableHead>
+                      <TableHead className="w-24 text-right">Grabs</TableHead>
+                      <TableHead className="w-24">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {searchResults.map((result) => (
+                      <TableRow key={result.id}>
+                        <TableCell className="font-medium max-w-md truncate">
+                          {result.title}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
+                        <TableCell>
+                          {result.quality && <Badge variant="outline">{result.quality}</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {formatSize(result.size)}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {result.grabs ?? result.seeders ?? '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => grabRelease(result)}
+                            disabled={grabbing === result.id}
+                            aria-label={`Download ${result.title}`}
+                          >
+                            {grabbing === result.id ? (
+                              <Spinner />
+                            ) : (
+                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* File info */}
         {book.bookFile && (
           <Card>
@@ -463,11 +630,12 @@ export default function BookDetail() {
               <h2 className="font-semibold mb-4">File</h2>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted rounded-lg">
                 <div className="flex items-center gap-3 min-w-0">
-                  <HugeiconsIcon icon={Book01Icon} className="h-8 w-8 text-muted-foreground flex-shrink-0" />
+                  <HugeiconsIcon
+                    icon={Book01Icon}
+                    className="h-8 w-8 text-muted-foreground flex-shrink-0"
+                  />
                   <div className="min-w-0">
-                    <p className="font-medium truncate">
-                      {book.bookFile.path.split('/').pop()}
-                    </p>
+                    <p className="font-medium truncate">{book.bookFile.path.split('/').pop()}</p>
                     <p className="text-sm text-muted-foreground">
                       {book.bookFile.format && `${book.bookFile.format.toUpperCase()} • `}
                       {formatFileSize(book.bookFile.size)}

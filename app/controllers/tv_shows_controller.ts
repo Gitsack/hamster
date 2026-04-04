@@ -890,6 +890,46 @@ export default class TvShowsController {
   }
 
   /**
+   * Search for releases on indexers for a specific episode
+   */
+  async searchEpisodeReleases({ params, request, response }: HttpContext) {
+    const episode = await Episode.query()
+      .where('id', params.episodeId)
+      .preload('season', (query) => query.preload('tvShow'))
+      .first()
+
+    if (!episode) {
+      return response.notFound({ error: 'Episode not found' })
+    }
+
+    const tvShow = episode.season.tvShow
+
+    try {
+      const { indexerManager } = await import('#services/indexers/indexer_manager')
+
+      const alternateTitles =
+        tvShow.originalTitle && tvShow.originalTitle !== tvShow.title ? [tvShow.originalTitle] : []
+
+      const results = await indexerManager.searchTvShows({
+        title: tvShow.title,
+        season: episode.seasonNumber,
+        episode: episode.episodeNumber,
+        year: tvShow.year || undefined,
+        tvdbId: tvShow.tvdbId || undefined,
+        imdbId: tvShow.imdbId || undefined,
+        alternateTitles,
+        limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
+      })
+
+      return response.json(results)
+    } catch (error) {
+      return response.badRequest({
+        error: error instanceof Error ? error.message : 'Failed to search releases',
+      })
+    }
+  }
+
+  /**
    * Trigger immediate search for all requested episodes of a TV show
    */
   async searchNow({ params, response }: HttpContext) {

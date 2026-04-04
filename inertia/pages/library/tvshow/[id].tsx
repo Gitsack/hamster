@@ -3,6 +3,14 @@ import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -26,6 +34,7 @@ import {
   ArrowDown01Icon,
   ArrowUp01Icon,
   FileDownloadIcon,
+  Search01Icon,
   Add01Icon,
   PlayIcon,
   Refresh01Icon,
@@ -129,6 +138,20 @@ interface SeasonDetail {
   episodes: Episode[]
 }
 
+interface SearchResult {
+  id: string
+  title: string
+  indexer: string
+  indexerId: number
+  size: number
+  publishDate: string
+  downloadUrl: string
+  quality?: string
+  seeders?: number
+  grabs?: number
+  protocol: string
+}
+
 export default function TvShowDetail() {
   const { url } = usePage()
   const showId = url.split('/').pop()
@@ -160,6 +183,9 @@ export default function TvShowDetail() {
   const { runBulk } = useOperationTrackerContext()
   const [enriching, setEnriching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [episodeSearchResults, setEpisodeSearchResults] = useState<Record<number, SearchResult[]>>({})
+  const [searchingEpisode, setSearchingEpisode] = useState<number | null>(null)
+  const [grabbingRelease, setGrabbingRelease] = useState<string | null>(null)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
   const [playingEpisode, setPlayingEpisode] = useState<{
     id: number
@@ -631,6 +657,60 @@ export default function TvShowDetail() {
     }
   }
 
+  const searchEpisodeReleases = async (episodeId: number) => {
+    setEpisodeSearchResults((prev) => ({ ...prev, [episodeId]: [] }))
+    setSearchingEpisode(episodeId)
+    try {
+      const response = await fetch(`/api/v1/tvshows/${showId}/episodes/${episodeId}/releases`)
+      if (response.ok) {
+        const data = await response.json()
+        setEpisodeSearchResults((prev) => ({ ...prev, [episodeId]: data }))
+      }
+    } catch (error) {
+      console.error('Failed to search releases:', error)
+      toast.error('Failed to search releases')
+    } finally {
+      setSearchingEpisode(null)
+    }
+  }
+
+  const grabEpisodeRelease = async (result: SearchResult, episodeId: number) => {
+    setGrabbingRelease(result.id)
+    try {
+      const response = await fetch('/api/v1/queue/grab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: result.title,
+          downloadUrl: result.downloadUrl,
+          size: result.size,
+          tvShowId: show?.id,
+          episodeId,
+          indexerId: result.indexerId,
+          indexerName: result.indexer,
+          guid: result.id,
+        }),
+      })
+      if (response.ok) {
+        toast.success('Download started')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to grab release')
+      }
+    } catch (error) {
+      console.error('Failed to grab release:', error)
+      toast.error('Failed to grab release')
+    } finally {
+      setGrabbingRelease(null)
+    }
+  }
+
+  const formatSize = (bytes: number) => {
+    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} MB`
+    return `${(bytes / 1024).toFixed(0)} KB`
+  }
+
   const requestAllSeasons = async () => {
     if (!show) return
 
@@ -987,7 +1067,6 @@ export default function TvShowDetail() {
                           <div className="space-y-2">
                             {getVisibleEpisodes(season.seasonNumber).map((episode) => (
                               <div
-                                key={episode.id}
                                 className="flex items-center gap-2 sm:gap-4 p-3 rounded-lg bg-muted/50"
                               >
                                 <div className="w-6 sm:w-8 text-center font-mono text-muted-foreground text-sm sm:text-base flex-shrink-0">
@@ -1079,25 +1158,104 @@ export default function TvShowDetail() {
                                       )
                                     }
 
-                                    // All other statuses: Use unified MediaStatusBadge
+                                    // All other statuses: Use unified MediaStatusBadge + manual search
                                     return (
-                                      <MediaStatusBadge
-                                        status={status}
-                                        progress={progress}
-                                        isToggling={togglingEpisodes.has(episode.id)}
-                                        onToggleRequest={() =>
-                                          toggleEpisodeRequested(
-                                            episode.id,
-                                            episode.requested,
-                                            season.seasonNumber,
-                                            episode.hasFile,
-                                            episode.title || `Episode ${episode.episodeNumber}`
-                                          )
-                                        }
-                                      />
+                                      <>
+                                        <Button
+                                          variant="outline"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={() => searchEpisodeReleases(episode.id)}
+                                          disabled={searchingEpisode === episode.id}
+                                          title="Manual search"
+                                        >
+                                          {searchingEpisode === episode.id ? (
+                                            <Spinner className="size-3" />
+                                          ) : (
+                                            <HugeiconsIcon
+                                              icon={Search01Icon}
+                                              className="h-3.5 w-3.5"
+                                            />
+                                          )}
+                                        </Button>
+                                        <MediaStatusBadge
+                                          status={status}
+                                          progress={progress}
+                                          isToggling={togglingEpisodes.has(episode.id)}
+                                          onToggleRequest={() =>
+                                            toggleEpisodeRequested(
+                                              episode.id,
+                                              episode.requested,
+                                              season.seasonNumber,
+                                              episode.hasFile,
+                                              episode.title || `Episode ${episode.episodeNumber}`
+                                            )
+                                          }
+                                        />
+                                      </>
                                     )
                                   })()}
                                 </div>
+                              </div>
+                              {episodeSearchResults[episode.id]?.length > 0 && (
+                                <div className="ml-8 sm:ml-12 mt-1 mb-2 border rounded-lg overflow-hidden">
+                                  <div className="overflow-x-auto">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow>
+                                          <TableHead>Release</TableHead>
+                                          <TableHead className="w-28">Indexer</TableHead>
+                                          <TableHead className="w-20">Quality</TableHead>
+                                          <TableHead className="w-20 text-right">Size</TableHead>
+                                          <TableHead className="w-16"></TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {episodeSearchResults[episode.id].map((result) => (
+                                          <TableRow key={result.id}>
+                                            <TableCell className="font-medium max-w-xs truncate text-sm">
+                                              {result.title}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground text-sm">
+                                              {result.indexer}
+                                            </TableCell>
+                                            <TableCell>
+                                              {result.quality && (
+                                                <Badge variant="outline" className="text-xs">
+                                                  {result.quality}
+                                                </Badge>
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="text-right text-muted-foreground text-sm">
+                                              {formatSize(result.size)}
+                                            </TableCell>
+                                            <TableCell>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7"
+                                                onClick={() =>
+                                                  grabEpisodeRelease(result, episode.id)
+                                                }
+                                                disabled={grabbingRelease === result.id}
+                                              >
+                                                {grabbingRelease === result.id ? (
+                                                  <Spinner className="size-3" />
+                                                ) : (
+                                                  <HugeiconsIcon
+                                                    icon={FileDownloadIcon}
+                                                    className="h-3.5 w-3.5"
+                                                  />
+                                                )}
+                                              </Button>
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </div>
+                              )}
                               </div>
                             ))}
                             {hasMoreEpisodes(season.seasonNumber) && (

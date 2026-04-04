@@ -248,6 +248,7 @@ router
     router.delete('/movies/:id', [MoviesController, 'destroy'])
     router.delete('/movies/:id/file', [MoviesController, 'deleteFile'])
     router.post('/movies/:id/request', [MoviesController, 'setWanted'])
+    router.get('/movies/:id/releases', [MoviesController, 'searchReleases'])
     router.post('/movies/:id/download', [MoviesController, 'download'])
     router.post('/movies/:id/search', [MoviesController, 'searchNow'])
     router.post('/movies/:id/enrich', [MoviesController, 'enrich'])
@@ -269,6 +270,10 @@ router
     router.get('/tvshows/:id/season/:seasonNumber', [TvShowsController, 'showSeason'])
     router.post('/tvshows/:id/season/:seasonNumber/request', [TvShowsController, 'setSeasonWanted'])
     router.post('/tvshows/:id/episodes/:episodeId/request', [TvShowsController, 'setEpisodeWanted'])
+    router.get('/tvshows/:id/episodes/:episodeId/releases', [
+      TvShowsController,
+      'searchEpisodeReleases',
+    ])
     router.delete('/tvshows/:id/episodes/:episodeId/file', [TvShowsController, 'deleteEpisodeFile'])
     router.delete('/tvshows/:id/episodes/:episodeId', [TvShowsController, 'destroyEpisode'])
     router.post('/tvshows/:id/search', [TvShowsController, 'searchNow'])
@@ -298,6 +303,7 @@ router
     router.delete('/books/:id/file', [BooksController, 'deleteFile'])
     router.post('/books/:id/enrich', [BooksController, 'enrich'])
     router.post('/books/:id/request', [BooksController, 'setWanted'])
+    router.get('/books/:id/releases', [BooksController, 'searchReleases'])
     router.post('/books/:id/download', [BooksController, 'download'])
     router.post('/books/:id/search', [BooksController, 'searchNow'])
 

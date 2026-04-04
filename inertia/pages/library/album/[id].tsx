@@ -211,6 +211,7 @@ export default function AlbumDetail() {
   }
 
   const searchReleases = async () => {
+    setSearchResults([])
     setSearching(true)
     try {
       const response = await fetch(`/api/v1/albums/${albumId}/releases`)
@@ -400,16 +401,35 @@ export default function AlbumDetail() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button onClick={searchAndDownload} disabled={downloading || percentComplete === 100}>
+                <Button onClick={() => searchAndDownload()} disabled={downloading || percentComplete === 100}>
                   {downloading ? (
+                    <Spinner className="md:mr-2" />
+                  ) : (
+                    <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
+                  )}
+                  <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{downloading ? 'Downloading...' : 'Download'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={searchReleases}
+                  disabled={searching || percentComplete === 100}
+                >
+                  {searching ? (
                     <Spinner className="md:mr-2" />
                   ) : (
                     <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
                   )}
-                  <span className="hidden md:inline">{downloading ? 'Searching...' : 'Search releases'}</span>
+                  <span className="hidden md:inline">{searching ? 'Searching...' : 'Browse releases'}</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{downloading ? 'Searching...' : 'Search releases'}</TooltipContent>
+              <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <DropdownMenu>
@@ -419,17 +439,15 @@ export default function AlbumDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={enrichAlbum} disabled={enriching}>
-                <HugeiconsIcon
-                  icon={Search01Icon}
-                  className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
-                />
-                {enriching ? 'Refreshing...' : 'Refresh metadata'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={searchReleases} disabled={searching}>
-                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
-                {searching ? 'Searching...' : 'Manual Search'}
-              </DropdownMenuItem>
+              {!album.musicbrainzId && (
+                <DropdownMenuItem onClick={enrichAlbum} disabled={enriching}>
+                  <HugeiconsIcon
+                    icon={Search01Icon}
+                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                  />
+                  {enriching ? 'Enriching...' : 'Enrich from MusicBrainz'}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               {album.trackFiles.length > 0 && (
                 <DropdownMenuItem
@@ -560,89 +578,89 @@ export default function AlbumDetail() {
             ) : (
               <Card>
                 <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12"></TableHead>
-                      <TableHead className="w-12">#</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead className="w-24 text-right">Duration</TableHead>
-                      <TableHead className="w-16 text-center">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tracksPage.visibleItems.map((track, index) => {
-                      const isCurrentTrack = player.currentTrack?.trackId === track.id
-                      const isPlaying = isCurrentTrack && player.isPlaying
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12"></TableHead>
+                        <TableHead className="w-12">#</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead className="w-24 text-right">Duration</TableHead>
+                        <TableHead className="w-16 text-center">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tracksPage.visibleItems.map((track, index) => {
+                        const isCurrentTrack = player.currentTrack?.trackId === track.id
+                        const isPlaying = isCurrentTrack && player.isPlaying
 
-                      return (
-                        <TableRow
-                          key={track.id}
-                          className={track.hasFile ? 'cursor-pointer hover:bg-muted/50' : ''}
-                          onClick={() => track.hasFile && playTrack(track, index)}
-                        >
-                          <TableCell>
-                            {track.hasFile && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  if (isPlaying) {
-                                    player.pause()
-                                  } else {
-                                    playTrack(track, index)
-                                  }
-                                }}
-                              >
+                        return (
+                          <TableRow
+                            key={track.id}
+                            className={track.hasFile ? 'cursor-pointer hover:bg-muted/50' : ''}
+                            onClick={() => track.hasFile && playTrack(track, index)}
+                          >
+                            <TableCell>
+                              {track.hasFile && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (isPlaying) {
+                                      player.pause()
+                                    } else {
+                                      playTrack(track, index)
+                                    }
+                                  }}
+                                >
+                                  <HugeiconsIcon
+                                    icon={isPlaying ? PauseIcon : PlayIcon}
+                                    className="h-4 w-4"
+                                  />
+                                </Button>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {track.discNumber > 1
+                                ? `${track.discNumber}-${track.trackNumber}`
+                                : track.trackNumber}
+                            </TableCell>
+                            <TableCell className="font-medium">{track.title}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              {formatDuration(track.durationMs)}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {track.hasFile ? (
                                 <HugeiconsIcon
-                                  icon={isPlaying ? PauseIcon : PlayIcon}
-                                  className="h-4 w-4"
+                                  icon={CheckmarkCircle01Icon}
+                                  className="h-5 w-5 text-green-500 mx-auto"
                                 />
-                              </Button>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {track.discNumber > 1
-                              ? `${track.discNumber}-${track.trackNumber}`
-                              : track.trackNumber}
-                          </TableCell>
-                          <TableCell className="font-medium">{track.title}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {formatDuration(track.durationMs)}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {track.hasFile ? (
-                              <HugeiconsIcon
-                                icon={CheckmarkCircle01Icon}
-                                className="h-5 w-5 text-green-500 mx-auto"
-                              />
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  searchAndDownload(track.id)
-                                }}
-                                disabled={downloading}
-                                title="Search for this track (single/EP)"
-                              >
-                                {downloading ? (
-                                  <Spinner />
-                                ) : (
-                                  <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
-                                )}
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    searchAndDownload(track.id)
+                                  }}
+                                  disabled={downloading}
+                                  title="Search for this track (single/EP)"
+                                >
+                                  {downloading ? (
+                                    <Spinner />
+                                  ) : (
+                                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
                 {tracksPage.hasMore && (
                   <div className="flex justify-center py-3">
@@ -665,42 +683,42 @@ export default function AlbumDetail() {
             ) : (
               <Card>
                 <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Path</TableHead>
-                      <TableHead className="w-24">Quality</TableHead>
-                      <TableHead className="w-24">Format</TableHead>
-                      <TableHead className="w-24 text-right">Size</TableHead>
-                      <TableHead className="w-16"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {album.trackFiles.map((file) => (
-                      <TableRow key={file.id}>
-                        <TableCell className="font-mono text-sm truncate max-w-[200px] sm:max-w-xs">
-                          {file.path}
-                        </TableCell>
-                        <TableCell>
-                          {file.quality && <Badge variant="outline">{file.quality}</Badge>}
-                        </TableCell>
-                        <TableCell className="uppercase text-muted-foreground">
-                          {file.format}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {formatSize(file.size)}
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="outline" size="sm" asChild>
-                            <a href={file.downloadUrl} download>
-                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                            </a>
-                          </Button>
-                        </TableCell>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Path</TableHead>
+                        <TableHead className="w-24">Quality</TableHead>
+                        <TableHead className="w-24">Format</TableHead>
+                        <TableHead className="w-24 text-right">Size</TableHead>
+                        <TableHead className="w-16"></TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {album.trackFiles.map((file) => (
+                        <TableRow key={file.id}>
+                          <TableCell className="font-mono text-sm truncate max-w-[200px] sm:max-w-xs">
+                            {file.path}
+                          </TableCell>
+                          <TableCell>
+                            {file.quality && <Badge variant="outline">{file.quality}</Badge>}
+                          </TableCell>
+                          <TableCell className="uppercase text-muted-foreground">
+                            {file.format}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatSize(file.size)}
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="outline" size="sm" asChild>
+                              <a href={file.downloadUrl} download>
+                                <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </Card>
             )}
@@ -710,51 +728,54 @@ export default function AlbumDetail() {
             <TabsContent value="search">
               <Card>
                 <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Release</TableHead>
-                      <TableHead className="w-32">Indexer</TableHead>
-                      <TableHead className="w-24">Quality</TableHead>
-                      <TableHead className="w-24 text-right">Size</TableHead>
-                      <TableHead className="w-24 text-right">Grabs</TableHead>
-                      <TableHead className="w-24"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {searchResults.map((result) => (
-                      <TableRow key={result.id}>
-                        <TableCell className="font-medium max-w-md truncate">
-                          {result.title}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
-                        <TableCell>
-                          {result.quality && <Badge variant="outline">{result.quality}</Badge>}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {formatSize(result.size)}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {result.grabs ?? result.seeders ?? '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => grabRelease(result)}
-                            disabled={grabbing === result.id}
-                          >
-                            {grabbing === result.id ? (
-                              <Spinner />
-                            ) : (
-                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TableCell>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Release</TableHead>
+                        <TableHead className="w-32">Indexer</TableHead>
+                        <TableHead className="w-24">Quality</TableHead>
+                        <TableHead className="w-24 text-right">Size</TableHead>
+                        <TableHead className="w-24 text-right">Grabs</TableHead>
+                        <TableHead className="w-24">
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {searchResults.map((result) => (
+                        <TableRow key={result.id}>
+                          <TableCell className="font-medium max-w-md truncate">
+                            {result.title}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
+                          <TableCell>
+                            {result.quality && <Badge variant="outline">{result.quality}</Badge>}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatSize(result.size)}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {result.grabs ?? result.seeders ?? '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => grabRelease(result)}
+                              disabled={grabbing === result.id}
+                              aria-label={`Download ${result.title}`}
+                            >
+                              {grabbing === result.id ? (
+                                <Spinner />
+                              ) : (
+                                <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </Card>
             </TabsContent>

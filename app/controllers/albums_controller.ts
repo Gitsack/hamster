@@ -484,7 +484,7 @@ export default class AlbumsController {
       artist: album.artist?.name,
       album: album.title,
       year: album.releaseDate?.year,
-      limit: request.input('limit', 100),
+      limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
     })
 
     return response.json(results)
