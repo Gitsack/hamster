@@ -16,6 +16,8 @@ function sanitizeSearchQuery(title: string): string {
   return title.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, ' ').trim()
 }
 
+export type MediaType = 'movie' | 'tv' | 'music' | 'book' | 'other'
+
 export interface UnifiedSearchResult {
   id: string
   title: string
@@ -30,11 +32,38 @@ export interface UnifiedSearchResult {
   peers?: number
   protocol: 'usenet' | 'torrent'
   source: 'direct' | 'prowlarr'
+  category?: string
+  categoryId?: number
+  mediaType?: MediaType
   // Music-specific
   artist?: string
   album?: string
   year?: number
   quality?: string
+}
+
+/**
+ * Derive a broad media type from a Newznab category ID.
+ * Newznab category ranges: 2000s=Movies, 3000s=Audio/Music,
+ * 5000s=TV, 7000s=Books, 8000s=Other (8010=Audiobook)
+ */
+function classifyMediaType(categoryId: number | undefined): MediaType | undefined {
+  if (categoryId === undefined) return undefined
+  const major = Math.floor(categoryId / 1000)
+  switch (major) {
+    case 2:
+      return 'movie'
+    case 3:
+      return 'music'
+    case 5:
+      return 'tv'
+    case 7:
+      return 'book'
+    case 8:
+      return 'book'
+    default:
+      return 'other'
+  }
 }
 
 export interface SearchOptions {
@@ -319,6 +348,9 @@ export class IndexerManager {
       peers: result.peers,
       protocol: 'usenet' as const,
       source: 'direct' as const,
+      category: result.category,
+      categoryId: result.categoryId,
+      mediaType: classifyMediaType(result.categoryId),
       artist: result.artist,
       album: result.album,
       year: result.year,
@@ -327,11 +359,13 @@ export class IndexerManager {
   }
 
   private mapProwlarrResults(results: ProwlarrSearchResult[]): UnifiedSearchResult[] {
-    return results.map((result) => ({
-      id: result.guid,
-      title: result.title,
-      indexer: result.indexer,
-      indexerId: String(result.indexerId),
+    return results.map((result) => {
+      const primaryCat = result.categories?.[0]
+      return {
+        id: result.guid,
+        title: result.title,
+        indexer: result.indexer,
+        indexerId: String(result.indexerId),
       size: result.size,
       publishDate: result.publishDate,
       downloadUrl: result.downloadUrl,
@@ -341,11 +375,15 @@ export class IndexerManager {
       peers: result.leechers,
       protocol: result.protocol,
       source: 'prowlarr' as const,
+      category: primaryCat?.name,
+      categoryId: primaryCat?.id,
+      mediaType: classifyMediaType(primaryCat?.id),
       artist: result.artist,
       album: result.album,
       year: result.year,
       quality: this.detectQuality(result.title),
-    }))
+      }
+    })
   }
 
   private detectQuality(title: string): string | undefined {
@@ -467,22 +505,28 @@ export class IndexerManager {
           )
 
           results.push(
-            ...prowlarrResults.map((result) => ({
-              id: result.guid,
-              title: result.title,
-              indexer: result.indexer,
-              indexerId: String(result.indexerId),
-              size: result.size,
-              publishDate: result.publishDate,
-              downloadUrl: result.downloadUrl,
-              infoUrl: result.infoUrl,
-              grabs: result.grabs,
-              seeders: result.seeders,
-              peers: result.leechers,
-              protocol: result.protocol,
-              source: 'prowlarr' as const,
-              quality: this.detectVideoQuality(result.title),
-            }))
+            ...prowlarrResults.map((result) => {
+              const cat = result.categories?.[0]
+              return {
+                id: result.guid,
+                title: result.title,
+                indexer: result.indexer,
+                indexerId: String(result.indexerId),
+                size: result.size,
+                publishDate: result.publishDate,
+                downloadUrl: result.downloadUrl,
+                infoUrl: result.infoUrl,
+                grabs: result.grabs,
+                seeders: result.seeders,
+                peers: result.leechers,
+                protocol: result.protocol,
+                source: 'prowlarr' as const,
+                category: cat?.name,
+                categoryId: cat?.id,
+                mediaType: classifyMediaType(cat?.id),
+                quality: this.detectVideoQuality(result.title),
+              }
+            })
           )
         } catch (error) {
           console.error('Prowlarr movie search failed:', error)
@@ -544,6 +588,9 @@ export class IndexerManager {
           peers: result.peers,
           protocol: 'usenet' as const,
           source: 'direct' as const,
+          category: result.category,
+          categoryId: result.categoryId,
+          mediaType: classifyMediaType(result.categoryId),
           quality: this.detectVideoQuality(result.title),
         }))
       } catch (error) {
@@ -678,22 +725,28 @@ export class IndexerManager {
           }
 
           results.push(
-            ...prowlarrResults.map((result) => ({
-              id: result.guid,
-              title: result.title,
-              indexer: result.indexer,
-              indexerId: String(result.indexerId),
-              size: result.size,
-              publishDate: result.publishDate,
-              downloadUrl: result.downloadUrl,
-              infoUrl: result.infoUrl,
-              grabs: result.grabs,
-              seeders: result.seeders,
-              peers: result.leechers,
-              protocol: result.protocol,
-              source: 'prowlarr' as const,
-              quality: this.detectVideoQuality(result.title),
-            }))
+            ...prowlarrResults.map((result) => {
+              const cat = result.categories?.[0]
+              return {
+                id: result.guid,
+                title: result.title,
+                indexer: result.indexer,
+                indexerId: String(result.indexerId),
+                size: result.size,
+                publishDate: result.publishDate,
+                downloadUrl: result.downloadUrl,
+                infoUrl: result.infoUrl,
+                grabs: result.grabs,
+                seeders: result.seeders,
+                peers: result.leechers,
+                protocol: result.protocol,
+                source: 'prowlarr' as const,
+                category: cat?.name,
+                categoryId: cat?.id,
+                mediaType: classifyMediaType(cat?.id),
+                quality: this.detectVideoQuality(result.title),
+              }
+            })
           )
         } catch (error) {
           console.error('Prowlarr TV search failed:', error)
@@ -852,6 +905,9 @@ export class IndexerManager {
       peers: result.peers,
       protocol: 'usenet' as const,
       source: 'direct' as const,
+      category: result.category,
+      categoryId: result.categoryId,
+      mediaType: classifyMediaType(result.categoryId),
       quality: this.detectVideoQuality(result.title),
     }))
   }
@@ -884,21 +940,27 @@ export class IndexerManager {
         )
 
         results.push(
-          ...prowlarrResults.map((result) => ({
-            id: result.guid,
-            title: result.title,
-            indexer: result.indexer,
-            indexerId: String(result.indexerId),
-            size: result.size,
-            publishDate: result.publishDate,
-            downloadUrl: result.downloadUrl,
-            infoUrl: result.infoUrl,
-            grabs: result.grabs,
-            seeders: result.seeders,
-            peers: result.leechers,
-            protocol: result.protocol,
-            source: 'prowlarr' as const,
-          }))
+          ...prowlarrResults.map((result) => {
+            const cat = result.categories?.[0]
+            return {
+              id: result.guid,
+              title: result.title,
+              indexer: result.indexer,
+              indexerId: String(result.indexerId),
+              size: result.size,
+              publishDate: result.publishDate,
+              downloadUrl: result.downloadUrl,
+              infoUrl: result.infoUrl,
+              grabs: result.grabs,
+              seeders: result.seeders,
+              peers: result.leechers,
+              protocol: result.protocol,
+              source: 'prowlarr' as const,
+              category: cat?.name,
+              categoryId: cat?.id,
+              mediaType: classifyMediaType(cat?.id),
+            }
+          })
         )
       } catch (error) {
         console.error('Prowlarr book search failed:', error)
@@ -944,6 +1006,9 @@ export class IndexerManager {
           peers: result.peers,
           protocol: 'usenet' as const,
           source: 'direct' as const,
+          category: result.category,
+          categoryId: result.categoryId,
+          mediaType: classifyMediaType(result.categoryId),
         }))
       } catch (error) {
         console.error(`Book search failed for indexer ${indexer.name}:`, error)

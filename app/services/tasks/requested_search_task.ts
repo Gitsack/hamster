@@ -927,7 +927,15 @@ class RequestedSearchTask {
       const availableResults = await blacklistService.filterBlacklisted(searchResults)
 
       if (availableResults.length === 0) {
-        return { found: false, grabbed: false }
+        const indexerNames = [...new Set(searchResults.map((r) => r.indexer))]
+        return {
+          found: false,
+          grabbed: false,
+          error:
+            searchResults.length > 0
+              ? `Found ${searchResults.length} results from ${indexerNames.join(', ')} but all were blacklisted`
+              : undefined,
+        }
       }
 
       // Load quality profile from the artist and rank by quality
@@ -941,7 +949,13 @@ class RequestedSearchTask {
       )
 
       if (!bestResult) {
-        return { found: true, grabbed: false, error: 'No results matching quality profile' }
+        const allowedQualities =
+          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+        return {
+          found: true,
+          grabbed: false,
+          error: `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})${profile?.minSizeMb || profile?.maxSizeMb ? ` or size limits (${profile?.minSizeMb ?? 0}–${profile?.maxSizeMb ?? '∞'} MB)` : ''}`,
+        }
       }
 
       await downloadManager.grab({
@@ -1024,7 +1038,13 @@ class RequestedSearchTask {
       )
 
       if (!bestResult) {
-        return { found: true, grabbed: false, error: 'No results matching quality profile' }
+        const allowedQualities =
+          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+        return {
+          found: true,
+          grabbed: false,
+          error: `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})${profile?.minSizeMb || profile?.maxSizeMb ? ` or size limits (${profile?.minSizeMb ?? 0}–${profile?.maxSizeMb ?? '∞'} MB)` : ''}`,
+        }
       }
 
       await downloadManager.grab({
@@ -1134,7 +1154,15 @@ class RequestedSearchTask {
       const availableResults = await blacklistService.filterBlacklisted(matchingResults)
 
       if (availableResults.length === 0) {
-        return { found: false, grabbed: false }
+        const indexerNames = [...new Set(searchResults.map((r) => r.indexer))]
+        return {
+          found: false,
+          grabbed: false,
+          error:
+            searchResults.length > 0
+              ? `Found ${searchResults.length} results from ${indexerNames.join(', ')} but none matched title filter or were blacklisted`
+              : undefined,
+        }
       }
 
       // Load quality profile from the TV show and rank by quality
@@ -1148,7 +1176,13 @@ class RequestedSearchTask {
       )
 
       if (!bestResult) {
-        return { found: true, grabbed: false, error: 'No results matching quality profile' }
+        const allowedQualities =
+          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+        return {
+          found: true,
+          grabbed: false,
+          error: `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})${profile?.minSizeMb || profile?.maxSizeMb ? ` or size limits (${profile?.minSizeMb ?? 0}–${profile?.maxSizeMb ?? '∞'} MB)` : ''}`,
+        }
       }
 
       await downloadManager.grab({
@@ -1224,7 +1258,13 @@ class RequestedSearchTask {
       )
 
       if (!bestResult) {
-        return { found: true, grabbed: false, error: 'No results matching quality profile' }
+        const allowedQualities =
+          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+        return {
+          found: true,
+          grabbed: false,
+          error: `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})${profile?.minSizeMb || profile?.maxSizeMb ? ` or size limits (${profile?.minSizeMb ?? 0}–${profile?.maxSizeMb ?? '∞'} MB)` : ''}`,
+        }
       }
 
       await downloadManager.grab({
