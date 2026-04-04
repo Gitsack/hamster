@@ -302,13 +302,18 @@ export default function TvShowDetail() {
   }
 
   const deleteShow = async () => {
-    const response = await fetch(`/api/v1/tvshows/${showId}`, { method: 'DELETE' })
-    if (response.ok) {
-      toast.success('TV show deleted')
-      router.visit('/library?tab=tv')
-    } else {
-      const error = await response.json()
-      toast.error(error.error || 'Failed to delete')
+    try {
+      const response = await fetch(`/api/v1/tvshows/${showId}`, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success('TV show deleted')
+        router.visit('/library?tab=tv')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete')
+      }
+    } catch (error) {
+      console.error('Failed to delete TV show:', error)
+      toast.error('Failed to delete TV show')
     }
     setDeleteDialogOpen(false)
   }
@@ -525,46 +530,56 @@ export default function TvShowDetail() {
   const removeEpisodeWithFile = async (deleteFiles: boolean) => {
     if (!episodeToRemove) return
 
-    const url = deleteFiles
-      ? `/api/v1/tvshows/${showId}/episodes/${episodeToRemove.id}?deleteFile=true`
-      : `/api/v1/tvshows/${showId}/episodes/${episodeToRemove.id}`
+    try {
+      const url = deleteFiles
+        ? `/api/v1/tvshows/${showId}/episodes/${episodeToRemove.id}?deleteFile=true`
+        : `/api/v1/tvshows/${showId}/episodes/${episodeToRemove.id}`
 
-    const response = await fetch(url, { method: 'DELETE' })
-    if (response.ok) {
-      toast.success(deleteFiles ? 'Episode and files removed from library' : 'Episode removed from library')
-      setRemoveWithFileDialogOpen(false)
-      setEpisodeToRemove(null)
-      fetchShow()
-    } else {
-      const data = await response.json()
-      toast.error(data.error || 'Failed to remove episode')
+      const response = await fetch(url, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success(deleteFiles ? 'Episode and files removed from library' : 'Episode removed from library')
+        setRemoveWithFileDialogOpen(false)
+        setEpisodeToRemove(null)
+        fetchShow()
+      } else {
+        const data = await response.json()
+        toast.error(data.error || 'Failed to remove episode')
+      }
+    } catch (error) {
+      console.error('Failed to remove episode:', error)
+      toast.error('Failed to remove episode')
     }
   }
 
   const deleteEpisodeFile = async () => {
     if (!selectedEpisodeForDelete) return
 
-    const response = await fetch(
-      `/api/v1/tvshows/${showId}/episodes/${selectedEpisodeForDelete.id}/file`,
-      { method: 'DELETE' }
-    )
-    if (response.ok) {
-      toast.success('Episode file deleted successfully')
-      setSeasonDetails((prev) => ({
-        ...prev,
-        [selectedEpisodeForDelete.seasonNumber]: {
-          ...prev[selectedEpisodeForDelete.seasonNumber],
-          episodes: prev[selectedEpisodeForDelete.seasonNumber].episodes.map((ep) =>
-            ep.id === selectedEpisodeForDelete.id
-              ? { ...ep, hasFile: false, episodeFile: null }
-              : ep
-          ),
-        },
-      }))
-      fetchShow()
-    } else {
-      const error = await response.json()
-      toast.error(error.error || 'Failed to delete file')
+    try {
+      const response = await fetch(
+        `/api/v1/tvshows/${showId}/episodes/${selectedEpisodeForDelete.id}/file`,
+        { method: 'DELETE' }
+      )
+      if (response.ok) {
+        toast.success('Episode file deleted successfully')
+        setSeasonDetails((prev) => ({
+          ...prev,
+          [selectedEpisodeForDelete.seasonNumber]: {
+            ...prev[selectedEpisodeForDelete.seasonNumber],
+            episodes: prev[selectedEpisodeForDelete.seasonNumber].episodes.map((ep) =>
+              ep.id === selectedEpisodeForDelete.id
+                ? { ...ep, hasFile: false, episodeFile: null }
+                : ep
+            ),
+          },
+        }))
+        fetchShow()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete file')
+      }
+    } catch (error) {
+      console.error('Failed to delete episode file:', error)
+      toast.error('Failed to delete episode file')
     }
     setDeleteFileDialogOpen(false)
     setSelectedEpisodeForDelete(null)

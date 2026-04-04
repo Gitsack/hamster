@@ -206,17 +206,22 @@ export default function MovieDetail() {
   }
 
   const deleteMovie = async (deleteFiles: boolean) => {
-    const url = deleteFiles
-      ? `/api/v1/movies/${movieId}?deleteFile=true`
-      : `/api/v1/movies/${movieId}`
+    try {
+      const url = deleteFiles
+        ? `/api/v1/movies/${movieId}?deleteFile=true`
+        : `/api/v1/movies/${movieId}`
 
-    const response = await fetch(url, { method: 'DELETE' })
-    if (response.ok) {
-      toast.success(deleteFiles ? 'Movie and files deleted' : 'Movie deleted')
-      router.visit('/library?tab=movies')
-    } else {
-      const error = await response.json()
-      toast.error(error.error || 'Failed to delete')
+      const response = await fetch(url, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success(deleteFiles ? 'Movie and files deleted' : 'Movie deleted')
+        router.visit('/library?tab=movies')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete')
+      }
+    } catch (error) {
+      console.error('Failed to delete movie:', error)
+      toast.error('Failed to delete movie')
     }
     setDeleteDialogOpen(false)
   }
@@ -275,13 +280,18 @@ export default function MovieDetail() {
   const deleteFile = async () => {
     if (!movie) return
 
-    const response = await fetch(`/api/v1/movies/${movieId}/file`, { method: 'DELETE' })
-    if (response.ok) {
-      toast.success('File deleted successfully')
-      setMovie({ ...movie, hasFile: false, movieFile: null })
-    } else {
-      const error = await response.json()
-      toast.error(error.error || 'Failed to delete file')
+    try {
+      const response = await fetch(`/api/v1/movies/${movieId}/file`, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success('File deleted successfully')
+        setMovie({ ...movie, hasFile: false, movieFile: null })
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete file')
+      }
+    } catch (error) {
+      console.error('Failed to delete movie file:', error)
+      toast.error('Failed to delete movie file')
     }
     setDeleteFileDialogOpen(false)
   }

@@ -563,7 +563,7 @@ export default class AlbumsController {
       limit: number
     }
 
-    if (trackId && !isNaN(trackId)) {
+    if (trackId && !Number.isNaN(trackId)) {
       // Search for specific track (might find a single or EP)
       const track = await Track.find(trackId)
       if (!track) {
@@ -592,21 +592,8 @@ export default class AlbumsController {
       const results = await indexerManager.search(searchQuery)
 
       if (results.length === 0) {
-        const { default: Indexer } = await import('#models/indexer')
-        const { default: ProwlarrConfig } = await import('#models/prowlarr_config')
-        const directIndexers = await Indexer.query().where('enabled', true)
-        const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
-        const indexerNames = directIndexers.map((i) => i.name)
-        if (prowlarrConfig) indexerNames.unshift('Prowlarr')
-
         const searchType = trackId ? 'track' : 'album'
-        return response.notFound({
-          error: `No releases found for this ${searchType}`,
-          details: {
-            indexersSearched: indexerNames,
-            totalResults: 0,
-          },
-        })
+        return response.notFound({ error: `No releases found for this ${searchType}` })
       }
 
       // Sort by size (prefer larger files, usually better quality) and grab the first

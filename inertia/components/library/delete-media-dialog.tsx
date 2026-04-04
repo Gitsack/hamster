@@ -99,7 +99,7 @@ export function DeleteMediaDialog({
           </DialogTitle>
           <DialogDescription>
             {hasFile
-              ? `This will remove the ${mediaType} from your library.`
+              ? `This will remove the ${mediaType} from your library. Use the checkbox below to also delete files from disk.`
               : `This will remove the ${mediaType} from your library.`}
           </DialogDescription>
         </DialogHeader>

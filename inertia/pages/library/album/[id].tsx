@@ -181,17 +181,22 @@ export default function AlbumDetail() {
   }
 
   const deleteAlbum = async (deleteFiles: boolean) => {
-    const url = deleteFiles
-      ? `/api/v1/albums/${albumId}?deleteFile=true`
-      : `/api/v1/albums/${albumId}`
+    try {
+      const url = deleteFiles
+        ? `/api/v1/albums/${albumId}?deleteFile=true`
+        : `/api/v1/albums/${albumId}`
 
-    const response = await fetch(url, { method: 'DELETE' })
-    if (response.ok) {
-      toast.success(deleteFiles ? 'Album and files deleted' : 'Album deleted')
-      router.visit('/library?tab=music')
-    } else {
-      const error = await response.json()
-      toast.error(error.error || 'Failed to delete')
+      const response = await fetch(url, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success(deleteFiles ? 'Album and files deleted' : 'Album deleted')
+        router.visit('/library?tab=music')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete')
+      }
+    } catch (error) {
+      console.error('Failed to delete album:', error)
+      toast.error('Failed to delete album')
     }
     setDeleteDialogOpen(false)
   }
@@ -199,13 +204,18 @@ export default function AlbumDetail() {
   const deleteAlbumFiles = async () => {
     if (!album) return
 
-    const response = await fetch(`/api/v1/albums/${albumId}/file`, { method: 'DELETE' })
-    if (response.ok) {
-      toast.success('Files deleted successfully')
-      setAlbum({ ...album, trackFiles: [] })
-    } else {
-      const error = await response.json()
-      toast.error(error.error || 'Failed to delete files')
+    try {
+      const response = await fetch(`/api/v1/albums/${albumId}/file`, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success('Files deleted successfully')
+        setAlbum({ ...album, trackFiles: [] })
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete files')
+      }
+    } catch (error) {
+      console.error('Failed to delete album files:', error)
+      toast.error('Failed to delete album files')
     }
     setDeleteFileDialogOpen(false)
   }

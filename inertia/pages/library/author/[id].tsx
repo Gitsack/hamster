@@ -234,13 +234,18 @@ export default function AuthorDetail() {
   }
 
   const deleteAuthor = async () => {
-    const response = await fetch(`/api/v1/authors/${authorId}`, { method: 'DELETE' })
-    if (response.ok) {
-      toast.success('Author deleted')
-      router.visit('/library?tab=books')
-    } else {
-      const error = await response.json()
-      toast.error(error.error || 'Failed to delete')
+    try {
+      const response = await fetch(`/api/v1/authors/${authorId}`, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success('Author deleted')
+        router.visit('/library?tab=books')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete')
+      }
+    } catch (error) {
+      console.error('Failed to delete author:', error)
+      toast.error('Failed to delete author')
     }
     setDeleteDialogOpen(false)
   }

@@ -160,17 +160,22 @@ export default function BookDetail() {
   }
 
   const deleteBook = async (deleteFiles: boolean) => {
-    const url = deleteFiles
-      ? `/api/v1/books/${bookId}?deleteFile=true`
-      : `/api/v1/books/${bookId}`
+    try {
+      const url = deleteFiles
+        ? `/api/v1/books/${bookId}?deleteFile=true`
+        : `/api/v1/books/${bookId}`
 
-    const response = await fetch(url, { method: 'DELETE' })
-    if (response.ok) {
-      toast.success(deleteFiles ? 'Book and files deleted' : 'Book deleted')
-      router.visit('/library?tab=books')
-    } else {
-      const error = await response.json()
-      toast.error(error.error || 'Failed to delete')
+      const response = await fetch(url, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success(deleteFiles ? 'Book and files deleted' : 'Book deleted')
+        router.visit('/library?tab=books')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete')
+      }
+    } catch (error) {
+      console.error('Failed to delete book:', error)
+      toast.error('Failed to delete book')
     }
     setDeleteDialogOpen(false)
   }
@@ -201,13 +206,18 @@ export default function BookDetail() {
   const deleteFile = async () => {
     if (!book) return
 
-    const response = await fetch(`/api/v1/books/${bookId}/file`, { method: 'DELETE' })
-    if (response.ok) {
-      toast.success('File deleted successfully')
-      setBook({ ...book, hasFile: false, bookFile: null })
-    } else {
-      const error = await response.json()
-      toast.error(error.error || 'Failed to delete file')
+    try {
+      const response = await fetch(`/api/v1/books/${bookId}/file`, { method: 'DELETE' })
+      if (response.ok) {
+        toast.success('File deleted successfully')
+        setBook({ ...book, hasFile: false, bookFile: null })
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to delete file')
+      }
+    } catch (error) {
+      console.error('Failed to delete book file:', error)
+      toast.error('Failed to delete book file')
     }
     setDeleteFileDialogOpen(false)
   }
