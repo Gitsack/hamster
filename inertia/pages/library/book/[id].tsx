@@ -14,7 +14,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  ArrowLeft01Icon,
   MoreVerticalIcon,
   Delete01Icon,
   Book01Icon,
@@ -24,6 +23,7 @@ import {
   UserIcon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
+import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
@@ -280,21 +280,16 @@ export default function BookDetail() {
   return (
     <AppLayout
       title={book.title}
+      headerPrefix={
+        <Breadcrumbs
+          items={[
+            { label: 'Books', href: '/library?tab=books' },
+            ...(book.author ? [{ label: book.author.name, href: `/author/${book.author.id}` }] : []),
+          ]}
+        />
+      }
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" asChild>
-                  <Link href={book.author ? `/author/${book.author.id}` : '/library'}>
-                    <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Back</span>
-                  </Link>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Back</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           {!book.hasFile && (
             <TooltipProvider>
               <Tooltip>

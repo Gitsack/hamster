@@ -32,7 +32,6 @@ import {
 } from '@/components/ui/dialog'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  ArrowLeft01Icon,
   MoreVerticalIcon,
   RefreshIcon,
   Delete01Icon,
@@ -51,6 +50,7 @@ import {
   NotificationOff01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
+import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 
@@ -471,21 +471,9 @@ export default function ArtistDetail() {
   return (
     <AppLayout
       title={artist.name}
+      headerPrefix={<Breadcrumbs items={[{ label: 'Music', href: '/library?tab=music' }]} />}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" asChild>
-                  <Link href="/library?tab=music">
-                    <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Back</span>
-                  </Link>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Back</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

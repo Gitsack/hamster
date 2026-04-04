@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  ArrowLeft01Icon,
+
   MoreVerticalIcon,
   Delete01Icon,
   Film01Icon,
@@ -29,6 +29,7 @@ import {
   NotificationOff01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
+import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
@@ -331,21 +332,9 @@ export default function MovieDetail() {
   return (
     <AppLayout
       title={movie.title}
+      headerPrefix={<Breadcrumbs items={[{ label: 'Movies', href: '/library?tab=movies' }]} />}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" asChild>
-                  <Link href="/library?tab=movies">
-                    <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Back</span>
-                  </Link>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Back</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
