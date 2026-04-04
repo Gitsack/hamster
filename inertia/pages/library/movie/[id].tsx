@@ -467,7 +467,7 @@ export default function MovieDetail() {
           </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" aria-label="More actions">
                 <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -637,11 +637,12 @@ export default function MovieDetail() {
                       audioPlayer.pause()
                       setVideoPlayerOpen(true)
                     }}
+                    aria-label="Play"
                   >
                     <HugeiconsIcon icon={PlayIcon} className="h-4 w-4 sm:mr-2" />
                     <span className="hidden sm:inline">Play</span>
                   </Button>
-                  <Button variant="outline" size="sm" asChild>
+                  <Button variant="outline" size="sm" asChild aria-label="Download">
                     <a href={movie.movieFile.downloadUrl} download>
                       <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 sm:mr-2" />
                       <span className="hidden sm:inline">Download</span>
@@ -652,6 +653,7 @@ export default function MovieDetail() {
                     size="sm"
                     className="text-destructive hover:text-destructive"
                     onClick={() => setDeleteFileDialogOpen(true)}
+                    aria-label="Delete"
                   >
                     <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 sm:mr-2" />
                     <span className="hidden sm:inline">Delete</span>
