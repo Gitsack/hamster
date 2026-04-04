@@ -2,9 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import fs from 'node:fs'
 import path from 'node:path'
 import TrackFile from '#models/track_file'
-import Track from '#models/track'
 import Album from '#models/album'
-import Artist from '#models/artist'
 import RootFolder from '#models/root_folder'
 import MovieFile from '#models/movie_file'
 import Movie from '#models/movie'
@@ -50,34 +48,26 @@ export default class PlaybackController {
       return response.badRequest({ error: 'Invalid track file ID' })
     }
 
-    // Get track file with all related data
-    const trackFile = await TrackFile.find(trackFileId)
+    // Get track file with all related data via eager loading
+    const trackFile = await TrackFile.query()
+      .where('id', trackFileId)
+      .preload('track', (trackQuery) => {
+        trackQuery.preload('album', (albumQuery) => {
+          albumQuery.preload('artist', (artistQuery) => {
+            artistQuery.preload('rootFolder')
+          })
+        })
+      })
+      .first()
+
     if (!trackFile) {
       return response.notFound({ error: 'Track file not found' })
     }
 
-    // Get the full path
-    const track = await Track.find(trackFile.trackId)
-    if (!track) {
-      return response.notFound({ error: 'Track not found' })
-    }
-
-    const album = await Album.find(track.albumId)
-    if (!album) {
-      return response.notFound({ error: 'Album not found' })
-    }
-
-    const artist = await Artist.find(album.artistId)
-    if (!artist) {
-      return response.notFound({ error: 'Artist not found' })
-    }
-
-    const rootFolder = await RootFolder.find(artist.rootFolderId)
-    if (!rootFolder) {
-      return response.notFound({ error: 'Root folder not found' })
-    }
-
-    const absolutePath = path.join(rootFolder.path, trackFile.relativePath)
+    const absolutePath = path.join(
+      trackFile.track.album.artist.rootFolder.path,
+      trackFile.relativePath
+    )
 
     // Check if file exists
     if (!fs.existsSync(absolutePath)) {
