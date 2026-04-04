@@ -375,15 +375,34 @@ export default function BookDetail() {
                     {downloading ? (
                       <Spinner className="md:mr-2" />
                     ) : (
-                      <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
                     )}
-                    <span className="hidden md:inline">Search releases</span>
+                    <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Search releases</TooltipContent>
+                <TooltipContent>{downloading ? 'Downloading...' : 'Download'}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={searchReleases}
+                  disabled={searching}
+                >
+                  {searching ? (
+                    <Spinner className="md:mr-2" />
+                  ) : (
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                  )}
+                  <span className="hidden md:inline">{searching ? 'Searching...' : 'Browse releases'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon">
@@ -391,10 +410,6 @@ export default function BookDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={searchReleases} disabled={searching}>
-                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
-                {searching ? 'Searching...' : 'Manual Search'}
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={enrichBook} disabled={enriching}>
                 <HugeiconsIcon
                   icon={Search01Icon}

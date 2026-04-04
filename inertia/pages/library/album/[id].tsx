@@ -400,16 +400,35 @@ export default function AlbumDetail() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button onClick={searchAndDownload} disabled={downloading || percentComplete === 100}>
+                <Button onClick={() => searchAndDownload()} disabled={downloading || percentComplete === 100}>
                   {downloading ? (
+                    <Spinner className="md:mr-2" />
+                  ) : (
+                    <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
+                  )}
+                  <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{downloading ? 'Downloading...' : 'Download'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={searchReleases}
+                  disabled={searching || percentComplete === 100}
+                >
+                  {searching ? (
                     <Spinner className="md:mr-2" />
                   ) : (
                     <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
                   )}
-                  <span className="hidden md:inline">{downloading ? 'Searching...' : 'Search releases'}</span>
+                  <span className="hidden md:inline">{searching ? 'Searching...' : 'Browse releases'}</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{downloading ? 'Searching...' : 'Search releases'}</TooltipContent>
+              <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <DropdownMenu>
@@ -419,17 +438,15 @@ export default function AlbumDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={enrichAlbum} disabled={enriching}>
-                <HugeiconsIcon
-                  icon={Search01Icon}
-                  className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
-                />
-                {enriching ? 'Refreshing...' : 'Refresh metadata'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={searchReleases} disabled={searching}>
-                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
-                {searching ? 'Searching...' : 'Manual Search'}
-              </DropdownMenuItem>
+              {!album.musicbrainzId && (
+                <DropdownMenuItem onClick={enrichAlbum} disabled={enriching}>
+                  <HugeiconsIcon
+                    icon={Search01Icon}
+                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                  />
+                  {enriching ? 'Enriching...' : 'Enrich from MusicBrainz'}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               {album.trackFiles.length > 0 && (
                 <DropdownMenuItem
