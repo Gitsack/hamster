@@ -189,6 +189,8 @@ export default function Library() {
     episodes: 0,
     books: 0,
   })
+  const [searchingItems, setSearchingItems] = useState<Set<string>>(new Set())
+  const [searchAllInProgress, setSearchAllInProgress] = useState(false)
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
@@ -1405,7 +1407,7 @@ export default function Library() {
       }
     }
 
-    const handleSearch = async (item: MissingItem) => {
+    const handleSearch = async (item: MissingItem): Promise<boolean> => {
       const [type, id] = item.id.split('-')
       let endpoint = ''
       switch (type) {
@@ -1423,66 +1425,129 @@ export default function Library() {
           break
       }
 
+      setSearchingItems((prev) => new Set(prev).add(item.id))
       try {
         const res = await fetch(endpoint, { method: 'POST' })
         if (res.ok) {
           const data = await res.json()
           if (data.grabbed) {
             toast.success(`Download started for ${item.title}`)
+            setMissingItems((prev) => prev.filter((i) => i.id !== item.id))
+            return true
           } else {
-            toast.info('No results found')
+            toast.info(`No results found for ${item.title}`)
+            return false
           }
         } else {
-          toast.error('Search failed')
+          toast.error(`Search failed for ${item.title}`)
+          return false
         }
       } catch (error) {
-        toast.error('Search failed')
+        toast.error(`Search failed for ${item.title}`)
+        return false
+      } finally {
+        setSearchingItems((prev) => {
+          const next = new Set(prev)
+          next.delete(item.id)
+          return next
+        })
+      }
+    }
+
+    const handleSearchAll = async () => {
+      setSearchAllInProgress(true)
+      let grabbed = 0
+      let failed = 0
+      for (const item of [...missingItems]) {
+        const success = await handleSearch(item)
+        if (success) grabbed++
+        else failed++
+      }
+      setSearchAllInProgress(false)
+      if (grabbed > 0) {
+        toast.success(`Started ${grabbed} download${grabbed > 1 ? 's' : ''}`)
+      }
+      if (failed > 0 && grabbed === 0) {
+        toast.info('No results found for any items')
       }
     }
 
     return (
       <div className="space-y-4">
-        <div className="text-sm text-muted-foreground mb-4">
-          {missingCounts.albums > 0 && <span className="mr-4">{missingCounts.albums} albums</span>}
-          {missingCounts.movies > 0 && <span className="mr-4">{missingCounts.movies} movies</span>}
-          {missingCounts.episodes > 0 && (
-            <span className="mr-4">{missingCounts.episodes} episodes</span>
-          )}
-          {missingCounts.books > 0 && <span className="mr-4">{missingCounts.books} books</span>}
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-sm text-muted-foreground">
+            {missingCounts.albums > 0 && (
+              <span className="mr-4">{missingCounts.albums} albums</span>
+            )}
+            {missingCounts.movies > 0 && (
+              <span className="mr-4">{missingCounts.movies} movies</span>
+            )}
+            {missingCounts.episodes > 0 && (
+              <span className="mr-4">{missingCounts.episodes} episodes</span>
+            )}
+            {missingCounts.books > 0 && (
+              <span className="mr-4">{missingCounts.books} books</span>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSearchAll}
+            disabled={searchAllInProgress || missingItems.length === 0}
+          >
+            {searchAllInProgress ? (
+              <Spinner className="h-4 w-4 mr-1" />
+            ) : (
+              <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-1" />
+            )}
+            Search All
+          </Button>
         </div>
         <div className="space-y-2">
-          {missingItems.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-            >
-              <div className="h-12 w-12 rounded overflow-hidden bg-muted flex-shrink-0">
-                {item.imageUrl ? (
-                  <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center">
-                    <HugeiconsIcon
-                      icon={getTypeIcon(item.type)}
-                      className="h-6 w-6 text-muted-foreground"
-                    />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{item.title}</div>
-                <div className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">
-                    {getTypeLabel(item.type)}
-                  </Badge>
-                  {item.subtitle && <span className="truncate">{item.subtitle}</span>}
+          {missingItems.map((item) => {
+            const isSearching = searchingItems.has(item.id)
+            return (
+              <div
+                key={item.id}
+                className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+              >
+                <div className="h-12 w-12 rounded overflow-hidden bg-muted flex-shrink-0">
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <HugeiconsIcon
+                        icon={getTypeIcon(item.type)}
+                        className="h-6 w-6 text-muted-foreground"
+                      />
+                    </div>
+                  )}
                 </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{item.title}</div>
+                  <div className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {getTypeLabel(item.type)}
+                    </Badge>
+                    {item.subtitle && <span className="truncate">{item.subtitle}</span>}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSearch(item)}
+                  disabled={isSearching}
+                >
+                  {isSearching ? (
+                    <Spinner className="h-4 w-4 mr-1" />
+                  ) : (
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-1" />
+                  )}
+                  {isSearching ? 'Searching...' : 'Search'}
+                </Button>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => handleSearch(item)}>
-                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-1" />
-                Search
-              </Button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     )
