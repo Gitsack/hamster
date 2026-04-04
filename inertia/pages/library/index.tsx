@@ -791,7 +791,6 @@ export default function Library() {
   const getFilteredArtists = () => {
     return artists
       .filter((artist) => artist.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      .filter(matchesStatusFilter)
       .sort((a, b) => {
         switch (sortBy) {
           case 'recent':
@@ -1679,7 +1678,7 @@ export default function Library() {
                 className="pl-9"
               />
             </div>
-            {activeTab !== 'missing' && (
+            {activeTab !== 'missing' && activeTab !== 'music' && (
               <div className="flex items-center gap-1">
                 {(['all', 'downloaded', 'requested', 'missing'] as StatusFilter[]).map((filter) => (
                   <Button
