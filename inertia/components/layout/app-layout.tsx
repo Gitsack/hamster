@@ -2,6 +2,7 @@ import { PropsWithChildren, ReactNode } from 'react'
 import { AppSidebar } from './app-sidebar'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { Separator } from '@/components/ui/separator'
+import { ErrorBoundary } from '@/components/error-boundary'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 
 interface AppLayoutProps extends PropsWithChildren {
@@ -28,7 +29,9 @@ export function AppLayout({ children, title, headerPrefix, actions }: AppLayoutP
         <main
           className={`flex-1 overflow-y-auto overflow-x-hidden p-4 min-w-0 ${hasPlayer ? 'pb-24' : ''}`}
         >
-          <div className="min-w-0 overflow-hidden">{children}</div>
+          <ErrorBoundary>
+            <div className="min-w-0 overflow-hidden">{children}</div>
+          </ErrorBoundary>
         </main>
       </SidebarInset>
     </SidebarProvider>
