@@ -40,6 +40,8 @@ import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
+import { DownloadProgressCard } from '@/components/library/download-progress-card'
+import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { VideoPlayer } from '@/components/player/video_player'
 
@@ -101,18 +103,14 @@ export default function MovieDetail() {
   const [deletingFile, setDeletingFile] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
-  const [activeDownload, setActiveDownload] = useState<{ progress: number; status: string } | null>(
-    null
-  )
   const [enriching, setEnriching] = useState(false)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
   const audioPlayer = useAudioPlayer()
+  const { getForMovie } = useActiveDownloads()
+  const activeDownload = movieId ? getForMovie(movieId) : null
 
   useEffect(() => {
     fetchMovie()
-    fetchActiveDownloads()
-    const interval = setInterval(fetchActiveDownloads, 5000)
-    return () => clearInterval(interval)
   }, [movieId])
 
   const fetchMovie = async () => {
@@ -130,26 +128,6 @@ export default function MovieDetail() {
       toast.error('Failed to load movie')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const fetchActiveDownloads = async () => {
-    try {
-      const response = await fetch('/api/v1/queue')
-      if (response.ok) {
-        const data = await response.json()
-        const download = data.find((item: any) => item.movieId === movieId)
-        if (download) {
-          setActiveDownload({
-            progress: download.progress || 0,
-            status: download.status || 'downloading',
-          })
-        } else {
-          setActiveDownload(null)
-        }
-      }
-    } catch (error) {
-      // Silently ignore - polling will retry
     }
   }
 
@@ -536,6 +514,10 @@ export default function MovieDetail() {
             )}
           </div>
         </MediaHero>
+
+        {activeDownload && (
+          <DownloadProgressCard downloads={[activeDownload]} />
+        )}
 
         {/* File info */}
         {movie.movieFile && (

@@ -40,6 +40,8 @@ import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
+import { DownloadProgressCard } from '@/components/library/download-progress-card'
+import { useActiveDownloads } from '@/hooks/use_active_downloads'
 
 interface Track {
   id: number
@@ -105,6 +107,8 @@ export default function AlbumDetail() {
   const [downloading, setDownloading] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
   const [enriching, setEnriching] = useState(false)
+  const { getForAlbum } = useActiveDownloads()
+  const albumDownloads = albumId ? getForAlbum(albumId) : []
 
   useEffect(() => {
     fetchAlbum()
@@ -449,6 +453,10 @@ export default function AlbumDetail() {
             </div>
           </div>
         </div>
+
+        {albumDownloads.length > 0 && (
+          <DownloadProgressCard downloads={albumDownloads} />
+        )}
 
         {/* Tabs */}
         <Tabs defaultValue="tracks" className="space-y-4">

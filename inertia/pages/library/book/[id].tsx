@@ -34,6 +34,8 @@ import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
+import { DownloadProgressCard } from '@/components/library/download-progress-card'
+import { useActiveDownloads } from '@/hooks/use_active_downloads'
 
 interface Author {
   id: number
@@ -81,15 +83,12 @@ export default function BookDetail() {
   const [deletingFile, setDeletingFile] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
-  const [activeDownload, setActiveDownload] = useState<{ progress: number; status: string } | null>(
-    null
-  )
+
+  const { getForBook } = useActiveDownloads()
+  const activeDownload = bookId ? getForBook(bookId) : null
 
   useEffect(() => {
     fetchBook()
-    fetchActiveDownloads()
-    const interval = setInterval(fetchActiveDownloads, 5000)
-    return () => clearInterval(interval)
   }, [bookId])
 
   const fetchBook = async () => {
@@ -107,26 +106,6 @@ export default function BookDetail() {
       toast.error('Failed to load book')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const fetchActiveDownloads = async () => {
-    try {
-      const response = await fetch('/api/v1/queue')
-      if (response.ok) {
-        const data = await response.json()
-        const download = data.find((item: any) => item.bookId === bookId)
-        if (download) {
-          setActiveDownload({
-            progress: download.progress || 0,
-            status: download.status || 'downloading',
-          })
-        } else {
-          setActiveDownload(null)
-        }
-      }
-    } catch (error) {
-      // Silently ignore - polling will retry
     }
   }
 
@@ -431,6 +410,10 @@ export default function BookDetail() {
             )}
           </div>
         </div>
+
+        {activeDownload && (
+          <DownloadProgressCard downloads={[activeDownload]} />
+        )}
 
         {/* Overview */}
         {book.overview && (

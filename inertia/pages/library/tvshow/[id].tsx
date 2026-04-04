@@ -46,6 +46,8 @@ import { cn } from '@/lib/utils'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
+import { DownloadProgressCard } from '@/components/library/download-progress-card'
+import { useActiveDownloads, type ActiveDownloadInfo } from '@/hooks/use_active_downloads'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { VideoPlayer } from '@/components/player/video_player'
 
@@ -131,12 +133,6 @@ interface SeasonDetail {
   episodes: Episode[]
 }
 
-interface ActiveDownload {
-  episodeId: string | null
-  progress: number
-  status: string
-}
-
 export default function TvShowDetail() {
   const { url } = usePage()
   const showId = url.split('/').pop()
@@ -148,9 +144,8 @@ export default function TvShowDetail() {
   const [seasonDetails, setSeasonDetails] = useState<Record<number, SeasonDetail>>({})
   const [loadingSeasons, setLoadingSeasons] = useState<Set<number>>(new Set())
   const [expandedSeason, setExpandedSeason] = useState<number | null>(null)
-  const [activeDownloads, setActiveDownloads] = useState<
-    Map<string, { progress: number; status: string }>
-  >(new Map())
+  const { getForTvShow } = useActiveDownloads()
+  const activeDownloads = showId ? getForTvShow(showId) : new Map<string, ActiveDownloadInfo>()
   const [togglingSeasons, setTogglingSeasons] = useState<Set<number>>(new Set())
   const [togglingEpisodes, setTogglingEpisodes] = useState<Set<number>>(new Set())
   const [deleteFileDialogOpen, setDeleteFileDialogOpen] = useState(false)
@@ -181,10 +176,6 @@ export default function TvShowDetail() {
 
   useEffect(() => {
     fetchShow()
-    fetchActiveDownloads()
-    // Poll for download status every 5 seconds
-    const interval = setInterval(fetchActiveDownloads, 5000)
-    return () => clearInterval(interval)
   }, [showId])
 
   const fetchShow = async () => {
@@ -202,27 +193,6 @@ export default function TvShowDetail() {
       toast.error('Failed to load TV show')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const fetchActiveDownloads = async () => {
-    try {
-      const response = await fetch('/api/v1/queue')
-      if (response.ok) {
-        const data = await response.json()
-        const downloads = new Map<string, { progress: number; status: string }>()
-        for (const item of data) {
-          if (item.tvShowId === showId && item.episodeId) {
-            downloads.set(item.episodeId, {
-              progress: item.progress || 0,
-              status: item.status || 'downloading',
-            })
-          }
-        }
-        setActiveDownloads(downloads)
-      }
-    } catch (error) {
-      // Silently ignore - polling will retry
     }
   }
 
@@ -884,6 +854,10 @@ export default function TvShowDetail() {
             </div>
           )}
         </MediaHero>
+
+        {activeDownloads.size > 0 && (
+          <DownloadProgressCard downloads={Array.from(activeDownloads.values())} />
+        )}
 
         {/* Seasons */}
         <Card>
