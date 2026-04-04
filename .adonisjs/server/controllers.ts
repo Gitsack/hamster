@@ -44,4 +44,6 @@ export const controllers = {
   UnmatchedFiles: () => import('#controllers/unmatched_files_controller'),
   User: () => import('#controllers/user_controller'),
   Webhooks: () => import('#controllers/webhooks_controller'),
+  Dashboard: () => import('#controllers/dashboard_controller'),
+  PasswordResets: () => import('#controllers/password_resets_controller'),
 }

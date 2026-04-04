@@ -13,14 +13,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
@@ -43,6 +35,7 @@ import { useShowMore } from '@/hooks/use_show_more'
 import { toast } from 'sonner'
 import { useOperationTrackerContext } from '@/hooks/use_operation_tracker'
 import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
+import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
 
 // Book from library (database)
 interface LibraryBook {
@@ -93,7 +86,6 @@ export default function AuthorDetail() {
   const [loadingBibliography, setLoadingBibliography] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const [activeDownloads, setActiveDownloads] = useState<
     Map<number, { progress: number; status: string }>
   >(new Map())
@@ -242,25 +234,15 @@ export default function AuthorDetail() {
   }
 
   const deleteAuthor = async () => {
-    setDeleting(true)
-    try {
-      const response = await fetch(`/api/v1/authors/${authorId}`, {
-        method: 'DELETE',
-      })
-      if (response.ok) {
-        toast.success('Author deleted')
-        router.visit('/library?tab=books')
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to delete')
-      }
-    } catch (error) {
-      console.error('Failed to delete author:', error)
-      toast.error('Failed to delete author')
-    } finally {
-      setDeleting(false)
-      setDeleteDialogOpen(false)
+    const response = await fetch(`/api/v1/authors/${authorId}`, { method: 'DELETE' })
+    if (response.ok) {
+      toast.success('Author deleted')
+      router.visit('/library?tab=books')
+    } else {
+      const error = await response.json()
+      toast.error(error.error || 'Failed to delete')
     }
+    setDeleteDialogOpen(false)
   }
 
   const toggleBookRequested = async (bookId: number, currentlyRequested: boolean) => {
@@ -847,33 +829,15 @@ export default function AuthorDetail() {
         </Tabs>
       </div>
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete {author.name}?</DialogTitle>
-            <DialogDescription>
-              This will remove the author and all associated books from your library. Files on disk
-              will not be deleted.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={deleteAuthor} disabled={deleting}>
-              {deleting ? (
-                <>
-                  <Spinner />
-                  Deleting...
-                </>
-              ) : (
-                'Delete'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteMediaDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title={author.name}
+        mediaType="author"
+        hasFile={false}
+        mode="remove"
+        onConfirm={deleteAuthor}
+      />
     </AppLayout>
   )
 }

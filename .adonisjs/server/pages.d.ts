@@ -14,12 +14,9 @@ declare module '@adonisjs/inertia/types' {
   export interface InertiaPages {
     'activity/history': ExtractProps<(typeof import('../../inertia/pages/activity/history.tsx'))['default']>
     'activity/queue': ExtractProps<(typeof import('../../inertia/pages/activity/queue.tsx'))['default']>
-    'auth/forgot_password': ExtractProps<(typeof import('../../inertia/pages/auth/forgot_password.tsx'))['default']>
     'auth/login': ExtractProps<(typeof import('../../inertia/pages/auth/login.tsx'))['default']>
     'auth/register': ExtractProps<(typeof import('../../inertia/pages/auth/register.tsx'))['default']>
-    'auth/reset_password': ExtractProps<(typeof import('../../inertia/pages/auth/reset_password.tsx'))['default']>
     'calendar/index': ExtractProps<(typeof import('../../inertia/pages/calendar/index.tsx'))['default']>
-    'dashboard': ExtractProps<(typeof import('../../inertia/pages/dashboard.tsx'))['default']>
     'errors/not_found': ExtractProps<(typeof import('../../inertia/pages/errors/not_found.tsx'))['default']>
     'errors/server_error': ExtractProps<(typeof import('../../inertia/pages/errors/server_error.tsx'))['default']>
     'getting-started': ExtractProps<(typeof import('../../inertia/pages/getting-started.tsx'))['default']>
@@ -35,7 +32,6 @@ declare module '@adonisjs/inertia/types' {
     'requests/index': ExtractProps<(typeof import('../../inertia/pages/requests/index.tsx'))['default']>
     'requests/search/[id]': ExtractProps<(typeof import('../../inertia/pages/requests/search/[id].tsx'))['default']>
     'search/discover': ExtractProps<(typeof import('../../inertia/pages/search/discover.tsx'))['default']>
-    'search/index.test': ExtractProps<(typeof import('../../inertia/pages/search/index.test.tsx'))['default']>
     'search/index': ExtractProps<(typeof import('../../inertia/pages/search/index.tsx'))['default']>
     'settings/download-clients': ExtractProps<(typeof import('../../inertia/pages/settings/download-clients.tsx'))['default']>
     'settings/indexers': ExtractProps<(typeof import('../../inertia/pages/settings/indexers.tsx'))['default']>
@@ -47,5 +43,9 @@ declare module '@adonisjs/inertia/types' {
     'settings/webhooks': ExtractProps<(typeof import('../../inertia/pages/settings/webhooks.tsx'))['default']>
     'system/events': ExtractProps<(typeof import('../../inertia/pages/system/events.tsx'))['default']>
     'system/status': ExtractProps<(typeof import('../../inertia/pages/system/status.tsx'))['default']>
+    'auth/forgot_password': ExtractProps<(typeof import('../../inertia/pages/auth/forgot_password.tsx'))['default']>
+    'auth/reset_password': ExtractProps<(typeof import('../../inertia/pages/auth/reset_password.tsx'))['default']>
+    'dashboard': ExtractProps<(typeof import('../../inertia/pages/dashboard.tsx'))['default']>
+    'search/index.test': ExtractProps<(typeof import('../../inertia/pages/search/index.test.tsx'))['default']>
   }
 }
