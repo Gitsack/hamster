@@ -118,6 +118,7 @@ interface QueueItem {
 type ViewMode = 'grid' | 'list'
 type SortBy = 'name' | 'recent' | 'count' | 'year'
 type MediaType = 'music' | 'movies' | 'tv' | 'books' | 'missing'
+type StatusFilter = 'all' | 'downloaded' | 'requested' | 'missing'
 
 interface MissingItem {
   id: string
@@ -194,6 +195,7 @@ export default function Library() {
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortBy, setSortBy] = useState<SortBy>('name')
   // Read initial tab from URL
   const initialTab =
@@ -202,9 +204,11 @@ export default function Library() {
       : 'movies'
   const [activeTab, setActiveTabState] = useState<MediaType>(initialTab)
 
-  // Sync active tab to URL
+  // Sync active tab to URL and reset filters
   const setActiveTab = useCallback((tab: MediaType) => {
     setActiveTabState(tab)
+    setSearchQuery('')
+    setStatusFilter('all')
     const url = new URL(window.location.href)
     url.searchParams.set('tab', tab)
     window.history.replaceState({}, '', url.toString())
@@ -250,7 +254,8 @@ export default function Library() {
           if (data.enabledMediaTypes?.length > 0) {
             // Add 'missing' tab as a special always-available option, sorted by canonical order
             const types = [...data.enabledMediaTypes, 'missing'].sort(
-              (a: MediaType, b: MediaType) => MEDIA_TYPE_ORDER.indexOf(a) - MEDIA_TYPE_ORDER.indexOf(b)
+              (a: MediaType, b: MediaType) =>
+                MEDIA_TYPE_ORDER.indexOf(a) - MEDIA_TYPE_ORDER.indexOf(b)
             ) as MediaType[]
             setEnabledMediaTypes(types)
             // Only override tab if no valid tab was provided via URL
@@ -764,10 +769,29 @@ export default function Library() {
     )
   }
 
+  // Status filter helper
+  const matchesStatusFilter = (item: { requested?: boolean; hasFile?: boolean }) => {
+    if (statusFilter === 'all') return true
+    const { status: itemStatus } = getMediaItemStatus(item, null)
+    switch (statusFilter) {
+      case 'downloaded':
+        return itemStatus === 'downloaded'
+      case 'requested':
+        return (
+          itemStatus === 'requested' || itemStatus === 'downloading' || itemStatus === 'importing'
+        )
+      case 'missing':
+        return itemStatus === 'none'
+      default:
+        return true
+    }
+  }
+
   // Filter and sort functions for each media type
   const getFilteredArtists = () => {
     return artists
       .filter((artist) => artist.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      .filter(matchesStatusFilter)
       .sort((a, b) => {
         switch (sortBy) {
           case 'recent':
@@ -783,6 +807,7 @@ export default function Library() {
   const getFilteredMovies = () => {
     return movies
       .filter((movie) => movie.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      .filter(matchesStatusFilter)
       .sort((a, b) => {
         switch (sortBy) {
           case 'recent':
@@ -798,6 +823,7 @@ export default function Library() {
   const getFilteredTvShows = () => {
     return tvShows
       .filter((show) => show.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      .filter(matchesStatusFilter)
       .sort((a, b) => {
         switch (sortBy) {
           case 'recent':
@@ -815,6 +841,7 @@ export default function Library() {
   const getFilteredAuthors = () => {
     return authors
       .filter((author) => author.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      .filter(matchesStatusFilter)
       .sort((a, b) => {
         switch (sortBy) {
           case 'recent':
@@ -853,6 +880,8 @@ export default function Library() {
     }
   }
 
+  const hasActiveFilters = searchQuery !== '' || statusFilter !== 'all'
+
   const renderEmptyState = () => {
     const config = MEDIA_TYPE_CONFIG[activeTab]
     return (
@@ -861,14 +890,26 @@ export default function Library() {
           <HugeiconsIcon icon={config.icon} className="h-12 w-12 text-muted-foreground" />
         </div>
         <h3 className="text-lg font-medium mb-2">
-          {searchQuery ? 'No items found' : `Your ${config.label.toLowerCase()} library is empty`}
+          {hasActiveFilters
+            ? 'No items found'
+            : `Your ${config.label.toLowerCase()} library is empty`}
         </h3>
         <p className="text-muted-foreground mb-4">
-          {searchQuery
-            ? 'Try a different search term'
+          {hasActiveFilters
+            ? 'Try adjusting your search or filters'
             : `Get started by adding your first ${config.itemLabel}`}
         </p>
-        {!searchQuery && (
+        {hasActiveFilters ? (
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSearchQuery('')
+              setStatusFilter('all')
+            }}
+          >
+            Clear filters
+          </Button>
+        ) : (
           <Button asChild>
             <Link href={config.addUrl}>
               <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
@@ -1114,7 +1155,8 @@ export default function Library() {
               )}
               {item.downloadedEpisodeCount !== undefined && (
                 <p className="text-xs text-green-500 truncate">
-                  {item.downloadedEpisodeCount} episode{item.downloadedEpisodeCount !== 1 ? 's' : ''} downloaded
+                  {item.downloadedEpisodeCount} episode
+                  {item.downloadedEpisodeCount !== 1 ? 's' : ''} downloaded
                 </p>
               )}
             </div>
@@ -1615,24 +1657,43 @@ export default function Library() {
                   ) : (
                     <HugeiconsIcon icon={FolderSearchIcon} className="h-4 w-4 sm:mr-2" />
                   )}
-                  <span className="hidden sm:inline">{scanning ? 'Scanning...' : 'Scan Library'}</span>
+                  <span className="hidden sm:inline">
+                    {scanning ? 'Scanning...' : 'Scan Library'}
+                  </span>
                 </Button>
               )}
             </div>
           </div>
 
-          {/* Search filter */}
-          <div className="relative w-full sm:w-80 mt-4">
-            <HugeiconsIcon
-              icon={Search01Icon}
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-            />
-            <Input
-              placeholder={`Filter ${config.label.toLowerCase()}...`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
+          {/* Search and status filter bar */}
+          <div className="flex flex-col sm:flex-row gap-3 mt-4">
+            <div className="relative w-full sm:w-80">
+              <HugeiconsIcon
+                icon={Search01Icon}
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+              />
+              <Input
+                placeholder={`Filter ${config.label.toLowerCase()}...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            {activeTab !== 'missing' && (
+              <div className="flex items-center gap-1">
+                {(['all', 'downloaded', 'requested', 'missing'] as StatusFilter[]).map((filter) => (
+                  <Button
+                    key={filter}
+                    variant={statusFilter === filter ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setStatusFilter(filter)}
+                    className="capitalize"
+                  >
+                    {filter}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Tab content */}
