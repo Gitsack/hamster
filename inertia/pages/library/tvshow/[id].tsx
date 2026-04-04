@@ -18,7 +18,6 @@ import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  ArrowLeft01Icon,
   MoreVerticalIcon,
   Delete01Icon,
   Tv01Icon,
@@ -36,6 +35,7 @@ import {
   NotificationOff01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
+import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { useOperationTrackerContext } from '@/hooks/use_operation_tracker'
@@ -688,21 +688,9 @@ export default function TvShowDetail() {
   return (
     <AppLayout
       title={show.title}
+      headerPrefix={<Breadcrumbs items={[{ label: 'TV Shows', href: '/library?tab=tv' }]} />}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" asChild>
-                  <Link href="/library?tab=tv">
-                    <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Back</span>
-                  </Link>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Back</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

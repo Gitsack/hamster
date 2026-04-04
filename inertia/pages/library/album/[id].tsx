@@ -24,7 +24,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-  ArrowLeft01Icon,
   MoreVerticalIcon,
   Search01Icon,
   CdIcon,
@@ -38,6 +37,7 @@ import {
   PauseIcon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
+import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
@@ -341,21 +341,16 @@ export default function AlbumDetail() {
   return (
     <AppLayout
       title={album.title}
+      headerPrefix={
+        <Breadcrumbs
+          items={[
+            { label: 'Music', href: '/library?tab=music' },
+            { label: album.artistName, href: `/artist/${album.artistId}` },
+          ]}
+        />
+      }
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" asChild>
-                  <Link href={`/artist/${album.artistId}`}>
-                    <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 md:mr-2" />
-                    <span className="hidden md:inline">Back to Artist</span>
-                  </Link>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Back to Artist</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           {tracksWithFiles > 0 && (
             <TooltipProvider>
               <Tooltip>
