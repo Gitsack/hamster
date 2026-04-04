@@ -79,6 +79,7 @@ import {
 import { MediaTeaser } from '@/components/library/media-teaser'
 import { useVisibleWatchProviders } from '@/hooks/use_visible_watch_providers'
 import { useMediaPreview } from '@/contexts/media_preview_context'
+import { useDebounce } from '@/hooks/use_debounce'
 
 // Error boundary to catch rendering errors
 class ErrorBoundary extends Component<
@@ -471,8 +472,11 @@ export default function SearchPage({
     window.history.replaceState({}, '', url.toString())
   }, [])
   const [searchQuery, setSearchQuery] = useState('')
+  const debouncedQuery = useDebounce(searchQuery, 400)
   const [searching, setSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+  const [focusedResultIndex, setFocusedResultIndex] = useState(-1)
+  const resultsContainerRef = useRef<HTMLDivElement>(null)
 
   // Music search results
   const [artistResults, setArtistResults] = useState<ArtistSearchResult[]>([])
@@ -853,8 +857,46 @@ export default function SearchPage({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       search()
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setFocusedResultIndex((prev) => prev + 1)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setFocusedResultIndex((prev) => Math.max(-1, prev - 1))
+    } else if (e.key === 'Escape') {
+      setFocusedResultIndex(-1)
     }
   }
+
+  // Auto-search when debounced query changes (skip for direct/indexer search which needs explicit submit)
+  const prevDebouncedQuery = useRef(debouncedQuery)
+  useEffect(() => {
+    if (
+      debouncedQuery !== prevDebouncedQuery.current &&
+      debouncedQuery.trim().length >= 2 &&
+      searchMode !== 'direct'
+    ) {
+      prevDebouncedQuery.current = debouncedQuery
+      search()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery, searchMode])
+
+  // Reset focused result when results change
+  useEffect(() => {
+    setFocusedResultIndex(-1)
+  }, [movieResults, tvShowResults, artistResults, albumResults, trackResults, authorResults, bookResults, indexerResults])
+
+  // Scroll focused result into view
+  useEffect(() => {
+    if (focusedResultIndex < 0 || !resultsContainerRef.current) return
+    const cards = resultsContainerRef.current.querySelectorAll('[data-search-result]')
+    const target = cards[focusedResultIndex] as HTMLElement | undefined
+    if (target) {
+      target.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      target.focus()
+    }
+  }, [focusedResultIndex])
 
   // Movie discover categories config
   const movieDiscoverCategories = useMemo(
@@ -1730,8 +1772,16 @@ export default function SearchPage({
     return (
       <Card
         key={item.id}
-        className={`${item.inLibrary ? 'opacity-60' : ''} cursor-pointer hover:bg-muted/50 transition-colors`}
+        data-search-result
+        tabIndex={0}
+        className={`${item.inLibrary ? 'opacity-60' : ''} cursor-pointer hover:bg-muted/50 focus:ring-2 focus:ring-ring focus:outline-none transition-colors`}
         onClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            onClick()
+          }
+        }}
       >
         <CardContent className="flex items-center gap-4 p-4">
           <div className="h-16 w-16 rounded bg-muted flex-shrink-0 overflow-hidden">
@@ -2208,7 +2258,7 @@ export default function SearchPage({
       return <NoResults />
     }
 
-    return null
+    return <InitialSearchPrompt message={`Search for ${musicSearchType}s to get started`} />
   }
 
   // Render movie results
@@ -2538,7 +2588,7 @@ export default function SearchPage({
     }
 
     if (hasSearched) return <NoResults />
-    return null
+    return <InitialSearchPrompt message={`Search for ${booksSearchType}s to get started`} />
   }
 
   // Render direct search results
@@ -2684,8 +2734,17 @@ export default function SearchPage({
     }
 
     if (hasSearched) return <NoResults />
-    return null
+    return <InitialSearchPrompt message="Search for releases across your indexers" />
   }
+
+  const InitialSearchPrompt = ({ message }: { message: string }) => (
+    <div className="text-center py-12 text-muted-foreground">
+      <div className="rounded-full bg-muted p-6 mb-4 inline-flex">
+        <HugeiconsIcon icon={Search01Icon} className="h-12 w-12 text-muted-foreground/50" />
+      </div>
+      <p>{message}</p>
+    </div>
+  )
 
   const SearchingSkeleton = () => (
     <div className="space-y-2">
@@ -2948,21 +3007,23 @@ export default function SearchPage({
             )}
 
             {/* Results */}
-            <TabsContent value="music" className="mt-4">
-              {renderMusicResults()}
-            </TabsContent>
-            <TabsContent value="movies" className="mt-4">
-              {renderMovieResults()}
-            </TabsContent>
-            <TabsContent value="tv" className="mt-4">
-              {renderTvResults()}
-            </TabsContent>
-            <TabsContent value="books" className="mt-4">
-              {renderBooksResults()}
-            </TabsContent>
-            <TabsContent value="direct" className="mt-4">
-              {renderDirectResults()}
-            </TabsContent>
+            <div ref={resultsContainerRef}>
+              <TabsContent value="music" className="mt-4">
+                {renderMusicResults()}
+              </TabsContent>
+              <TabsContent value="movies" className="mt-4">
+                {renderMovieResults()}
+              </TabsContent>
+              <TabsContent value="tv" className="mt-4">
+                {renderTvResults()}
+              </TabsContent>
+              <TabsContent value="books" className="mt-4">
+                {renderBooksResults()}
+              </TabsContent>
+              <TabsContent value="direct" className="mt-4">
+                {renderDirectResults()}
+              </TabsContent>
+            </div>
           </Tabs>
         </div>
 
