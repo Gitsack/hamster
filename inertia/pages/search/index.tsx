@@ -2639,7 +2639,7 @@ export default function SearchPage({
               {(selectedCategories.length > 0 || selectedMediaTypes.size > 0) &&
                 ` (filtered from ${indexerResults.length})`}
             </div>
-            <div className="overflow-x-auto -mx-6 px-6">
+            <div className="overflow-x-auto">
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
@@ -2842,7 +2842,7 @@ export default function SearchPage({
           <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as MediaType | 'direct')}>
             <div className="flex flex-col gap-3">
               {/* Main media type tabs - scrollable on small screens */}
-              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none">
+              <div className="overflow-x-auto scrollbar-none">
                 <TabsList className="min-w-max">
                   {enabledMediaTypes.map((type) => {
                     const config = MEDIA_TYPE_CONFIG[type]
