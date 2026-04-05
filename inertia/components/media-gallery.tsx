@@ -15,7 +15,13 @@ function extractYouTubeKey(embedUrl: string): string | null {
   return match ? match[1] : null
 }
 
-export function MediaGallery({ trailerUrl, images, title, className, children }: MediaGalleryProps) {
+export function MediaGallery({
+  trailerUrl,
+  images,
+  title,
+  className,
+  children,
+}: MediaGalleryProps) {
   const [playingTrailer, setPlayingTrailer] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -68,9 +74,10 @@ export function MediaGallery({ trailerUrl, images, title, className, children }:
   }
 
   const goToSlide = (direction: 'prev' | 'next') => {
-    const next = direction === 'next'
-      ? (activeIndex + 1) % totalSlides
-      : (activeIndex - 1 + totalSlides) % totalSlides
+    const next =
+      direction === 'next'
+        ? (activeIndex + 1) % totalSlides
+        : (activeIndex - 1 + totalSlides) % totalSlides
     scrollToSlide(next)
   }
 
@@ -78,7 +85,12 @@ export function MediaGallery({ trailerUrl, images, title, className, children }:
   const onMouseDown = (e: MouseEvent) => {
     const el = scrollRef.current
     if (!el) return
-    dragState.current = { isDown: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft, dragged: false }
+    dragState.current = {
+      isDown: true,
+      startX: e.pageX - el.offsetLeft,
+      scrollLeft: el.scrollLeft,
+      dragged: false,
+    }
     el.style.cursor = 'grabbing'
     el.style.scrollSnapType = 'none'
   }

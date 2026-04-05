@@ -4,13 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Spinner } from '@/components/ui/spinner'
-import {
-  Select,
-  SelectPopup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
 import { type MediaItemStatus } from '@/components/library/media-status-badge'
@@ -160,13 +154,9 @@ export default function DiscoverPage() {
   const isGenre = category === 'genre' && !!genreId
   const genreNames = mediaType === 'movies' ? MOVIE_GENRE_NAMES : TV_GENRE_NAMES
   const genreName = isGenre ? genreNames[genreId!] || 'Genre' : ''
-  const genreTitle = isGenre
-    ? `${genreName} ${mediaType === 'movies' ? 'Movies' : 'Shows'}`
-    : ''
+  const genreTitle = isGenre ? `${genreName} ${mediaType === 'movies' ? 'Movies' : 'Shows'}` : ''
 
-  const pageTitle = isGenre
-    ? genreTitle
-    : CATEGORY_LABELS[mediaType]?.[category] || 'Discover'
+  const pageTitle = isGenre ? genreTitle : CATEGORY_LABELS[mediaType]?.[category] || 'Discover'
   const isRecommendation = category in RECOMMENDATION_SOURCES
   const apiBase = mediaType === 'movies' ? '/api/v1/movies/discover' : '/api/v1/tvshows/discover'
   const recApiBase =
@@ -531,7 +521,11 @@ export default function DiscoverPage() {
   const isMovie = mediaType === 'movies'
 
   // Lazy-load streaming provider badges as items become visible
-  const { providers: watchProviders, loadingIds: watchProviderLoading, observerRef: watchProviderRef } = useVisibleWatchProviders(isMovie ? 'movie' : 'tv')
+  const {
+    providers: watchProviders,
+    loadingIds: watchProviderLoading,
+    observerRef: watchProviderRef,
+  } = useVisibleWatchProviders(isMovie ? 'movie' : 'tv')
 
   return (
     <AppLayout
@@ -550,7 +544,9 @@ export default function DiscoverPage() {
         isGenre ? (
           <Select value={sortBy} onValueChange={handleSortChange}>
             <SelectTrigger className="w-[150px] h-9">
-              <SelectValue placeholder={sortOptions.find((o) => o.value === sortBy)?.label ?? 'Sort by'}>
+              <SelectValue
+                placeholder={sortOptions.find((o) => o.value === sortBy)?.label ?? 'Sort by'}
+              >
                 {sortOptions.find((o) => o.value === sortBy)?.label ?? 'Sort by'}
               </SelectValue>
             </SelectTrigger>
@@ -568,7 +564,6 @@ export default function DiscoverPage() {
       <Head title={pageTitle} />
 
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
-
         {/* Grid */}
         {initialLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">

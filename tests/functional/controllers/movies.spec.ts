@@ -258,7 +258,9 @@ test.group('MoviesController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await Movie.query().where('id', result.id as string).delete()
+      await Movie.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 

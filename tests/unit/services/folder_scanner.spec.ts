@@ -53,10 +53,7 @@ function isBookFile(fileName: string): boolean {
 
 type MediaType = 'music' | 'movies' | 'tv' | 'books'
 
-function detectMediaTypeFromFiles(
-  fileNames: string[],
-  folderName: string
-): MediaType | null {
+function detectMediaTypeFromFiles(fileNames: string[], folderName: string): MediaType | null {
   let videoCount = 0
   let audioCount = 0
   let bookCount = 0
@@ -186,10 +183,7 @@ test.group('FolderScanner | detectMediaType', () => {
 
   test('detects tv from video files with S01E01 pattern', ({ assert }) => {
     const files = ['episode.mkv']
-    assert.equal(
-      detectMediaTypeFromFiles(files, 'Breaking.Bad.S01E01.720p.BluRay'),
-      'tv'
-    )
+    assert.equal(detectMediaTypeFromFiles(files, 'Breaking.Bad.S01E01.720p.BluRay'), 'tv')
   })
 
   test('detects tv from video files with 1x01 pattern', ({ assert }) => {
@@ -207,10 +201,7 @@ test.group('FolderScanner | detectMediaType', () => {
 
   test('detects books from book files', ({ assert }) => {
     const files = ['book.epub', 'cover.jpg']
-    assert.equal(
-      detectMediaTypeFromFiles(files, 'Stephen King - The Shining epub'),
-      'books'
-    )
+    assert.equal(detectMediaTypeFromFiles(files, 'Stephen King - The Shining epub'), 'books')
   })
 
   test('returns null when no media files found', ({ assert }) => {

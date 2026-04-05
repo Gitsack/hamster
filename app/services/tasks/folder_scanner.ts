@@ -738,16 +738,10 @@ class FolderScanner {
     rootFolder: RootFolder
   ): Promise<MatchResult | null> {
     // Parse TV pattern from folder name
-    const tvMatch = folderName.match(
-      /(.+?)[\s._-]*(?:S(\d{1,2})E(\d{1,2})|(\d{1,2})x(\d{1,2}))/i
-    )
+    const tvMatch = folderName.match(/(.+?)[\s._-]*(?:S(\d{1,2})E(\d{1,2})|(\d{1,2})x(\d{1,2}))/i)
     if (!tvMatch) return null
 
-    const showTitle = tvMatch[1]
-      .replace(/\./g, ' ')
-      .replace(/_/g, ' ')
-      .replace(/-/g, ' ')
-      .trim()
+    const showTitle = tvMatch[1].replace(/\./g, ' ').replace(/_/g, ' ').replace(/-/g, ' ').trim()
     const seasonNum = Number.parseInt(tvMatch[2] || tvMatch[4])
     const episodeNum = Number.parseInt(tvMatch[3] || tvMatch[5])
     const yearMatch = showTitle.match(/\b(19\d{2}|20\d{2})\b/)
@@ -873,7 +867,9 @@ class FolderScanner {
 
     // Fall back to folder name parsing ("Artist - Album" pattern)
     if (!artistName || !albumTitle) {
-      const musicMatch = folderName.match(/^(.+?)\s*-\s*(.+?)(?:\s+(?:CD|LP|EP|FLAC|MP3|WEB|Vinyl|\d{4}).*)?$/i)
+      const musicMatch = folderName.match(
+        /^(.+?)\s*-\s*(.+?)(?:\s+(?:CD|LP|EP|FLAC|MP3|WEB|Vinyl|\d{4}).*)?$/i
+      )
       if (musicMatch) {
         if (!artistName) artistName = musicMatch[1].replace(/\./g, ' ').trim()
         if (!albumTitle) albumTitle = musicMatch[2].replace(/\./g, ' ').trim()
@@ -886,9 +882,7 @@ class FolderScanner {
     }
 
     // Find or create artist
-    let artist = await Artist.query()
-      .whereILike('name', artistName)
-      .first()
+    let artist = await Artist.query().whereILike('name', artistName).first()
 
     if (!artist) {
       artist = await Artist.create({
@@ -1088,10 +1082,7 @@ class FolderScanner {
     return null
   }
 
-  private async findExistingTvShowByTitle(
-    title: string,
-    year?: number
-  ): Promise<TvShow | null> {
+  private async findExistingTvShowByTitle(title: string, year?: number): Promise<TvShow | null> {
     const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '')
     const shows = await TvShow.query()
 

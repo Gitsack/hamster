@@ -254,12 +254,11 @@ export default function UsersSettings() {
                           >
                             <HugeiconsIcon icon={LockPasswordIcon} className="size-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeletingUser(user)}
-                          >
-                            <HugeiconsIcon icon={Delete01Icon} className="size-4 text-destructive" />
+                          <Button variant="ghost" size="icon" onClick={() => setDeletingUser(user)}>
+                            <HugeiconsIcon
+                              icon={Delete01Icon}
+                              className="size-4 text-destructive"
+                            />
                           </Button>
                         </div>
                       </TableCell>

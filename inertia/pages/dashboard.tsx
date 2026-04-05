@@ -282,9 +282,7 @@ function DownloadActivity() {
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              {item.sizeBytes ? formatBytes(item.sizeBytes) : '--'}
-            </span>
+            <span>{item.sizeBytes ? formatBytes(item.sizeBytes) : '--'}</span>
             <span>ETA: {formatEta(item.etaSeconds)}</span>
           </div>
         </div>

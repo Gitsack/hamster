@@ -29,7 +29,11 @@ export function SimilarLane({ mediaType, mediaId, tmdbId }: SimilarLaneProps) {
   const [loading, setLoading] = useState(true)
   const { openMoviePreview, openTvShowPreview } = useMediaPreview()
 
-  const { providers: watchProviders, loadingIds: watchProviderLoading, observerRef: watchProviderRef } = useVisibleWatchProviders(mediaType === 'movies' ? 'movie' : 'tv')
+  const {
+    providers: watchProviders,
+    loadingIds: watchProviderLoading,
+    observerRef: watchProviderRef,
+  } = useVisibleWatchProviders(mediaType === 'movies' ? 'movie' : 'tv')
 
   useEffect(() => {
     if (!tmdbId) {

@@ -232,8 +232,16 @@ export const WithStreamingProviders: Story = {
     mediaType: 'movie',
     status: 'downloaded',
     streamingProviders: [
-      { id: 8, name: 'Netflix', logoUrl: 'https://image.tmdb.org/t/p/original/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg' },
-      { id: 337, name: 'Disney+', logoUrl: 'https://image.tmdb.org/t/p/original/7rwgEs15tFwyR9NPQ5vpzxTj19Q.jpg' },
+      {
+        id: 8,
+        name: 'Netflix',
+        logoUrl: 'https://image.tmdb.org/t/p/original/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg',
+      },
+      {
+        id: 337,
+        name: 'Disney+',
+        logoUrl: 'https://image.tmdb.org/t/p/original/7rwgEs15tFwyR9NPQ5vpzxTj19Q.jpg',
+      },
     ],
   },
 }
@@ -249,11 +257,31 @@ export const ManyStreamingProviders: Story = {
     mediaType: 'movie',
     status: 'none',
     streamingProviders: [
-      { id: 8, name: 'Netflix', logoUrl: 'https://image.tmdb.org/t/p/original/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg' },
-      { id: 337, name: 'Disney+', logoUrl: 'https://image.tmdb.org/t/p/original/7rwgEs15tFwyR9NPQ5vpzxTj19Q.jpg' },
-      { id: 9, name: 'Prime Video', logoUrl: 'https://image.tmdb.org/t/p/original/emthp39XA2YScoYL1p0sdbAH2WA.jpg' },
-      { id: 350, name: 'Apple TV+', logoUrl: 'https://image.tmdb.org/t/p/original/6uhKBfmtzFqOcLousHwZuzcrScK.jpg' },
-      { id: 531, name: 'Paramount+', logoUrl: 'https://image.tmdb.org/t/p/original/xbhHHa1YgtpwhC8lb1NQ3ACVcLd.jpg' },
+      {
+        id: 8,
+        name: 'Netflix',
+        logoUrl: 'https://image.tmdb.org/t/p/original/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg',
+      },
+      {
+        id: 337,
+        name: 'Disney+',
+        logoUrl: 'https://image.tmdb.org/t/p/original/7rwgEs15tFwyR9NPQ5vpzxTj19Q.jpg',
+      },
+      {
+        id: 9,
+        name: 'Prime Video',
+        logoUrl: 'https://image.tmdb.org/t/p/original/emthp39XA2YScoYL1p0sdbAH2WA.jpg',
+      },
+      {
+        id: 350,
+        name: 'Apple TV+',
+        logoUrl: 'https://image.tmdb.org/t/p/original/6uhKBfmtzFqOcLousHwZuzcrScK.jpg',
+      },
+      {
+        id: 531,
+        name: 'Paramount+',
+        logoUrl: 'https://image.tmdb.org/t/p/original/xbhHHa1YgtpwhC8lb1NQ3ACVcLd.jpg',
+      },
     ],
   },
 }
@@ -397,7 +425,9 @@ export const StreamingLoaderBadge: StoryObj = {
   render: () => (
     <>
       <StreamingProviderLoader />
-      <span style={{ color: '#888', fontSize: 12 }}>← Matrix loading badge at actual size (20×20)</span>
+      <span style={{ color: '#888', fontSize: 12 }}>
+        ← Matrix loading badge at actual size (20×20)
+      </span>
     </>
   ),
 }

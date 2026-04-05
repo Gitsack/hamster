@@ -38,20 +38,14 @@ export function MediaHero({
           </div>
           <div className="flex-1 min-w-0 space-y-4">{children}</div>
         </div>
-        {overview && (
-          <p className="text-muted-foreground line-clamp-5">{overview}</p>
-        )}
+        {overview && <p className="text-muted-foreground line-clamp-5">{overview}</p>}
       </div>
 
       {/* Media section: trailers and images */}
       {hasGallery && (
         <div>
           <h2 className="font-semibold mb-3">Media</h2>
-          <MediaGallery
-            trailerUrl={trailerUrl}
-            images={images}
-            title={title}
-          />
+          <MediaGallery trailerUrl={trailerUrl} images={images} title={title} />
         </div>
       )}
     </>

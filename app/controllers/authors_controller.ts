@@ -205,7 +205,12 @@ export default class AuthorsController {
 
     await author.save()
 
-    return response.json({ id: author.id, name: author.name, requested: author.requested, monitored: author.monitored })
+    return response.json({
+      id: author.id,
+      name: author.name,
+      requested: author.requested,
+      monitored: author.monitored,
+    })
   }
 
   async destroy({ params, response }: HttpContext) {

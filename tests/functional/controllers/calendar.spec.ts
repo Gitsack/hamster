@@ -139,9 +139,7 @@ test.group('CalendarController', (group) => {
       },
     } as never)
 
-    const found = result.find(
-      (e: any) => e.uid === `movie-${unrequestedMovie.id}@hamster`
-    )
+    const found = result.find((e: any) => e.uid === `movie-${unrequestedMovie.id}@hamster`)
     assert.isUndefined(found)
 
     await unrequestedMovie.delete()
@@ -173,9 +171,7 @@ test.group('CalendarController', (group) => {
       },
     } as never)
 
-    const found = result.find(
-      (e: any) => e.uid === `movie-${unrequestedMovie.id}@hamster`
-    )
+    const found = result.find((e: any) => e.uid === `movie-${unrequestedMovie.id}@hamster`)
     assert.isNotNull(found)
 
     await unrequestedMovie.delete()

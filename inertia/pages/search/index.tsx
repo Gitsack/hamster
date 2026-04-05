@@ -73,10 +73,7 @@ import {
 import { toast } from 'sonner'
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
 import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dialog'
-import {
-  CardStatusBadge,
-  type MediaItemStatus,
-} from '@/components/library/media-status-badge'
+import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaTeaser } from '@/components/library/media-teaser'
 import { useVisibleWatchProviders } from '@/hooks/use_visible_watch_providers'
 import { useMediaPreview } from '@/contexts/media_preview_context'
@@ -335,129 +332,139 @@ function formatAge(dateString: string): string {
 }
 
 // Horizontal scroll lane component for discover content
-const DiscoverLane = memo(({
-  title,
-  items,
-  type,
-  source,
-  moreHref,
-  onItemClick,
-  onAdd,
-  onToggle,
-  togglingItems,
-  watchProviderMap,
-  watchProviderLoading,
-  watchProviderObserverRef,
-}: {
-  title: string
-  items: (MovieSearchResult | TvShowSearchResult)[]
-  type: 'movie' | 'tv'
-  source?: 'tmdb' | 'trakt' | 'justwatch'
-  moreHref?: string
-  onItemClick: (item: MovieSearchResult | TvShowSearchResult) => void
-  onAdd: (item: MovieSearchResult | TvShowSearchResult) => void
-  onToggle: (item: MovieSearchResult | TvShowSearchResult) => void
-  togglingItems: Set<string>
-  watchProviderMap?: Record<string, { id: number; name: string; logoUrl: string }[]>
-  watchProviderLoading?: Set<string>
-  watchProviderObserverRef?: (tmdbId: string) => (el: HTMLDivElement | null) => void
-}) => {
-  const scrollRef = useRef<HTMLDivElement>(null)
+const DiscoverLane = memo(
+  ({
+    title,
+    items,
+    type,
+    source,
+    moreHref,
+    onItemClick,
+    onAdd,
+    onToggle,
+    togglingItems,
+    watchProviderMap,
+    watchProviderLoading,
+    watchProviderObserverRef,
+  }: {
+    title: string
+    items: (MovieSearchResult | TvShowSearchResult)[]
+    type: 'movie' | 'tv'
+    source?: 'tmdb' | 'trakt' | 'justwatch'
+    moreHref?: string
+    onItemClick: (item: MovieSearchResult | TvShowSearchResult) => void
+    onAdd: (item: MovieSearchResult | TvShowSearchResult) => void
+    onToggle: (item: MovieSearchResult | TvShowSearchResult) => void
+    togglingItems: Set<string>
+    watchProviderMap?: Record<string, { id: number; name: string; logoUrl: string }[]>
+    watchProviderLoading?: Set<string>
+    watchProviderObserverRef?: (tmdbId: string) => (el: HTMLDivElement | null) => void
+  }) => {
+    const scrollRef = useRef<HTMLDivElement>(null)
 
-  const scroll = (direction: 'left' | 'right') => {
-    if (scrollRef.current) {
-      const scrollAmount = 400
-      scrollRef.current.scrollBy({
-        left: direction === 'left' ? -scrollAmount : scrollAmount,
-        behavior: 'smooth',
-      })
+    const scroll = (direction: 'left' | 'right') => {
+      if (scrollRef.current) {
+        const scrollAmount = 400
+        scrollRef.current.scrollBy({
+          left: direction === 'left' ? -scrollAmount : scrollAmount,
+          behavior: 'smooth',
+        })
+      }
     }
-  }
 
-  if (items.length === 0) return null
+    if (items.length === 0) return null
 
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h3 className="text-lg font-semibold">
-            {title}
-            {source && (
-              <Badge variant="outline" className="ml-2 text-xs font-normal">
-                {source === 'trakt' ? 'Trakt' : source === 'justwatch' ? 'JustWatch' : 'For You'}
-              </Badge>
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold">
+              {title}
+              {source && (
+                <Badge variant="outline" className="ml-2 text-xs font-normal">
+                  {source === 'trakt' ? 'Trakt' : source === 'justwatch' ? 'JustWatch' : 'For You'}
+                </Badge>
+              )}
+            </h3>
+            {moreHref && (
+              <button
+                onClick={() => router.visit(moreHref)}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Show more
+              </button>
             )}
-          </h3>
-          {moreHref && (
-            <button
-              onClick={() => router.visit(moreHref)}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => scroll('left')}
+              aria-label="Scroll left"
             >
-              Show more
-            </button>
-          )}
+              <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => scroll('right')}
+              aria-label="Scroll right"
+            >
+              <HugeiconsIcon icon={ArrowRight01Icon} className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => scroll('left')} aria-label="Scroll left">
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => scroll('right')} aria-label="Scroll right">
-            <HugeiconsIcon icon={ArrowRight01Icon} className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-      <div
-        ref={scrollRef}
-        className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
-        style={{ scrollbarWidth: 'thin' }}
-      >
-        {items.map((item) => {
-          let status: MediaItemStatus = 'none'
-          if (item.inLibrary) {
-            if (type === 'movie') {
-              const movie = item as MovieSearchResult
-              status = movie.hasFile
-                ? 'downloaded'
-                : movie.requested
-                  ? 'requested'
-                  : 'downloaded'
-            } else {
-              const show = item as TvShowSearchResult
-              status = show.requested ? 'requested' : 'downloaded'
+        <div
+          ref={scrollRef}
+          className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+          style={{ scrollbarWidth: 'thin' }}
+        >
+          {items.map((item) => {
+            let status: MediaItemStatus = 'none'
+            if (item.inLibrary) {
+              if (type === 'movie') {
+                const movie = item as MovieSearchResult
+                status = movie.hasFile ? 'downloaded' : movie.requested ? 'requested' : 'downloaded'
+              } else {
+                const show = item as TvShowSearchResult
+                status = show.requested ? 'requested' : 'downloaded'
+              }
             }
-          }
-          const handleToggle =
-            status === 'none'
-              ? () => onAdd(item)
-              : status === 'requested'
-                ? () => onToggle(item)
-                : undefined
+            const handleToggle =
+              status === 'none'
+                ? () => onAdd(item)
+                : status === 'requested'
+                  ? () => onToggle(item)
+                  : undefined
 
-          return (
-            <MediaTeaser
-              key={item.tmdbId}
-              tmdbId={item.tmdbId}
-              title={item.title}
-              year={item.year}
-              posterUrl={item.posterUrl}
-              genres={item.genres}
-              mediaType={type}
-              status={status}
-              isToggling={togglingItems.has(item.tmdbId)}
-              showStatusOnHover={status === 'none'}
-              onToggleRequest={handleToggle}
-              streamingProviders={watchProviderMap?.[item.tmdbId]}
-              isLoadingProviders={watchProviderLoading?.has(item.tmdbId)}
-              observerRef={watchProviderObserverRef?.(item.tmdbId)}
-              onClick={() => onItemClick(item)}
-              size="lane"
-            />
-          )
-        })}
+            return (
+              <MediaTeaser
+                key={item.tmdbId}
+                tmdbId={item.tmdbId}
+                title={item.title}
+                year={item.year}
+                posterUrl={item.posterUrl}
+                genres={item.genres}
+                mediaType={type}
+                status={status}
+                isToggling={togglingItems.has(item.tmdbId)}
+                showStatusOnHover={status === 'none'}
+                onToggleRequest={handleToggle}
+                streamingProviders={watchProviderMap?.[item.tmdbId]}
+                isLoadingProviders={watchProviderLoading?.has(item.tmdbId)}
+                observerRef={watchProviderObserverRef?.(item.tmdbId)}
+                onClick={() => onItemClick(item)}
+                size="lane"
+              />
+            )
+          })}
+        </div>
       </div>
-    </div>
-  )
-})
+    )
+  }
+)
 
 // Skeleton for discover lanes
 const DiscoverLaneSkeleton = () => (
@@ -589,8 +596,16 @@ export default function SearchPage({
   const { openMoviePreview, openTvShowPreview } = useMediaPreview()
 
   // Lazy-load streaming provider badges as items become visible
-  const { providers: movieWatchProviders, loadingIds: movieWatchProviderLoading, observerRef: movieWatchProviderRef } = useVisibleWatchProviders('movie')
-  const { providers: tvWatchProviders, loadingIds: tvWatchProviderLoading, observerRef: tvWatchProviderRef } = useVisibleWatchProviders('tv')
+  const {
+    providers: movieWatchProviders,
+    loadingIds: movieWatchProviderLoading,
+    observerRef: movieWatchProviderRef,
+  } = useVisibleWatchProviders('movie')
+  const {
+    providers: tvWatchProviders,
+    loadingIds: tvWatchProviderLoading,
+    observerRef: tvWatchProviderRef,
+  } = useVisibleWatchProviders('tv')
 
   // Books add state
   const [selectedAuthor, setSelectedAuthor] = useState<AuthorSearchResult | null>(null)
@@ -724,7 +739,8 @@ export default function SearchPage({
       .then((data) => {
         if (data.enabledMediaTypes?.length > 0) {
           const sorted = [...data.enabledMediaTypes].sort(
-            (a: MediaType, b: MediaType) => MEDIA_TYPE_ORDER.indexOf(a) - MEDIA_TYPE_ORDER.indexOf(b)
+            (a: MediaType, b: MediaType) =>
+              MEDIA_TYPE_ORDER.indexOf(a) - MEDIA_TYPE_ORDER.indexOf(b)
           )
           setEnabledMediaTypes(sorted)
           // If current mode isn't enabled, switch to first enabled
@@ -922,7 +938,16 @@ export default function SearchPage({
   // Reset focused result when results change
   useEffect(() => {
     setFocusedResultIndex(-1)
-  }, [movieResults, tvShowResults, artistResults, albumResults, trackResults, authorResults, bookResults, indexerResults])
+  }, [
+    movieResults,
+    tvShowResults,
+    artistResults,
+    albumResults,
+    trackResults,
+    authorResults,
+    bookResults,
+    indexerResults,
+  ])
 
   // Scroll focused result into view
   useEffect(() => {
@@ -1995,7 +2020,11 @@ export default function SearchPage({
                           Loading albums...
                         </div>
                       ) : albums.length === 0 ? (
-                        <EmptyState title="No albums found" message="No albums available for this artist." className="py-6" />
+                        <EmptyState
+                          title="No albums found"
+                          message="No albums available for this artist."
+                          className="py-6"
+                        />
                       ) : (
                         <div className="space-y-2">
                           {albums.map((album) => {
@@ -2072,7 +2101,11 @@ export default function SearchPage({
                                         Loading tracks...
                                       </div>
                                     ) : tracks.length === 0 ? (
-                                      <EmptyState title="No tracks found" message="No tracks available for this album." className="py-4" />
+                                      <EmptyState
+                                        title="No tracks found"
+                                        message="No tracks available for this album."
+                                        className="py-4"
+                                      />
                                     ) : (
                                       <div className="space-y-1">
                                         {tracks.map((track, idx) => (
@@ -2204,7 +2237,11 @@ export default function SearchPage({
                           Loading tracks...
                         </div>
                       ) : tracks.length === 0 ? (
-                        <EmptyState title="No tracks found" message="No tracks available for this album." className="py-6" />
+                        <EmptyState
+                          title="No tracks found"
+                          message="No tracks available for this album."
+                          className="py-6"
+                        />
                       ) : (
                         <div className="space-y-1">
                           {tracks.map((track, idx) => (
@@ -2779,7 +2816,13 @@ export default function SearchPage({
                         <TableCell>
                           <div className="flex items-center gap-1">
                             {result.infoUrl && (
-                              <Button variant="ghost" size="icon" asChild className="h-8 w-8" aria-label="View release info">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                asChild
+                                className="h-8 w-8"
+                                aria-label="View release info"
+                              >
                                 <a href={result.infoUrl} target="_blank" rel="noopener noreferrer">
                                   <HugeiconsIcon icon={Link01Icon} className="h-4 w-4" />
                                 </a>
@@ -2853,11 +2896,21 @@ export default function SearchPage({
           <TableBody>
             {Array.from({ length: 5 }).map((_, i) => (
               <TableRow key={i}>
-                <TableCell><Skeleton className="h-4 w-3/4" /></TableCell>
-                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                <TableCell><Skeleton className="h-4 w-8" /></TableCell>
-                <TableCell><Skeleton className="h-8 w-16" /></TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-3/4" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-16" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-12" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-8" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-8 w-16" />
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -3032,9 +3085,7 @@ export default function SearchPage({
                       {availableMediaTypes.size > 1 && (
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm text-muted-foreground">Type:</span>
-                          {(
-                            ['movie', 'tv', 'music', 'book', 'other'] as ResultMediaType[]
-                          )
+                          {(['movie', 'tv', 'music', 'book', 'other'] as ResultMediaType[])
                             .filter((mt) => availableMediaTypes.has(mt))
                             .map((mt) => {
                               const active = selectedMediaTypes.has(mt)

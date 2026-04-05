@@ -69,7 +69,10 @@ function OperationGroupCard({
       >
         {allDone ? (
           failed === 0 ? (
-            <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-4 text-green-500 shrink-0" />
+            <HugeiconsIcon
+              icon={CheckmarkCircle02Icon}
+              className="size-4 text-green-500 shrink-0"
+            />
           ) : (
             <HugeiconsIcon icon={Cancel01Icon} className="size-4 text-yellow-500 shrink-0" />
           )
@@ -101,10 +104,7 @@ function OperationGroupCard({
                   />
                 )}
                 {op.status === 'error' && (
-                  <HugeiconsIcon
-                    icon={Cancel01Icon}
-                    className="size-3 text-destructive shrink-0"
-                  />
+                  <HugeiconsIcon icon={Cancel01Icon} className="size-3 text-destructive shrink-0" />
                 )}
                 <span className="truncate">{op.label}</span>
               </div>

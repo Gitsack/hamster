@@ -78,24 +78,24 @@ export const Large: Story = {
 
 export const Icon: Story = {
   args: {
-    size: 'icon',
-    children: <PlusIcon />,
+    'size': 'icon',
+    'children': <PlusIcon />,
     'aria-label': 'Add',
   },
 }
 
 export const IconSmall: Story = {
   args: {
-    size: 'icon-sm',
-    children: <SearchIcon />,
+    'size': 'icon-sm',
+    'children': <SearchIcon />,
     'aria-label': 'Search',
   },
 }
 
 export const IconLarge: Story = {
   args: {
-    size: 'icon-lg',
-    children: <SettingsIcon />,
+    'size': 'icon-lg',
+    'children': <SettingsIcon />,
     'aria-label': 'Settings',
   },
 }

@@ -61,7 +61,8 @@ export class BookImportService {
       console.log(`[BookImportService] Original output path: ${outputPath}`)
 
       if (download.downloadClientId) {
-        const DownloadClient = (await import('#models/download_client')).default
+        const DownloadClientModule = await import('#models/download_client')
+        const DownloadClient = DownloadClientModule.default
         const client = await DownloadClient.find(download.downloadClientId)
         if (client?.settings?.remotePath && client?.settings?.localPath) {
           const oldPath = outputPath

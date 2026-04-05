@@ -488,7 +488,9 @@ export default function AuthorDetail() {
                     icon={author.monitored ? Notification01Icon : NotificationOff01Icon}
                     className="h-4 w-4 md:mr-2"
                   />
-                  <span className="hidden md:inline">{author.monitored ? 'Monitored' : 'Monitor'}</span>
+                  <span className="hidden md:inline">
+                    {author.monitored ? 'Monitored' : 'Monitor'}
+                  </span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{author.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
@@ -642,7 +644,9 @@ export default function AuthorDetail() {
                     <MergedBookCard
                       key={book.openlibraryId || book.libraryId}
                       book={book}
-                      downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                      downloadInfo={
+                        book.libraryId ? activeDownloads.get(book.libraryId) : undefined
+                      }
                       isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
                       isAdding={addingBooks.has(book.openlibraryId)}
                       onToggleRequest={toggleBookRequested}
@@ -683,7 +687,9 @@ export default function AuthorDetail() {
                     <MergedBookCard
                       key={book.openlibraryId || book.libraryId}
                       book={book}
-                      downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                      downloadInfo={
+                        book.libraryId ? activeDownloads.get(book.libraryId) : undefined
+                      }
                       isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
                       isAdding={false}
                       onToggleRequest={toggleBookRequested}
@@ -712,7 +718,9 @@ export default function AuthorDetail() {
                     <MergedBookCard
                       key={book.openlibraryId || book.libraryId}
                       book={book}
-                      downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                      downloadInfo={
+                        book.libraryId ? activeDownloads.get(book.libraryId) : undefined
+                      }
                       isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
                       isAdding={false}
                       onToggleRequest={toggleBookRequested}
@@ -741,7 +749,9 @@ export default function AuthorDetail() {
                     <MergedBookCard
                       key={book.openlibraryId || book.libraryId}
                       book={book}
-                      downloadInfo={book.libraryId ? activeDownloads.get(book.libraryId) : undefined}
+                      downloadInfo={
+                        book.libraryId ? activeDownloads.get(book.libraryId) : undefined
+                      }
                       isToggling={book.libraryId ? togglingBooks.has(book.libraryId) : false}
                       isAdding={false}
                       onToggleRequest={toggleBookRequested}

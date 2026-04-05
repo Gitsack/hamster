@@ -402,13 +402,18 @@ export default function AlbumDetail() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button onClick={() => searchAndDownload()} disabled={downloading || percentComplete === 100}>
+                <Button
+                  onClick={() => searchAndDownload()}
+                  disabled={downloading || percentComplete === 100}
+                >
                   {downloading ? (
                     <Spinner className="md:mr-2" />
                   ) : (
                     <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
                   )}
-                  <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
+                  <span className="hidden md:inline">
+                    {downloading ? 'Downloading...' : 'Download'}
+                  </span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{downloading ? 'Downloading...' : 'Download'}</TooltipContent>
@@ -427,7 +432,9 @@ export default function AlbumDetail() {
                   ) : (
                     <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
                   )}
-                  <span className="hidden md:inline">{searching ? 'Searching...' : 'Browse releases'}</span>
+                  <span className="hidden md:inline">
+                    {searching ? 'Searching...' : 'Browse releases'}
+                  </span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
@@ -567,9 +574,7 @@ export default function AlbumDetail() {
           </div>
         </div>
 
-        {albumDownloads.length > 0 && (
-          <DownloadProgressCard downloads={albumDownloads} />
-        )}
+        {albumDownloads.length > 0 && <DownloadProgressCard downloads={albumDownloads} />}
 
         {/* Tabs */}
         <Tabs defaultValue="tracks" className="space-y-4">

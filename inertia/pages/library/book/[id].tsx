@@ -187,9 +187,7 @@ export default function BookDetail() {
   }
 
   const deleteBook = async (deleteFiles: boolean) => {
-    const url = deleteFiles
-      ? `/api/v1/books/${bookId}?deleteFile=true`
-      : `/api/v1/books/${bookId}`
+    const url = deleteFiles ? `/api/v1/books/${bookId}?deleteFile=true` : `/api/v1/books/${bookId}`
 
     const response = await fetch(url, { method: 'DELETE' })
     if (response.ok) {
@@ -363,7 +361,9 @@ export default function BookDetail() {
         <Breadcrumbs
           items={[
             { label: 'Books', href: '/library?tab=books' },
-            ...(book.author ? [{ label: book.author.name, href: `/author/${book.author.id}` }] : []),
+            ...(book.author
+              ? [{ label: book.author.name, href: `/author/${book.author.id}` }]
+              : []),
           ]}
         />
       }
@@ -379,7 +379,9 @@ export default function BookDetail() {
                     ) : (
                       <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
                     )}
-                    <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
+                    <span className="hidden md:inline">
+                      {downloading ? 'Downloading...' : 'Download'}
+                    </span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{downloading ? 'Downloading...' : 'Download'}</TooltipContent>
@@ -389,17 +391,15 @@ export default function BookDetail() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  onClick={searchReleases}
-                  disabled={searching}
-                >
+                <Button variant="outline" onClick={searchReleases} disabled={searching}>
                   {searching ? (
                     <Spinner className="md:mr-2" />
                   ) : (
                     <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
                   )}
-                  <span className="hidden md:inline">{searching ? 'Searching...' : 'Browse releases'}</span>
+                  <span className="hidden md:inline">
+                    {searching ? 'Searching...' : 'Browse releases'}
+                  </span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
@@ -540,9 +540,7 @@ export default function BookDetail() {
           </div>
         </div>
 
-        {activeDownload && (
-          <DownloadProgressCard downloads={[activeDownload]} />
-        )}
+        {activeDownload && <DownloadProgressCard downloads={[activeDownload]} />}
 
         {/* Overview */}
         {book.overview && (

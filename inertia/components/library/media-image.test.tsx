@@ -49,9 +49,7 @@ describe('MediaImage', () => {
   })
 
   it('applies custom iconClassName to fallback', () => {
-    render(
-      <MediaImage src={null} alt="No poster" mediaType="books" iconClassName="h-24 w-24" />
-    )
+    render(<MediaImage src={null} alt="No poster" mediaType="books" iconClassName="h-24 w-24" />)
     const icon = screen.getByTestId('fallback-icon')
     expect(icon).toHaveClass('h-24', 'w-24')
   })

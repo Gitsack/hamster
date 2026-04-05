@@ -587,9 +587,7 @@ export default class MoviesController {
         const { default: IndexerModel } = await import('#models/indexer')
         const { default: ProwlarrConfig } = await import('#models/prowlarr_config')
         const directIndexers = await IndexerModel.query().where('enabled', true)
-        const prowlarrConfig = await ProwlarrConfig.query()
-          .where('syncEnabled', true)
-          .first()
+        const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
         const indexerNames = directIndexers.map((i) => i.name)
         if (prowlarrConfig) indexerNames.unshift('Prowlarr')
 
@@ -610,8 +608,7 @@ export default class MoviesController {
         const profile = movie.qualityProfileId
           ? await QualityProfile.find(movie.qualityProfileId)
           : null
-        const allowedQualities =
-          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+        const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
 
         return response.notFound({
           error: 'No releases matching quality profile and size limits',
