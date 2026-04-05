@@ -1980,7 +1980,7 @@ export default function SearchPage({
                         onClick={() => toggleArtistExpand(artist.musicbrainzId)}
                       >
                         <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-1" />
-                        {isExpanded ? 'Hide' : 'Explore'}
+                        {isExpanded ? 'Hide Albums' : 'Show Albums'}
                       </Button>
                     </div>
                   </div>
@@ -1995,7 +1995,7 @@ export default function SearchPage({
                           Loading albums...
                         </div>
                       ) : albums.length === 0 ? (
-                        <EmptyState title="No albums found" message="No albums were found for this artist." className="py-6" />
+                        <EmptyState title="No albums found" message="No albums available for this artist." className="py-6" />
                       ) : (
                         <div className="space-y-2">
                           {albums.map((album) => {
@@ -2041,27 +2041,24 @@ export default function SearchPage({
                                     ) : (
                                       <Button
                                         size="sm"
-                                        variant="outline"
-                                        className="h-7 text-xs"
                                         onClick={() => {
                                           handleAddAlbum(album)
                                         }}
                                       >
-                                        <HugeiconsIcon icon={Add01Icon} className="h-3 w-3 mr-1" />
+                                        <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
                                         Add
                                       </Button>
                                     )}
                                     <Button
                                       size="sm"
-                                      variant="ghost"
-                                      className="h-7 text-xs"
+                                      variant="outline"
                                       onClick={() => toggleAlbumExpand(album.musicbrainzId)}
                                     >
                                       <HugeiconsIcon
                                         icon={ArrowRight01Icon}
-                                        className={`h-3 w-3 transition-transform ${isAlbumExpanded ? 'rotate-90' : ''}`}
+                                        className={`h-4 w-4 mr-1 transition-transform ${isAlbumExpanded ? 'rotate-90' : ''}`}
                                       />
-                                      Tracks
+                                      {isAlbumExpanded ? 'Hide Tracks' : 'Show Tracks'}
                                     </Button>
                                   </div>
                                 </div>
@@ -2075,7 +2072,7 @@ export default function SearchPage({
                                         Loading tracks...
                                       </div>
                                     ) : tracks.length === 0 ? (
-                                      <EmptyState title="No tracks found" message="Track listing is not available for this album." className="py-4" />
+                                      <EmptyState title="No tracks found" message="No tracks available for this album." className="py-4" />
                                     ) : (
                                       <div className="space-y-1">
                                         {tracks.map((track, idx) => (
@@ -2096,7 +2093,7 @@ export default function SearchPage({
                                               <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                                className="h-7 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                                                 onClick={() => handleAddAlbum(album, track.title)}
                                               >
                                                 <HugeiconsIcon
@@ -2192,7 +2189,7 @@ export default function SearchPage({
                           icon={ArrowRight01Icon}
                           className={`h-4 w-4 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                         />
-                        {isExpanded ? 'Hide' : 'Tracks'}
+                        {isExpanded ? 'Hide Tracks' : 'Show Tracks'}
                       </Button>
                     </div>
                   </div>
@@ -2207,7 +2204,7 @@ export default function SearchPage({
                           Loading tracks...
                         </div>
                       ) : tracks.length === 0 ? (
-                        <EmptyState title="No tracks found" message="No tracks were found for this album." className="py-6" />
+                        <EmptyState title="No tracks found" message="No tracks available for this album." className="py-6" />
                       ) : (
                         <div className="space-y-1">
                           {tracks.map((track, idx) => (
@@ -2292,7 +2289,6 @@ export default function SearchPage({
                   ) : track.albumMusicbrainzId ? (
                     <Button
                       size="sm"
-                      variant="outline"
                       onClick={() => {
                         // Find the album and open add dialog
                         const album: AlbumSearchResult = {
@@ -2658,7 +2654,7 @@ export default function SearchPage({
 
   // Render direct search results
   const renderDirectResults = () => {
-    if (searching) return <SearchingSkeleton />
+    if (searching) return <TableSearchingSkeleton />
 
     if (filteredIndexerResults.length > 0) {
       return (
@@ -2839,6 +2835,35 @@ export default function SearchPage({
         </Card>
       ))}
     </div>
+  )
+
+  const TableSearchingSkeleton = () => (
+    <Card>
+      <CardContent className="pt-6">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Title</TableHead>
+              <TableHead className="w-24">Indexer</TableHead>
+              <TableHead className="w-20">Size</TableHead>
+              <TableHead className="w-16">Grabs</TableHead>
+              <TableHead className="w-20">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton className="h-4 w-3/4" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                <TableCell><Skeleton className="h-8 w-16" /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   )
 
   const NoResults = () => (
