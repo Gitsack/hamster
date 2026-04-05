@@ -674,23 +674,6 @@ export default function TvShowDetail() {
     }
   }
 
-  const searchEpisodeReleases = async (episodeId: number) => {
-    setEpisodeSearchResults((prev) => ({ ...prev, [episodeId]: [] }))
-    setSearchingEpisode(episodeId)
-    try {
-      const response = await fetch(`/api/v1/tvshows/${showId}/episodes/${episodeId}/releases`)
-      if (response.ok) {
-        const data = await response.json()
-        setEpisodeSearchResults((prev) => ({ ...prev, [episodeId]: data }))
-      }
-    } catch (error) {
-      console.error('Failed to search releases:', error)
-      toast.error('Failed to search releases')
-    } finally {
-      setSearchingEpisode(null)
-    }
-  }
-
   const searchReleases = async () => {
     if (!show) return
     setSearching(true)
