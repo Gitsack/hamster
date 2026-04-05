@@ -1220,7 +1220,6 @@ export default function TvShowDetail() {
                                   })()}
                                 </div>
                               </div>
-                              </div>
                             ))}
                             {hasMoreEpisodes(season.seasonNumber) && (
                               <div className="flex justify-center pt-2">
