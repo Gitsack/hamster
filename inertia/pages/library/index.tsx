@@ -199,11 +199,14 @@ export default function Library() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortBy, setSortBy] = useState<SortBy>('name')
-  // Read initial tab from URL
-  const initialTab =
-    typeof window !== 'undefined'
-      ? (new URLSearchParams(window.location.search).get('tab') as MediaType) || 'movies'
+  // Read initial tab from URL (validate against known types to prevent crashes)
+  const initialTab = (() => {
+    if (typeof window === 'undefined') return 'movies' as MediaType
+    const urlTab = new URLSearchParams(window.location.search).get('tab')
+    return urlTab && MEDIA_TYPE_ORDER.includes(urlTab as MediaType)
+      ? (urlTab as MediaType)
       : 'movies'
+  })()
   const [activeTab, setActiveTabState] = useState<MediaType>(initialTab)
 
   // Sync active tab to URL and reset filters

@@ -399,7 +399,7 @@ export default function Dashboard({
             value={stats.tvShows}
             icon={Tv01Icon}
             subtitle={`${stats.episodes.toLocaleString()} episodes`}
-            href="/library?tab=tvshows"
+            href="/library?tab=tv"
           />
           <StatCard
             title="Albums"
