@@ -1224,7 +1224,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${artist.name} added to library`)
+        toast.success(`${artist.name} added — searching for downloads`, {
+          action: {
+            label: 'View Queue',
+            onClick: () => router.visit('/activity'),
+          },
+        })
         setAddArtistDialogOpen(false)
         setArtistResults((prev) =>
           prev.map((r) =>
@@ -1265,7 +1270,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${album.title} added to library`)
+        toast.success(`${album.title} added — searching for downloads`, {
+          action: {
+            label: 'View Queue',
+            onClick: () => router.visit('/activity'),
+          },
+        })
         setAddAlbumDialogOpen(false)
         setAlbumResults((prev) =>
           prev.map((r) => (r.musicbrainzId === album.musicbrainzId ? { ...r, inLibrary: true } : r))
@@ -1316,7 +1326,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${movie.title} added to library`)
+        toast.success(`${movie.title} added — searching for downloads`, {
+          action: {
+            label: 'View Queue',
+            onClick: () => router.visit('/activity'),
+          },
+        })
         setAddMovieDialogOpen(false)
         // Update in search results
         setMovieResults((prev) =>
@@ -1396,7 +1411,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${show.title} added to library`)
+        toast.success(`${show.title} added — searching for downloads`, {
+          action: {
+            label: 'View Queue',
+            onClick: () => router.visit('/activity'),
+          },
+        })
         setAddTvShowDialogOpen(false)
         setEpisodeSelection(null)
         // Update in search results
@@ -1608,7 +1628,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${author.name} added to library`)
+        toast.success(`${author.name} added to library`, {
+          action: {
+            label: 'View Author',
+            onClick: () => router.visit(`/author/${data.id}`),
+          },
+        })
         setAddAuthorDialogOpen(false)
         setAuthorResults((prev) =>
           prev.map((r) =>
@@ -1657,7 +1682,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${book.title} added to library`)
+        toast.success(`${book.title} added to library`, {
+          action: {
+            label: 'View Book',
+            onClick: () => router.visit(`/book/${data.id}`),
+          },
+        })
         setAddBookDialogOpen(false)
         setBookResults((prev) =>
           prev.map((r) => (r.openlibraryId === book.openlibraryId ? { ...r, inLibrary: true } : r))

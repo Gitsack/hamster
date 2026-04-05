@@ -346,7 +346,12 @@ export default function DiscoverPage() {
       })
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${movie.title} added to library`)
+        toast.success(`${movie.title} added — searching for downloads`, {
+          action: {
+            label: 'View Queue',
+            onClick: () => router.visit('/activity'),
+          },
+        })
         setAddDialogOpen(false)
         updateItem(movie.tmdbId, (m) => ({
           ...m,
@@ -395,7 +400,12 @@ export default function DiscoverPage() {
       })
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${show.title} added to library`)
+        toast.success(`${show.title} added — searching for downloads`, {
+          action: {
+            label: 'View Queue',
+            onClick: () => router.visit('/activity'),
+          },
+        })
         setAddDialogOpen(false)
         setEpisodeSelection(null)
         updateItem(show.tmdbId, (s) => ({
