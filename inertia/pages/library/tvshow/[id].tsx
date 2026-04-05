@@ -194,9 +194,6 @@ export default function TvShowDetail() {
   const { runBulk } = useOperationTrackerContext()
   const [enriching, setEnriching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [episodeSearchResults, setEpisodeSearchResults] = useState<Record<number, SearchResult[]>>({})
-  const [searchingEpisode, setSearchingEpisode] = useState<number | null>(null)
-  const [grabbingRelease, setGrabbingRelease] = useState<string | null>(null)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -1223,65 +1220,6 @@ export default function TvShowDetail() {
                                   })()}
                                 </div>
                               </div>
-                              {episodeSearchResults[episode.id]?.length > 0 && (
-                                <div className="ml-8 sm:ml-12 mt-1 mb-2 border rounded-lg overflow-hidden">
-                                  <div className="overflow-x-auto">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>Release</TableHead>
-                                          <TableHead className="w-28">Indexer</TableHead>
-                                          <TableHead className="w-20">Quality</TableHead>
-                                          <TableHead className="w-20 text-right">Size</TableHead>
-                                          <TableHead className="w-16"></TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {episodeSearchResults[episode.id].map((result) => (
-                                          <TableRow key={result.id}>
-                                            <TableCell className="font-medium max-w-xs truncate text-sm">
-                                              {result.title}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-sm">
-                                              {result.indexer}
-                                            </TableCell>
-                                            <TableCell>
-                                              {result.quality && (
-                                                <Badge variant="outline" className="text-xs">
-                                                  {result.quality}
-                                                </Badge>
-                                              )}
-                                            </TableCell>
-                                            <TableCell className="text-right text-muted-foreground text-sm">
-                                              {formatSize(result.size)}
-                                            </TableCell>
-                                            <TableCell>
-                                              <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="h-7"
-                                                onClick={() =>
-                                                  grabEpisodeRelease(result, episode.id)
-                                                }
-                                                disabled={grabbingRelease === result.id}
-                                              >
-                                                {grabbingRelease === result.id ? (
-                                                  <Spinner className="size-3" />
-                                                ) : (
-                                                  <HugeiconsIcon
-                                                    icon={FileDownloadIcon}
-                                                    className="h-3.5 w-3.5"
-                                                  />
-                                                )}
-                                              </Button>
-                                            </TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </div>
-                              )}
                               </div>
                             ))}
                             {hasMoreEpisodes(season.seasonNumber) && (
