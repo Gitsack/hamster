@@ -11,7 +11,7 @@ export default class PasswordResetsController {
     return inertia.render('auth/forgot_password', {})
   }
 
-  async sendResetLink({ request, response, session }: HttpContext) {
+  async sendResetLink({ request, response, session, logger }: HttpContext) {
     const { email } = await request.validateUsing(forgotPasswordValidator)
 
     const user = await User.findBy('email', email)
@@ -31,11 +31,18 @@ export default class PasswordResetsController {
       })
 
       const resetUrl = `${request.completeUrl().split('/forgot-password')[0]}/reset-password?token=${token}`
-      await MailService.sendPasswordResetEmail(email, resetUrl)
+      try {
+        await MailService.sendPasswordResetEmail(email, resetUrl)
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to send password reset email')
+      }
     }
 
     // Always show success to prevent email enumeration
-    session.flash('success', 'If an account with that email exists, a password reset link has been sent.')
+    session.flash(
+      'success',
+      'If an account with that email exists, a password reset link has been sent.'
+    )
     return response.redirect('/forgot-password')
   }
 
