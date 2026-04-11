@@ -273,7 +273,10 @@ router
     router.delete('/tvshows/:id/episodes/:episodeId/file', [TvShowsController, 'deleteEpisodeFile'])
     router.delete('/tvshows/:id/episodes/:episodeId', [TvShowsController, 'destroyEpisode'])
     router.get('/tvshows/:id/releases', [TvShowsController, 'searchReleases'])
-    router.get('/tvshows/:id/episodes/:episodeId/releases', [TvShowsController, 'searchEpisodeReleases'])
+    router.get('/tvshows/:id/episodes/:episodeId/releases', [
+      TvShowsController,
+      'searchEpisodeReleases',
+    ])
     router.post('/tvshows/:id/search', [TvShowsController, 'searchNow'])
     router.post('/tvshows/:id/episodes/:episodeId/search', [TvShowsController, 'searchEpisodeNow'])
     router.post('/tvshows/:id/enrich', [TvShowsController, 'enrich'])

@@ -563,7 +563,7 @@ export default class AlbumsController {
       limit: number
     }
 
-    if (trackId && !isNaN(trackId)) {
+    if (trackId && !Number.isNaN(trackId)) {
       // Search for specific track (might find a single or EP)
       const track = await Track.find(trackId)
       if (!track) {

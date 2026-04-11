@@ -3,7 +3,9 @@ import type { NextFn } from '@adonisjs/core/types/http'
 import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import { readFileSync } from 'node:fs'
 
-const packageJson = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'))
+const packageJson = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf-8')
+)
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   share(ctx: HttpContext) {

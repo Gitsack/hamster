@@ -336,9 +336,7 @@ test.group('PlaybackController', () => {
     assert.property(badRequestResult, 'error')
   })
 
-  test('episodePlaybackInfo returns notFound for non-existent episode file', async ({
-    assert,
-  }) => {
+  test('episodePlaybackInfo returns notFound for non-existent episode file', async ({ assert }) => {
     const controller = new PlaybackController()
     let notFoundResult: Record<string, unknown> = {}
 

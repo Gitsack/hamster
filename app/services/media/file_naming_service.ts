@@ -68,6 +68,7 @@ interface BookNamingData {
  * │   │   └── 02 - Track Title.flac
  */
 export class FileNamingService {
+  // eslint-disable-next-line no-control-regex
   private readonly illegalChars = /[<>:"/\\|?*\x00-\x1f]/g
   private readonly reservedNames = [
     'CON',

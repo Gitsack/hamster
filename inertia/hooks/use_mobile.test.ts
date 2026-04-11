@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react'
-import { useIsMobile } from './use-mobile'
+import { useIsMobile } from './use_mobile'
 
 let matchMediaListener: (() => void) | null = null
 
@@ -62,7 +62,11 @@ describe('useIsMobile', () => {
 
     // Simulate resize to mobile
     act(() => {
-      Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 500 })
+      Object.defineProperty(window, 'innerWidth', {
+        writable: true,
+        configurable: true,
+        value: 500,
+      })
       matchMediaListener?.()
     })
 

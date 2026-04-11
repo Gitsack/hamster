@@ -562,7 +562,7 @@ export default class PlaybackController {
       return response.badRequest({ error: 'Invalid session ID' })
     }
 
-    if (isNaN(segmentIndex) || segmentIndex < 0) {
+    if (Number.isNaN(segmentIndex) || segmentIndex < 0) {
       return response.badRequest({ error: 'Invalid segment index' })
     }
 

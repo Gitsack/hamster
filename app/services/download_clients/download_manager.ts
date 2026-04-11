@@ -2086,7 +2086,6 @@ export class DownloadManager {
             const sabConfig = await sabnzbdService.getConfig(config)
             if (sabConfig.completeDir) {
               // Check if the path is accessible locally
-              const fs = await import('node:fs/promises')
               let pathAccessible = false
               try {
                 await fs.access(sabConfig.completeDir)
@@ -2126,7 +2125,6 @@ export class DownloadManager {
           try {
             const destDir = await nzbgetService.getConfigValue(config, 'DestDir')
             if (destDir) {
-              const fs = await import('node:fs/promises')
               let pathAccessible = false
               try {
                 await fs.access(destDir)

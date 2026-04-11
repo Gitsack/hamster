@@ -40,7 +40,7 @@ test.group('SystemController', () => {
     // Timestamp should be a valid ISO string
     assert.isString(result.timestamp)
     const parsedDate = new Date(result.timestamp as string)
-    assert.isFalse(isNaN(parsedDate.getTime()))
+    assert.isFalse(Number.isNaN(parsedDate.getTime()))
   })
 
   test('health includes database check', async ({ assert }) => {

@@ -6,12 +6,7 @@ export default class extends BaseSchema {
   async up() {
     this.schema.createTable(this.tableName, (table) => {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
-      table
-        .uuid('user_id')
-        .notNullable()
-        .references('id')
-        .inTable('users')
-        .onDelete('CASCADE')
+      table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE')
       table.string('token_hash').notNullable().unique()
       table.timestamp('expires_at').notNullable()
       table.timestamp('used_at').nullable()
