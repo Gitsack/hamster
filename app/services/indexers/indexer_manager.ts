@@ -66,6 +66,17 @@ function classifyMediaType(categoryId: number | undefined): MediaType | undefine
   }
 }
 
+export interface SkippedIndexer {
+  indexerId: string
+  reason: 'rate_limited'
+  availableAt: number | null
+}
+
+export interface SearchResult {
+  results: UnifiedSearchResult[]
+  skippedIndexers: SkippedIndexer[]
+}
+
 export interface SearchOptions {
   query?: string
   artist?: string
@@ -138,10 +149,21 @@ export class IndexerManager {
   }
 
   /**
+   * Return the current set of rate-limited indexers with their cooldown timestamps.
+   */
+  public getRateLimitedIndexers(): Array<{ indexerId: string; availableAt: number }> {
+    const now = Date.now()
+    return Array.from(this.rateLimitCooldowns.entries())
+      .filter(([_, cooldownUntil]) => cooldownUntil > now)
+      .map(([indexerId, cooldownUntil]) => ({ indexerId, availableAt: cooldownUntil }))
+  }
+
+  /**
    * Search across all configured indexers
    */
-  async search(options: SearchOptions): Promise<UnifiedSearchResult[]> {
+  async search(options: SearchOptions): Promise<SearchResult> {
     const results: UnifiedSearchResult[] = []
+    const skippedDueToRateLimit: string[] = []
 
     // Get Prowlarr config if enabled
     const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
@@ -175,8 +197,13 @@ export class IndexerManager {
       }
     }
 
-    // Search direct indexers in parallel
+    // Search direct indexers in parallel (skip rate-limited ones)
     const directSearches = directIndexers.map(async (indexer) => {
+      if (this.isIndexerRateLimited(indexer.id)) {
+        skippedDueToRateLimit.push(indexer.id)
+        return []
+      }
+
       try {
         const config: NewznabIndexerConfig = {
           id: indexer.id,
@@ -239,9 +266,15 @@ export class IndexerManager {
       return dateB - dateA
     })
 
+    const skippedIndexers = skippedDueToRateLimit.map((id) => ({
+      indexerId: id,
+      reason: 'rate_limited' as const,
+      availableAt: this.rateLimitCooldowns.get(id) || null,
+    }))
+
     // Deduplicate by title (prefer larger files) - skip if requested
     if (options.skipDedup) {
-      return results
+      return { results, skippedIndexers }
     }
 
     const seen = new Map<string, UnifiedSearchResult>()
@@ -253,7 +286,7 @@ export class IndexerManager {
       }
     }
 
-    return Array.from(seen.values())
+    return { results: Array.from(seen.values()), skippedIndexers }
   }
 
   /**
