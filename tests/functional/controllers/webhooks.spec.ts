@@ -121,7 +121,9 @@ test.group('WebhooksController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await Webhook.query().where('id', result.id as string).delete()
+      await Webhook.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 
@@ -152,7 +154,9 @@ test.group('WebhooksController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await Webhook.query().where('id', result.id as string).delete()
+      await Webhook.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 

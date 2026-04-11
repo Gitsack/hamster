@@ -109,7 +109,9 @@ test.group('ImportListsController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await ImportList.query().where('id', result.id as string).delete()
+      await ImportList.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 
@@ -144,7 +146,9 @@ test.group('ImportListsController', (group) => {
     assert.equal(created!.mediaType, 'tv')
 
     // Cleanup
-    await ImportList.query().where('id', result.id as string).delete()
+    await ImportList.query()
+      .where('id', result.id as string)
+      .delete()
   })
 
   // ---- show ----

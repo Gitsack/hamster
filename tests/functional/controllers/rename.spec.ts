@@ -11,7 +11,12 @@ test.group('RenameController', () => {
 
     const originalMethod = fileOrganizerService.previewRenameMovie
     fileOrganizerService.previewRenameMovie = async () => [
-      { id: 'fake-id', currentPath: '/movies/old.mkv', newPath: '/movies/new.mkv', willChange: true },
+      {
+        id: 'fake-id',
+        currentPath: '/movies/old.mkv',
+        newPath: '/movies/new.mkv',
+        willChange: true,
+      },
     ]
 
     try {
@@ -167,7 +172,12 @@ test.group('RenameController', () => {
 
     const originalMethod = fileOrganizerService.previewRenameArtist
     fileOrganizerService.previewRenameArtist = async () => [
-      { id: 'fake-id', currentPath: '/music/old.flac', newPath: '/music/new.flac', willChange: true },
+      {
+        id: 'fake-id',
+        currentPath: '/music/old.flac',
+        newPath: '/music/new.flac',
+        willChange: true,
+      },
     ]
 
     try {
@@ -227,7 +237,12 @@ test.group('RenameController', () => {
 
     const originalMethod = fileOrganizerService.previewRenameBooks
     fileOrganizerService.previewRenameBooks = async () => [
-      { id: 'fake-id', currentPath: '/books/old.epub', newPath: '/books/new.epub', willChange: true },
+      {
+        id: 'fake-id',
+        currentPath: '/books/old.epub',
+        newPath: '/books/new.epub',
+        willChange: true,
+      },
     ]
 
     try {

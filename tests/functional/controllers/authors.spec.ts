@@ -188,7 +188,9 @@ test.group('AuthorsController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await Author.query().where('id', result.id as string).delete()
+      await Author.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 

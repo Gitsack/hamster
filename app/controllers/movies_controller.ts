@@ -587,9 +587,7 @@ export default class MoviesController {
         const { default: IndexerModel } = await import('#models/indexer')
         const { default: ProwlarrConfig } = await import('#models/prowlarr_config')
         const directIndexers = await IndexerModel.query().where('enabled', true)
-        const prowlarrConfig = await ProwlarrConfig.query()
-          .where('syncEnabled', true)
-          .first()
+        const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
         const indexerNames = directIndexers.map((i) => i.name)
         if (prowlarrConfig) indexerNames.unshift('Prowlarr')
 
@@ -610,8 +608,7 @@ export default class MoviesController {
         const profile = movie.qualityProfileId
           ? await QualityProfile.find(movie.qualityProfileId)
           : null
-        const allowedQualities =
-          profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
+        const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
 
         return response.notFound({
           error: 'No releases matching quality profile and size limits',
@@ -654,38 +651,6 @@ export default class MoviesController {
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search and download',
-      })
-    }
-  }
-
-  /**
-   * Search for releases on indexers for this movie (manual search)
-   */
-  async searchReleases({ params, request, response }: HttpContext) {
-    const movie = await Movie.find(params.id)
-    if (!movie) {
-      return response.notFound({ error: 'Movie not found' })
-    }
-
-    try {
-      const { indexerManager } = await import('#services/indexers/indexer_manager')
-
-      const alternateTitles =
-        movie.originalTitle && movie.originalTitle !== movie.title ? [movie.originalTitle] : []
-
-      const results = await indexerManager.searchMovies({
-        title: movie.title,
-        year: movie.year ?? undefined,
-        imdbId: movie.imdbId ?? undefined,
-        tmdbId: movie.tmdbId ?? undefined,
-        alternateTitles,
-        limit: request.input('limit', 100),
-      })
-
-      return response.json(results)
-    } catch (error) {
-      return response.badRequest({
-        error: error instanceof Error ? error.message : 'Failed to search releases',
       })
     }
   }

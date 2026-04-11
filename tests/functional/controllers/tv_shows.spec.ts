@@ -319,7 +319,9 @@ test.group('TvShowsController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await TvShow.query().where('id', result.id as string).delete()
+      await TvShow.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 

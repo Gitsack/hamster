@@ -50,24 +50,11 @@ import {
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
+import { useActiveDownloads, type QueueItem } from '@/hooks/use_active_downloads'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface QueueItem {
-  id: string
-  externalId: string | null
-  title: string
-  status: string
-  progress: number
-  size: number | null
-  remaining: number | null
-  eta: number | null
-  albumId: string | null
-  downloadClient: string
-  startedAt: string | null
-}
 
 interface CompletedEntry {
   name: string
@@ -291,8 +278,10 @@ function EmptyState({
 export default function Activity() {
   const [activeTab, setActiveTab] = useState('downloads')
 
-  // Downloads state
-  const [queue, setQueue] = useState<QueueItem[]>([])
+  // Downloads state — reads from shared context, local override for optimistic updates
+  const { queue: sharedQueue, refresh: refreshSharedQueue } = useActiveDownloads()
+  const [queueOverride, setQueueOverride] = useState<QueueItem[] | null>(null)
+  const queue = queueOverride ?? sharedQueue
   const [queueLoading, setQueueLoading] = useState(true)
   const [queueError, setQueueError] = useState<string | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
@@ -340,23 +329,12 @@ export default function Activity() {
   // Data fetching
   // ---------------------------------------------------------------------------
 
-  const fetchQueue = useCallback(async (showLoading = true) => {
-    if (showLoading) setQueueLoading(true)
+  const fetchQueue = useCallback(async (_showLoading = true) => {
+    setQueueOverride(null)
+    await refreshSharedQueue()
+    setQueueLoading(false)
     setQueueError(null)
-    try {
-      const response = await fetch('/api/v1/queue')
-      if (response.ok) {
-        const data = await response.json()
-        setQueue(data)
-      } else {
-        setQueueError('Failed to fetch queue')
-      }
-    } catch {
-      setQueueError('Failed to connect to server')
-    } finally {
-      setQueueLoading(false)
-    }
-  }, [])
+  }, [refreshSharedQueue])
 
   const fetchCompleted = useCallback(async (showLoading = true) => {
     if (showLoading) setCompletedLoading(true)
@@ -425,13 +403,6 @@ export default function Activity() {
     tabLoadedRef.current.downloads = true
   }, [fetchQueue])
 
-  // Auto-refresh downloads every 5 seconds when on downloads tab
-  useEffect(() => {
-    if (activeTab !== 'downloads') return
-    const interval = setInterval(() => fetchQueue(false), 5000)
-    return () => clearInterval(interval)
-  }, [activeTab, fetchQueue])
-
   // Fetch tab data when switching tabs (only first time)
   useEffect(() => {
     if (activeTab === 'completed' && !tabLoadedRef.current.completed) {
@@ -471,8 +442,8 @@ export default function Activity() {
         case 'downloads': {
           const response = await fetch('/api/v1/queue/refresh', { method: 'POST' })
           if (response.ok) {
-            const data = await response.json()
-            setQueue(data)
+            setQueueOverride(null)
+            await refreshSharedQueue()
           }
           break
         }
@@ -578,8 +549,9 @@ export default function Activity() {
     try {
       const response = await fetch(`/api/v1/queue/${cancelId}`, { method: 'DELETE' })
       if (response.ok) {
-        setQueue((prev) => prev.filter((item) => item.id !== cancelId))
+        setQueueOverride((prev) => (prev ?? sharedQueue).filter((item) => item.id !== cancelId))
         toast.success('Download cancelled')
+        refreshSharedQueue()
       } else {
         toast.error('Failed to cancel download')
       }

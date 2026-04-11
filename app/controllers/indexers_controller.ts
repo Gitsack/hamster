@@ -151,7 +151,7 @@ export default class IndexersController {
       // type=general for Prowlarr-like search without music filters
       const isGeneralSearch = type === 'general'
 
-      const results = await indexerManager.search({
+      const { results, skippedIndexers } = await indexerManager.search({
         query,
         artist,
         album,
@@ -162,7 +162,10 @@ export default class IndexersController {
         skipDedup: isGeneralSearch, // Also skip dedup for general search
       })
 
-      return response.json(results)
+      return response.json({
+        results,
+        skippedIndexers,
+      })
     } catch (error) {
       console.error('Search error:', error)
       return response.internalServerError({ error: 'Search failed', details: String(error) })

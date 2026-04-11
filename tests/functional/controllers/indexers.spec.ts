@@ -97,7 +97,9 @@ test.group('IndexersController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await Indexer.query().where('id', result.id as string).delete()
+      await Indexer.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 
@@ -125,7 +127,9 @@ test.group('IndexersController', (group) => {
     assert.deepEqual(result.categories, [])
 
     if (result.id) {
-      await Indexer.query().where('id', result.id as string).delete()
+      await Indexer.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 
