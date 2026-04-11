@@ -86,7 +86,7 @@ test.group('QueueController', (group) => {
     } as never)
 
     const data = result.data as any[]
-    const download = data.find((d: any) => d.title === 'Queue Test Shape')
+    const download = data.find((item: any) => item.title === 'Queue Test Shape')
     assert.isNotNull(download)
     if (download) {
       assert.property(download, 'id')
@@ -121,7 +121,7 @@ test.group('QueueController', (group) => {
     assert.isArray(result)
     assert.isTrue(result.length >= 1)
 
-    const found = result.find((d: any) => d.title === 'Queue Test Failed Entry') as any
+    const found = result.find((item: any) => item.title === 'Queue Test Failed Entry') as any
     assert.isNotNull(found)
     if (found) {
       assert.equal(found.status, 'failed')

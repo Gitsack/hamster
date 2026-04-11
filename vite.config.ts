@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react'
 import adonisjs from '@adonisjs/vite/client'
 import tailwindcss from '@tailwindcss/vite'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
+const rootDir = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   plugins: [
@@ -22,8 +22,8 @@ export default defineConfig({
    */
   resolve: {
     alias: {
-      '~/': `${__dirname}/inertia/`,
-      '@/': `${__dirname}/inertia/`,
+      '~/': `${rootDir}/inertia/`,
+      '@/': `${rootDir}/inertia/`,
     },
   },
 })

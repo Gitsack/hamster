@@ -97,7 +97,9 @@ export default class extends BaseSchema {
     // ─── Fix download_clients type column to support torrent clients ───
     // Knex enum() creates a CHECK constraint, not a native PG enum type.
     // Drop the old constraint and add an expanded one.
-    this.schema.raw('ALTER TABLE "download_clients" DROP CONSTRAINT IF EXISTS "download_clients_type_check"')
+    this.schema.raw(
+      'ALTER TABLE "download_clients" DROP CONSTRAINT IF EXISTS "download_clients_type_check"'
+    )
     this.schema.raw(`
       ALTER TABLE "download_clients"
       ADD CONSTRAINT "download_clients_type_check"
@@ -188,7 +190,9 @@ export default class extends BaseSchema {
     })
 
     // Restore original CHECK constraint for download_clients type
-    this.schema.raw('ALTER TABLE "download_clients" DROP CONSTRAINT IF EXISTS "download_clients_type_check"')
+    this.schema.raw(
+      'ALTER TABLE "download_clients" DROP CONSTRAINT IF EXISTS "download_clients_type_check"'
+    )
     this.schema.raw(`
       ALTER TABLE "download_clients"
       ADD CONSTRAINT "download_clients_type_check"

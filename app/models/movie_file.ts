@@ -40,5 +40,4 @@ export default class MovieFile extends BaseModel {
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
-
 }

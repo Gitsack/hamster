@@ -48,9 +48,7 @@ test.group('NotificationsController', (group) => {
   })
 
   group.teardown(async () => {
-    await NotificationProvider.query()
-      .whereIn('id', [provider1.id, provider2.id])
-      .delete()
+    await NotificationProvider.query().whereIn('id', [provider1.id, provider2.id]).delete()
     await NotificationProvider.query().where('name', 'like', 'Notif Test%').delete()
   })
 
@@ -86,10 +84,7 @@ test.group('NotificationsController', (group) => {
       },
     } as never)
 
-    const discord = result.find((p: any) => p.name === 'Notif Test Discord') as Record<
-      string,
-      any
-    >
+    const discord = result.find((p: any) => p.name === 'Notif Test Discord') as Record<string, any>
     assert.isNotNull(discord)
     // webhookUrl should be masked
     assert.include(discord.settings.webhookUrl, '****')
@@ -134,7 +129,9 @@ test.group('NotificationsController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await NotificationProvider.query().where('id', result.id as string).delete()
+      await NotificationProvider.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 

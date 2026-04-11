@@ -70,7 +70,9 @@ test.group('TagsController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await Tag.query().where('id', result.id as string).delete()
+      await Tag.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 
@@ -376,10 +378,7 @@ test.group('TagsController', (group) => {
 
     assert.isTrue(noContentCalled)
 
-    const deleted = await MediaTag.query()
-      .where('tagId', tag1.id)
-      .where('mediaId', mediaId)
-      .first()
+    const deleted = await MediaTag.query().where('tagId', tag1.id).where('mediaId', mediaId).first()
     assert.isNull(deleted)
   })
 
@@ -471,10 +470,7 @@ test.group('TagsController', (group) => {
     assert.equal(result.skipped, 1)
 
     // Cleanup
-    await MediaTag.query()
-      .where('tagId', tag2.id)
-      .whereIn('mediaId', [existingId, newId])
-      .delete()
+    await MediaTag.query().where('tagId', tag2.id).whereIn('mediaId', [existingId, newId]).delete()
   })
 
   // ---- media ----
@@ -536,10 +532,7 @@ test.group('TagsController', (group) => {
     }
 
     // Cleanup
-    await MediaTag.query()
-      .where('tagId', tag1.id)
-      .whereIn('mediaId', [movieId, artistId])
-      .delete()
+    await MediaTag.query().where('tagId', tag1.id).whereIn('mediaId', [movieId, artistId]).delete()
   })
 
   // ---- forMedia ----

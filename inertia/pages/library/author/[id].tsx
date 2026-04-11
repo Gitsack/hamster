@@ -32,6 +32,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useShowMore } from '@/hooks/use_show_more'
 import { toast } from 'sonner'
 import { useOperationTrackerContext } from '@/hooks/use_operation_tracker'
+import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
 
@@ -84,19 +85,27 @@ export default function AuthorDetail() {
   const [loadingBibliography, setLoadingBibliography] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [activeDownloads, setActiveDownloads] = useState<
-    Map<number, { progress: number; status: string }>
-  >(new Map())
   const [togglingBooks, setTogglingBooks] = useState<Set<number>>(new Set())
   const [addingBooks, setAddingBooks] = useState<Set<string>>(new Set())
   const [requestingAll, setRequestingAll] = useState(false)
   const { runBulk } = useOperationTrackerContext()
+  const { queue } = useActiveDownloads()
+
+  const activeDownloads = useMemo(() => {
+    const downloads = new Map<number, { progress: number; status: string }>()
+    for (const item of queue) {
+      if (item.bookId) {
+        downloads.set(Number(item.bookId), {
+          progress: item.progress || 0,
+          status: item.status || 'downloading',
+        })
+      }
+    }
+    return downloads
+  }, [queue])
 
   useEffect(() => {
     fetchAuthor()
-    fetchActiveDownloads()
-    const interval = setInterval(fetchActiveDownloads, 5000)
-    return () => clearInterval(interval)
   }, [authorId])
 
   // Fetch bibliography when author loads and has OpenLibrary ID
@@ -105,27 +114,6 @@ export default function AuthorDetail() {
       fetchBibliography(author.openlibraryId)
     }
   }, [author?.openlibraryId])
-
-  const fetchActiveDownloads = async () => {
-    try {
-      const response = await fetch('/api/v1/queue')
-      if (response.ok) {
-        const data = await response.json()
-        const downloads = new Map<number, { progress: number; status: string }>()
-        for (const item of data) {
-          if (item.bookId) {
-            downloads.set(item.bookId, {
-              progress: item.progress || 0,
-              status: item.status || 'downloading',
-            })
-          }
-        }
-        setActiveDownloads(downloads)
-      }
-    } catch (error) {
-      // Silently ignore - polling will retry
-    }
-  }
 
   const fetchAuthor = async () => {
     try {

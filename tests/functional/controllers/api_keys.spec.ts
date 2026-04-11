@@ -24,8 +24,16 @@ test.group('ApiKeysController', (group) => {
   // ---- index ----
 
   test('index returns list of API keys for the authenticated user', async ({ assert }) => {
-    const key1 = await ApiKey.create({ userId: user.id, name: 'ApiKeys Test Key 1', key: 'abcdefgh1234567890abcdefgh123456' })
-    const key2 = await ApiKey.create({ userId: user.id, name: 'ApiKeys Test Key 2', key: 'zyxwvuts0987654321zyxwvuts098765' })
+    const key1 = await ApiKey.create({
+      userId: user.id,
+      name: 'ApiKeys Test Key 1',
+      key: 'abcdefgh1234567890abcdefgh123456',
+    })
+    const key2 = await ApiKey.create({
+      userId: user.id,
+      name: 'ApiKeys Test Key 2',
+      key: 'zyxwvuts0987654321zyxwvuts098765',
+    })
 
     const controller = new ApiKeysController()
     let result: unknown[] = []
@@ -45,7 +53,10 @@ test.group('ApiKeysController', (group) => {
     assert.include(names, 'ApiKeys Test Key 2')
 
     // Verify key is masked (prefix only)
-    const entry = result.find((k: any) => k.name === 'ApiKeys Test Key 1') as Record<string, unknown>
+    const entry = result.find((k: any) => k.name === 'ApiKeys Test Key 1') as Record<
+      string,
+      unknown
+    >
     assert.isTrue((entry.keyPrefix as string).endsWith('...'))
     assert.equal((entry.keyPrefix as string).length, 11) // 8 chars + '...'
 
@@ -102,7 +113,9 @@ test.group('ApiKeysController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await ApiKey.query().where('id', result.id as string).delete()
+      await ApiKey.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 

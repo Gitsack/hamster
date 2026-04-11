@@ -150,9 +150,6 @@ export default function MovieDetail() {
   const [searching, setSearching] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const [searching, setSearching] = useState(false)
-  const [grabbing, setGrabbing] = useState<string | null>(null)
   const [releasePickerOpen, setReleasePickerOpen] = useState(false)
   const audioPlayer = useAudioPlayer()
   const { getForMovie } = useActiveDownloads()
@@ -375,53 +372,6 @@ export default function MovieDetail() {
       toast.error('Failed to enrich movie')
     } finally {
       setEnriching(false)
-    }
-  }
-
-  const searchReleases = async () => {
-    setSearchResults([])
-    setSearching(true)
-    try {
-      const response = await fetch(`/api/v1/movies/${movieId}/releases`)
-      if (response.ok) {
-        const data = await response.json()
-        setSearchResults(data)
-      }
-    } catch (error) {
-      console.error('Failed to search releases:', error)
-      toast.error('Failed to search releases')
-    } finally {
-      setSearching(false)
-    }
-  }
-
-  const grabRelease = async (result: SearchResult) => {
-    setGrabbing(result.id)
-    try {
-      const response = await fetch('/api/v1/queue/grab', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: result.title,
-          downloadUrl: result.downloadUrl,
-          size: result.size,
-          movieId: movie?.id,
-          indexerId: result.indexerId,
-          indexerName: result.indexer,
-          guid: result.id,
-        }),
-      })
-      if (response.ok) {
-        toast.success('Download started')
-      } else {
-        const error = await response.json()
-        toast.error(error.error || 'Failed to grab release')
-      }
-    } catch (error) {
-      console.error('Failed to grab release:', error)
-      toast.error('Failed to grab release')
-    } finally {
-      setGrabbing(null)
     }
   }
 

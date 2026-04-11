@@ -3,7 +3,6 @@ import { indexEntities } from '@adonisjs/core'
 import { indexPages } from '@adonisjs/inertia'
 
 export default defineConfig({
-
   /*
   |--------------------------------------------------------------------------
   | Commands
@@ -106,10 +105,7 @@ export default defineConfig({
   ],
 
   hooks: {
-    init: [
-      indexEntities(),
-      indexPages({ framework: 'react' }),
-    ],
+    init: [indexEntities(), indexPages({ framework: 'react' })],
     buildStarting: [() => import('@adonisjs/vite/build_hook')],
   },
 })

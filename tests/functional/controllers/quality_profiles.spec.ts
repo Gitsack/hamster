@@ -122,7 +122,9 @@ test.group('QualityProfilesController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await QualityProfile.query().where('id', result.id as string).delete()
+      await QualityProfile.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 
