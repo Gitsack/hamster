@@ -112,7 +112,7 @@ export class BookScannerService {
       const authorCount = groupedAuthors.size
       let authorIndex = 0
 
-      for (const [_authorKey, authorData] of groupedAuthors) {
+      for (const [, authorData] of groupedAuthors) {
         authorIndex++
         onProgress?.({
           phase: 'metadata',

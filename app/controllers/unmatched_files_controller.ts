@@ -186,9 +186,7 @@ export default class UnmatchedFilesController {
    * raw relativePath (which may be an absolute SABnzbd storage path).
    */
   private async pruneStaleRecords(): Promise<void> {
-    const files = await UnmatchedFile.query()
-      .where('status', 'pending')
-      .preload('rootFolder')
+    const files = await UnmatchedFile.query().where('status', 'pending').preload('rootFolder')
 
     if (files.length === 0) return
 
@@ -236,7 +234,9 @@ export default class UnmatchedFilesController {
 
     if (staleIds.length > 0) {
       await UnmatchedFile.query().whereIn('id', staleIds).delete()
-      console.log(`[UnmatchedFiles] Pruned ${staleIds.length} stale records (files no longer on disk)`)
+      console.log(
+        `[UnmatchedFiles] Pruned ${staleIds.length} stale records (files no longer on disk)`
+      )
     }
   }
 }

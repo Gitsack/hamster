@@ -20,7 +20,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -183,10 +185,13 @@ export default function TvShowDetail() {
   const { runBulk } = useOperationTrackerContext()
   const [enriching, setEnriching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [episodeSearchResults, setEpisodeSearchResults] = useState<Record<number, SearchResult[]>>({})
-  const [searchingEpisode, setSearchingEpisode] = useState<number | null>(null)
-  const [grabbingRelease, setGrabbingRelease] = useState<string | null>(null)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [grabbing, setGrabbing] = useState<string | null>(null)
+  const [releasePickerOpen, setReleasePickerOpen] = useState(false)
+  const [releasePickerTitle, setReleasePickerTitle] = useState('')
+  const [releasePickerEpisodeId, setReleasePickerEpisodeId] = useState<number | null>(null)
   const [playingEpisode, setPlayingEpisode] = useState<{
     id: number
     fileId: number
@@ -657,25 +662,51 @@ export default function TvShowDetail() {
     }
   }
 
-  const searchEpisodeReleases = async (episodeId: number) => {
-    setEpisodeSearchResults((prev) => ({ ...prev, [episodeId]: [] }))
-    setSearchingEpisode(episodeId)
+  const searchReleases = async () => {
+    if (!show) return
+    setSearching(true)
+    setReleasePickerTitle(show.title)
+    setReleasePickerEpisodeId(null)
+    setReleasePickerOpen(true)
     try {
-      const response = await fetch(`/api/v1/tvshows/${showId}/episodes/${episodeId}/releases`)
+      const response = await fetch(`/api/v1/tvshows/${showId}/releases`)
       if (response.ok) {
         const data = await response.json()
-        setEpisodeSearchResults((prev) => ({ ...prev, [episodeId]: data }))
+        setSearchResults(data)
+      } else {
+        toast.error('Failed to search releases')
       }
     } catch (error) {
       console.error('Failed to search releases:', error)
       toast.error('Failed to search releases')
     } finally {
-      setSearchingEpisode(null)
+      setSearching(false)
     }
   }
 
-  const grabEpisodeRelease = async (result: SearchResult, episodeId: number) => {
-    setGrabbingRelease(result.id)
+  const searchEpisodeReleases = async (episodeId: number, episodeLabel: string) => {
+    setSearching(true)
+    setReleasePickerTitle(episodeLabel)
+    setReleasePickerEpisodeId(episodeId)
+    setReleasePickerOpen(true)
+    try {
+      const response = await fetch(`/api/v1/tvshows/${showId}/episodes/${episodeId}/releases`)
+      if (response.ok) {
+        const data = await response.json()
+        setSearchResults(data)
+      } else {
+        toast.error('Failed to search releases')
+      }
+    } catch (error) {
+      console.error('Failed to search releases:', error)
+      toast.error('Failed to search releases')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const grabRelease = async (result: SearchResult) => {
+    setGrabbing(result.id)
     try {
       const response = await fetch('/api/v1/queue/grab', {
         method: 'POST',
@@ -685,7 +716,7 @@ export default function TvShowDetail() {
           downloadUrl: result.downloadUrl,
           size: result.size,
           tvShowId: show?.id,
-          episodeId,
+          ...(releasePickerEpisodeId ? { episodeId: releasePickerEpisodeId } : {}),
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
@@ -693,6 +724,7 @@ export default function TvShowDetail() {
       })
       if (response.ok) {
         toast.success('Download started')
+        setReleasePickerOpen(false)
       } else {
         const error = await response.json()
         toast.error(error.error || 'Failed to grab release')
@@ -701,14 +733,14 @@ export default function TvShowDetail() {
       console.error('Failed to grab release:', error)
       toast.error('Failed to grab release')
     } finally {
-      setGrabbingRelease(null)
+      setGrabbing(null)
     }
   }
 
-  const formatSize = (bytes: number) => {
-    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`
-    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} MB`
-    return `${(bytes / 1024).toFixed(0)} KB`
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
   }
 
   const requestAllSeasons = async () => {
@@ -820,6 +852,25 @@ export default function TvShowDetail() {
               <TooltipContent>{show.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={searchReleases}
+                  disabled={searching}
+                >
+                  {searching ? (
+                    <Spinner className="md:mr-2" />
+                  ) : (
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                  )}
+                  <span className="hidden md:inline">{searching ? 'Searching...' : 'Browse releases'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" aria-label="More actions">
@@ -827,13 +878,28 @@ export default function TvShowDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={refreshMetadata} disabled={enriching || refreshing}>
-                <HugeiconsIcon
-                  icon={Refresh01Icon}
-                  className={`h-4 w-4 mr-2 ${enriching || refreshing ? 'animate-spin' : ''}`}
-                />
-                {enriching || refreshing ? 'Refreshing...' : 'Refresh metadata'}
+              <DropdownMenuItem onClick={searchReleases} disabled={searching}>
+                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
+                {searching ? 'Searching...' : 'Manual Search'}
               </DropdownMenuItem>
+              {!show.tmdbId && (
+                <DropdownMenuItem onClick={refreshMetadata} disabled={enriching}>
+                  <HugeiconsIcon
+                    icon={Search01Icon}
+                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                  />
+                  {enriching ? 'Enriching...' : 'Enrich from TMDB'}
+                </DropdownMenuItem>
+              )}
+              {show.tmdbId && (
+                <DropdownMenuItem onClick={refreshMetadata} disabled={refreshing}>
+                  <HugeiconsIcon
+                    icon={Refresh01Icon}
+                    className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
+                  />
+                  {refreshing ? 'Refreshing...' : 'Refresh metadata'}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
@@ -1043,6 +1109,8 @@ export default function TvShowDetail() {
                           <div className="space-y-2">
                             {getVisibleEpisodes(season.seasonNumber).map((episode) => (
                               <div
+                                role="group"
+                                aria-label={`Episode ${episode.episodeNumber}: ${episode.title}`}
                                 className="flex items-center gap-2 sm:gap-4 p-3 rounded-lg bg-muted/50"
                               >
                                 <div className="w-6 sm:w-8 text-center font-mono text-muted-foreground text-sm sm:text-base flex-shrink-0">
@@ -1137,23 +1205,25 @@ export default function TvShowDetail() {
                                     // All other statuses: Use unified MediaStatusBadge + manual search
                                     return (
                                       <>
-                                        <Button
-                                          variant="outline"
-                                          size="icon"
-                                          className="h-7 w-7"
-                                          onClick={() => searchEpisodeReleases(episode.id)}
-                                          disabled={searchingEpisode === episode.id}
-                                          title="Manual search"
-                                        >
-                                          {searchingEpisode === episode.id ? (
-                                            <Spinner className="size-3" />
-                                          ) : (
+                                        {(status === 'requested' || status === 'none') && (
+                                          <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            aria-label="Manual search"
+                                            onClick={() =>
+                                              searchEpisodeReleases(
+                                                episode.id,
+                                                `${show.title} - S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} - ${episode.title}`
+                                              )
+                                            }
+                                          >
                                             <HugeiconsIcon
                                               icon={Search01Icon}
                                               className="h-3.5 w-3.5"
                                             />
-                                          )}
-                                        </Button>
+                                          </Button>
+                                        )}
                                         <MediaStatusBadge
                                           status={status}
                                           progress={progress}
@@ -1172,66 +1242,6 @@ export default function TvShowDetail() {
                                     )
                                   })()}
                                 </div>
-                              </div>
-                              {episodeSearchResults[episode.id]?.length > 0 && (
-                                <div className="ml-8 sm:ml-12 mt-1 mb-2 border rounded-lg overflow-hidden">
-                                  <div className="overflow-x-auto">
-                                    <Table>
-                                      <TableHeader>
-                                        <TableRow>
-                                          <TableHead>Release</TableHead>
-                                          <TableHead className="w-28">Indexer</TableHead>
-                                          <TableHead className="w-20">Quality</TableHead>
-                                          <TableHead className="w-20 text-right">Size</TableHead>
-                                          <TableHead className="w-16"></TableHead>
-                                        </TableRow>
-                                      </TableHeader>
-                                      <TableBody>
-                                        {episodeSearchResults[episode.id].map((result) => (
-                                          <TableRow key={result.id}>
-                                            <TableCell className="font-medium max-w-xs truncate text-sm">
-                                              {result.title}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-sm">
-                                              {result.indexer}
-                                            </TableCell>
-                                            <TableCell>
-                                              {result.quality && (
-                                                <Badge variant="outline" className="text-xs">
-                                                  {result.quality}
-                                                </Badge>
-                                              )}
-                                            </TableCell>
-                                            <TableCell className="text-right text-muted-foreground text-sm">
-                                              {formatSize(result.size)}
-                                            </TableCell>
-                                            <TableCell>
-                                              <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="h-7"
-                                                onClick={() =>
-                                                  grabEpisodeRelease(result, episode.id)
-                                                }
-                                                disabled={grabbingRelease === result.id}
-                                              >
-                                                {grabbingRelease === result.id ? (
-                                                  <Spinner className="size-3" />
-                                                ) : (
-                                                  <HugeiconsIcon
-                                                    icon={FileDownloadIcon}
-                                                    className="h-3.5 w-3.5"
-                                                  />
-                                                )}
-                                              </Button>
-                                            </TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  </div>
-                                </div>
-                              )}
                               </div>
                             ))}
                             {hasMoreEpisodes(season.seasonNumber) && (
@@ -1301,6 +1311,72 @@ export default function TvShowDetail() {
         mode="remove"
         onConfirm={removeEpisodeWithFile}
       />
+
+      {/* Release picker dialog */}
+      <Dialog open={releasePickerOpen} onOpenChange={setReleasePickerOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Manual Search</DialogTitle>
+            <DialogDescription>{releasePickerTitle}</DialogDescription>
+          </DialogHeader>
+          {searching ? (
+            <div className="flex items-center justify-center py-12">
+              <Spinner className="h-8 w-8" />
+              <span className="ml-3 text-muted-foreground">Searching indexers...</span>
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">No releases found</div>
+          ) : (
+            <div className="overflow-auto flex-1">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Release</TableHead>
+                    <TableHead className="w-32">Indexer</TableHead>
+                    <TableHead className="w-24">Quality</TableHead>
+                    <TableHead className="w-24 text-right">Size</TableHead>
+                    <TableHead className="w-24 text-right">Grabs</TableHead>
+                    <TableHead className="w-16"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {searchResults.map((result) => (
+                    <TableRow key={result.id}>
+                      <TableCell className="font-medium max-w-md truncate">
+                        {result.title}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
+                      <TableCell>
+                        {result.quality && <Badge variant="outline">{result.quality}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {formatFileSize(result.size)}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {result.grabs ?? result.seeders ?? '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => grabRelease(result)}
+                          disabled={grabbing === result.id}
+                        >
+                          {grabbing === result.id ? (
+                            <Spinner />
+                          ) : (
+                            <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Video player dialog */}
       <Dialog

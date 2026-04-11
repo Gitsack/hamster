@@ -10,8 +10,7 @@ test.group('RecommendationsController', (group) => {
   group.setup(async () => {
     originalGetMovieLanes =
       recommendationService.getMovieRecommendationLanes.bind(recommendationService)
-    originalGetTvLanes =
-      recommendationService.getTvRecommendationLanes.bind(recommendationService)
+    originalGetTvLanes = recommendationService.getTvRecommendationLanes.bind(recommendationService)
 
     // Clear recommendation cache to avoid stale data
     recommendationService.clearCache()

@@ -270,12 +270,13 @@ router
     router.get('/tvshows/:id/season/:seasonNumber', [TvShowsController, 'showSeason'])
     router.post('/tvshows/:id/season/:seasonNumber/request', [TvShowsController, 'setSeasonWanted'])
     router.post('/tvshows/:id/episodes/:episodeId/request', [TvShowsController, 'setEpisodeWanted'])
+    router.delete('/tvshows/:id/episodes/:episodeId/file', [TvShowsController, 'deleteEpisodeFile'])
+    router.delete('/tvshows/:id/episodes/:episodeId', [TvShowsController, 'destroyEpisode'])
+    router.get('/tvshows/:id/releases', [TvShowsController, 'searchReleases'])
     router.get('/tvshows/:id/episodes/:episodeId/releases', [
       TvShowsController,
       'searchEpisodeReleases',
     ])
-    router.delete('/tvshows/:id/episodes/:episodeId/file', [TvShowsController, 'deleteEpisodeFile'])
-    router.delete('/tvshows/:id/episodes/:episodeId', [TvShowsController, 'destroyEpisode'])
     router.post('/tvshows/:id/search', [TvShowsController, 'searchNow'])
     router.post('/tvshows/:id/episodes/:episodeId/search', [TvShowsController, 'searchEpisodeNow'])
     router.post('/tvshows/:id/enrich', [TvShowsController, 'enrich'])

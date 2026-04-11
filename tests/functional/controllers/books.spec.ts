@@ -334,7 +334,9 @@ test.group('BooksController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await Book.query().where('id', result.id as string).delete()
+      await Book.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 

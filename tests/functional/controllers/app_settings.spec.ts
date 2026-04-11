@@ -376,7 +376,9 @@ test.group('AppSettingsController', (group) => {
     assert.equal(badRequestResult.error, 'Invalid media type')
   })
 
-  test('updateNamingPatterns returns badRequest for invalid patterns object', async ({ assert }) => {
+  test('updateNamingPatterns returns badRequest for invalid patterns object', async ({
+    assert,
+  }) => {
     const controller = new AppSettingsController()
     let badRequestResult: Record<string, unknown> = {}
 
@@ -398,7 +400,9 @@ test.group('AppSettingsController', (group) => {
     assert.equal(badRequestResult.error, 'Invalid patterns')
   })
 
-  test('updateNamingPatterns returns badRequest for unknown template variables', async ({ assert }) => {
+  test('updateNamingPatterns returns badRequest for unknown template variables', async ({
+    assert,
+  }) => {
     const controller = new AppSettingsController()
     let badRequestResult: Record<string, unknown> = {}
 
@@ -487,7 +491,9 @@ test.group('AppSettingsController', (group) => {
     assert.isString(badRequestResult.error)
   })
 
-  test('batchWatchProviders returns empty providers when no streaming providers selected', async ({ assert }) => {
+  test('batchWatchProviders returns empty providers when no streaming providers selected', async ({
+    assert,
+  }) => {
     await AppSetting.set('selectedStreamingProviders', [])
 
     const controller = new AppSettingsController()

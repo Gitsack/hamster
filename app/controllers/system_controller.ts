@@ -27,7 +27,6 @@ interface HealthResponse {
 }
 
 export default class SystemController {
-
   private previousHealthStatus: Map<string, 'ok' | 'warning' | 'error'> = new Map()
 
   /**

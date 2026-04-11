@@ -13,7 +13,10 @@ import { prowlarrService, type ProwlarrSearchResult } from './prowlarr_service.j
  * that can interfere with indexer text search (e.g. apostrophes, asterisks).
  */
 function sanitizeSearchQuery(title: string): string {
-  return title.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, ' ').trim()
+  return title
+    .replace(/[^a-zA-Z0-9\s-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 export type MediaType = 'movie' | 'tv' | 'music' | 'book' | 'other'
@@ -64,6 +67,17 @@ function classifyMediaType(categoryId: number | undefined): MediaType | undefine
     default:
       return 'other'
   }
+}
+
+export interface SkippedIndexer {
+  indexerId: string
+  reason: 'rate_limited'
+  availableAt: number | null
+}
+
+export interface SearchResult {
+  results: UnifiedSearchResult[]
+  skippedIndexers: SkippedIndexer[]
 }
 
 export interface SearchOptions {
@@ -138,10 +152,21 @@ export class IndexerManager {
   }
 
   /**
+   * Return the current set of rate-limited indexers with their cooldown timestamps.
+   */
+  public getRateLimitedIndexers(): Array<{ indexerId: string; availableAt: number }> {
+    const now = Date.now()
+    return Array.from(this.rateLimitCooldowns.entries())
+      .filter(([_, cooldownUntil]) => cooldownUntil > now)
+      .map(([indexerId, cooldownUntil]) => ({ indexerId, availableAt: cooldownUntil }))
+  }
+
+  /**
    * Search across all configured indexers
    */
-  async search(options: SearchOptions): Promise<UnifiedSearchResult[]> {
+  async search(options: SearchOptions): Promise<SearchResult> {
     const results: UnifiedSearchResult[] = []
+    const skippedDueToRateLimit: string[] = []
 
     // Get Prowlarr config if enabled
     const prowlarrConfig = await ProwlarrConfig.query().where('syncEnabled', true).first()
@@ -175,8 +200,13 @@ export class IndexerManager {
       }
     }
 
-    // Search direct indexers in parallel
+    // Search direct indexers in parallel (skip rate-limited ones)
     const directSearches = directIndexers.map(async (indexer) => {
+      if (this.isIndexerRateLimited(indexer.id)) {
+        skippedDueToRateLimit.push(indexer.id)
+        return []
+      }
+
       try {
         const config: NewznabIndexerConfig = {
           id: indexer.id,
@@ -239,9 +269,15 @@ export class IndexerManager {
       return dateB - dateA
     })
 
+    const skippedIndexers = skippedDueToRateLimit.map((id) => ({
+      indexerId: id,
+      reason: 'rate_limited' as const,
+      availableAt: this.rateLimitCooldowns.get(id) || null,
+    }))
+
     // Deduplicate by title (prefer larger files) - skip if requested
     if (options.skipDedup) {
-      return results
+      return { results, skippedIndexers }
     }
 
     const seen = new Map<string, UnifiedSearchResult>()
@@ -253,7 +289,7 @@ export class IndexerManager {
       }
     }
 
-    return Array.from(seen.values())
+    return { results: Array.from(seen.values()), skippedIndexers }
   }
 
   /**
@@ -366,22 +402,22 @@ export class IndexerManager {
         title: result.title,
         indexer: result.indexer,
         indexerId: String(result.indexerId),
-      size: result.size,
-      publishDate: result.publishDate,
-      downloadUrl: result.downloadUrl,
-      infoUrl: result.infoUrl,
-      grabs: result.grabs,
-      seeders: result.seeders,
-      peers: result.leechers,
-      protocol: result.protocol,
-      source: 'prowlarr' as const,
-      category: primaryCat?.name,
-      categoryId: primaryCat?.id,
-      mediaType: classifyMediaType(primaryCat?.id),
-      artist: result.artist,
-      album: result.album,
-      year: result.year,
-      quality: this.detectQuality(result.title),
+        size: result.size,
+        publishDate: result.publishDate,
+        downloadUrl: result.downloadUrl,
+        infoUrl: result.infoUrl,
+        grabs: result.grabs,
+        seeders: result.seeders,
+        peers: result.leechers,
+        protocol: result.protocol,
+        source: 'prowlarr' as const,
+        category: primaryCat?.name,
+        categoryId: primaryCat?.id,
+        mediaType: classifyMediaType(primaryCat?.id),
+        artist: result.artist,
+        album: result.album,
+        year: result.year,
+        quality: this.detectQuality(result.title),
       }
     })
   }

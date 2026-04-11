@@ -57,6 +57,7 @@ import {
   ArrowLeft01Icon,
   ViewIcon,
   Cancel01Icon,
+  Alert02Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -533,6 +534,9 @@ export default function SearchPage({
 
   // Direct search results
   const [indexerResults, setIndexerResults] = useState<IndexerSearchResult[]>([])
+  const [skippedIndexers, setSkippedIndexers] = useState<
+    Array<{ indexerId: string; reason: string; availableAt: number | null }>
+  >([])
 
   // Filters (direct search)
   const [indexers, setIndexers] = useState<Indexer[]>([])
@@ -824,6 +828,7 @@ export default function SearchPage({
     setHasSearched(true)
     setSelectedResults(new Set())
     setSelectedMediaTypes(new Set())
+    setSkippedIndexers([])
 
     try {
       if (searchMode === 'direct') {
@@ -838,7 +843,15 @@ export default function SearchPage({
 
         const response = await fetch(`/api/v1/indexers/search?${params}`)
         if (response.ok) {
-          setIndexerResults(await response.json())
+          const data = await response.json()
+          if (Array.isArray(data)) {
+            // Backwards compatibility
+            setIndexerResults(data)
+            setSkippedIndexers([])
+          } else {
+            setIndexerResults(data.results)
+            setSkippedIndexers(data.skippedIndexers || [])
+          }
         } else {
           toast.error('Search failed')
         }
@@ -1224,7 +1237,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${artist.name} added to library`)
+        toast.success(`${artist.name} added — searching for downloads`, {
+          action: {
+            label: 'View Queue',
+            onClick: () => router.visit('/activity'),
+          },
+        })
         setAddArtistDialogOpen(false)
         setArtistResults((prev) =>
           prev.map((r) =>
@@ -1265,7 +1283,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${album.title} added to library`)
+        toast.success(`${album.title} added — searching for downloads`, {
+          action: {
+            label: 'View Queue',
+            onClick: () => router.visit('/activity'),
+          },
+        })
         setAddAlbumDialogOpen(false)
         setAlbumResults((prev) =>
           prev.map((r) => (r.musicbrainzId === album.musicbrainzId ? { ...r, inLibrary: true } : r))
@@ -1316,7 +1339,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${movie.title} added to library`)
+        toast.success(`${movie.title} added — searching for downloads`, {
+          action: {
+            label: 'View Queue',
+            onClick: () => router.visit('/activity'),
+          },
+        })
         setAddMovieDialogOpen(false)
         // Update in search results
         setMovieResults((prev) =>
@@ -1396,7 +1424,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${show.title} added to library`)
+        toast.success(`${show.title} added — searching for downloads`, {
+          action: {
+            label: 'View Queue',
+            onClick: () => router.visit('/activity'),
+          },
+        })
         setAddTvShowDialogOpen(false)
         setEpisodeSelection(null)
         // Update in search results
@@ -1608,7 +1641,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${author.name} added to library`)
+        toast.success(`${author.name} added to library`, {
+          action: {
+            label: 'View Author',
+            onClick: () => router.visit(`/author/${data.id}`),
+          },
+        })
         setAddAuthorDialogOpen(false)
         setAuthorResults((prev) =>
           prev.map((r) =>
@@ -1657,7 +1695,12 @@ export default function SearchPage({
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${book.title} added to library`)
+        toast.success(`${book.title} added to library`, {
+          action: {
+            label: 'View Book',
+            onClick: () => router.visit(`/book/${data.id}`),
+          },
+        })
         setAddBookDialogOpen(false)
         setBookResults((prev) =>
           prev.map((r) => (r.openlibraryId === book.openlibraryId ? { ...r, inLibrary: true } : r))
@@ -1950,7 +1993,7 @@ export default function SearchPage({
                         onClick={() => toggleArtistExpand(artist.musicbrainzId)}
                       >
                         <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-1" />
-                        {isExpanded ? 'Hide' : 'Explore'}
+                        {isExpanded ? 'Hide Albums' : 'Show Albums'}
                       </Button>
                     </div>
                   </div>
@@ -1965,7 +2008,7 @@ export default function SearchPage({
                           Loading albums...
                         </div>
                       ) : albums.length === 0 ? (
-                        <EmptyState title="No albums found" message="No albums were found for this artist." className="py-6" />
+                        <EmptyState title="No albums found" message="No albums available for this artist." className="py-6" />
                       ) : (
                         <div className="space-y-2">
                           {albums.map((album) => {
@@ -2011,27 +2054,24 @@ export default function SearchPage({
                                     ) : (
                                       <Button
                                         size="sm"
-                                        variant="outline"
-                                        className="h-7 text-xs"
                                         onClick={() => {
                                           handleAddAlbum(album)
                                         }}
                                       >
-                                        <HugeiconsIcon icon={Add01Icon} className="h-3 w-3 mr-1" />
+                                        <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
                                         Add
                                       </Button>
                                     )}
                                     <Button
                                       size="sm"
-                                      variant="ghost"
-                                      className="h-7 text-xs"
+                                      variant="outline"
                                       onClick={() => toggleAlbumExpand(album.musicbrainzId)}
                                     >
                                       <HugeiconsIcon
                                         icon={ArrowRight01Icon}
-                                        className={`h-3 w-3 transition-transform ${isAlbumExpanded ? 'rotate-90' : ''}`}
+                                        className={`h-4 w-4 mr-1 transition-transform ${isAlbumExpanded ? 'rotate-90' : ''}`}
                                       />
-                                      Tracks
+                                      {isAlbumExpanded ? 'Hide Tracks' : 'Show Tracks'}
                                     </Button>
                                   </div>
                                 </div>
@@ -2045,7 +2085,7 @@ export default function SearchPage({
                                         Loading tracks...
                                       </div>
                                     ) : tracks.length === 0 ? (
-                                      <EmptyState title="No tracks found" message="Track listing is not available for this album." className="py-4" />
+                                      <EmptyState title="No tracks found" message="No tracks available for this album." className="py-4" />
                                     ) : (
                                       <div className="space-y-1">
                                         {tracks.map((track, idx) => (
@@ -2066,7 +2106,7 @@ export default function SearchPage({
                                               <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                                className="h-7 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                                                 onClick={() => handleAddAlbum(album, track.title)}
                                               >
                                                 <HugeiconsIcon
@@ -2162,7 +2202,7 @@ export default function SearchPage({
                           icon={ArrowRight01Icon}
                           className={`h-4 w-4 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
                         />
-                        {isExpanded ? 'Hide' : 'Tracks'}
+                        {isExpanded ? 'Hide Tracks' : 'Show Tracks'}
                       </Button>
                     </div>
                   </div>
@@ -2177,7 +2217,7 @@ export default function SearchPage({
                           Loading tracks...
                         </div>
                       ) : tracks.length === 0 ? (
-                        <EmptyState title="No tracks found" message="No tracks were found for this album." className="py-6" />
+                        <EmptyState title="No tracks found" message="No tracks available for this album." className="py-6" />
                       ) : (
                         <div className="space-y-1">
                           {tracks.map((track, idx) => (
@@ -2262,7 +2302,6 @@ export default function SearchPage({
                   ) : track.albumMusicbrainzId ? (
                     <Button
                       size="sm"
-                      variant="outline"
                       onClick={() => {
                         // Find the album and open add dialog
                         const album: AlbumSearchResult = {
@@ -2628,18 +2667,37 @@ export default function SearchPage({
 
   // Render direct search results
   const renderDirectResults = () => {
-    if (searching) return <SearchingSkeleton />
+    if (searching) return <TableSearchingSkeleton />
 
     if (filteredIndexerResults.length > 0) {
       return (
         <Card className="min-w-0 overflow-hidden">
           <CardContent className="pt-6 min-w-0">
+            {skippedIndexers.length > 0 && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/50 p-3 text-sm mb-4">
+                <HugeiconsIcon
+                  icon={Alert02Icon}
+                  className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+                />
+                <div>
+                  <p className="font-medium text-amber-800 dark:text-amber-200">
+                    {skippedIndexers.length}{' '}
+                    {skippedIndexers.length === 1 ? 'indexer was' : 'indexers were'} skipped due to
+                    rate limiting
+                  </p>
+                  <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
+                    {skippedIndexers.map((s) => `Indexer #${s.indexerId}`).join(', ')} — will be
+                    available again shortly
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="text-sm text-muted-foreground mb-4">
               Found {filteredIndexerResults.length} results
               {(selectedCategories.length > 0 || selectedMediaTypes.size > 0) &&
                 ` (filtered from ${indexerResults.length})`}
             </div>
-            <div className="overflow-x-auto -mx-6 px-6">
+            <div className="overflow-x-auto">
               <Table className="w-full">
                 <TableHeader>
                   <TableRow>
@@ -2781,7 +2839,32 @@ export default function SearchPage({
       )
     }
 
-    if (hasSearched) return <NoResults />
+    if (hasSearched) {
+      return (
+        <>
+          {skippedIndexers.length > 0 && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/50 p-3 text-sm mb-4">
+              <HugeiconsIcon
+                icon={Alert02Icon}
+                className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+              />
+              <div>
+                <p className="font-medium text-amber-800 dark:text-amber-200">
+                  {skippedIndexers.length}{' '}
+                  {skippedIndexers.length === 1 ? 'indexer was' : 'indexers were'} skipped due to
+                  rate limiting
+                </p>
+                <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
+                  {skippedIndexers.map((s) => `Indexer #${s.indexerId}`).join(', ')} — will be
+                  available again shortly
+                </p>
+              </div>
+            </div>
+          )}
+          <NoResults />
+        </>
+      )
+    }
     return <InitialSearchPrompt message="Search for releases across your indexers" />
   }
 
@@ -2809,6 +2892,35 @@ export default function SearchPage({
         </Card>
       ))}
     </div>
+  )
+
+  const TableSearchingSkeleton = () => (
+    <Card>
+      <CardContent className="pt-6">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Title</TableHead>
+              <TableHead className="w-24">Indexer</TableHead>
+              <TableHead className="w-20">Size</TableHead>
+              <TableHead className="w-16">Grabs</TableHead>
+              <TableHead className="w-20">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton className="h-4 w-3/4" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-12" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                <TableCell><Skeleton className="h-8 w-16" /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   )
 
   const NoResults = () => (
@@ -2842,7 +2954,7 @@ export default function SearchPage({
           <Tabs value={searchMode} onValueChange={(v) => setSearchMode(v as MediaType | 'direct')}>
             <div className="flex flex-col gap-3">
               {/* Main media type tabs - scrollable on small screens */}
-              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none">
+              <div className="overflow-x-auto scrollbar-none">
                 <TabsList className="min-w-max">
                   {enabledMediaTypes.map((type) => {
                     const config = MEDIA_TYPE_CONFIG[type]

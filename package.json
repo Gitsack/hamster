@@ -1,6 +1,6 @@
 {
   "name": "hamster",
-  "version": "1.22.0",
+  "version": "1.24.3",
   "private": true,
   "type": "module",
   "license": "GPL-3.0",
@@ -10,12 +10,16 @@
     "dev": "node ace serve --hmr",
     "test": "node ace test",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
+    "generate:types": "node bin/generate-types.js",
+    "pretypecheck": "npm run generate:types",
     "typecheck": "tsc --noEmit",
     "test:frontend": "vitest run",
     "test:frontend:watch": "vitest",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "setup:worktree": "MAIN=$(git worktree list --porcelain | head -1 | cut -d' ' -f2) && ln -sf \"$MAIN/.env\" .env && ln -sf \"$MAIN/node_modules\" node_modules"
   },
   "imports": {
     "#controllers/*": "./app/controllers/*.js",

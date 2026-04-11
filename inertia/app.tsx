@@ -5,6 +5,7 @@ import './css/app.css'
 import { hydrateRoot } from 'react-dom/client'
 import { createInertiaApp } from '@inertiajs/react'
 import { resolvePageComponent } from '@adonisjs/inertia/helpers'
+import { ActiveDownloadsProvider } from '@/contexts/active_downloads_context'
 import { AudioPlayerProvider } from '@/contexts/audio_player_context'
 import { MediaPreviewProvider } from '@/contexts/media_preview_context'
 import { AudioPlayer } from '@/components/player/audio_player'
@@ -35,15 +36,17 @@ createInertiaApp({
     hydrateRoot(
       el,
       <ErrorBoundary fullPage>
-        <AudioPlayerProvider>
-          <OperationTrackerProvider>
-            <MediaPreviewProvider>
-              <App {...props} />
-              <AudioPlayer />
-              <ClientOnlyToaster />
-            </MediaPreviewProvider>
-          </OperationTrackerProvider>
-        </AudioPlayerProvider>
+        <ActiveDownloadsProvider>
+          <AudioPlayerProvider>
+            <OperationTrackerProvider>
+              <MediaPreviewProvider>
+                <App {...props} />
+                <AudioPlayer />
+                <ClientOnlyToaster />
+              </MediaPreviewProvider>
+            </OperationTrackerProvider>
+          </AudioPlayerProvider>
+        </ActiveDownloadsProvider>
       </ErrorBoundary>
     )
   },

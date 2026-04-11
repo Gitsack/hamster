@@ -47,9 +47,7 @@ test.group('BlacklistController', (group) => {
   })
 
   group.teardown(async () => {
-    await BlacklistedRelease.query()
-      .where('indexer', 'bl-test-indexer')
-      .delete()
+    await BlacklistedRelease.query().where('indexer', 'bl-test-indexer').delete()
     await movie.delete()
   })
 

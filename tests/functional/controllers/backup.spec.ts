@@ -7,7 +7,6 @@ import BackupController from '#controllers/backup_controller'
  * to avoid real filesystem and pg_dump operations.
  */
 
-
 const mockBackups = [
   {
     name: 'hamster_2026-01-15_10-00-00.sql.gz',
@@ -106,7 +105,7 @@ test.group('BackupController', (group) => {
 
     assert.equal(statusCode, 201)
     assert.property(result, 'backup')
-    const backup = result.backup as typeof mockBackups[0]
+    const backup = result.backup as (typeof mockBackups)[0]
     assert.equal(backup.name, 'hamster_2026-01-15_10-00-00.sql.gz')
     assert.equal(backup.size, 1024000)
 

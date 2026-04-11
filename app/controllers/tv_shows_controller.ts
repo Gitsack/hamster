@@ -890,6 +890,38 @@ export default class TvShowsController {
   }
 
   /**
+   * Search for releases on indexers for this TV show (manual search)
+   */
+  async searchReleases({ params, request, response }: HttpContext) {
+    const show = await TvShow.find(params.id)
+    if (!show) {
+      return response.notFound({ error: 'TV show not found' })
+    }
+
+    try {
+      const { indexerManager } = await import('#services/indexers/indexer_manager')
+
+      const alternateTitles =
+        show.originalTitle && show.originalTitle !== show.title ? [show.originalTitle] : []
+
+      const results = await indexerManager.searchTvShows({
+        title: show.title,
+        year: show.year ?? undefined,
+        tvdbId: show.tvdbId ?? undefined,
+        imdbId: show.imdbId ?? undefined,
+        alternateTitles,
+        limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
+      })
+
+      return response.json(results)
+    } catch (error) {
+      return response.badRequest({
+        error: error instanceof Error ? error.message : 'Failed to search releases',
+      })
+    }
+  }
+
+  /**
    * Search for releases on indexers for a specific episode
    */
   async searchEpisodeReleases({ params, request, response }: HttpContext) {
@@ -903,6 +935,10 @@ export default class TvShowsController {
     }
 
     const tvShow = episode.season.tvShow
+
+    if (tvShow.id !== params.id) {
+      return response.notFound({ error: 'Episode not found for this TV show' })
+    }
 
     try {
       const { indexerManager } = await import('#services/indexers/indexer_manager')

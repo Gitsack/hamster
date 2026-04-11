@@ -111,7 +111,7 @@ export class TvShowScannerService {
       const showCount = groupedShows.size
       let showIndex = 0
 
-      for (const [_showKey, showData] of groupedShows) {
+      for (const [, showData] of groupedShows) {
         showIndex++
         onProgress?.({
           phase: 'metadata',
