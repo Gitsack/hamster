@@ -12,6 +12,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
+    "generate:types": "node bin/generate-types.js",
+    "pretypecheck": "npm run generate:types",
     "typecheck": "tsc --noEmit",
     "test:frontend": "vitest run",
     "test:frontend:watch": "vitest",
