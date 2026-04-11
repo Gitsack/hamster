@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.3](https://github.com/Gitsack/hamster/compare/hamster-v1.24.2...hamster-v1.24.3) (2026-04-11)
+
+
+### Bug Fixes
+
+* ts error on github ([7b94802](https://github.com/Gitsack/hamster/commit/7b94802001990a8fc7aedb89e52c168f76afc0de))
+
 ## [1.24.2](https://github.com/Gitsack/hamster/compare/hamster-v1.24.1...hamster-v1.24.2) (2026-04-11)
 
 
