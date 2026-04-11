@@ -45,6 +45,8 @@ import { DownloadProgressCard } from '@/components/library/download-progress-car
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { useShowMore } from '@/hooks/use_show_more'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
+import { DownloadClientIndicator } from '@/components/library/download-client-indicator'
+import { useDownloadClients } from '@/hooks/use_download_clients'
 import { MediaStatusBadge } from '@/components/library/media-status-badge'
 
 interface Track {
@@ -116,6 +118,8 @@ export default function AlbumDetail() {
   const { getForAlbum } = useActiveDownloads()
   const albumDownloads = albumId ? getForAlbum(albumId) : []
   const tracksPage = useShowMore(album?.tracks ?? [])
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
+  const { clients: downloadClients } = useDownloadClients()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteFileDialogOpen, setDeleteFileDialogOpen] = useState(false)
 
@@ -270,6 +274,7 @@ export default function AlbumDetail() {
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
+          ...(selectedClientId && { downloadClientId: selectedClientId }),
         }),
       })
       if (response.ok) {
@@ -555,12 +560,17 @@ export default function AlbumDetail() {
               ))}
             </div>
 
-            {/* Quality and folder info */}
-            {(album.qualityProfile || album.rootFolder) && (
+            {/* Quality, download client, and folder info */}
+            {(album.qualityProfile || album.rootFolder || downloadClients.length > 0) && (
               <div className="flex flex-wrap gap-2 text-sm">
                 {album.qualityProfile && (
                   <Badge variant="secondary">{album.qualityProfile.name}</Badge>
                 )}
+                <DownloadClientIndicator
+                  clients={downloadClients}
+                  selectedClientId={selectedClientId}
+                  onClientChange={setSelectedClientId}
+                />
                 {album.rootFolder && <Badge variant="secondary">{album.rootFolder.path}</Badge>}
               </div>
             )}
