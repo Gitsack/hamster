@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.25.1](https://github.com/Gitsack/hamster/compare/hamster-v1.25.0...hamster-v1.25.1) (2026-04-11)
+
+
+### Bug Fixes
+
+* remove duplicate function declarations in movie page ([7096f62](https://github.com/Gitsack/hamster/commit/7096f62e6a391201eeace053f5de8dab564f8863))
+* remove duplicate searchReleases and grabRelease function declarations ([a4d7cdc](https://github.com/Gitsack/hamster/commit/a4d7cdc2389e0f4d83d81094507c9b2b97b19a55))
+
 ## [1.25.0](https://github.com/Gitsack/hamster/compare/hamster-v1.24.3...hamster-v1.25.0) (2026-04-11)
 
 
