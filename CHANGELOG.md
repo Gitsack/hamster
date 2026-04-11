@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.25.0](https://github.com/Gitsack/hamster/compare/hamster-v1.24.3...hamster-v1.25.0) (2026-04-11)
+
+
+### Features
+
+* add Storybook stories for new UI components ([d49ba78](https://github.com/Gitsack/hamster/commit/d49ba78b058d9ecc46f752113c62f8edcf6381cb))
+* show active download client in search/download flow ([843091d](https://github.com/Gitsack/hamster/commit/843091d9bb4217caa5aa97c859c3b55664c704d3))
+
+
+### Bug Fixes
+
+* prevent Library page crash on TV shows tab ([616f884](https://github.com/Gitsack/hamster/commit/616f88412b4835f287e14c707afc2b0dab828cf6))
+* resolve ESLint errors failing CI ([b018d03](https://github.com/Gitsack/hamster/commit/b018d0389cac8fb98a2a3803850dad645a0b9292))
+
 ## [1.24.3](https://github.com/Gitsack/hamster/compare/hamster-v1.24.2...hamster-v1.24.3) (2026-04-11)
 
 
