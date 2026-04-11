@@ -329,12 +329,15 @@ export default function Activity() {
   // Data fetching
   // ---------------------------------------------------------------------------
 
-  const fetchQueue = useCallback(async (_showLoading = true) => {
-    setQueueOverride(null)
-    await refreshSharedQueue()
-    setQueueLoading(false)
-    setQueueError(null)
-  }, [refreshSharedQueue])
+  const fetchQueue = useCallback(
+    async (_showLoading = true) => {
+      setQueueOverride(null)
+      await refreshSharedQueue()
+      setQueueLoading(false)
+      setQueueError(null)
+    },
+    [refreshSharedQueue]
+  )
 
   const fetchCompleted = useCallback(async (showLoading = true) => {
     if (showLoading) setCompletedLoading(true)
@@ -767,7 +770,13 @@ export default function Activity() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button onClick={refreshActiveTab} disabled={refreshing} size="sm" variant="outline" aria-label="Refresh">
+          <Button
+            onClick={refreshActiveTab}
+            disabled={refreshing}
+            size="sm"
+            variant="outline"
+            aria-label="Refresh"
+          >
             <HugeiconsIcon
               icon={RefreshIcon}
               className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
@@ -887,7 +896,11 @@ export default function Activity() {
                           <TableCell>{getStatusBadge(item.status)}</TableCell>
                           <TableCell>
                             <div className="space-y-1">
-                              <Progress value={Number(item.progress) || 0} className="h-2" aria-label="Download progress" />
+                              <Progress
+                                value={Number(item.progress) || 0}
+                                className="h-2"
+                                aria-label="Download progress"
+                              />
                               <div className="text-xs text-muted-foreground">
                                 {(Number(item.progress) || 0).toFixed(1)}%
                               </div>
@@ -900,7 +913,12 @@ export default function Activity() {
                             {formatEta(item.eta)}
                           </TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="sm" onClick={() => setCancelId(item.id)} aria-label="Delete download">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setCancelId(item.id)}
+                              aria-label="Delete download"
+                            >
                               <HugeiconsIcon
                                 icon={Delete01Icon}
                                 className="h-4 w-4 text-destructive"

@@ -27,7 +27,10 @@ test.group('CustomFormatsController', (group) => {
   })
 
   group.teardown(async () => {
-    await db.from('quality_profile_custom_formats').whereIn('custom_format_id', [format1.id, format2.id]).delete()
+    await db
+      .from('quality_profile_custom_formats')
+      .whereIn('custom_format_id', [format1.id, format2.id])
+      .delete()
     await CustomFormat.query().where('name', 'like', 'CF Test%').delete()
   })
 
@@ -64,7 +67,13 @@ test.group('CustomFormatsController', (group) => {
           name: 'CF Test FLAC',
           includeWhenRenaming: false,
           specifications: [
-            { name: 'FLAC', implementation: 'contains', negate: false, required: true, value: 'FLAC' },
+            {
+              name: 'FLAC',
+              implementation: 'contains',
+              negate: false,
+              required: true,
+              value: 'FLAC',
+            },
           ],
         }),
       },
@@ -82,7 +91,9 @@ test.group('CustomFormatsController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await CustomFormat.query().where('id', result.id as string).delete()
+      await CustomFormat.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 
@@ -146,7 +157,13 @@ test.group('CustomFormatsController', (group) => {
           name: 'CF Test New Name',
           includeWhenRenaming: true,
           specifications: [
-            { name: 'new', implementation: 'contains', negate: false, required: true, value: 'new' },
+            {
+              name: 'new',
+              implementation: 'contains',
+              negate: false,
+              required: true,
+              value: 'new',
+            },
           ],
         }),
       },

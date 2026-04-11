@@ -19,7 +19,11 @@ vi.mock('@/contexts/media_preview_context', () => ({
 }))
 
 vi.mock('@/hooks/use_visible_watch_providers', () => ({
-  useVisibleWatchProviders: () => ({ providers: {}, loadingIds: new Set(), observerRef: () => () => {} }),
+  useVisibleWatchProviders: () => ({
+    providers: {},
+    loadingIds: new Set(),
+    observerRef: () => () => {},
+  }),
 }))
 
 vi.mock('@/components/ui/skeleton', () => ({
@@ -103,9 +107,7 @@ describe('SimilarLane', () => {
   })
 
   it('renders nothing when tmdbId is null', () => {
-    const { container } = render(
-      <SimilarLane mediaType="movies" tmdbId={null} />
-    )
+    const { container } = render(<SimilarLane mediaType="movies" tmdbId={null} />)
     expect(container.innerHTML).toBe('')
   })
 
@@ -121,9 +123,7 @@ describe('SimilarLane', () => {
   it('renders nothing when fetch returns empty results', async () => {
     mockFetchSuccess({ results: [] })
 
-    const { container } = render(
-      <SimilarLane mediaType="movies" tmdbId="123" />
-    )
+    const { container } = render(<SimilarLane mediaType="movies" tmdbId="123" />)
 
     await waitFor(() => {
       expect(container.querySelector('[data-testid="skeleton"]')).not.toBeInTheDocument()
@@ -134,9 +134,7 @@ describe('SimilarLane', () => {
   it('renders nothing when fetch fails', async () => {
     mockFetchFailure()
 
-    const { container } = render(
-      <SimilarLane mediaType="movies" tmdbId="123" />
-    )
+    const { container } = render(<SimilarLane mediaType="movies" tmdbId="123" />)
 
     await waitFor(() => {
       expect(container.querySelector('[data-testid="skeleton"]')).not.toBeInTheDocument()

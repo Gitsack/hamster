@@ -1519,9 +1519,7 @@ export default function Library() {
             {missingCounts.episodes > 0 && (
               <span className="mr-4">{missingCounts.episodes} episodes</span>
             )}
-            {missingCounts.books > 0 && (
-              <span className="mr-4">{missingCounts.books} books</span>
-            )}
+            {missingCounts.books > 0 && <span className="mr-4">{missingCounts.books} books</span>}
           </div>
           <Button
             variant="outline"

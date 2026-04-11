@@ -139,7 +139,9 @@ test.group('RootFoldersController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await RootFolder.query().where('id', result.id as string).delete()
+      await RootFolder.query()
+        .where('id', result.id as string)
+        .delete()
     }
     try {
       await fs.rm(newTempDir, { recursive: true })
@@ -227,7 +229,9 @@ test.group('RootFoldersController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await RootFolder.query().where('id', result.id as string).delete()
+      await RootFolder.query()
+        .where('id', result.id as string)
+        .delete()
     }
     try {
       await fs.rm(newDir, { recursive: true })

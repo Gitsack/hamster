@@ -117,7 +117,15 @@ export const SmallIconSize: Story = {
   name: 'Small Icon Size',
   decorators: [
     (Story) => (
-      <div style={{ width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden', background: 'var(--muted, #f3f4f6)' }}>
+      <div
+        style={{
+          width: '80px',
+          height: '80px',
+          borderRadius: '8px',
+          overflow: 'hidden',
+          background: 'var(--muted, #f3f4f6)',
+        }}
+      >
         <Story />
       </div>
     ),

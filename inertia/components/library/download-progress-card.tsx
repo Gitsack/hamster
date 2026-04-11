@@ -29,9 +29,8 @@ function formatEta(seconds: number | null): string {
 
 function DownloadItem({ download }: { download: ActiveDownloadInfo }) {
   const isImporting = download.status === 'importing'
-  const downloaded = download.size && download.remaining !== null
-    ? download.size - download.remaining
-    : null
+  const downloaded =
+    download.size && download.remaining !== null ? download.size - download.remaining : null
 
   return (
     <div className="space-y-2">
@@ -39,11 +38,19 @@ function DownloadItem({ download }: { download: ActiveDownloadInfo }) {
         <div className="flex items-center gap-2 min-w-0">
           <HugeiconsIcon
             icon={Download01Icon}
-            className={cn('h-4 w-4 flex-shrink-0', isImporting ? 'text-purple-500' : 'text-blue-500')}
+            className={cn(
+              'h-4 w-4 flex-shrink-0',
+              isImporting ? 'text-purple-500' : 'text-blue-500'
+            )}
           />
           <span className="text-sm font-medium truncate">{download.title}</span>
         </div>
-        <span className={cn('text-sm font-medium flex-shrink-0', isImporting ? 'text-purple-500' : 'text-blue-500')}>
+        <span
+          className={cn(
+            'text-sm font-medium flex-shrink-0',
+            isImporting ? 'text-purple-500' : 'text-blue-500'
+          )}
+        >
           {isImporting ? 'Importing' : `${Math.round(download.progress)}%`}
         </span>
       </div>
@@ -55,7 +62,9 @@ function DownloadItem({ download }: { download: ActiveDownloadInfo }) {
         {downloaded !== null && download.size && (
           <div className="flex items-center gap-1">
             <HugeiconsIcon icon={HardDriveIcon} className="h-3 w-3" />
-            <span>{formatFileSize(downloaded)} / {formatFileSize(download.size)}</span>
+            <span>
+              {formatFileSize(downloaded)} / {formatFileSize(download.size)}
+            </span>
           </div>
         )}
         {!isImporting && download.eta !== null && download.eta > 0 && (
@@ -64,9 +73,7 @@ function DownloadItem({ download }: { download: ActiveDownloadInfo }) {
             <span>{formatEta(download.eta)}</span>
           </div>
         )}
-        {download.downloadClient && (
-          <span className="ml-auto">{download.downloadClient}</span>
-        )}
+        {download.downloadClient && <span className="ml-auto">{download.downloadClient}</span>}
       </div>
     </div>
   )

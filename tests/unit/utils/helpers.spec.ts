@@ -1,5 +1,10 @@
 import { test } from '@japa/runner'
-import { accessWithTimeout, isAccessible, statWithTimeout, readdirWithTimeout } from '../../../app/utils/fs_utils.js'
+import {
+  accessWithTimeout,
+  isAccessible,
+  statWithTimeout,
+  readdirWithTimeout,
+} from '../../../app/utils/fs_utils.js'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'

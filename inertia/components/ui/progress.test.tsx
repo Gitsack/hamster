@@ -33,9 +33,9 @@ describe('Progress', () => {
   it('renders track and indicator elements', () => {
     render(<Progress value={50} />)
     const track = screen.getByRole('progressbar').querySelector('[data-slot="progress-track"]')
-    const indicator = screen.getByRole('progressbar').querySelector(
-      '[data-slot="progress-indicator"]'
-    )
+    const indicator = screen
+      .getByRole('progressbar')
+      .querySelector('[data-slot="progress-indicator"]')
     expect(track).toBeInTheDocument()
     expect(indicator).toBeInTheDocument()
   })

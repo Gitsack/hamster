@@ -936,7 +936,7 @@ export default class TvShowsController {
 
     const tvShow = episode.season.tvShow
 
-    if (tvShow.id !== Number(params.id)) {
+    if (tvShow.id !== params.id) {
       return response.notFound({ error: 'Episode not found for this TV show' })
     }
 

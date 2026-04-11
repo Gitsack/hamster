@@ -118,7 +118,9 @@ test.group('DownloadClientsController', (group) => {
 
     // Cleanup
     if (result.id) {
-      await DownloadClient.query().where('id', result.id as string).delete()
+      await DownloadClient.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 
@@ -148,7 +150,9 @@ test.group('DownloadClientsController', (group) => {
     assert.equal(result.removeFailedDownloads, true)
 
     if (result.id) {
-      await DownloadClient.query().where('id', result.id as string).delete()
+      await DownloadClient.query()
+        .where('id', result.id as string)
+        .delete()
     }
   })
 

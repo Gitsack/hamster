@@ -1,9 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react'
-import {
-  useAudioPlayer,
-  AudioPlayerProvider,
-  type Track,
-} from './audio_player_context'
+import { useAudioPlayer, AudioPlayerProvider, type Track } from './audio_player_context'
 
 // Mock HTMLAudioElement
 let mockAudio: {

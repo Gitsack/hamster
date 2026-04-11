@@ -36,6 +36,7 @@ export interface DownloadRequest {
   indexerId?: string
   indexerName?: string
   guid?: string
+  downloadClientId?: number
 }
 
 export interface QueueItem {
@@ -528,11 +529,22 @@ export class DownloadManager {
       throw new Error('File already exists in library')
     }
 
-    // Get enabled download client
-    const client = await DownloadClient.query()
-      .where('enabled', true)
-      .orderBy('priority', 'asc')
-      .first()
+    // Get download client — use override if specified, otherwise pick by priority
+    let client: DownloadClient | null = null
+    if (request.downloadClientId) {
+      client = await DownloadClient.query()
+        .where('id', request.downloadClientId)
+        .where('enabled', true)
+        .first()
+      if (!client) {
+        throw new Error('Selected download client not found or is disabled')
+      }
+    } else {
+      client = await DownloadClient.query()
+        .where('enabled', true)
+        .orderBy('priority', 'asc')
+        .first()
+    }
 
     if (!client) {
       throw new Error('No enabled download client configured')
@@ -1041,7 +1053,12 @@ export class DownloadManager {
                 await download.save()
 
                 // Blacklist the release if it's a genuine download failure (not a config issue)
-                if (blacklistService.shouldBlacklist(errorMessage)) {
+                if (!blacklistService.shouldBlacklist(errorMessage)) {
+                  logger.warn(
+                    { title: download.title, error: errorMessage },
+                    'DownloadManager: Download failed due to configuration issue (not blacklisting)'
+                  )
+                } else {
                   const guid = download.nzbInfo?.guid || download.externalId || ''
                   const indexer = download.nzbInfo?.indexer || 'unknown'
 
@@ -1049,6 +1066,14 @@ export class DownloadManager {
                     { title: download.title, guid, indexer },
                     'DownloadManager: Blacklisting failed release'
                   )
+
+                  // Check if we've exceeded the retry limit before adding the new blacklist entry
+                  const hasExceeded = await blacklistService.hasExceededRetries({
+                    movieId: download.movieId,
+                    episodeId: download.episodeId,
+                    albumId: download.albumId,
+                    bookId: download.bookId,
+                  })
 
                   await blacklistService.blacklist({
                     guid,
@@ -1060,14 +1085,6 @@ export class DownloadManager {
                     bookId: download.bookId,
                     reason: errorMessage,
                     failureType: blacklistService.determineFailureType(errorMessage),
-                  })
-
-                  // Check if we've exceeded the retry limit (3 retries max)
-                  const hasExceeded = await blacklistService.hasExceededRetries({
-                    movieId: download.movieId,
-                    episodeId: download.episodeId,
-                    albumId: download.albumId,
-                    bookId: download.bookId,
                   })
 
                   if (!hasExceeded) {
@@ -2081,7 +2098,6 @@ export class DownloadManager {
             const sabConfig = await sabnzbdService.getConfig(config)
             if (sabConfig.completeDir) {
               // Check if the path is accessible locally
-              const fs = await import('node:fs/promises')
               let pathAccessible = false
               try {
                 await fs.access(sabConfig.completeDir)
@@ -2121,7 +2137,6 @@ export class DownloadManager {
           try {
             const destDir = await nzbgetService.getConfigValue(config, 'DestDir')
             if (destDir) {
-              const fs = await import('node:fs/promises')
               let pathAccessible = false
               try {
                 await fs.access(destDir)

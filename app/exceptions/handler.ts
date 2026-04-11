@@ -56,7 +56,10 @@ export default class HttpExceptionHandler extends ExceptionHandler {
     // Log API errors to stdout so they appear in docker logs
     if (ctx.request.url().startsWith('/api/')) {
       const err = error as any
-      console.error(`[API Error] ${ctx.request.method()} ${ctx.request.url()}:`, err?.message || err)
+      console.error(
+        `[API Error] ${ctx.request.method()} ${ctx.request.url()}:`,
+        err?.message || err
+      )
     }
 
     return super.report(error, ctx)

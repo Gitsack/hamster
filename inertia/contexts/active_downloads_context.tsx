@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type ReactNode,
+} from 'react'
 
 export interface ActiveDownloadInfo {
   progress: number
@@ -124,7 +132,15 @@ export function ActiveDownloadsProvider({ children }: { children: ReactNode }) {
 
   return (
     <ActiveDownloadsContext.Provider
-      value={{ queue, getForMovie, getForBook, getForEpisode, getForAlbum, getForTvShow, refresh: fetchQueue }}
+      value={{
+        queue,
+        getForMovie,
+        getForBook,
+        getForEpisode,
+        getForAlbum,
+        getForTvShow,
+        refresh: fetchQueue,
+      }}
     >
       {children}
     </ActiveDownloadsContext.Provider>

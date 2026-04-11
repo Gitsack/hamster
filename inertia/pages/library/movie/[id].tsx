@@ -34,7 +34,6 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-
   MoreVerticalIcon,
   Delete01Icon,
   Film01Icon,
@@ -59,6 +58,8 @@ import { DownloadProgressCard } from '@/components/library/download-progress-car
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
+import { DownloadClientIndicator } from '@/components/library/download-client-indicator'
+import { useDownloadClients } from '@/hooks/use_download_clients'
 import { VideoPlayer } from '@/components/player/video_player'
 
 interface QualityProfile {
@@ -151,9 +152,11 @@ export default function MovieDetail() {
   const [grabbing, setGrabbing] = useState<string | null>(null)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
   const [releasePickerOpen, setReleasePickerOpen] = useState(false)
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
   const audioPlayer = useAudioPlayer()
   const { getForMovie } = useActiveDownloads()
   const activeDownload = movieId ? getForMovie(movieId) : null
+  const { clients: downloadClients } = useDownloadClients()
 
   useEffect(() => {
     fetchMovie()
@@ -330,6 +333,7 @@ export default function MovieDetail() {
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
+          ...(selectedClientId && { downloadClientId: selectedClientId }),
         }),
       })
       if (response.ok) {
@@ -372,6 +376,54 @@ export default function MovieDetail() {
       toast.error('Failed to enrich movie')
     } finally {
       setEnriching(false)
+    }
+  }
+
+  const searchReleases = async () => {
+    setSearchResults([])
+    setSearching(true)
+    try {
+      const response = await fetch(`/api/v1/movies/${movieId}/releases`)
+      if (response.ok) {
+        const data = await response.json()
+        setSearchResults(data)
+      }
+    } catch (error) {
+      console.error('Failed to search releases:', error)
+      toast.error('Failed to search releases')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const grabRelease = async (result: SearchResult) => {
+    setGrabbing(result.id)
+    try {
+      const response = await fetch('/api/v1/queue/grab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: result.title,
+          downloadUrl: result.downloadUrl,
+          size: result.size,
+          movieId: movie?.id,
+          indexerId: result.indexerId,
+          indexerName: result.indexer,
+          guid: result.id,
+          ...(selectedClientId && { downloadClientId: selectedClientId }),
+        }),
+      })
+      if (response.ok) {
+        toast.success('Download started')
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to grab release')
+      }
+    } catch (error) {
+      console.error('Failed to grab release:', error)
+      toast.error('Failed to grab release')
+    } finally {
+      setGrabbing(null)
     }
   }
 
@@ -451,7 +503,9 @@ export default function MovieDetail() {
                     icon={movie.monitored ? Notification01Icon : NotificationOff01Icon}
                     className="h-4 w-4 md:mr-2"
                   />
-                  <span className="hidden md:inline">{movie.monitored ? 'Monitored' : 'Monitor'}</span>
+                  <span className="hidden md:inline">
+                    {movie.monitored ? 'Monitored' : 'Monitor'}
+                  </span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{movie.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
@@ -467,7 +521,9 @@ export default function MovieDetail() {
                     ) : (
                       <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
                     )}
-                    <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
+                    <span className="hidden md:inline">
+                      {downloading ? 'Downloading...' : 'Download'}
+                    </span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{downloading ? 'Downloading...' : 'Download'}</TooltipContent>
@@ -477,17 +533,15 @@ export default function MovieDetail() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  onClick={searchReleases}
-                  disabled={searching}
-                >
+                <Button variant="outline" onClick={searchReleases} disabled={searching}>
                   {searching ? (
                     <Spinner className="md:mr-2" />
                   ) : (
                     <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
                   )}
-                  <span className="hidden md:inline">{searching ? 'Searching...' : 'Browse releases'}</span>
+                  <span className="hidden md:inline">
+                    {searching ? 'Searching...' : 'Browse releases'}
+                  </span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
@@ -604,9 +658,14 @@ export default function MovieDetail() {
             </div>
           )}
 
-          {/* Quality and folder info */}
+          {/* Quality, download client, and folder info */}
           <div className="flex flex-wrap gap-2 text-sm">
             {movie.qualityProfile && <Badge variant="secondary">{movie.qualityProfile.name}</Badge>}
+            <DownloadClientIndicator
+              clients={downloadClients}
+              selectedClientId={selectedClientId}
+              onClientChange={setSelectedClientId}
+            />
             {movie.rootFolder && <Badge variant="secondary">{movie.rootFolder.path}</Badge>}
           </div>
 
@@ -635,9 +694,7 @@ export default function MovieDetail() {
           </div>
         </MediaHero>
 
-        {activeDownload && (
-          <DownloadProgressCard downloads={[activeDownload]} />
-        )}
+        {activeDownload && <DownloadProgressCard downloads={[activeDownload]} />}
 
         {/* File info */}
         {movie.movieFile && (
