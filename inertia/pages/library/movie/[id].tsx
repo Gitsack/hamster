@@ -34,7 +34,6 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
-
   MoreVerticalIcon,
   Delete01Icon,
   Film01Icon,
@@ -504,7 +503,9 @@ export default function MovieDetail() {
                     icon={movie.monitored ? Notification01Icon : NotificationOff01Icon}
                     className="h-4 w-4 md:mr-2"
                   />
-                  <span className="hidden md:inline">{movie.monitored ? 'Monitored' : 'Monitor'}</span>
+                  <span className="hidden md:inline">
+                    {movie.monitored ? 'Monitored' : 'Monitor'}
+                  </span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{movie.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
@@ -520,7 +521,9 @@ export default function MovieDetail() {
                     ) : (
                       <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
                     )}
-                    <span className="hidden md:inline">{downloading ? 'Downloading...' : 'Download'}</span>
+                    <span className="hidden md:inline">
+                      {downloading ? 'Downloading...' : 'Download'}
+                    </span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{downloading ? 'Downloading...' : 'Download'}</TooltipContent>
@@ -530,17 +533,15 @@ export default function MovieDetail() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  onClick={searchReleases}
-                  disabled={searching}
-                >
+                <Button variant="outline" onClick={searchReleases} disabled={searching}>
                   {searching ? (
                     <Spinner className="md:mr-2" />
                   ) : (
                     <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
                   )}
-                  <span className="hidden md:inline">{searching ? 'Searching...' : 'Browse releases'}</span>
+                  <span className="hidden md:inline">
+                    {searching ? 'Searching...' : 'Browse releases'}
+                  </span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
@@ -693,9 +694,7 @@ export default function MovieDetail() {
           </div>
         </MediaHero>
 
-        {activeDownload && (
-          <DownloadProgressCard downloads={[activeDownload]} />
-        )}
+        {activeDownload && <DownloadProgressCard downloads={[activeDownload]} />}
 
         {/* File info */}
         {movie.movieFile && (

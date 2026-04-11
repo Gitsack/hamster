@@ -482,7 +482,9 @@ export default function ArtistDetail() {
                     icon={artist.monitored ? Notification01Icon : NotificationOff01Icon}
                     className="h-4 w-4 md:mr-2"
                   />
-                  <span className="hidden md:inline">{artist.monitored ? 'Monitored' : 'Monitor'}</span>
+                  <span className="hidden md:inline">
+                    {artist.monitored ? 'Monitored' : 'Monitor'}
+                  </span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{artist.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>

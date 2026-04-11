@@ -16,10 +16,7 @@ import {
   InformationCircleIcon,
   Tv01Icon,
 } from '@hugeicons/core-free-icons'
-import {
-  MediaStatusBadge,
-  type MediaItemStatus,
-} from '@/components/library/media-status-badge'
+import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaGallery } from '@/components/media-gallery'
 import { SimilarLane } from '@/components/library/similar-lane'
 import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dialog'
@@ -111,7 +108,9 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
   const [togglingDetails, setTogglingDetails] = useState(false)
 
   // Add flow state
-  const [rootFolders, setRootFolders] = useState<{ id: string; path: string; mediaType: string }[]>([])
+  const [rootFolders, setRootFolders] = useState<{ id: string; path: string; mediaType: string }[]>(
+    []
+  )
   const [qualityProfiles, setQualityProfiles] = useState<QualityProfile[]>([])
   const [configLoaded, setConfigLoaded] = useState(false)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -417,7 +416,13 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                 {/* Gallery: Trailer + Backdrop Images */}
                 <MediaGallery
                   trailerUrl={movieDetails.trailerUrl}
-                  images={movieDetails.backdropImages?.length ? movieDetails.backdropImages : movieDetails.backdropUrl ? [movieDetails.backdropUrl] : undefined}
+                  images={
+                    movieDetails.backdropImages?.length
+                      ? movieDetails.backdropImages
+                      : movieDetails.backdropUrl
+                        ? [movieDetails.backdropUrl]
+                        : undefined
+                  }
                   title={movieDetails.title}
                 >
                   {movieDetails.inLibrary && (
@@ -525,11 +530,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                       View in Library
                     </Button>
                   ) : (
-                    <Button
-                      className="flex-1"
-                      disabled={adding}
-                      onClick={handleAddToLibrary}
-                    >
+                    <Button className="flex-1" disabled={adding} onClick={handleAddToLibrary}>
                       {adding ? (
                         <Spinner className="h-4 w-4 mr-2" />
                       ) : (
@@ -550,7 +551,13 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                 {/* Gallery: Trailer + Backdrop Images */}
                 <MediaGallery
                   trailerUrl={tvShowDetails.trailerUrl}
-                  images={tvShowDetails.backdropImages?.length ? tvShowDetails.backdropImages : tvShowDetails.backdropUrl ? [tvShowDetails.backdropUrl] : undefined}
+                  images={
+                    tvShowDetails.backdropImages?.length
+                      ? tvShowDetails.backdropImages
+                      : tvShowDetails.backdropUrl
+                        ? [tvShowDetails.backdropUrl]
+                        : undefined
+                  }
                   title={tvShowDetails.title}
                 >
                   {tvShowDetails.inLibrary && (
@@ -660,11 +667,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                       View in Library
                     </Button>
                   ) : (
-                    <Button
-                      className="flex-1"
-                      disabled={adding}
-                      onClick={handleAddToLibrary}
-                    >
+                    <Button className="flex-1" disabled={adding} onClick={handleAddToLibrary}>
                       {adding ? (
                         <Spinner className="h-4 w-4 mr-2" />
                       ) : (

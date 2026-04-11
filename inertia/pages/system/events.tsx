@@ -51,7 +51,7 @@ export default function SystemEvents() {
       const response = await fetch('/api/v1/notifications/history?limit=50')
       if (response.ok) {
         const data = await response.json()
-        setNotifHistory(Array.isArray(data) ? data : data.data ?? [])
+        setNotifHistory(Array.isArray(data) ? data : (data.data ?? []))
       }
     } catch {
       toast.error('Failed to fetch events')
@@ -98,9 +98,7 @@ export default function SystemEvents() {
               ))}
             </div>
           ) : notifHistory.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No events yet.
-            </div>
+            <div className="text-center py-8 text-muted-foreground">No events yet.</div>
           ) : (
             <div className="overflow-x-auto -mx-6 px-6">
               <Table>

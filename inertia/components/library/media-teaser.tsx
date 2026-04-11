@@ -102,7 +102,9 @@ export function MediaTeaser({
   const wasVisibleRef = useRef(false)
   const loadingRef = useRef(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [transition, setTransition] = useState<'pending' | 'loading' | 'fading-out' | 'fading-in' | 'idle'>('idle')
+  const [transition, setTransition] = useState<
+    'pending' | 'loading' | 'fading-out' | 'fading-in' | 'idle'
+  >('idle')
 
   useEffect(() => {
     if (isLoadingProviders) {
@@ -114,7 +116,9 @@ export function MediaTeaser({
         wasVisibleRef.current = true
         setTransition('loading')
       }, 400)
-      return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+      return () => {
+        if (debounceRef.current) clearTimeout(debounceRef.current)
+      }
     }
 
     if (!loadingRef.current) return
@@ -138,7 +142,10 @@ export function MediaTeaser({
       const t2 = setTimeout(() => {
         setTransition('idle')
       }, 500)
-      return () => { clearTimeout(t1); clearTimeout(t2) }
+      return () => {
+        clearTimeout(t1)
+        clearTimeout(t2)
+      }
     }
 
     // Loader was never shown (fast fetch) — go straight to fade-in or idle
@@ -153,14 +160,10 @@ export function MediaTeaser({
 
   const IconComponent = mediaType === 'movie' ? Film01Icon : Tv01Icon
 
-  const widthClass =
-    size === 'lane' ? 'w-[150px]' : size === 'small' ? 'w-32' : ''
-  const iconSize =
-    size === 'small' ? 'h-8 w-8' : 'h-12 w-12'
-  const titleSize =
-    size === 'small' ? 'text-xs' : 'text-sm'
-  const yearSize =
-    size === 'small' ? 'text-[10px]' : 'text-xs'
+  const widthClass = size === 'lane' ? 'w-[150px]' : size === 'small' ? 'w-32' : ''
+  const iconSize = size === 'small' ? 'h-8 w-8' : 'h-12 w-12'
+  const titleSize = size === 'small' ? 'text-xs' : 'text-sm'
+  const yearSize = size === 'small' ? 'text-[10px]' : 'text-xs'
 
   const maxProviders = 3
   const visibleProviders = streamingProviders?.slice(0, maxProviders) ?? []
@@ -200,10 +203,7 @@ export function MediaTeaser({
         {/* Hover gradient */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
         {/* Status badge */}
-        <div
-          className="absolute top-2 right-2 z-10"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
           <CardStatusBadge
             status={status}
             size="tiny"

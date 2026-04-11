@@ -102,7 +102,12 @@ describe('DeleteMediaDialog', () => {
       const user = userEvent.setup()
       const onConfirm = vi.fn().mockResolvedValue(undefined)
       render(
-        <DeleteMediaDialog {...defaultProps} mode="deleteFile" hasFile={true} onConfirm={onConfirm} />
+        <DeleteMediaDialog
+          {...defaultProps}
+          mode="deleteFile"
+          hasFile={true}
+          onConfirm={onConfirm}
+        />
       )
 
       await user.click(screen.getByRole('button', { name: 'Delete File' }))

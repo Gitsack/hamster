@@ -84,6 +84,6 @@ export const WithLabel: Story = {
 export const Invalid: Story = {
   args: {
     'aria-invalid': true,
-    defaultValue: 'invalid value',
+    'defaultValue': 'invalid value',
   },
 }

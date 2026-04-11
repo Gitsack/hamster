@@ -539,7 +539,9 @@ export default function DownloadClients() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className={showFolderBrowser || showTempFolderBrowser ? 'max-w-2xl' : 'max-w-lg'}>
+        <DialogContent
+          className={showFolderBrowser || showTempFolderBrowser ? 'max-w-2xl' : 'max-w-lg'}
+        >
           <DialogHeader>
             <DialogTitle>
               {editingClient ? 'Edit Download Client' : 'Add Download Client'}
@@ -722,7 +724,9 @@ export default function DownloadClients() {
                       onChange={(e) => setFormData({ ...formData, localPath: e.target.value })}
                       placeholder="/mnt/downloads/complete"
                     />
-                    <p className="text-xs text-muted-foreground">Completed downloads path as Hamster sees it</p>
+                    <p className="text-xs text-muted-foreground">
+                      Completed downloads path as Hamster sees it
+                    </p>
                   </>
                 )}
               </div>
@@ -769,7 +773,8 @@ export default function DownloadClients() {
                       placeholder="/tmp/downloads"
                     />
                     <p className="text-xs text-muted-foreground">
-                      In-progress downloads path as Hamster sees it. Use a local disk for better performance instead of NAS.
+                      In-progress downloads path as Hamster sees it. Use a local disk for better
+                      performance instead of NAS.
                     </p>
                   </>
                 )}

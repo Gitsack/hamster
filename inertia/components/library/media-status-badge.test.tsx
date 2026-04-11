@@ -13,20 +13,14 @@ describe('getMediaItemStatus', () => {
     })
 
     it('returns downloaded even with active download', () => {
-      const result = getMediaItemStatus(
-        { hasFile: true },
-        { progress: 50, status: 'downloading' }
-      )
+      const result = getMediaItemStatus({ hasFile: true }, { progress: 50, status: 'downloading' })
       expect(result).toEqual({ status: 'downloaded', progress: 100 })
     })
   })
 
   describe('downloading status', () => {
     it('returns downloading with progress when active download exists', () => {
-      const result = getMediaItemStatus(
-        { hasFile: false },
-        { progress: 45, status: 'downloading' }
-      )
+      const result = getMediaItemStatus({ hasFile: false }, { progress: 45, status: 'downloading' })
       expect(result).toEqual({ status: 'downloading', progress: 45 })
     })
 
@@ -43,10 +37,7 @@ describe('getMediaItemStatus', () => {
 
   describe('importing status', () => {
     it('returns importing when active download has importing status', () => {
-      const result = getMediaItemStatus(
-        { hasFile: false },
-        { progress: 100, status: 'importing' }
-      )
+      const result = getMediaItemStatus({ hasFile: false }, { progress: 100, status: 'importing' })
       expect(result).toEqual({ status: 'importing', progress: 100 })
     })
 
@@ -113,10 +104,7 @@ describe('getMediaItemStatus', () => {
     })
 
     it('importing download takes priority over requested', () => {
-      const result = getMediaItemStatus(
-        { requested: true },
-        { progress: 100, status: 'importing' }
-      )
+      const result = getMediaItemStatus({ requested: true }, { progress: 100, status: 'importing' })
       expect(result.status).toBe('importing')
     })
   })
