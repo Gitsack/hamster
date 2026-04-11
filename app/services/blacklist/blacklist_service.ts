@@ -3,7 +3,7 @@ import type { UnifiedSearchResult } from '#services/indexers/indexer_manager'
 import { DateTime } from 'luxon'
 
 const BLACKLIST_EXPIRY_DAYS = 30
-const MAX_RETRIES = 3
+const MAX_RETRIES = 5
 
 export interface BlacklistEntry {
   guid: string
@@ -20,7 +20,6 @@ export interface BlacklistEntry {
 // Failure patterns that should trigger blacklisting (SABnzbd/download failures)
 const BLACKLISTABLE_PATTERNS: string[] = [
   'download failed',
-  'failed',
   'extraction failed',
   'unpack failed',
   'crc error',
@@ -47,6 +46,12 @@ const NON_BLACKLISTABLE_PATTERNS: string[] = [
   'no space',
   'network storage',
   'file not found',
+  'failed making',
+  'mkdir',
+  'no such file or directory',
+  'read-only file system',
+  'directory not found',
+  'cannot create',
 ]
 
 class BlacklistService {
