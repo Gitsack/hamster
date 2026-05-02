@@ -24,64 +24,59 @@
 
 ## [1.24.3](https://github.com/Gitsack/hamster/compare/hamster-v1.24.2...hamster-v1.24.3) (2026-04-11)
 
-
 ### Bug Fixes
 
-* ts error on github ([7b94802](https://github.com/Gitsack/hamster/commit/7b94802001990a8fc7aedb89e52c168f76afc0de))
+- ts error on github ([7b94802](https://github.com/Gitsack/hamster/commit/7b94802001990a8fc7aedb89e52c168f76afc0de))
 
 ## [1.24.2](https://github.com/Gitsack/hamster/compare/hamster-v1.24.1...hamster-v1.24.2) (2026-04-11)
 
-
 ### Bug Fixes
 
-* ts errors ([77f555c](https://github.com/Gitsack/hamster/commit/77f555c80e051a0a547a8c7cf4d35b6d312ab14b))
+- ts errors ([77f555c](https://github.com/Gitsack/hamster/commit/77f555c80e051a0a547a8c7cf4d35b6d312ab14b))
 
 ## [1.24.1](https://github.com/Gitsack/hamster/compare/hamster-v1.24.0...hamster-v1.24.1) (2026-04-11)
 
-
 ### Bug Fixes
 
-* lint fixes ([ffb76df](https://github.com/Gitsack/hamster/commit/ffb76df3f96980ffa76316a0cf074c0c1f2542b2))
+- lint fixes ([ffb76df](https://github.com/Gitsack/hamster/commit/ffb76df3f96980ffa76316a0cf074c0c1f2542b2))
 
 ## [1.24.0](https://github.com/Gitsack/hamster/compare/hamster-v1.23.0...hamster-v1.24.0) (2026-04-11)
 
-
 ### Features
 
-* add database indexes for high-frequency query columns ([9bbf28c](https://github.com/Gitsack/hamster/commit/9bbf28c5c9d3583862178a3e2613e6d80e2cb0da))
-* shared download status polling via ActiveDownloadsProvider context ([46834fc](https://github.com/Gitsack/hamster/commit/46834fc082dbfbd1f826bb6cab5e886a21c325d6))
-* shared download status polling via context provider ([037d9c9](https://github.com/Gitsack/hamster/commit/037d9c94dd8a57acd12182922ecd7c1fe43c2505))
-* show rate-limit and indexer skip feedback in search UI ([2cd55f7](https://github.com/Gitsack/hamster/commit/2cd55f7fa404b326faa6224b896c19e5d16bd579))
-* standardize button patterns, labels, and empty states in search results ([fdfa9e1](https://github.com/Gitsack/hamster/commit/fdfa9e1d5298a0001f5da127398e0761bbe19094))
-* standardize search page button patterns and empty states ([1d54891](https://github.com/Gitsack/hamster/commit/1d548915fcd6b31e77e693e239a4670ad02268d6))
-* streamline discover-to-download flow with improved toast feedback ([b9ddbca](https://github.com/Gitsack/hamster/commit/b9ddbca842961d98f98bba9c1df4ad25ae4d64e9))
-* streamline discover-to-download flow with toast feedback ([d274238](https://github.com/Gitsack/hamster/commit/d274238e764d7321655ea679b160cbb611497c18))
-
+- add database indexes for high-frequency query columns ([9bbf28c](https://github.com/Gitsack/hamster/commit/9bbf28c5c9d3583862178a3e2613e6d80e2cb0da))
+- shared download status polling via ActiveDownloadsProvider context ([46834fc](https://github.com/Gitsack/hamster/commit/46834fc082dbfbd1f826bb6cab5e886a21c325d6))
+- shared download status polling via context provider ([037d9c9](https://github.com/Gitsack/hamster/commit/037d9c94dd8a57acd12182922ecd7c1fe43c2505))
+- show rate-limit and indexer skip feedback in search UI ([2cd55f7](https://github.com/Gitsack/hamster/commit/2cd55f7fa404b326faa6224b896c19e5d16bd579))
+- standardize button patterns, labels, and empty states in search results ([fdfa9e1](https://github.com/Gitsack/hamster/commit/fdfa9e1d5298a0001f5da127398e0761bbe19094))
+- standardize search page button patterns and empty states ([1d54891](https://github.com/Gitsack/hamster/commit/1d548915fcd6b31e77e693e239a4670ad02268d6))
+- streamline discover-to-download flow with improved toast feedback ([b9ddbca](https://github.com/Gitsack/hamster/commit/b9ddbca842961d98f98bba9c1df4ad25ae4d64e9))
+- streamline discover-to-download flow with toast feedback ([d274238](https://github.com/Gitsack/hamster/commit/d274238e764d7321655ea679b160cbb611497c18))
 
 ### Bug Fixes
 
-* add error handling to dashboard and password reset ([d8ed5c0](https://github.com/Gitsack/hamster/commit/d8ed5c096b578b38898f49d767481adf2e8fac4e))
-* add error handling to dashboard controller and password reset flow ([0f88d20](https://github.com/Gitsack/hamster/commit/0f88d20dc895f3c10f8670f727d0a3f2cedbb782))
-* add missing EmptyState UI component ([2901869](https://github.com/Gitsack/hamster/commit/2901869348af6bcbabf37231e0dddc1e3b36b417))
-* add missing providers to SSR entry point to prevent Library page crash ([f225297](https://github.com/Gitsack/hamster/commit/f225297c04f0e4cff574b3d2bf0da14a75ddedce))
-* add missing SSR providers to prevent Library page Error 500 ([cef286b](https://github.com/Gitsack/hamster/commit/cef286bf3df4973db2dd7b54c841ba9c007446f7))
-* blacklist and retry settings ([f850e76](https://github.com/Gitsack/hamster/commit/f850e76d5a28ede521c9b0dafda371a8b5a2684a))
-* create shared EmptyState UI component to resolve missing module error ([4c5798a](https://github.com/Gitsack/hamster/commit/4c5798aa1930656c3d44f4d68f5643a49d8792ec))
-* migration ([d2d803d](https://github.com/Gitsack/hamster/commit/d2d803d0d9c0673fbbe36c89b3ff6ce4acefbc9a))
-* remove dead inline episode search code in tvshow page ([2a55f96](https://github.com/Gitsack/hamster/commit/2a55f962b67c88df80506162c1e55aca938926ac))
-* remove dead inline episode search results code referencing undefined grabEpisodeRelease ([c45a2f4](https://github.com/Gitsack/hamster/commit/c45a2f45340d34f3ef5fcea12f365b8b615a5d50))
-* remove duplicate function declarations in movie detail page ([e2514cf](https://github.com/Gitsack/hamster/commit/e2514cf7cc8244229b183a0404389f5eef6fae21))
-* remove duplicate searchEpisodeReleases declaration in tvshow page ([8ae8ba1](https://github.com/Gitsack/hamster/commit/8ae8ba15e8f89d35bba0b71fbed9197f38e27985))
-* remove duplicate searchEpisodeReleases in tvshow page ([91ed9ed](https://github.com/Gitsack/hamster/commit/91ed9ed12b5e4fcac8628d4132abd4463aa3f77c))
-* remove duplicate searchEpisodeReleases route causing server startup crash ([abbef8d](https://github.com/Gitsack/hamster/commit/abbef8daabfb2df4ee808f981965d02a92cad5d8))
-* remove duplicate searchReleases and grabRelease function declarations in movie page ([445d79f](https://github.com/Gitsack/hamster/commit/445d79f845bd437041d271348405c45914fbb384))
-* remove duplicate state declarations in movie detail page ([bc4fb81](https://github.com/Gitsack/hamster/commit/bc4fb81d4f14516b3fc448af2b5217e632d74ae1))
-* remove duplicate state declarations in movie detail page causing transform errors ([12c312f](https://github.com/Gitsack/hamster/commit/12c312f080070f99dfcd9154e00d584c71e87780))
-* remove orphaned closing div in tvshow page ([8c6b1d4](https://github.com/Gitsack/hamster/commit/8c6b1d4248dd38aeb010b601d75412a528f4355b))
-* remove orphaned closing div tag left from dead code removal in tvshow page ([1f9cfd2](https://github.com/Gitsack/hamster/commit/1f9cfd2a703293a4ef6dd1d1db9bc43fff7a249b))
-* replace negative margin scroll containers with proper overflow in search page ([0c621e8](https://github.com/Gitsack/hamster/commit/0c621e8674f1c97a4e003f6d836cd197c3cfc998))
-* setup:worktree command ([414a83a](https://github.com/Gitsack/hamster/commit/414a83ac3402e4c00828a6b3528810051be1bc56))
-* standardize TVShow detail page to match Movie/Album patterns ([f51adc3](https://github.com/Gitsack/hamster/commit/f51adc32063fb9f9158ecd20232f390c038c4478))
+- add error handling to dashboard and password reset ([d8ed5c0](https://github.com/Gitsack/hamster/commit/d8ed5c096b578b38898f49d767481adf2e8fac4e))
+- add error handling to dashboard controller and password reset flow ([0f88d20](https://github.com/Gitsack/hamster/commit/0f88d20dc895f3c10f8670f727d0a3f2cedbb782))
+- add missing EmptyState UI component ([2901869](https://github.com/Gitsack/hamster/commit/2901869348af6bcbabf37231e0dddc1e3b36b417))
+- add missing providers to SSR entry point to prevent Library page crash ([f225297](https://github.com/Gitsack/hamster/commit/f225297c04f0e4cff574b3d2bf0da14a75ddedce))
+- add missing SSR providers to prevent Library page Error 500 ([cef286b](https://github.com/Gitsack/hamster/commit/cef286bf3df4973db2dd7b54c841ba9c007446f7))
+- blacklist and retry settings ([f850e76](https://github.com/Gitsack/hamster/commit/f850e76d5a28ede521c9b0dafda371a8b5a2684a))
+- create shared EmptyState UI component to resolve missing module error ([4c5798a](https://github.com/Gitsack/hamster/commit/4c5798aa1930656c3d44f4d68f5643a49d8792ec))
+- migration ([d2d803d](https://github.com/Gitsack/hamster/commit/d2d803d0d9c0673fbbe36c89b3ff6ce4acefbc9a))
+- remove dead inline episode search code in tvshow page ([2a55f96](https://github.com/Gitsack/hamster/commit/2a55f962b67c88df80506162c1e55aca938926ac))
+- remove dead inline episode search results code referencing undefined grabEpisodeRelease ([c45a2f4](https://github.com/Gitsack/hamster/commit/c45a2f45340d34f3ef5fcea12f365b8b615a5d50))
+- remove duplicate function declarations in movie detail page ([e2514cf](https://github.com/Gitsack/hamster/commit/e2514cf7cc8244229b183a0404389f5eef6fae21))
+- remove duplicate searchEpisodeReleases declaration in tvshow page ([8ae8ba1](https://github.com/Gitsack/hamster/commit/8ae8ba15e8f89d35bba0b71fbed9197f38e27985))
+- remove duplicate searchEpisodeReleases in tvshow page ([91ed9ed](https://github.com/Gitsack/hamster/commit/91ed9ed12b5e4fcac8628d4132abd4463aa3f77c))
+- remove duplicate searchEpisodeReleases route causing server startup crash ([abbef8d](https://github.com/Gitsack/hamster/commit/abbef8daabfb2df4ee808f981965d02a92cad5d8))
+- remove duplicate searchReleases and grabRelease function declarations in movie page ([445d79f](https://github.com/Gitsack/hamster/commit/445d79f845bd437041d271348405c45914fbb384))
+- remove duplicate state declarations in movie detail page ([bc4fb81](https://github.com/Gitsack/hamster/commit/bc4fb81d4f14516b3fc448af2b5217e632d74ae1))
+- remove duplicate state declarations in movie detail page causing transform errors ([12c312f](https://github.com/Gitsack/hamster/commit/12c312f080070f99dfcd9154e00d584c71e87780))
+- remove orphaned closing div in tvshow page ([8c6b1d4](https://github.com/Gitsack/hamster/commit/8c6b1d4248dd38aeb010b601d75412a528f4355b))
+- remove orphaned closing div tag left from dead code removal in tvshow page ([1f9cfd2](https://github.com/Gitsack/hamster/commit/1f9cfd2a703293a4ef6dd1d1db9bc43fff7a249b))
+- replace negative margin scroll containers with proper overflow in search page ([0c621e8](https://github.com/Gitsack/hamster/commit/0c621e8674f1c97a4e003f6d836cd197c3cfc998))
+- setup:worktree command ([414a83a](https://github.com/Gitsack/hamster/commit/414a83ac3402e4c00828a6b3528810051be1bc56))
+- standardize TVShow detail page to match Movie/Album patterns ([f51adc3](https://github.com/Gitsack/hamster/commit/f51adc32063fb9f9158ecd20232f390c038c4478))
 
 ## [1.23.0](https://github.com/Gitsack/hamster/compare/hamster-v1.22.0...hamster-v1.23.0) (2026-04-04)
 
