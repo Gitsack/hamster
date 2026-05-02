@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.0](https://github.com/Gitsack/hamster/compare/hamster-v1.25.1...hamster-v1.26.0) (2026-05-02)
+
+
+### Features
+
+* replace existing file when grabbing release manually ([834dee3](https://github.com/Gitsack/hamster/commit/834dee33735c4f19890e3460c33b198451539fbe))
+
 ## [1.25.1](https://github.com/Gitsack/hamster/compare/hamster-v1.25.0...hamster-v1.25.1) (2026-04-11)
 
 
