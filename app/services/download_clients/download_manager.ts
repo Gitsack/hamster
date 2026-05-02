@@ -14,6 +14,7 @@ import { movieImportService } from '#services/media/movie_import_service'
 import { episodeImportService } from '#services/media/episode_import_service'
 import { bookImportService } from '#services/media/book_import_service'
 import { fileNamingService } from '#services/media/file_naming_service'
+import { matchTitleToLibrary } from '#services/media/library_matcher'
 import { blacklistService } from '#services/blacklist/blacklist_service'
 import QualityProfile from '#models/quality_profile'
 import { scoreRelease } from '#services/quality/quality_scorer'
@@ -826,6 +827,7 @@ export class DownloadManager {
               { nzoId: slot.nzo_id, filename: slot.filename },
               'DownloadManager: Found untracked SABnzbd queue item, creating record'
             )
+            const match = await matchTitleToLibrary(slot.filename)
             download = await Download.create({
               downloadClientId: client.id,
               externalId: slot.nzo_id,
@@ -835,6 +837,11 @@ export class DownloadManager {
               sizeBytes: Math.floor(Number.parseFloat(slot.mb) * 1024 * 1024),
               remainingBytes: Math.floor(Number.parseFloat(slot.mbleft) * 1024 * 1024),
               etaSeconds: this.parseTimeLeft(slot.timeleft),
+              movieId: match?.type === 'movie' ? match.id : null,
+              tvShowId: match?.type === 'episode' ? match.tvShowId : null,
+              episodeId: match?.type === 'episode' ? match.id : null,
+              albumId: match?.type === 'album' ? match.id : null,
+              bookId: match?.type === 'book' ? match.id : null,
             })
             downloadsByExternalId.set(slot.nzo_id, download)
           }
@@ -1672,6 +1679,31 @@ export class DownloadManager {
             )
             await download.save()
           }
+        }
+      }
+
+      // If the download has no media linkage (e.g. created from an untracked
+      // SABnzbd item), try a one-shot match against the library before bailing.
+      const hasMediaLinkage =
+        download.albumId ||
+        download.movieId ||
+        download.tvShowId ||
+        download.episodeId ||
+        download.bookId
+      if (!hasMediaLinkage) {
+        const match = await matchTitleToLibrary(download.title)
+        if (match) {
+          logger.info(
+            { title: download.title, matchType: match.type, matchId: match.id },
+            'DownloadManager: Recovered media linkage for orphan download'
+          )
+          if (match.type === 'movie') download.movieId = match.id
+          else if (match.type === 'episode') {
+            download.tvShowId = match.tvShowId
+            download.episodeId = match.id
+          } else if (match.type === 'album') download.albumId = match.id
+          else if (match.type === 'book') download.bookId = match.id
+          await download.save()
         }
       }
 
