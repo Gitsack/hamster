@@ -25,6 +25,7 @@ export interface NzbInfo {
   downloadUrl?: string
   size?: number
   indexer?: string
+  replaceExisting?: boolean
 }
 
 export default class Download extends BaseModel {

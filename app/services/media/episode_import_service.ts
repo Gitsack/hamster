@@ -137,7 +137,8 @@ export class EpisodeImportService {
             filePath,
             tvShow,
             rootFolder,
-            download.episodeId
+            download.episodeId,
+            download.nzbInfo?.replaceExisting === true
           )
 
           if (importResult.success) {
@@ -242,7 +243,8 @@ export class EpisodeImportService {
     sourcePath: string,
     tvShow: TvShow,
     rootFolder: RootFolder,
-    knownEpisodeId?: string | null
+    knownEpisodeId?: string | null,
+    forceReplace: boolean = false
   ): Promise<{ success: boolean; error?: string; destinationPath?: string }> {
     const fileName = path.basename(sourcePath)
 
@@ -305,8 +307,9 @@ export class EpisodeImportService {
     }
 
     // --- Integrity check 3: don't overwrite a larger existing file ---
+    // Skipped when forceReplace is set (user explicitly chose this release).
     const existingFile = await EpisodeFile.query().where('episodeId', episode.id).first()
-    if (existingFile) {
+    if (existingFile && !forceReplace) {
       const existingAbsPath = path.join(rootFolder.path, existingFile.relativePath)
       try {
         const existingStats = await fs.stat(existingAbsPath)

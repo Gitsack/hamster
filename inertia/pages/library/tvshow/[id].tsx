@@ -747,6 +747,7 @@ export default function TvShowDetail() {
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
+          replaceExisting: true,
           ...(selectedClientId && { downloadClientId: selectedClientId }),
         }),
       })
@@ -906,10 +907,6 @@ export default function TvShowDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={searchReleases} disabled={searching}>
-                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
-                {searching ? 'Searching...' : 'Manual Search'}
-              </DropdownMenuItem>
               {!show.tmdbId && (
                 <DropdownMenuItem onClick={refreshMetadata} disabled={enriching}>
                   <HugeiconsIcon

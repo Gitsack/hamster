@@ -130,6 +130,7 @@ export default class QueueController {
       indexerName,
       guid,
       downloadClientId,
+      replaceExisting,
     } = request.only([
       'title',
       'downloadUrl',
@@ -144,6 +145,7 @@ export default class QueueController {
       'indexerName',
       'guid',
       'downloadClientId',
+      'replaceExisting',
     ])
 
     if (!title || !downloadUrl) {
@@ -165,6 +167,7 @@ export default class QueueController {
         indexerName,
         guid,
         downloadClientId: downloadClientId ? Number(downloadClientId) : undefined,
+        replaceExisting: replaceExisting === true || replaceExisting === 'true',
       })
 
       return response.created({

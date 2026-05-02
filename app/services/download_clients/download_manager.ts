@@ -38,6 +38,7 @@ export interface DownloadRequest {
   indexerName?: string
   guid?: string
   downloadClientId?: number
+  replaceExisting?: boolean
 }
 
 export interface QueueItem {
@@ -490,44 +491,48 @@ export class DownloadManager {
       }
     }
 
-    // Check hasFile flag directly on the media item as a safety net
-    if (request.episodeId) {
-      const episode = await Episode.find(request.episodeId)
-      if (episode?.hasFile) {
-        logger.info(
-          { title: request.title },
-          'DownloadManager: Skipping download, episode already has file'
-        )
-        throw new Error('Episode already has a file')
+    // Check hasFile flag directly on the media item as a safety net.
+    // Skipped when replaceExisting is set (manual grab where the user explicitly
+    // chose to overwrite the existing file).
+    if (!request.replaceExisting) {
+      if (request.episodeId) {
+        const episode = await Episode.find(request.episodeId)
+        if (episode?.hasFile) {
+          logger.info(
+            { title: request.title },
+            'DownloadManager: Skipping download, episode already has file'
+          )
+          throw new Error('Episode already has a file')
+        }
+      } else if (request.movieId) {
+        const movie = await Movie.find(request.movieId)
+        if (movie?.hasFile) {
+          logger.info(
+            { title: request.title },
+            'DownloadManager: Skipping download, movie already has file'
+          )
+          throw new Error('Movie already has a file')
+        }
+      } else if (request.bookId) {
+        const book = await Book.find(request.bookId)
+        if (book?.hasFile) {
+          logger.info(
+            { title: request.title },
+            'DownloadManager: Skipping download, book already has file'
+          )
+          throw new Error('Book already has a file')
+        }
       }
-    } else if (request.movieId) {
-      const movie = await Movie.find(request.movieId)
-      if (movie?.hasFile) {
-        logger.info(
-          { title: request.title },
-          'DownloadManager: Skipping download, movie already has file'
-        )
-        throw new Error('Movie already has a file')
-      }
-    } else if (request.bookId) {
-      const book = await Book.find(request.bookId)
-      if (book?.hasFile) {
-        logger.info(
-          { title: request.title },
-          'DownloadManager: Skipping download, book already has file'
-        )
-        throw new Error('Book already has a file')
-      }
-    }
 
-    // Check if file already exists in the library (based on expected path from naming settings)
-    const fileAlreadyExists = await this.checkFileExistsInLibrary(request)
-    if (fileAlreadyExists) {
-      logger.info(
-        { title: request.title },
-        'DownloadManager: Skipping download, file already exists in library'
-      )
-      throw new Error('File already exists in library')
+      // Check if file already exists in the library (based on expected path from naming settings)
+      const fileAlreadyExists = await this.checkFileExistsInLibrary(request)
+      if (fileAlreadyExists) {
+        logger.info(
+          { title: request.title },
+          'DownloadManager: Skipping download, file already exists in library'
+        )
+        throw new Error('File already exists in library')
+      }
     }
 
     // Get download client — use override if specified, otherwise pick by priority
@@ -575,6 +580,7 @@ export class DownloadManager {
         downloadUrl: request.downloadUrl,
         size: request.size,
         indexer: request.indexerName,
+        ...(request.replaceExisting ? { replaceExisting: true } : {}),
       },
       startedAt: DateTime.now(),
     })

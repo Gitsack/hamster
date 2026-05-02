@@ -333,6 +333,7 @@ export default function MovieDetail() {
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
+          replaceExisting: true,
           ...(selectedClientId && { downloadClientId: selectedClientId }),
         }),
       })
@@ -506,10 +507,6 @@ export default function MovieDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={searchReleases} disabled={searching}>
-                <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-2" />
-                {searching ? 'Searching...' : 'Manual Search'}
-              </DropdownMenuItem>
               {!movie.tmdbId && (
                 <DropdownMenuItem onClick={enrichMovie} disabled={enriching}>
                   <HugeiconsIcon

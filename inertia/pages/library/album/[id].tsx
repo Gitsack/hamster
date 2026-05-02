@@ -274,6 +274,7 @@ export default function AlbumDetail() {
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
+          replaceExisting: true,
           ...(selectedClientId && { downloadClientId: selectedClientId }),
         }),
       })

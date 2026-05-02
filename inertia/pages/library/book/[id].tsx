@@ -282,6 +282,7 @@ export default function BookDetail() {
           indexerId: result.indexerId,
           indexerName: result.indexer,
           guid: result.id,
+          replaceExisting: true,
         }),
       })
       if (response.ok) {

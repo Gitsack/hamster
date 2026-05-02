@@ -132,7 +132,8 @@ export class MovieImportService {
           mainFile.path,
           movie,
           rootFolder,
-          mainFile.quality
+          mainFile.quality,
+          download.nzbInfo?.replaceExisting === true
         )
 
         if (importResult.success) {
@@ -238,7 +239,8 @@ export class MovieImportService {
     sourcePath: string,
     movie: Movie,
     rootFolder: RootFolder,
-    quality?: string
+    quality?: string,
+    forceReplace: boolean = false
   ): Promise<{ success: boolean; error?: string; destinationPath?: string }> {
     // --- Integrity check 1: minimum file size ---
     const sourceStats = await fs.stat(sourcePath)
@@ -275,8 +277,9 @@ export class MovieImportService {
     }
 
     // --- Integrity check 3: don't overwrite a larger existing file ---
+    // Skipped when forceReplace is set (user explicitly chose this release).
     const existingFile = await MovieFile.query().where('movieId', movie.id).first()
-    if (existingFile) {
+    if (existingFile && !forceReplace) {
       const existingAbsPath = path.join(rootFolder.path, existingFile.relativePath)
       try {
         const existingStats = await fs.stat(existingAbsPath)
