@@ -58,6 +58,26 @@ export type ProgressCallback = (action: string, message: string) => void
 class FolderScanner {
   private isRunning = false
 
+  /** TaskRunner: returns true while a scan is in progress */
+  get running(): boolean {
+    return this.isRunning
+  }
+
+  /** TaskRunner: noop. Scheduling is handled by TaskScheduler. */
+  start(_interval: number): void {
+    // No-op: TaskScheduler drives execution
+  }
+
+  /** TaskRunner: noop. Scheduling is handled by TaskScheduler. */
+  stop(): void {
+    // No-op: TaskScheduler drives execution
+  }
+
+  /** TaskRunner: invoked by TaskScheduler on each tick */
+  async run(): Promise<void> {
+    await this.scan()
+  }
+
   /**
    * Folder names that should be skipped during scanning.
    * Includes NAS system folders, recycle bins, metadata dirs, and OS junk.
@@ -1647,10 +1667,9 @@ class FolderScanner {
     // Check for "Artist - Album" pattern (with hyphen)
     const hasArtistAlbumPattern = /^[^-]+-[^-]+/.test(original.replace(/\./g, '-'))
 
-    // Albums don't have hasFile - check requested or monitored
-    const albums = await Album.query()
-      .where((q) => q.where('requested', true).orWhere('monitored', true))
-      .preload('artist')
+    // Match against ALL albums in the library — a file on disk for a known album
+    // should always be importable, regardless of how the entry got into the library.
+    const albums = await Album.query().preload('artist')
 
     let bestMatch: { id: string; title: string; confidence: number } | null = null
 
@@ -1714,7 +1733,7 @@ class FolderScanner {
     const musicIndicators = /\b(flac|mp3|cd|lp|vinyl|320|v0|album|\dcd)\b/i
     const hasMusicIndicator = musicIndicators.test(original)
 
-    const movies = await Movie.query().where((q) => q.where('requested', true))
+    const movies = await Movie.query()
 
     let bestMatch: { id: string; title: string; confidence: number } | null = null
 
@@ -1779,8 +1798,7 @@ class FolderScanner {
     const folderYearMatch = original.match(/\b(19\d{2}|20\d{2})\b/)
     const folderYear = folderYearMatch ? Number.parseInt(folderYearMatch[1]) : undefined
 
-    // TvShow doesn't have hasFile - it's at episode level
-    const shows = await TvShow.query().where('requested', true)
+    const shows = await TvShow.query()
 
     for (const show of shows) {
       const showNorm = show.title.toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -1826,9 +1844,7 @@ class FolderScanner {
       return null // Require book indicator for book matching
     }
 
-    const books = await Book.query()
-      .where((q) => q.where('requested', true))
-      .preload('author')
+    const books = await Book.query().preload('author')
 
     let bestMatch: { id: string; title: string; confidence: number } | null = null
 

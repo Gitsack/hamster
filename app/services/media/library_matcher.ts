@@ -155,7 +155,10 @@ async function matchMovie(
   year?: number
 ): Promise<{ type: 'movie'; id: string; title: string } | null> {
   const wanted = normalize(title)
-  const movies = await Movie.query().where('requested', true)
+  // Match against ALL movies in the library — not only requested.
+  // A file landing on disk for a known movie should always be importable,
+  // regardless of how the library entry got there (request, scan, manual add).
+  const movies = await Movie.query()
   for (const movie of movies) {
     if (!isSimilar(wanted, normalize(movie.title))) continue
     if (year && movie.year && Math.abs(year - movie.year) > 1) continue
@@ -171,7 +174,7 @@ async function matchEpisode(
 ): Promise<{ type: 'episode'; id: string; title: string; tvShowId: string } | null> {
   if (season === undefined || episode === undefined) return null
   const wanted = normalize(title)
-  const shows = await TvShow.query().where('requested', true)
+  const shows = await TvShow.query()
   for (const show of shows) {
     if (!isSimilar(wanted, normalize(show.title))) continue
     const ep = await Episode.query()
@@ -197,7 +200,7 @@ async function matchAlbum(
 ): Promise<{ type: 'album'; id: string; title: string } | null> {
   const wantedArtist = normalize(artist)
   const wantedAlbum = normalize(albumTitle)
-  const albums = await Album.query().where('requested', true).preload('artist')
+  const albums = await Album.query().preload('artist')
   for (const album of albums) {
     const artistName = (album as unknown as { artist?: { name?: string } }).artist?.name || ''
     if (!isSimilar(wantedAlbum, normalize(album.title))) continue
@@ -213,7 +216,7 @@ async function matchBook(
 ): Promise<{ type: 'book'; id: string; title: string } | null> {
   const wantedAuthor = normalize(author)
   const wantedTitle = normalize(bookTitle)
-  const books = await Book.query().where('requested', true).preload('author')
+  const books = await Book.query().preload('author')
   for (const book of books) {
     const authorName = (book as unknown as { author?: { name?: string } }).author?.name || ''
     if (!isSimilar(wantedTitle, normalize(book.title))) continue

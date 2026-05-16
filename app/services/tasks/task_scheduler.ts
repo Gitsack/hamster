@@ -23,6 +23,13 @@ const DEFAULT_TASKS: DefaultTask[] = [
     intervalMinutes: 5,
     enabled: true,
   },
+  { name: 'Folder Scanner', type: 'folder_scan', intervalMinutes: 10, enabled: true },
+  {
+    name: 'Stuck Import Recovery',
+    type: 'stuck_import_recovery',
+    intervalMinutes: 15,
+    enabled: true,
+  },
   { name: 'Requested Items Search', type: 'requested_search', intervalMinutes: 60, enabled: true },
   { name: 'RSS Sync', type: 'rss_sync', intervalMinutes: 15, enabled: true },
   { name: 'Backup', type: 'backup', intervalMinutes: 1440, enabled: true },
@@ -137,6 +144,8 @@ class TaskScheduler {
     const delays: Record<string, number> = {
       download_monitor: 5000,
       completed_scanner: 10000,
+      folder_scan: 15000,
+      stuck_import_recovery: 18000,
       requested_search: 20000,
       rss_sync: 30000,
       cleanup: 45000,

@@ -81,11 +81,13 @@ class CompletedDownloadsScanner {
    */
   private async loadCache(): Promise<void> {
     console.log('[CompletedScanner] Loading library cache...')
+    // Match against ALL library items (not only requested). A completed download
+    // on disk for any known library entry should be importable.
     const [movies, shows, albums, books] = await Promise.all([
-      Movie.query().where('requested', true),
-      TvShow.query().where('requested', true),
-      Album.query().where('requested', true).preload('artist'),
-      Book.query().where('requested', true).preload('author'),
+      Movie.query(),
+      TvShow.query(),
+      Album.query().preload('artist'),
+      Book.query().preload('author'),
     ])
     this.cachedMovies = movies
     this.cachedShows = shows
@@ -198,6 +200,17 @@ class CompletedDownloadsScanner {
             onProgress?.('error', `Error processing "${slot.name}"`)
           }
         }
+        break
+      }
+      default: {
+        // NZBGet/qBittorrent/Transmission/Deluge: orphan recovery is handled by
+        // folder_scanner which walks the client's completed folder on disk.
+        // That path is more reliable than per-client API history APIs (works
+        // when the client is offline, when history was cleared, when files were
+        // placed manually). See app/services/tasks/folder_scanner.ts.
+        console.log(
+          `[CompletedScanner] Skipping API scan for ${client.name} (${client.type}); orphan recovery is handled by folder_scanner.`
+        )
         break
       }
     }

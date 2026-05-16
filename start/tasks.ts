@@ -12,6 +12,8 @@
 import { requestedSearchTask } from '#services/tasks/requested_search_task'
 import { downloadMonitorTask } from '#services/tasks/download_monitor_task'
 import { completedDownloadsScanner } from '#services/tasks/completed_downloads_scanner'
+import { folderScanner } from '#services/tasks/folder_scanner'
+import { stuckImportRecoveryTask } from '#services/tasks/stuck_import_recovery_task'
 import { rssSyncTask } from '#services/tasks/rss_sync_task'
 import { refreshMetadataTask } from '#services/tasks/refresh_metadata_task'
 import { backupService } from '#services/backup/backup_service'
@@ -64,6 +66,8 @@ taskScheduler.register('completed_scanner', {
     return false
   },
 })
+taskScheduler.register('folder_scan', folderScanner)
+taskScheduler.register('stuck_import_recovery', stuckImportRecoveryTask)
 taskScheduler.register('requested_search', requestedSearchTask)
 taskScheduler.register('rss_sync', rssSyncTask)
 taskScheduler.register('backup', backupService)

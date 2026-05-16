@@ -1661,6 +1661,44 @@ export class DownloadManager {
   }
 
   /**
+   * Public entry-point to (re)trigger an import for a completed download.
+   * Used by the stuck-import recovery task and manual retries from the UI.
+   */
+  async retryImport(download: Download): Promise<void> {
+    if (this.importsInFlight.has(download.id)) {
+      logger.debug(
+        { downloadId: download.id, title: download.title },
+        'DownloadManager: retryImport skipped — already in-flight'
+      )
+      return
+    }
+    const attempt = (this.importAttempts.get(download.id) || 0) + 1
+    if (attempt > DownloadManager.MAX_IMPORT_ATTEMPTS) {
+      logger.warn(
+        { downloadId: download.id, title: download.title, attempt },
+        'DownloadManager: retryImport refused — max attempts exceeded'
+      )
+      download.status = 'failed'
+      download.errorMessage = `Import failed after ${attempt - 1} attempts`
+      await download.save()
+      return
+    }
+    this.importAttempts.set(download.id, attempt)
+    this.importsInFlight.add(download.id)
+    try {
+      await this.triggerImport(download)
+    } finally {
+      this.importsInFlight.delete(download.id)
+    }
+  }
+
+  /** Test/maintenance hook: reset retry bookkeeping for a download */
+  resetImportAttempts(downloadId: string): void {
+    this.importAttempts.delete(downloadId)
+    this.importsInFlight.delete(downloadId)
+  }
+
+  /**
    * Trigger import for a completed download
    * Routes to the appropriate import service based on media type
    */
