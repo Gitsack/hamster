@@ -44,6 +44,15 @@ export default await Env.create(new URL('../', import.meta.url), {
   |----------------------------------------------------------
   */
   SERVICE_HOST_MAP: Env.schema.string.optional(),
+  /*
+   * Filesystem path translation, same syntax as SERVICE_HOST_MAP.
+   * Each entry is FROM:TO and translates the FROM prefix on any DB-stored
+   * filesystem path (e.g. download client localPath) to TO at FS-access time.
+   * Used when the local dev environment mounts the same volume at a different
+   * path than the production Docker setup (Docker: /downloads, local: /mnt/nas/download).
+   * Example: SERVICE_PATH_MAP=/downloads:/mnt/nas/download,/media:/mnt/nas/media
+   */
+  SERVICE_PATH_MAP: Env.schema.string.optional(),
 
   DB_HOST: Env.schema.string({ format: 'host' }),
   DB_PORT: Env.schema.number(),

@@ -36,6 +36,7 @@ import {
   Settings01Icon,
   Globe02Icon,
   StarIcon,
+  Refresh01Icon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 import { FolderBrowser } from '@/components/folder-browser'
@@ -246,6 +247,7 @@ export default function MediaManagement() {
   })
   const [rootFolders, setRootFolders] = useState<RootFolder[]>([])
   const [loading, setLoading] = useState(true)
+  const [scanningFolderIds, setScanningFolderIds] = useState<Set<number>>(new Set())
 
   // Streaming providers state
   const [availableProviders, setAvailableProviders] = useState<StreamingProvider[]>([])
@@ -418,6 +420,85 @@ export default function MediaManagement() {
 
   const getFolderForMediaType = (mediaType: MediaType) => {
     return rootFolders.find((folder) => folder.mediaType === mediaType)
+  }
+
+  const handleRescan = async (folderId: number) => {
+    // Optimistically mark as scanning. The scan endpoint returns 202
+    // immediately and the work continues in the background, so we poll
+    // /scan-status until it reports isScanning=false before clearing.
+    setScanningFolderIds((prev) => {
+      const next = new Set(prev)
+      next.add(folderId)
+      return next
+    })
+
+    try {
+      const response = await fetch(`/api/v1/rootfolders/${folderId}/scan`, { method: 'POST' })
+
+      if (response.status === 409) {
+        toast.info('A scan is already in progress for this folder')
+      } else if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        toast.error(data.error || 'Failed to start scan')
+        setScanningFolderIds((prev) => {
+          const next = new Set(prev)
+          next.delete(folderId)
+          return next
+        })
+        return
+      } else {
+        toast.success('Library scan started')
+      }
+    } catch {
+      toast.error('Failed to start scan')
+      setScanningFolderIds((prev) => {
+        const next = new Set(prev)
+        next.delete(folderId)
+        return next
+      })
+      return
+    }
+
+    // Poll status every 3s. Stop when isScanning is false or after 15 min
+    // (safety cap — large libraries can take a while but the polling
+    // shouldn't outlive a reasonable scan).
+    const startedAt = Date.now()
+    const POLL_INTERVAL_MS = 3000
+    const POLL_TIMEOUT_MS = 15 * 60 * 1000
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/v1/rootfolders/${folderId}/scan-status`)
+        if (!res.ok) throw new Error('status check failed')
+        const data = await res.json()
+        if (!data.isScanning) {
+          setScanningFolderIds((prev) => {
+            const next = new Set(prev)
+            next.delete(folderId)
+            return next
+          })
+          toast.success('Library scan complete')
+          fetchData()
+          return
+        }
+        if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+          setScanningFolderIds((prev) => {
+            const next = new Set(prev)
+            next.delete(folderId)
+            return next
+          })
+          return
+        }
+        setTimeout(poll, POLL_INTERVAL_MS)
+      } catch {
+        setScanningFolderIds((prev) => {
+          const next = new Set(prev)
+          next.delete(folderId)
+          return next
+        })
+      }
+    }
+    setTimeout(poll, POLL_INTERVAL_MS)
   }
 
   const openFolderDialog = (mediaType: MediaType) => {
@@ -1220,6 +1301,22 @@ export default function MediaManagement() {
                                 className="size-4 text-destructive"
                               />
                             )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Rescan this folder to reconcile files on disk with the library"
+                              disabled={
+                                scanningFolderIds.has(folder.id) || !folder.accessible
+                              }
+                              onClick={() => handleRescan(folder.id)}
+                            >
+                              <HugeiconsIcon
+                                icon={Refresh01Icon}
+                                className={`size-4 ${
+                                  scanningFolderIds.has(folder.id) ? 'animate-spin' : ''
+                                }`}
+                              />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"

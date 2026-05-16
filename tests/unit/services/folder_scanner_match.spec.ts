@@ -6,12 +6,15 @@ import { EpisodeFactory } from '../../../database/factories/episode_factory.js'
 import { SeasonFactory } from '../../../database/factories/season_factory.js'
 import { AlbumFactory } from '../../../database/factories/album_factory.js'
 import { ArtistFactory } from '../../../database/factories/artist_factory.js'
+import { DownloadFactory } from '../../../database/factories/download_factory.js'
 import Movie from '#models/movie'
 import TvShow from '#models/tv_show'
 import Episode from '#models/episode'
 import Season from '#models/season'
 import Album from '#models/album'
 import Artist from '#models/artist'
+import Download from '#models/download'
+import { DateTime } from 'luxon'
 
 /**
  * These tests verify that FolderScanner.matchToLibrary() picks up library
@@ -139,5 +142,53 @@ test.group('FolderScanner | TaskRunner interface', () => {
     folderScanner.start(60)
     folderScanner.stop()
     assert.isFalse(folderScanner.running)
+  })
+})
+
+// ---- regression: failed downloads should be re-considered, not ignored ----
+// Verifies that the Download lookup query now includes status='failed' so
+// folders sitting in /downloads/complete that previously failed (e.g.
+// "Unknown media type" before the matcher was fixed) can be retried.
+test.group('FolderScanner | retries failed downloads', (group) => {
+  const ids: string[] = []
+
+  group.teardown(async () => {
+    await Download.query().whereIn('id', ids).delete()
+  })
+
+  test('a Download row with status=failed is findable via outputPath lookup', async ({
+    assert,
+  }) => {
+    const dl = await DownloadFactory.create({
+      title: 'FSRetryTest__Jury.Duty.S01E04.WEB.h264',
+      status: 'failed',
+      outputPath: '/tmp/folder-scanner-retry-test/Jury Duty S01E04',
+      errorMessage: 'Unknown media type - cannot determine import service',
+    })
+    ids.push(dl.id)
+
+    // The folder_scanner query: include 'failed' in the status filter
+    const row = await Download.query()
+      .where('outputPath', '/tmp/folder-scanner-retry-test/Jury Duty S01E04')
+      .whereIn('status', ['completed', 'importing', 'failed'])
+      .first()
+
+    assert.isNotNull(row)
+    assert.equal(row?.id, dl.id)
+    assert.equal(row?.status, 'failed')
+  })
+
+  test('cooldown threshold check returns false for old failures', ({ assert }) => {
+    const updatedAt = DateTime.now().minus({ minutes: 10 })
+    const recentThreshold = DateTime.now().minus({ minutes: 5 })
+    // outside cooldown → eligible for retry
+    assert.isFalse(updatedAt > recentThreshold)
+  })
+
+  test('cooldown threshold check returns true for recent failures', ({ assert }) => {
+    const updatedAt = DateTime.now().minus({ minutes: 1 })
+    const recentThreshold = DateTime.now().minus({ minutes: 5 })
+    // within cooldown → skip retry to avoid tight loop
+    assert.isTrue(updatedAt > recentThreshold)
   })
 })

@@ -1,6 +1,7 @@
 import env from '#start/env'
 
 let hostMap: Map<string, string> | null = null
+let pathMap: Array<{ from: string; to: string }> | null = null
 
 function getHostMap(): Map<string, string> {
   if (hostMap !== null) return hostMap
@@ -16,6 +17,27 @@ function getHostMap(): Map<string, string> {
     }
   }
   return hostMap
+}
+
+function getPathMap(): Array<{ from: string; to: string }> {
+  if (pathMap !== null) return pathMap
+
+  pathMap = []
+  const raw = env.get('SERVICE_PATH_MAP', '')
+  if (!raw) return pathMap
+
+  for (const entry of raw.split(',')) {
+    const [from, to] = entry.split(':').map((s) => s.trim())
+    if (from && to) {
+      pathMap.push({ from, to })
+    }
+  }
+
+  // Sort by FROM length descending so the longest, most-specific prefix wins.
+  // Without this, "/d" would shadow "/downloads" if both were configured.
+  pathMap.sort((a, b) => b.from.length - a.from.length)
+
+  return pathMap
 }
 
 /**
@@ -42,4 +64,26 @@ export function mapUrl(url: string): string {
   } catch {
     return url
   }
+}
+
+/**
+ * Translate a filesystem path through SERVICE_PATH_MAP.
+ *
+ * Used at FS-access boundaries when the DB stores a path that's valid in one
+ * runtime (typically Docker, e.g. "/downloads/complete") but mounted at a
+ * different location in another runtime (typically local dev, e.g.
+ * "/mnt/nas/download/complete").
+ *
+ * Only the longest matching FROM prefix is replaced, and only on a full path
+ * segment boundary ("/" or end-of-string) to avoid translating "/downloadsX".
+ */
+export function mapPath(p: string | null | undefined): string {
+  if (!p) return p ?? ''
+  for (const { from, to } of getPathMap()) {
+    if (p === from) return to
+    if (p.startsWith(from + '/')) {
+      return to + p.slice(from.length)
+    }
+  }
+  return p
 }

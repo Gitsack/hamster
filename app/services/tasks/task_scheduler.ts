@@ -30,6 +30,12 @@ const DEFAULT_TASKS: DefaultTask[] = [
     intervalMinutes: 15,
     enabled: true,
   },
+  // Walks library root folders to reconcile files-on-disk against library
+  // entries. Catches files placed in the library outside Hamster's import
+  // pipeline (manual copy, pre-existing media, files renamed externally).
+  // 4 hours is a balance: long enough that walking 50k files is not a hot
+  // path, short enough that "Requested" badges clear within a working day.
+  { name: 'Library Scan', type: 'library_scan', intervalMinutes: 240, enabled: true },
   { name: 'Requested Items Search', type: 'requested_search', intervalMinutes: 60, enabled: true },
   { name: 'RSS Sync', type: 'rss_sync', intervalMinutes: 15, enabled: true },
   { name: 'Backup', type: 'backup', intervalMinutes: 1440, enabled: true },
@@ -146,6 +152,7 @@ class TaskScheduler {
       completed_scanner: 10000,
       folder_scan: 15000,
       stuck_import_recovery: 18000,
+      library_scan: 90000,
       requested_search: 20000,
       rss_sync: 30000,
       cleanup: 45000,

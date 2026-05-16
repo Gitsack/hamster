@@ -240,11 +240,19 @@ export class MovieScannerService {
     const existingFile = await MovieFile.query().where('relativePath', relativePath).first()
 
     if (existingFile) {
+      // Self-healing: an earlier scan may have linked the file to a Movie row
+      // that was created from a buggy parser pass (e.g. a typo title with
+      // tmdb_id=NULL). If so, look up the canonical Movie by TMDB id and
+      // re-attribute the file. See processMovie comment above findExistingMovie.
+      const healed = await this.healOrphanLink(existingFile, parsed, rootFolder)
+      if (healed) {
+        return { created: false, updated: true, unmatched: false }
+      }
+
       // File already imported - check if size changed
       if (existingFile.sizeBytes === fileSize) {
         return { created: false, updated: false, unmatched: false }
       }
-      // Update file size
       existingFile.sizeBytes = fileSize
       await existingFile.save()
       return { created: false, updated: true, unmatched: false }
@@ -273,6 +281,13 @@ export class MovieScannerService {
       }
     }
 
+    // A library entry may have been created via "Request" before any root
+    // folder was configured — its rootFolderId is null. Adopt the current
+    // root folder so future scans pick it up consistently.
+    if (!movie.rootFolderId) {
+      movie.rootFolderId = rootFolder.id
+    }
+
     // Create movie file record
     await MovieFile.create({
       movieId: movie.id,
@@ -291,30 +306,105 @@ export class MovieScannerService {
   }
 
   /**
-   * Find existing movie by title and year
+   * Heal a MovieFile that was attributed to a parser-bug-created Movie row
+   * (typically: tmdbId=NULL, needsReview=true, title slightly mangled).
+   *
+   * Procedure: look up TMDB from the parsed name. If TMDB returns a movie that
+   * already exists in the library under a *different* Movie row, re-attribute
+   * the MovieFile to that canonical row and delete the orphan if safe.
+   *
+   * Returns true if a heal occurred.
+   */
+  private async healOrphanLink(
+    existingFile: MovieFile,
+    parsed: ParsedMovieInfo,
+    rootFolder: RootFolder
+  ): Promise<boolean> {
+    const current = await Movie.find(existingFile.movieId)
+    if (!current) return false
+
+    // Only heal rows with no tmdbId — the row was created from a parsed
+    // filename without metadata, so a fresh TMDB lookup is safe. If the
+    // lookup resolves to a *different* canonical Movie row, the orphan was
+    // never the real owner of this file.
+    if (current.tmdbId) return false
+
+    const tmdbResult = await this.lookupTmdb(parsed)
+    if (!tmdbResult) return false
+
+    const canonical = await Movie.query().where('tmdbId', String(tmdbResult.id)).first()
+    if (!canonical || canonical.id === current.id) return false
+
+    // Re-attribute the file
+    existingFile.movieId = canonical.id
+    await existingFile.save()
+
+    // Update canonical row
+    if (!canonical.rootFolderId) canonical.rootFolderId = rootFolder.id
+    canonical.hasFile = true
+    await canonical.save()
+
+    // Drop the orphan if it has no other files and was not user-requested
+    if (!current.requested) {
+      const remaining = await MovieFile.query().where('movieId', current.id).count('* as cnt')
+      const cnt = Number((remaining[0] as unknown as { $extras: { cnt: string } }).$extras.cnt)
+      if (cnt === 0) {
+        await current.delete()
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * Find existing movie by title and year.
+   *
+   * Strategy:
+   *  1. Within the current root folder, try exact + normalized title with
+   *     year filter (when both have year).
+   *  2. Anywhere in the DB, try the same — to catch entries created by
+   *     "Request" before any root folder was configured (rootFolderId=null).
+   *  3. Anywhere in the DB, try normalized title with year tolerance (±1)
+   *     or year-not-set on either side. This catches metadata drift between
+   *     filename year and TMDB year.
+   *
+   * The looser passes happen second so a same-folder match always wins over
+   * a cross-folder one when both exist.
    */
   private async findExistingMovie(
     parsed: ParsedMovieInfo,
     rootFolderId: string
   ): Promise<Movie | null> {
-    const query = Movie.query().where('rootFolderId', rootFolderId)
+    const normalizedTarget = this.normalizeTitle(parsed.title)
 
-    if (parsed.year) {
-      query.where('year', parsed.year)
+    // Pass 1: same root folder, exact ILIKE title (+ year if parsed)
+    let q = Movie.query().where('rootFolderId', rootFolderId)
+    if (parsed.year) q = q.where('year', parsed.year)
+    const exactSameFolder = await q.whereILike('title', parsed.title).first()
+    if (exactSameFolder) return exactSameFolder
+
+    // Pass 2: same root folder, normalized title (+ year if parsed)
+    const sameFolderCandidates = await (
+      parsed.year
+        ? Movie.query().where('rootFolderId', rootFolderId).where('year', parsed.year)
+        : Movie.query().where('rootFolderId', rootFolderId)
+    ).exec()
+    for (const c of sameFolderCandidates) {
+      if (this.normalizeTitle(c.title) === normalizedTarget) return c
     }
 
-    // Try exact title match first
-    let movie = await query.clone().whereILike('title', parsed.title).first()
-    if (movie) return movie
-
-    // Try fuzzy match - normalize titles
-    const normalizedTitle = this.normalizeTitle(parsed.title)
-    const candidates = await query.clone().exec()
-
-    for (const candidate of candidates) {
-      if (this.normalizeTitle(candidate.title) === normalizedTitle) {
-        return candidate
-      }
+    // Pass 3: anywhere in DB, normalized title with year tolerance.
+    // Restricted to titles that share the first 3 normalized chars to keep
+    // the candidate set small on large libraries.
+    const prefix = normalizedTarget.slice(0, 3)
+    if (!prefix) return null
+    const wider = await Movie.query()
+      .whereRaw(`LOWER(REGEXP_REPLACE(title, '[^a-zA-Z0-9]', '', 'g')) LIKE ?`, [`${prefix}%`])
+      .exec()
+    for (const c of wider) {
+      if (this.normalizeTitle(c.title) !== normalizedTarget) continue
+      if (parsed.year && c.year && Math.abs(parsed.year - c.year) > 1) continue
+      return c
     }
 
     return null

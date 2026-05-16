@@ -25,6 +25,7 @@ import UnmatchedFile from '#models/unmatched_file'
 import type { ParsedInfo } from '#models/unmatched_file'
 import { isUpgrade } from '#services/quality/quality_scorer'
 import type { QualityItem } from '#models/quality_profile'
+import { mapPath } from '#utils/host_mapping'
 
 type MediaType = 'music' | 'movies' | 'tv' | 'books'
 
@@ -327,18 +328,25 @@ class FolderScanner {
   ): Promise<ScanResults> {
     const results: ScanResults = { processed: 0, imported: 0, created: 0, skipped: 0, errors: [] }
 
-    // Get the local path for the complete folder
-    const localPath = client.settings?.localPath
-    if (!localPath) {
+    // Get the local path for the complete folder. SERVICE_PATH_MAP rewrites
+    // the DB-stored Docker-style path to its local-dev equivalent when the
+    // env var is set; in Docker SERVICE_PATH_MAP is unset and this is a no-op.
+    const configuredPath = client.settings?.localPath
+    if (!configuredPath) {
       console.log(`[FolderScanner] No local path configured for ${client.name}, skipping`)
       return results
     }
+    const localPath = mapPath(configuredPath)
 
     // Check if folder exists
     try {
       await fs.access(localPath)
     } catch {
-      console.log(`[FolderScanner] Local path not accessible: ${localPath}`)
+      console.log(
+        `[FolderScanner] Local path not accessible: ${localPath}${
+          localPath !== configuredPath ? ` (mapped from ${configuredPath})` : ''
+        }`
+      )
       return results
     }
 
@@ -438,10 +446,13 @@ class FolderScanner {
             possiblePaths.push(remotePath)
           }
         }
-        // Check by path (local and remote equivalent) first
+        // Look for an existing Download row for this folder, in any non-active
+        // status. We include 'failed' so that previously-failed orphans can be
+        // retried once the library state changes (e.g. the show was added,
+        // the matcher logic improved, or the user fixed a configuration issue).
         let existingDownload = await Download.query()
           .whereIn('outputPath', possiblePaths)
-          .whereIn('status', ['completed', 'importing'])
+          .whereIn('status', ['completed', 'importing', 'failed'])
           .first()
 
         // If not found by path, try normalized title match
@@ -449,8 +460,8 @@ class FolderScanner {
         if (!existingDownload) {
           const normalizedName = folder.name.toLowerCase().replace(/[^a-z0-9]/g, '')
           const candidates = await Download.query()
-            .whereIn('status', ['completed', 'importing'])
-            .select('id', 'title', 'status')
+            .whereIn('status', ['completed', 'importing', 'failed'])
+            .select('id', 'title', 'status', 'updated_at')
           existingDownload =
             candidates.find(
               (d) => d.title.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedName
@@ -461,10 +472,31 @@ class FolderScanner {
           if (existingDownload.status === 'completed') {
             await this.cleanupFolder(folderPath, 'already completed')
             onProgress?.('cleaned', `Cleaned up "${folder.name}" (already completed)`)
+            continue
+          }
+          if (existingDownload.status === 'failed') {
+            // Cooldown: don't retry rows updated in the last 5 minutes — avoids
+            // tight loops when the failure is genuinely terminal (e.g. wrong
+            // permissions). Outside the cooldown, delete the row so the normal
+            // match + import path below recreates it cleanly. If matching now
+            // succeeds, the file gets imported; if it still doesn't match, an
+            // UnmatchedFile record is created.
+            const recentThreshold = DateTime.now().minus({ minutes: 5 })
+            if (existingDownload.updatedAt && existingDownload.updatedAt > recentThreshold) {
+              console.log(
+                `[FolderScanner] Skipping "${folder.name}" - failed recently (${existingDownload.errorMessage ?? 'no message'})`
+              )
+              continue
+            }
+            console.log(
+              `[FolderScanner] Retrying previously failed download "${folder.name}" (was: ${existingDownload.errorMessage ?? 'no message'})`
+            )
+            await existingDownload.delete()
+            // fall through to the regular match-and-import flow below
           } else {
             console.log(`[FolderScanner] Skipping "${folder.name}" - currently importing`)
+            continue
           }
-          continue
         }
 
         // Try to match to an existing library item

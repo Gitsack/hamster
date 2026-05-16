@@ -149,28 +149,32 @@ export class MovieParser {
     source?: string
     codec?: string
   } {
-    const lowerName = name.toLowerCase()
     const result: { resolution?: string; source?: string; codec?: string } = {}
 
-    // Find resolution
+    // Require separator (.,_,-,whitespace) or string-boundary on both sides so
+    // that short tokens like "ts", "cam", "web", "dvd" don't match inside real
+    // words ("Beasts", "Camelot", "Webster").
+    const boundedMatch = (term: string) => {
+      const re = new RegExp(`(?:^|[.\\s_-])${term}(?=$|[.\\s_-])`, 'i')
+      return re.test(name)
+    }
+
     for (const res of RESOLUTIONS) {
-      if (lowerName.includes(res.toLowerCase())) {
+      if (boundedMatch(res)) {
         result.resolution = res
         break
       }
     }
 
-    // Find source
     for (const src of SOURCES) {
-      if (lowerName.includes(src.toLowerCase())) {
+      if (boundedMatch(src)) {
         result.source = src.toUpperCase()
         break
       }
     }
 
-    // Find codec
     for (const codec of CODECS) {
-      if (lowerName.includes(codec.toLowerCase())) {
+      if (boundedMatch(codec)) {
         result.codec = codec.toUpperCase()
         break
       }
@@ -210,10 +214,16 @@ export class MovieParser {
       )
     }
 
-    // Remove quality indicators
+    // Remove quality indicators.
+    // CRITICAL: require a separator (.,_,-,whitespace) or string-boundary on
+    // BOTH sides of the term. The old regex allowed the separators to be
+    // optional, which meant a 2-char source like "ts" (telesync) would strip
+    // from "Beas[ts]" and "[ts]unami", and "cam" would strip from "Camelot".
+    // Word boundary `\b` alone is not enough because "." is a word boundary
+    // in JS regex only when followed by a non-word char — we want symmetry.
     const qualityTerms = [...RESOLUTIONS, ...SOURCES, ...CODECS]
     for (const term of qualityTerms) {
-      const regex = new RegExp(`[.\\s_-]?${term}[.\\s_-]?`, 'gi')
+      const regex = new RegExp(`(?:^|[.\\s_-])${term}(?=$|[.\\s_-])`, 'gi')
       title = title.replace(regex, ' ')
     }
 

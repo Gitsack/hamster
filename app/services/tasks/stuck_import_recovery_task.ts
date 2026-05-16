@@ -4,6 +4,7 @@ import DownloadClient from '#models/download_client'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { DateTime } from 'luxon'
 import logger from '@adonisjs/core/services/logger'
+import { mapPath } from '#utils/host_mapping'
 
 /**
  * Pattern fragments that identify transient/recoverable import failures.
@@ -225,7 +226,9 @@ class StuckImportRecoveryTask {
     }
 
     // Verify the path is now reachable before paying for an import attempt.
-    const reachable = await this.isPathReachable(download.outputPath)
+    // mapPath() translates the DB-stored Docker path to the local-runtime
+    // path when SERVICE_PATH_MAP is set; no-op otherwise.
+    const reachable = await this.isPathReachable(mapPath(download.outputPath))
     if (!reachable) {
       logger.debug(
         { downloadId: download.id, path: download.outputPath },

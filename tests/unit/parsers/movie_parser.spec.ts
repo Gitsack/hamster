@@ -160,4 +160,44 @@ test.group('MovieParser | parseFromPath', () => {
     assert.equal(result.title, 'Movie Name')
     assert.equal(result.year, 2024)
   })
+
+  // ---- regression: short quality tokens must not match inside real words ----
+
+  test('does not strip "ts" from "Beasts" (regression: telesync false positive)', ({ assert }) => {
+    const result = parser.parse(
+      'Fantastic.Beasts.The.Crimes.of.Grindelwald.2018.1080p.BluRay.x264-GROUP'
+    )
+    assert.equal(result.title.toLowerCase(), 'fantastic beasts the crimes of grindelwald')
+    assert.equal(result.year, 2018)
+    assert.equal(result.source, 'BLURAY')
+  })
+
+  test('does not strip "cam" from "Camelot"', ({ assert }) => {
+    const result = parser.parse('Camelot.2011.1080p.WEB-DL.x264')
+    assert.equal(result.title.toLowerCase(), 'camelot')
+    assert.notEqual(result.source, 'CAM')
+  })
+
+  test('does not strip "web" from "Webster"', ({ assert }) => {
+    const result = parser.parse('Webster.1983.DVDRip.x264')
+    assert.include(result.title.toLowerCase(), 'webster')
+  })
+
+  test('still recognizes bona-fide TS source token', ({ assert }) => {
+    const result = parser.parse('Some.Movie.2024.TS.x264-GROUP')
+    assert.equal(result.source, 'TS')
+  })
+
+  test('still recognizes bona-fide CAM source token', ({ assert }) => {
+    const result = parser.parse('Some.Movie.2024.CAM.x264-GROUP')
+    assert.equal(result.source, 'CAM')
+  })
+
+  test('parseFromPath: Fantastic Beasts folder parses cleanly', ({ assert }) => {
+    const result = parser.parseFromPath(
+      'Fantastic Beasts The Crimes of Grindelwald (2018)/Fantastic Beasts The Crimes of Grindelwald (2018).mkv'
+    )
+    assert.equal(result.title.toLowerCase(), 'fantastic beasts the crimes of grindelwald')
+    assert.equal(result.year, 2018)
+  })
 })
