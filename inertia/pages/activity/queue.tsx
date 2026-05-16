@@ -1,7 +1,7 @@
 import { Head } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -28,27 +28,23 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   RefreshIcon,
   Delete01Icon,
   CheckmarkCircle01Icon,
-  ArrowDown01Icon,
-  PauseIcon,
   FolderSearchIcon,
   Search01Icon,
   CleanIcon,
   Cancel01Icon,
-  ArrowLeft01Icon,
-  ArrowRight01Icon,
   MoreVerticalIcon,
 } from '@hugeicons/core-free-icons'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { useActiveDownloads, type QueueItem } from '@/hooks/use_active_downloads'
 
@@ -123,13 +119,6 @@ interface HistoryItem {
   completedAt: string | null
 }
 
-interface HistoryMeta {
-  total: number
-  perPage: number
-  currentPage: number
-  lastPage: number
-}
-
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
@@ -150,13 +139,12 @@ function formatEta(seconds: number | null): string {
   return `${hours}h ${minutes}m`
 }
 
-function formatDate(dateStr: string | null): string {
+function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return '-'
   const date = new Date(dateStr)
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   })
@@ -164,7 +152,12 @@ function formatDate(dateStr: string | null): string {
 
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return ''
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  return timeAgoMs(new Date(dateStr).getTime())
+}
+
+function timeAgoMs(ms: number): string {
+  if (!ms || ms <= 0) return '—'
+  const seconds = Math.floor((Date.now() - ms) / 1000)
   if (seconds < 60) return 'just now'
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
@@ -201,17 +194,6 @@ function getStatusBadge(status: string) {
       return <Badge variant="secondary">Ignored</Badge>
     default:
       return <Badge variant="outline">{status}</Badge>
-  }
-}
-
-function getStatusIcon(status: string) {
-  switch (status) {
-    case 'downloading':
-      return <HugeiconsIcon icon={ArrowDown01Icon} className="h-4 w-4 text-blue-500" />
-    case 'paused':
-      return <HugeiconsIcon icon={PauseIcon} className="h-4 w-4 text-muted-foreground" />
-    default:
-      return <Spinner className="text-muted-foreground" />
   }
 }
 
@@ -276,16 +258,22 @@ function EmptyState({
 // ---------------------------------------------------------------------------
 
 export default function Activity() {
-  const [activeTab, setActiveTab] = useState('downloads')
+  const [activeTab, setActiveTab] = useState('activity')
 
-  // Downloads state — reads from shared context, local override for optimistic updates
+  // Active downloads
   const { queue: sharedQueue, refresh: refreshSharedQueue } = useActiveDownloads()
   const [queueOverride, setQueueOverride] = useState<QueueItem[] | null>(null)
   const queue = queueOverride ?? sharedQueue
   const [queueLoading, setQueueLoading] = useState(true)
-  const [queueError, setQueueError] = useState<string | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
+
+  // Recent errors + completed (status='failed' / 'completed')
+  const [recentErrors, setRecentErrors] = useState<HistoryItem[]>([])
+  const [recentCompleted, setRecentCompleted] = useState<HistoryItem[]>([])
+  const [recentLoading, setRecentLoading] = useState(true)
+  const [clearingFailed, setClearingFailed] = useState(false)
+  const [confirmClearFailed, setConfirmClearFailed] = useState(false)
 
   // Completed folder state
   const [completedEntries, setCompletedEntries] = useState<CompletedEntry[]>([])
@@ -293,7 +281,6 @@ export default function Activity() {
   const [completedLoading, setCompletedLoading] = useState(true)
   const [completedFilter, setCompletedFilter] = useState<'all' | 'duplicates' | 'unpacking'>('all')
   const [cleaningUp, setCleaningUp] = useState(false)
-  const [actioningId, setActioningId] = useState<string | null>(null)
 
   // Unmatched state
   const [unmatched, setUnmatched] = useState<UnmatchedItem[]>([])
@@ -303,41 +290,53 @@ export default function Activity() {
   const [deleteUnmatchedId, setDeleteUnmatchedId] = useState<string | null>(null)
   const [deletingUnmatched, setDeletingUnmatched] = useState(false)
   const [bulkActioning, setBulkActioning] = useState(false)
-
-  // History state
-  const [history, setHistory] = useState<HistoryItem[]>([])
-  const [historyMeta, setHistoryMeta] = useState<HistoryMeta | null>(null)
-  const [historyLoading, setHistoryLoading] = useState(true)
-  const [historyStatusFilter, setHistoryStatusFilter] = useState('all')
-  const [historyPage, setHistoryPage] = useState(1)
-  const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set())
+  const [actioningId, setActioningId] = useState<string | null>(null)
 
   // Action loading states
   const [refreshing, setRefreshing] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [processingMessages, setProcessingMessages] = useState<string[]>([])
 
-  // Track whether tabs have been loaded at least once
+  // Track lazy-loaded tabs
   const tabLoadedRef = useRef<Record<string, boolean>>({
-    downloads: false,
-    completed: false,
+    activity: false,
+    pending: false,
     unmatched: false,
-    history: false,
   })
 
   // ---------------------------------------------------------------------------
   // Data fetching
   // ---------------------------------------------------------------------------
 
-  const fetchQueue = useCallback(
-    async (_showLoading = true) => {
-      setQueueOverride(null)
-      await refreshSharedQueue()
-      setQueueLoading(false)
-      setQueueError(null)
-    },
-    [refreshSharedQueue]
-  )
+  const fetchQueue = useCallback(async () => {
+    setQueueOverride(null)
+    await refreshSharedQueue()
+    setQueueLoading(false)
+  }, [refreshSharedQueue])
+
+  // Errors + recent completions both come from /queue/history with a status filter.
+  // We fetch them in parallel; both feed the Activity tab.
+  const fetchRecent = useCallback(async (showLoading = true) => {
+    if (showLoading) setRecentLoading(true)
+    try {
+      const [failedRes, completedRes] = await Promise.all([
+        fetch('/api/v1/queue/history?status=failed&limit=20'),
+        fetch('/api/v1/queue/history?status=completed&limit=10'),
+      ])
+      if (failedRes.ok) {
+        const data = await failedRes.json()
+        setRecentErrors(data.data ?? [])
+      }
+      if (completedRes.ok) {
+        const data = await completedRes.json()
+        setRecentCompleted(data.data ?? [])
+      }
+    } catch {
+      console.error('Failed to fetch recent activity')
+    } finally {
+      setRecentLoading(false)
+    }
+  }, [])
 
   const fetchCompleted = useCallback(async (showLoading = true) => {
     if (showLoading) setCompletedLoading(true)
@@ -376,49 +375,25 @@ export default function Activity() {
     [unmatchedMediaFilter, unmatchedStatusFilter]
   )
 
-  const fetchHistory = useCallback(async () => {
-    setHistoryLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: historyPage.toString(),
-        limit: '25',
-      })
-      if (historyStatusFilter !== 'all') params.append('status', historyStatusFilter)
-      const response = await fetch(`/api/v1/queue/history?${params}`)
-      if (response.ok) {
-        const data = await response.json()
-        setHistory(data.data)
-        setHistoryMeta(data.meta)
-      }
-    } catch {
-      console.error('Failed to fetch history')
-    } finally {
-      setHistoryLoading(false)
-    }
-  }, [historyPage, historyStatusFilter])
-
   // ---------------------------------------------------------------------------
-  // Initial load & auto-refresh for downloads tab
+  // Initial load
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
     fetchQueue()
-    tabLoadedRef.current.downloads = true
-  }, [fetchQueue])
+    fetchRecent()
+    tabLoadedRef.current.activity = true
+  }, [fetchQueue, fetchRecent])
 
-  // Fetch tab data when switching tabs (only first time)
   useEffect(() => {
-    if (activeTab === 'completed' && !tabLoadedRef.current.completed) {
-      tabLoadedRef.current.completed = true
+    if (activeTab === 'pending' && !tabLoadedRef.current.pending) {
+      tabLoadedRef.current.pending = true
       fetchCompleted()
     } else if (activeTab === 'unmatched' && !tabLoadedRef.current.unmatched) {
       tabLoadedRef.current.unmatched = true
       fetchUnmatched()
-    } else if (activeTab === 'history' && !tabLoadedRef.current.history) {
-      tabLoadedRef.current.history = true
-      fetchHistory()
     }
-  }, [activeTab, fetchCompleted, fetchUnmatched, fetchHistory])
+  }, [activeTab, fetchCompleted, fetchUnmatched])
 
   // Re-fetch unmatched when filters change
   useEffect(() => {
@@ -426,13 +401,6 @@ export default function Activity() {
       fetchUnmatched()
     }
   }, [unmatchedMediaFilter, unmatchedStatusFilter, fetchUnmatched])
-
-  // Re-fetch history when filters/page change
-  useEffect(() => {
-    if (tabLoadedRef.current.history) {
-      fetchHistory()
-    }
-  }, [historyPage, historyStatusFilter, fetchHistory])
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -442,22 +410,16 @@ export default function Activity() {
     setRefreshing(true)
     try {
       switch (activeTab) {
-        case 'downloads': {
-          const response = await fetch('/api/v1/queue/refresh', { method: 'POST' })
-          if (response.ok) {
-            setQueueOverride(null)
-            await refreshSharedQueue()
-          }
+        case 'activity': {
+          await fetch('/api/v1/queue/refresh', { method: 'POST' }).catch(() => null)
+          await Promise.all([fetchQueue(), fetchRecent(false)])
           break
         }
-        case 'completed':
+        case 'pending':
           await fetchCompleted(false)
           break
         case 'unmatched':
           await fetchUnmatched(false)
-          break
-        case 'history':
-          await fetchHistory()
           break
       }
     } catch {
@@ -472,8 +434,7 @@ export default function Activity() {
       const data = await response.json()
       if (response.ok) {
         toast.success(data.message || successMsg)
-        fetchQueue(false)
-        if (activeTab === 'completed') fetchCompleted(false)
+        fetchQueue()
       } else {
         toast.error(data.error || 'Action failed')
       }
@@ -520,9 +481,9 @@ export default function Activity() {
               }
             } else {
               setProcessingMessages((prev) => [...prev, event.message])
-              // Refresh the pending import list when items are imported or cleaned up
               if (event.action === 'imported' || event.action === 'cleaned') {
                 fetchCompleted(false)
+                fetchRecent(false)
               }
             }
           } catch {
@@ -536,9 +497,10 @@ export default function Activity() {
       } else {
         toast.success('Done — no new imports')
       }
-      fetchQueue(false)
+      fetchQueue()
       fetchCompleted(false)
       fetchUnmatched(false)
+      fetchRecent(false)
     } catch {
       toast.error('Failed to process downloads')
     } finally {
@@ -566,7 +528,60 @@ export default function Activity() {
     }
   }
 
-  // Completed folder actions
+  const retryDownload = async (id: string) => {
+    setActioningId(id)
+    try {
+      const response = await fetch(`/api/v1/queue/${id}/retry`, { method: 'POST' })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(data.message || 'Retry triggered')
+        fetchRecent(false)
+        fetchQueue()
+      } else {
+        toast.error(data.error || 'Retry failed')
+      }
+    } catch {
+      toast.error('Retry failed')
+    } finally {
+      setActioningId(null)
+    }
+  }
+
+  const dismissError = async (id: string) => {
+    setActioningId(id)
+    try {
+      const response = await fetch(`/api/v1/queue/${id}?deleteFiles=false`, { method: 'DELETE' })
+      if (response.ok) {
+        setRecentErrors((prev) => prev.filter((e) => e.id !== id))
+      } else {
+        toast.error('Failed to dismiss')
+      }
+    } catch {
+      toast.error('Failed to dismiss')
+    } finally {
+      setActioningId(null)
+    }
+  }
+
+  const clearAllFailed = async () => {
+    setClearingFailed(true)
+    try {
+      const response = await fetch('/api/v1/queue/clear-failed', { method: 'POST' })
+      const data = await response.json()
+      if (response.ok) {
+        toast.success(data.message || `Cleared ${data.count ?? ''} errors`)
+        setRecentErrors([])
+      } else {
+        toast.error('Failed to clear errors')
+      }
+    } catch {
+      toast.error('Failed to clear errors')
+    } finally {
+      setClearingFailed(false)
+      setConfirmClearFailed(false)
+    }
+  }
+
   const cleanupCompleted = async () => {
     setCleaningUp(true)
     try {
@@ -586,8 +601,7 @@ export default function Activity() {
     }
   }
 
-  // Importing item actions
-  const retryImport = async (id: string) => {
+  const retryImportItem = async (id: string) => {
     try {
       const response = await fetch(`/api/v1/queue/${id}/retry`, { method: 'POST' })
       const data = await response.json()
@@ -619,7 +633,6 @@ export default function Activity() {
     }
   }
 
-  // Unmatched tab actions
   const ignoreUnmatched = async (id: string) => {
     setActioningId(id)
     try {
@@ -683,53 +696,103 @@ export default function Activity() {
     }
   }
 
-  const bulkDeleteUnmatched = async () => {
-    setBulkActioning(true)
-    try {
-      const ids = unmatched.map((u) => u.id)
-      if (ids.length === 0) {
-        toast.info('No files to delete')
-        setBulkActioning(false)
-        return
-      }
-      const response = await fetch('/api/v1/unmatched/bulk-delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      })
-      if (response.ok) {
-        toast.success('All files deleted')
-        fetchUnmatched(false)
-      } else {
-        toast.error('Failed to delete files')
-      }
-    } catch {
-      toast.error('Failed to delete files')
-    } finally {
-      setBulkActioning(false)
-    }
-  }
-
-  const toggleError = (id: string) => {
-    setExpandedErrors((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
   // ---------------------------------------------------------------------------
-  // Counts for tab badges
+  // Derived state
   // ---------------------------------------------------------------------------
 
   const pendingUnmatchedCount = unmatched.filter((u) => u.status === 'pending').length
   const duplicateCount = completedEntries.filter((e) => e.isDuplicate || e.isUnpacking).length
+  const pendingImportCount = completedEntries.length + importingItems.length
   const filteredCompleted = completedEntries.filter((e) => {
     if (completedFilter === 'duplicates') return e.isDuplicate
     if (completedFilter === 'unpacking') return e.isUnpacking
     return true
   })
+
+  // One chronological feed mixing active, errors, and recent completions.
+  // Sort key: startedAt for active rows (or now() if queued with no startedAt yet),
+  // completedAt for finished rows.
+  type FeedKind = 'active' | 'error' | 'completed'
+  interface FeedItem {
+    id: string
+    kind: FeedKind
+    status: string
+    title: string
+    subtitle: string | null
+    errorMessage: string | null
+    progress: number | null
+    size: number | null
+    eta: number | null
+    timestamp: number
+    timestampIso: string | null
+  }
+
+  const feed = useMemo<FeedItem[]>(() => {
+    const items: FeedItem[] = []
+
+    for (const q of queue) {
+      const iso = q.startedAt ?? null
+      items.push({
+        id: q.id,
+        kind: 'active',
+        status: q.status,
+        title: q.title,
+        subtitle: q.downloadClient,
+        errorMessage: null,
+        progress: Number(q.progress) || 0,
+        size: q.size,
+        eta: q.eta,
+        // Items without a startedAt (e.g. freshly queued) belong at the top.
+        timestamp: iso ? new Date(iso).getTime() : Date.now(),
+        timestampIso: iso,
+      })
+    }
+
+    // Fall back to startedAt when completedAt is null — failed rows often
+    // have no completedAt (e.g. when a download fails at import time before
+    // the client marks it complete), but they always have a startedAt.
+    const tsOf = (iso: string | null): number =>
+      iso ? new Date(iso).getTime() : 0
+
+    for (const e of recentErrors) {
+      const iso = e.completedAt ?? e.startedAt
+      items.push({
+        id: e.id,
+        kind: 'error',
+        status: 'failed',
+        title: e.title,
+        subtitle: e.downloadClient ?? e.albumTitle ?? null,
+        errorMessage: e.errorMessage,
+        progress: null,
+        size: e.size,
+        eta: null,
+        timestamp: tsOf(iso),
+        timestampIso: iso,
+      })
+    }
+
+    for (const c of recentCompleted) {
+      const iso = c.completedAt ?? c.startedAt
+      items.push({
+        id: c.id,
+        kind: 'completed',
+        status: 'completed',
+        title: c.title,
+        subtitle: c.downloadClient ?? c.albumTitle ?? null,
+        errorMessage: null,
+        progress: null,
+        size: c.size,
+        eta: null,
+        timestamp: tsOf(iso),
+        timestampIso: iso,
+      })
+    }
+
+    items.sort((a, b) => b.timestamp - a.timestamp)
+    return items
+  }, [queue, recentErrors, recentCompleted])
+
+  const feedLoading = queueLoading || recentLoading
 
   // ---------------------------------------------------------------------------
   // Render
@@ -759,13 +822,6 @@ export default function Activity() {
               <DropdownMenuItem onClick={processDownloads} disabled={processing}>
                 <HugeiconsIcon icon={FolderSearchIcon} className="h-4 w-4 mr-2" />
                 Process Downloads
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => postAction('/api/v1/queue/deduplicate', 'Deduplication complete')}
-              >
-                <HugeiconsIcon icon={CleanIcon} className="h-4 w-4 mr-2" />
-                Deduplicate Queue
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -814,119 +870,217 @@ export default function Activity() {
         </Card>
       )}
 
-      <Tabs defaultValue="downloads" onValueChange={setActiveTab}>
+      <Tabs defaultValue="activity" onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="downloads">
-            Downloads
-            {queue.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 text-xs px-1.5 py-0">
-                {queue.length}
+          <TabsTrigger value="activity" className="group">
+            Activity
+            {(queue.length > 0 || recentErrors.length > 0) && (
+              <Badge
+                variant="default"
+                className="ml-1.5 text-xs px-1.5 py-0 group-data-[active]:bg-white group-data-[active]:text-primary"
+              >
+                {queue.length + recentErrors.length}
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="completed">
+          <TabsTrigger value="pending" className="group">
             Pending Import
-            {completedEntries.length + importingItems.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 text-xs px-1.5 py-0">
-                {completedEntries.length + importingItems.length}
+            {pendingImportCount > 0 && (
+              <Badge
+                variant="default"
+                className="ml-1.5 text-xs px-1.5 py-0 group-data-[active]:bg-white group-data-[active]:text-primary"
+              >
+                {pendingImportCount}
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="unmatched">
+          <TabsTrigger value="unmatched" className="group">
             Unmatched
             {pendingUnmatchedCount > 0 && (
-              <Badge variant="secondary" className="ml-1.5 text-xs px-1.5 py-0">
+              <Badge
+                variant="default"
+                className="ml-1.5 text-xs px-1.5 py-0 group-data-[active]:bg-white group-data-[active]:text-primary"
+              >
                 {pendingUnmatchedCount}
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
 
         {/* ----------------------------------------------------------------- */}
-        {/* Downloads Tab                                                      */}
+        {/* Activity (one chronological feed: active + errors + completed)    */}
         {/* ----------------------------------------------------------------- */}
-        <TabsContent value="downloads">
+        <TabsContent value="activity">
           <Card>
-            <CardContent className="pt-6">
-              {queueError ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <p className="text-destructive mb-4">{queueError}</p>
-                  <Button onClick={() => fetchQueue()} variant="outline">
-                    Try Again
-                  </Button>
-                </div>
-              ) : queueLoading ? (
-                <TableSkeleton rows={3} />
-              ) : queue.length === 0 ? (
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-base">Recent Activity</CardTitle>
+              {recentErrors.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmClearFailed(true)}
+                  disabled={clearingFailed}
+                  className="text-muted-foreground"
+                >
+                  Clear errors
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {feedLoading ? (
+                <TableSkeleton rows={5} />
+              ) : feed.length === 0 ? (
                 <EmptyState
                   icon={
                     <HugeiconsIcon
                       icon={CheckmarkCircle01Icon}
-                      className="h-12 w-12 text-green-500"
+                      className="h-12 w-12 text-muted-foreground"
                     />
                   }
-                  title="No active downloads"
-                  subtitle="Downloads will appear here when you grab releases."
+                  title="Nothing happening"
+                  subtitle="Active downloads and recently finished items will show up here."
                 />
               ) : (
                 <div className="overflow-x-auto -mx-6 px-6">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-10"></TableHead>
                         <TableHead>Title</TableHead>
                         <TableHead className="w-32">Status</TableHead>
-                        <TableHead className="w-48">Progress</TableHead>
                         <TableHead className="w-24 text-right">Size</TableHead>
-                        <TableHead className="w-24 text-right">ETA</TableHead>
+                        <TableHead className="w-40">When</TableHead>
                         <TableHead className="w-24"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {queue.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{getStatusIcon(item.status)}</TableCell>
-                          <TableCell>
-                            <div className="font-medium truncate max-w-md">{item.title}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {item.downloadClient}
-                            </div>
-                          </TableCell>
-                          <TableCell>{getStatusBadge(item.status)}</TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <Progress
-                                value={Number(item.progress) || 0}
-                                className="h-2"
-                                aria-label="Download progress"
-                              />
-                              <div className="text-xs text-muted-foreground">
-                                {(Number(item.progress) || 0).toFixed(1)}%
+                      {feed.map((item) => {
+                        const isActive = item.kind === 'active'
+                        const isError = item.kind === 'error'
+                        const isDownloading =
+                          isActive &&
+                          (item.status === 'downloading' ||
+                            item.status === 'queued' ||
+                            item.status === 'paused')
+                        // "When" is relative-time-only; the Status badge already
+                        // tells the user the row kind. Exception: when actively
+                        // downloading with an ETA, that's more useful than
+                        // "started Nm ago". We read the numeric `timestamp`
+                        // (not the iso string) so freshly-queued items —
+                        // which have no startedAt yet — render as "just now"
+                        // instead of an empty cell.
+                        const when =
+                          isActive && item.eta && item.eta > 0
+                            ? `${formatEta(item.eta)} left`
+                            : timeAgoMs(item.timestamp)
+
+                        return (
+                          <TableRow key={`${item.kind}-${item.id}`}>
+                            <TableCell className="py-2 max-w-md">
+                              <div className="flex items-baseline gap-2 min-w-0">
+                                <span
+                                  className="font-medium truncate text-sm"
+                                  title={item.title}
+                                >
+                                  {item.title}
+                                </span>
+                                {item.subtitle && (
+                                  <span className="text-xs text-muted-foreground shrink-0">
+                                    · {item.subtitle}
+                                  </span>
+                                )}
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {formatSize(item.size)}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {formatEta(item.eta)}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setCancelId(item.id)}
-                              aria-label="Delete download"
+                              {isDownloading && item.progress !== null && (
+                                <div className="mt-1 flex items-center gap-2">
+                                  <Progress
+                                    value={item.progress}
+                                    className="h-1 flex-1"
+                                    aria-label="Download progress"
+                                  />
+                                  <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                                    {item.progress.toFixed(0)}%
+                                  </span>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="py-2">
+                              {isError && item.errorMessage ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="cursor-help">
+                                      {getStatusBadge(item.status)}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-sm break-words whitespace-pre-wrap text-left">
+                                    {item.errorMessage}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                getStatusBadge(item.status)
+                              )}
+                            </TableCell>
+                            <TableCell className="py-2 text-right text-muted-foreground text-sm tabular-nums">
+                              {formatSize(item.size)}
+                            </TableCell>
+                            <TableCell
+                              className="py-2 text-muted-foreground text-sm"
+                              title={item.timestampIso ?? ''}
                             >
-                              <HugeiconsIcon
-                                icon={Delete01Icon}
-                                className="h-4 w-4 text-destructive"
-                              />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                              {when}
+                            </TableCell>
+                            <TableCell className="py-2">
+                              {/* min-h-8 keeps row height consistent across
+                                  rows with and without action buttons. */}
+                              <div className="flex gap-1 justify-end min-h-8 items-center">
+                                {isActive && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setCancelId(item.id)}
+                                    title="Cancel"
+                                    aria-label="Cancel download"
+                                  >
+                                    <HugeiconsIcon
+                                      icon={Delete01Icon}
+                                      className="h-4 w-4 text-destructive"
+                                    />
+                                  </Button>
+                                )}
+                                {isError && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => retryDownload(item.id)}
+                                      disabled={actioningId === item.id}
+                                      title="Retry"
+                                      aria-label="Retry"
+                                    >
+                                      {actioningId === item.id ? (
+                                        <Spinner className="h-4 w-4" />
+                                      ) : (
+                                        <HugeiconsIcon icon={RefreshIcon} className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => dismissError(item.id)}
+                                      disabled={actioningId === item.id}
+                                      title="Dismiss"
+                                      aria-label="Dismiss"
+                                    >
+                                      <HugeiconsIcon
+                                        icon={Cancel01Icon}
+                                        className="h-4 w-4 text-muted-foreground"
+                                      />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -936,9 +1090,9 @@ export default function Activity() {
         </TabsContent>
 
         {/* ----------------------------------------------------------------- */}
-        {/* Completed Tab                                                      */}
+        {/* Pending Import Tab                                                 */}
         {/* ----------------------------------------------------------------- */}
-        <TabsContent value="completed">
+        <TabsContent value="pending">
           <Card>
             <CardContent className="pt-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
@@ -1040,11 +1194,11 @@ export default function Activity() {
                               </TableCell>
                               <TableCell className="text-muted-foreground text-sm">
                                 {item.completedAt ? (
-                                  <div title={formatDate(item.completedAt)}>
+                                  <div title={formatDateTime(item.completedAt)}>
                                     Downloaded {timeAgo(item.completedAt)}
                                   </div>
                                 ) : item.startedAt ? (
-                                  <div title={formatDate(item.startedAt)}>
+                                  <div title={formatDateTime(item.startedAt)}>
                                     Started {timeAgo(item.startedAt)}
                                   </div>
                                 ) : (
@@ -1056,7 +1210,7 @@ export default function Activity() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => retryImport(item.id)}
+                                    onClick={() => retryImportItem(item.id)}
                                     title="Retry import"
                                     aria-label="Retry import"
                                   >
@@ -1186,25 +1340,14 @@ export default function Activity() {
                     </SelectPopup>
                   </Select>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={bulkIgnoreUnmatched}
-                    disabled={bulkActioning || pendingUnmatchedCount === 0}
-                  >
-                    Ignore All Pending
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={bulkDeleteUnmatched}
-                    disabled={bulkActioning || unmatched.length === 0}
-                    className="text-destructive"
-                  >
-                    Delete All
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={bulkIgnoreUnmatched}
+                  disabled={bulkActioning || pendingUnmatchedCount === 0}
+                >
+                  Ignore All Pending
+                </Button>
               </div>
 
               {unmatchedLoading ? (
@@ -1291,131 +1434,6 @@ export default function Activity() {
             </CardContent>
           </Card>
         </TabsContent>
-
-        {/* ----------------------------------------------------------------- */}
-        {/* History Tab                                                        */}
-        {/* ----------------------------------------------------------------- */}
-        <TabsContent value="history">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <Select
-                  value={historyStatusFilter}
-                  onValueChange={(v) => {
-                    setHistoryStatusFilter(v)
-                    setHistoryPage(1)
-                  }}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                  </SelectPopup>
-                </Select>
-              </div>
-
-              {historyLoading ? (
-                <TableSkeleton rows={5} />
-              ) : history.length === 0 ? (
-                <EmptyState
-                  icon={<Spinner className="size-12 text-muted-foreground" />}
-                  title="No history yet"
-                  subtitle="Completed and failed downloads will appear here."
-                />
-              ) : (
-                <>
-                  <div className="overflow-x-auto -mx-6 px-6">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Title</TableHead>
-                          <TableHead className="w-28">Status</TableHead>
-                          <TableHead className="w-24 text-right">Size</TableHead>
-                          <TableHead className="w-40">Client</TableHead>
-                          <TableHead className="w-44">Date</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {history.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell className="max-w-md">
-                              <div className="font-medium truncate">{item.title}</div>
-                              {item.albumTitle && (
-                                <div className="text-xs text-muted-foreground">
-                                  {item.albumTitle}
-                                </div>
-                              )}
-                              {item.errorMessage && (
-                                <div
-                                  className="text-xs text-destructive mt-1 cursor-pointer hover:text-destructive/80"
-                                  onClick={() => toggleError(item.id)}
-                                >
-                                  {expandedErrors.has(item.id) ? (
-                                    <span className="break-words whitespace-pre-wrap">
-                                      {item.errorMessage}
-                                    </span>
-                                  ) : (
-                                    <span className="line-clamp-1">{item.errorMessage}</span>
-                                  )}
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell>{getStatusBadge(item.status)}</TableCell>
-                            <TableCell className="text-right text-muted-foreground">
-                              {formatSize(item.size)}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {item.downloadClient || '-'}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {formatDate(item.completedAt)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  {historyMeta && historyMeta.lastPage > 1 && (
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 mt-4 pt-4 border-t">
-                      <div className="text-sm text-muted-foreground">
-                        Showing {(historyMeta.currentPage - 1) * historyMeta.perPage + 1} to{' '}
-                        {Math.min(historyMeta.currentPage * historyMeta.perPage, historyMeta.total)}{' '}
-                        of {historyMeta.total} entries
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
-                          disabled={historyMeta.currentPage <= 1}
-                        >
-                          <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
-                        </Button>
-                        <span className="text-sm">
-                          Page {historyMeta.currentPage} of {historyMeta.lastPage}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setHistoryPage((p) => Math.min(historyMeta.lastPage, p + 1))
-                          }
-                          disabled={historyMeta.currentPage >= historyMeta.lastPage}
-                        >
-                          <HugeiconsIcon icon={ArrowRight01Icon} className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {/* Cancel download confirmation */}
@@ -1435,6 +1453,29 @@ export default function Activity() {
               disabled={cancelling}
             >
               {cancelling ? 'Cancelling...' : 'Cancel Download'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear all errors confirmation */}
+      <AlertDialog open={confirmClearFailed} onOpenChange={setConfirmClearFailed}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all errors?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the {recentErrors.length} failed download records. Files on disk are
+              not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={clearAllFailed}
+              className="bg-destructive text-destructive-foreground"
+              disabled={clearingFailed}
+            >
+              {clearingFailed ? 'Clearing...' : 'Clear'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

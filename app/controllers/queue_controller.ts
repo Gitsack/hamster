@@ -82,12 +82,20 @@ export default class QueueController {
   async history({ request, response }: HttpContext) {
     const page = request.input('page', 1)
     const limit = request.input('limit', 50)
+    const status = request.input('status')
+
+    // Allow filtering to just one status (used by the Activity feed which
+    // pulls failed and completed separately).
+    const statuses =
+      status === 'failed' || status === 'completed' ? [status] : ['completed', 'failed']
 
     const downloads = await Download.query()
-      .whereIn('status', ['completed', 'failed'])
+      .whereIn('status', statuses)
       .preload('album')
       .preload('downloadClient')
-      .orderBy('completedAt', 'desc')
+      // Failed rows often have no completedAt — fall back to updatedAt so
+      // they don't all sink to the bottom of the result set.
+      .orderByRaw('COALESCE(completed_at, updated_at, started_at) DESC')
       .paginate(page, limit)
 
     return response.json({
