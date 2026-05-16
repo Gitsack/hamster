@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.27.0](https://github.com/Gitsack/hamster/compare/hamster-v1.26.0...hamster-v1.27.0) (2026-05-16)
+
+
+### Features
+
+* activity revamp ([7de340c](https://github.com/Gitsack/hamster/commit/7de340cbdc06ab343b3a64a3e5d05526f1175a91))
+
+
+### Bug Fixes
+
+* better downloaded / library handling ([6c3c831](https://github.com/Gitsack/hamster/commit/6c3c831d322e9ac0e837c9cce3fcdd09f9f0b80f))
+* complete imports ([4a05437](https://github.com/Gitsack/hamster/commit/4a0543755056704a86c725a3cadc90bbd293fc50))
+
 ## [1.26.0](https://github.com/Gitsack/hamster/compare/hamster-v1.25.1...hamster-v1.26.0) (2026-05-02)
 
 
