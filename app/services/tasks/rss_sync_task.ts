@@ -363,7 +363,12 @@ class RssSyncTask {
         if (withActiveDownloads.has(album.id)) return false
         const trackCount = album.tracks.length
         const fileCount = album.tracks.filter((t) => t.trackFileId !== null).length
-        return trackCount === 0 || fileCount < trackCount
+        // Albums with zero tracks AND no MusicBrainz ID can never be satisfied
+        // (we can't fetch tracks from MB) and would loop forever — skip them.
+        if (trackCount === 0 && !album.musicbrainzReleaseGroupId) return false
+        // Need at least one track defined to know what "complete" means.
+        if (trackCount === 0) return false
+        return fileCount < trackCount
       })
       .map((album) => ({
         id: album.id,

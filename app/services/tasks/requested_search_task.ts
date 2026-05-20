@@ -346,11 +346,15 @@ class RequestedSearchTask {
       .preload('artist')
       .preload('tracks')
 
-    // Filter to only albums with missing tracks
+    // Filter to only albums with missing tracks.
+    // Skip albums with zero tracks — they can't be satisfied because we don't know
+    // what files to expect, so they'd be re-grabbed forever. Run track enrichment
+    // first (via refresh_metadata) and they'll become eligible on the next pass.
     const albumsToSearch = requestedAlbums.filter((album) => {
       const trackCount = album.tracks.length
+      if (trackCount === 0) return false
       const fileCount = album.tracks.filter((t) => t.trackFileId !== null).length
-      return trackCount === 0 || fileCount < trackCount
+      return fileCount < trackCount
     })
 
     logger.info({ count: albumsToSearch.length }, 'RequestedSearch: Found requested albums')

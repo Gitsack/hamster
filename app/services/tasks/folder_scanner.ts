@@ -941,7 +941,7 @@ class FolderScanner {
         rootFolderId: rootFolder.id,
         name: artistName,
         status: 'continuing',
-        monitored: true,
+        monitored: false,
       })
     }
 

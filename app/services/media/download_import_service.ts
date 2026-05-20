@@ -178,6 +178,14 @@ export class DownloadImportService {
         await download.save()
         result.success = true
 
+        // Clear the requested flag now that the album has been satisfied.
+        // Without this, the album stays "wanted" forever and rss_sync/requested_search
+        // will keep grabbing the same NZB on every tick.
+        if (album.requested) {
+          album.requested = false
+          await album.save()
+        }
+
         // Emit import completed event
         eventEmitter
           .emitImportCompleted({

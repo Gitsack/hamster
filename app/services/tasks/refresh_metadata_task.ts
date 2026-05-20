@@ -113,7 +113,7 @@ class RefreshMetadataTask {
               airDate: tmdbSeason.airDate ? DateTime.fromISO(tmdbSeason.airDate) : null,
               posterUrl: tmdbSeason.posterPath || null,
               episodeCount: tmdbSeason.episodeCount,
-              requested: show.monitored,
+              requested: false,
             })
             existingSeasons.set(tmdbSeason.seasonNumber, season)
           } else {
@@ -170,7 +170,7 @@ class RefreshMetadataTask {
                 stillUrl: tmdbEpisode.stillPath || null,
                 rating: tmdbEpisode.voteAverage || null,
                 votes: tmdbEpisode.voteCount || null,
-                requested: show.monitored,
+                requested: false,
                 hasFile: false,
               })
             }
@@ -294,7 +294,7 @@ class RefreshMetadataTask {
               secondaryTypes: mbAlbum.secondaryTypes || [],
               releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
               imageUrl: coverUrl,
-              requested: artist.monitored,
+              requested: false,
               anyReleaseOk: true,
             })
           }
@@ -370,7 +370,7 @@ class RefreshMetadataTask {
               overview: work.description,
               coverUrl: openLibraryService.getCoverUrl(work.coverId, 'L'),
               genres: work.subjects || [],
-              requested: author.monitored,
+              requested: false,
               hasFile: false,
             })
           }

@@ -463,11 +463,12 @@ export class DownloadManager {
         return existingDownload
       }
 
-      // Check for recently completed downloads (within 1 hour) to prevent duplicate downloads
-      // when a download just finished but hasFile hasn't been updated yet
+      // Check for recently completed downloads (within 7 days) to prevent duplicate downloads
+      // of the same media item. A media item that completed recently should not be re-grabbed
+      // automatically — if it's truly missing, manual search is the right escape hatch.
       const recentlyCompletedQuery = Download.query()
         .where('status', 'completed')
-        .where('completedAt', '>=', DateTime.now().minus({ hours: 1 }).toSQL())
+        .where('completedAt', '>=', DateTime.now().minus({ days: 7 }).toSQL())
 
       if (request.episodeId) {
         recentlyCompletedQuery.where('episodeId', request.episodeId)
@@ -486,8 +487,25 @@ export class DownloadManager {
           'DownloadManager: Skipping recently completed download'
         )
         throw new Error(
-          'A download completed recently and may still be importing. Please check back shortly.'
+          'A download for this item completed recently. Use manual search to re-grab if needed.'
         )
+      }
+
+      // Dedup by NZB GUID across all history: same release should never be re-grabbed
+      // automatically regardless of media id. Stops indexer feeds from cycling the same
+      // posts when the prior import didn't flip the wanted flag (e.g. trackCount=0).
+      if (request.guid) {
+        const sameGuid = await Download.query()
+          .whereRaw("nzb_info->>'guid' = ?", [request.guid])
+          .whereIn('status', ['queued', 'downloading', 'paused', 'importing', 'completed'])
+          .first()
+        if (sameGuid) {
+          logger.info(
+            { title: request.title, guid: request.guid, existingId: sameGuid.id },
+            'DownloadManager: Skipping — NZB guid already seen'
+          )
+          throw new Error('This release has already been downloaded.')
+        }
       }
     }
 
