@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.1](https://github.com/Gitsack/hamster/compare/hamster-v1.27.0...hamster-v1.27.1) (2026-05-20)
+
+
+### Bug Fixes
+
+* duplicate downloads, artists monitored ([31d7d8a](https://github.com/Gitsack/hamster/commit/31d7d8a47d6f1b435b30644ccd1fc4af640576b5))
+
 ## [1.27.0](https://github.com/Gitsack/hamster/compare/hamster-v1.26.0...hamster-v1.27.0) (2026-05-16)
 
 
