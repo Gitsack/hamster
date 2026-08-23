@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/Gitsack/hamster/compare/hamster-v1.27.1...hamster-v1.28.0) (2026-08-23)
+
+
+### Features
+
+* better retrieval system, fixes ([2402a2b](https://github.com/Gitsack/hamster/commit/2402a2b86639835d3b42790a7ccc33823ae9ce43))
+
 ## [1.27.1](https://github.com/Gitsack/hamster/compare/hamster-v1.27.0...hamster-v1.27.1) (2026-05-20)
 
 
