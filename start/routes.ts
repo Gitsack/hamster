@@ -25,6 +25,7 @@ const AuthorsController = () => import('#controllers/authors_controller')
 const BooksController = () => import('#controllers/books_controller')
 const DownloadClientsController = () => import('#controllers/download_clients_controller')
 const QueueController = () => import('#controllers/queue_controller')
+const HistoryController = () => import('#controllers/history_controller')
 const PlaybackController = () => import('#controllers/playback_controller')
 const PlaybackSettingsController = () => import('#controllers/playback_settings_controller')
 const AppSettingsController = () => import('#controllers/app_settings_controller')
@@ -135,7 +136,7 @@ router
 
     // Activity
     router.on('/activity/queue').renderInertia('activity/queue', {}).as('activity.queue')
-    router.get('/activity/history', ({ response }) => response.redirect('/activity/queue'))
+    router.on('/activity/history').renderInertia('activity/history', {}).as('activity.history')
 
     // System
     router.on('/system/status').renderInertia('system/status', {}).as('system.status')
@@ -320,6 +321,8 @@ router
     router.post('/queue/:id/retry', [QueueController, 'retryImport'])
     router.delete('/queue/:id', [QueueController, 'destroy'])
     router.get('/queue/history', [QueueController, 'history'])
+    router.get('/history', [HistoryController, 'index'])
+    router.get('/history/summary', [HistoryController, 'summary'])
     router.post('/queue/grab', [QueueController, 'grab'])
     router.post('/queue/deduplicate', [QueueController, 'deduplicateQueue'])
     router.post('/queue/search-requested', [QueueController, 'searchRequested'])

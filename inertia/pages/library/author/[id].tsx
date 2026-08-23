@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   DropdownMenu,
@@ -28,6 +29,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
+import { MediaHero } from '@/components/media-hero'
 import { useState, useEffect, useMemo } from 'react'
 import { useShowMore } from '@/hooks/use_show_more'
 import { toast } from 'sonner'
@@ -450,12 +452,13 @@ export default function AuthorDetail() {
       <AppLayout title="Loading...">
         <Head title="Loading..." />
         <div className="space-y-6">
-          <div className="flex gap-6">
-            <Skeleton className="h-48 w-48 rounded-lg" />
+          <div className="flex gap-4 md:gap-6">
+            <Skeleton className="w-28 sm:w-40 md:w-48 aspect-square rounded-lg shrink-0" />
             <div className="flex-1 space-y-4">
               <Skeleton className="h-8 w-1/3" />
               <Skeleton className="h-4 w-1/2" />
               <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
             </div>
           </div>
         </div>
@@ -467,9 +470,11 @@ export default function AuthorDetail() {
     return (
       <AppLayout title="Not Found">
         <Head title="Not Found" />
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Author not found</p>
-        </div>
+        <EmptyState
+          icon={<HugeiconsIcon icon={Book01Icon} />}
+          title="Author not found"
+          message="This author is no longer in your library — they may have been removed. Head back to the book library to pick another."
+        />
       </AppLayout>
     )
   }
@@ -483,10 +488,10 @@ export default function AuthorDetail() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={toggleMonitored}>
+                <Button variant="outline" onClick={toggleMonitored} aria-pressed={author.monitored}>
                   <HugeiconsIcon
                     icon={author.monitored ? Notification01Icon : NotificationOff01Icon}
-                    className="h-4 w-4 md:mr-2"
+                    className="h-4 w-4"
                   />
                   <span className="hidden md:inline">
                     {author.monitored ? 'Monitored' : 'Monitor'}
@@ -498,7 +503,7 @@ export default function AuthorDetail() {
           </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" aria-label="More actions">
                 <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -506,14 +511,14 @@ export default function AuthorDetail() {
               <DropdownMenuItem onClick={toggleWanted}>
                 <HugeiconsIcon
                   icon={author.requested ? ViewOffIcon : ViewIcon}
-                  className="h-4 w-4 mr-2"
+                  className="h-4 w-4"
                 />
                 {author.requested ? 'Unrequest' : 'Request'}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={refreshAuthor} disabled={refreshing}>
                 <HugeiconsIcon
                   icon={RefreshIcon}
-                  className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
+                  className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
                 />
                 {refreshing ? 'Refreshing...' : 'Refresh metadata'}
               </DropdownMenuItem>
@@ -522,8 +527,8 @@ export default function AuthorDetail() {
                 className="text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
-                Delete
+                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
+                Remove from Library
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -533,59 +538,51 @@ export default function AuthorDetail() {
       <Head title={author.name} />
 
       <div className="space-y-6">
-        {/* Author header */}
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Author image */}
-          <div className="w-full md:w-48 aspect-square md:aspect-auto md:h-48 bg-muted rounded-lg overflow-hidden flex-shrink-0">
-            {author.imageUrl ? (
-              <img src={author.imageUrl} alt={author.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon icon={Book01Icon} className="h-16 w-16 text-muted-foreground/50" />
-              </div>
+        <MediaHero
+          title={author.name}
+          posterUrl={author.imageUrl}
+          posterAspect="square"
+          posterFallback={
+            <HugeiconsIcon icon={Book01Icon} className="h-16 w-16 text-muted-foreground/50" />
+          }
+          overview={author.overview}
+        >
+          <div>
+            <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-[-0.01em]">{author.name}</h1>
+            </div>
+          </div>
+
+          {/* Library tally — the dot carries the status colour, the word carries the label */}
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <HugeiconsIcon icon={Book01Icon} className="h-4 w-4" />
+              <span className="readout">{totalBooks}</span> books
+            </span>
+            {downloadedBooks > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-status-complete" aria-hidden="true" />
+                <span className="readout">{downloadedBooks}</span> downloaded
+              </span>
+            )}
+            {requestedBooks > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-status-queued" aria-hidden="true" />
+                <span className="readout">{requestedBooks}</span> requested
+              </span>
             )}
           </div>
 
-          {/* Author info */}
-          <div className="flex-1 space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl font-bold">{author.name}</h1>
-              </div>
-            </div>
-
-            {author.overview && (
-              <p className="text-muted-foreground line-clamp-3">{author.overview}</p>
+          {/* Tags */}
+          <div className="flex flex-wrap gap-2">
+            {author.qualityProfile && <Badge variant="outline">{author.qualityProfile.name}</Badge>}
+            {author.rootFolder && (
+              <Badge variant="secondary" className="readout">
+                {author.rootFolder.path}
+              </Badge>
             )}
-
-            {/* Stats */}
-            <div className="flex flex-wrap gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{totalBooks} books</Badge>
-              </div>
-              {downloadedBooks > 0 && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="default" className="bg-green-600">
-                    {downloadedBooks} downloaded
-                  </Badge>
-                </div>
-              )}
-              {requestedBooks > 0 && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{requestedBooks} requested</Badge>
-                </div>
-              )}
-            </div>
-
-            {/* Tags */}
-            <div className="flex flex-wrap gap-2">
-              {author.qualityProfile && (
-                <Badge variant="outline">{author.qualityProfile.name}</Badge>
-              )}
-              {author.rootFolder && <Badge variant="outline">{author.rootFolder.path}</Badge>}
-            </div>
           </div>
-        </div>
+        </MediaHero>
 
         {/* Books / Bibliography */}
         <Tabs defaultValue="all" className="space-y-4">
@@ -615,12 +612,12 @@ export default function AuthorDetail() {
               >
                 {requestingAll ? (
                   <>
-                    <Spinner className="mr-2" />
+                    <Spinner />
                     Requesting...
                   </>
                 ) : (
                   <>
-                    <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                    <HugeiconsIcon icon={Add01Icon} className="h-4 w-4" />
                     Request All in Library
                   </>
                 )}
@@ -631,10 +628,12 @@ export default function AuthorDetail() {
           <TabsContent value="all" className="space-y-4">
             {mergedBooks.length === 0 ? (
               <EmptyState
+                icon={<HugeiconsIcon icon={Book01Icon} />}
+                title="No books found"
                 message={
                   loadingBibliography
-                    ? 'Loading bibliography...'
-                    : 'No books found. Try refreshing to fetch from OpenLibrary.'
+                    ? 'Loading the bibliography from OpenLibrary…'
+                    : 'OpenLibrary has no works linked to this author yet. Run Refresh metadata from the actions menu to fetch them.'
                 }
               />
             ) : (
@@ -655,7 +654,7 @@ export default function AuthorDetail() {
                           openlibraryId: book.openlibraryId,
                           title: book.title,
                           description: book.description,
-                          coverUrl: book.coverUrl,
+                          coverUrl: book.coverUrl ?? null,
                           subjects: null,
                           inLibrary: book.inLibrary,
                           bookId: book.libraryId || null,
@@ -669,7 +668,8 @@ export default function AuthorDetail() {
                 {allBooksPage.hasMore && (
                   <div className="flex justify-center pt-2">
                     <Button variant="outline" onClick={allBooksPage.showMore}>
-                      Show more ({allBooksPage.shownCount} of {allBooksPage.totalCount})
+                      Show more (<span className="readout">{allBooksPage.shownCount}</span> of{' '}
+                      <span className="readout">{allBooksPage.totalCount}</span>)
                     </Button>
                   </div>
                 )}
@@ -679,7 +679,11 @@ export default function AuthorDetail() {
 
           <TabsContent value="library" className="space-y-4">
             {inLibraryBooks.length === 0 ? (
-              <EmptyState message="No books in library yet" />
+              <EmptyState
+                icon={<HugeiconsIcon icon={Book01Icon} />}
+                title="No books in library yet"
+                message="Add a book from the bibliography tab and it will appear here."
+              />
             ) : (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -700,7 +704,8 @@ export default function AuthorDetail() {
                 {inLibraryPage.hasMore && (
                   <div className="flex justify-center pt-2">
                     <Button variant="outline" onClick={inLibraryPage.showMore}>
-                      Show more ({inLibraryPage.shownCount} of {inLibraryPage.totalCount})
+                      Show more (<span className="readout">{inLibraryPage.shownCount}</span> of{' '}
+                      <span className="readout">{inLibraryPage.totalCount}</span>)
                     </Button>
                   </div>
                 )}
@@ -710,7 +715,11 @@ export default function AuthorDetail() {
 
           <TabsContent value="downloaded" className="space-y-4">
             {downloadedBooksFiltered.length === 0 ? (
-              <EmptyState message="No downloaded books yet" />
+              <EmptyState
+                icon={<HugeiconsIcon icon={Book01Icon} />}
+                title="No downloaded books yet"
+                message="Nothing by this author has landed on disk. Request a book and the next indexer search will pick it up."
+              />
             ) : (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -731,7 +740,8 @@ export default function AuthorDetail() {
                 {downloadedPage.hasMore && (
                   <div className="flex justify-center pt-2">
                     <Button variant="outline" onClick={downloadedPage.showMore}>
-                      Show more ({downloadedPage.shownCount} of {downloadedPage.totalCount})
+                      Show more (<span className="readout">{downloadedPage.shownCount}</span> of{' '}
+                      <span className="readout">{downloadedPage.totalCount}</span>)
                     </Button>
                   </div>
                 )}
@@ -741,7 +751,11 @@ export default function AuthorDetail() {
 
           <TabsContent value="requested" className="space-y-4">
             {requestedBooksFiltered.length === 0 ? (
-              <EmptyState message="No requested books" />
+              <EmptyState
+                icon={<HugeiconsIcon icon={Book01Icon} />}
+                title="No requested books"
+                message="Request a book from the bibliography and Hamster will keep searching your indexers for it."
+              />
             ) : (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -762,7 +776,8 @@ export default function AuthorDetail() {
                 {requestedPage.hasMore && (
                   <div className="flex justify-center pt-2">
                     <Button variant="outline" onClick={requestedPage.showMore}>
-                      Show more ({requestedPage.shownCount} of {requestedPage.totalCount})
+                      Show more (<span className="readout">{requestedPage.shownCount}</span> of{' '}
+                      <span className="readout">{requestedPage.totalCount}</span>)
                     </Button>
                   </div>
                 )}
@@ -772,7 +787,11 @@ export default function AuthorDetail() {
 
           <TabsContent value="available" className="space-y-4">
             {notInLibraryBooks.length === 0 ? (
-              <EmptyState message="All books are in library" />
+              <EmptyState
+                icon={<HugeiconsIcon icon={Book01Icon} />}
+                title="Every listed book is already in your library"
+                message="OpenLibrary lists nothing further for this author."
+              />
             ) : (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -789,7 +808,7 @@ export default function AuthorDetail() {
                           openlibraryId: book.openlibraryId,
                           title: book.title,
                           description: book.description,
-                          coverUrl: book.coverUrl,
+                          coverUrl: book.coverUrl ?? null,
                           subjects: null,
                           inLibrary: book.inLibrary,
                           bookId: book.libraryId || null,
@@ -803,7 +822,8 @@ export default function AuthorDetail() {
                 {availablePage.hasMore && (
                   <div className="flex justify-center pt-2">
                     <Button variant="outline" onClick={availablePage.showMore}>
-                      Show more ({availablePage.shownCount} of {availablePage.totalCount})
+                      Show more (<span className="readout">{availablePage.shownCount}</span> of{' '}
+                      <span className="readout">{availablePage.totalCount}</span>)
                     </Button>
                   </div>
                 )}
@@ -826,24 +846,12 @@ export default function AuthorDetail() {
   )
 }
 
-// Empty state component
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="rounded-full bg-muted p-6 mb-4">
-        <HugeiconsIcon icon={Book01Icon} className="h-12 w-12 text-muted-foreground" />
-      </div>
-      <p className="text-muted-foreground">{message}</p>
-    </div>
-  )
-}
-
 // Merged book type for unified display
 interface MergedBook {
   openlibraryId: string
   title: string
   description: string | null
-  coverUrl: string | null
+  coverUrl: string | null | undefined
   inLibrary: boolean
   libraryId?: number | null
   requested: boolean
@@ -934,9 +942,9 @@ function MergedBookCard({
   return (
     <CardWrapper>
       <Card
-        className={`py-0 overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group ${
-          isComplete ? 'ring-1 ring-green-500/50' : ''
-        } ${isNotInLibrary ? 'opacity-70' : ''}`}
+        className={`py-0 overflow-hidden transition-colors duration-150 cursor-pointer group hover:border-primary ${
+          isNotInLibrary ? 'opacity-70' : ''
+        }`}
       >
         <div className="aspect-2/3 bg-muted relative">
           {book.coverUrl ? (
@@ -959,6 +967,7 @@ function MergedBookCard({
             <CardStatusBadge
               status={status as MediaItemStatus}
               size="sm"
+              isToggling={isToggling}
               showOnHover={status === 'none'}
               onToggleRequest={handleToggleRequest}
             />
@@ -1001,13 +1010,13 @@ function MergedBookCard({
           )}
         </div>
         <CardContent className={`p-3 ${isNotInLibrary ? 'opacity-70' : ''}`}>
-          <h3 className="font-medium truncate group-hover:text-primary transition-colors">
+          <h3 className="text-sm font-medium truncate group-hover:text-primary transition-colors duration-150">
             {book.title}
           </h3>
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
             {book.seriesName ? (
               <span className="truncate">
-                {book.seriesName} #{book.seriesPosition}
+                {book.seriesName} <span className="readout">#{book.seriesPosition}</span>
               </span>
             ) : (
               <span>&nbsp;</span>

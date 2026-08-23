@@ -160,7 +160,7 @@ function DialogContent({
         aria-modal="true"
         data-slot="dialog-content"
         className={cn(
-          'bg-background relative z-10 grid w-full max-w-lg gap-4 rounded-lg border p-6 shadow-lg outline-none max-h-[85vh] overflow-y-auto mx-4',
+          'bg-popover text-popover-foreground border-border relative z-10 grid w-full max-w-lg gap-4 rounded-xl border p-6 shadow-lg outline-none max-h-[85vh] overflow-y-auto mx-4',
           className
         )}
         {...props}
@@ -170,7 +170,7 @@ function DialogContent({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="ring-offset-background focus:ring-ring absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className="focus-visible:ring-ring/50 focus-visible:border-ring text-muted-foreground hover:bg-accent hover:text-accent-foreground absolute top-4 right-4 flex size-8 items-center justify-center rounded-md border border-transparent transition-colors outline-none focus-visible:ring-[3px] disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
             <span className="sr-only">Close</span>

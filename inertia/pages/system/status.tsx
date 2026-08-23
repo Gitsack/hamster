@@ -10,8 +10,8 @@ import {
   CheckmarkCircle01Icon,
   Cancel01Icon,
   Alert01Icon,
+  PulseIcon,
 } from '@hugeicons/core-free-icons'
-import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 
@@ -48,6 +48,13 @@ const CHECK_LABELS: Record<string, string> = {
   downloadClients: 'Download Clients',
 }
 
+/** Health state maps onto the status ramp: healthy is a fact, error is an alarm. */
+const HEALTH_STATE = {
+  ok: { label: 'Healthy', icon: CheckmarkCircle01Icon, fill: 'bg-status-complete text-white' },
+  warning: { label: 'Warning', icon: Alert01Icon, fill: 'bg-status-queued text-white' },
+  error: { label: 'Error', icon: Cancel01Icon, fill: 'bg-status-failed text-white' },
+} as const
+
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400)
   const hours = Math.floor((seconds % 86400) / 3600)
@@ -61,26 +68,30 @@ function formatUptime(seconds: number): string {
   return parts.join(' ')
 }
 
-function StatusIcon({ status }: { status: 'ok' | 'warning' | 'error' }) {
-  switch (status) {
-    case 'ok':
-      return <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-5 w-5 text-green-500" />
-    case 'warning':
-      return <HugeiconsIcon icon={Alert01Icon} className="h-5 w-5 text-yellow-500" />
-    case 'error':
-      return <HugeiconsIcon icon={Cancel01Icon} className="h-5 w-5 text-red-500" />
-  }
+function formatCheckedAt(timestamp: string | undefined): string {
+  if (!timestamp) return '-'
+  const d = new Date(timestamp)
+  if (Number.isNaN(d.getTime())) return '-'
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 function StatusBadge({ status }: { status: 'ok' | 'warning' | 'error' }) {
-  switch (status) {
-    case 'ok':
-      return <Badge className="bg-green-500">Healthy</Badge>
-    case 'warning':
-      return <Badge className="bg-yellow-500 text-black">Warning</Badge>
-    case 'error':
-      return <Badge className="bg-red-500">Error</Badge>
-  }
+  const state = HEALTH_STATE[status]
+  return (
+    <Badge className={`${state.fill} border-transparent`}>
+      <HugeiconsIcon icon={state.icon} aria-hidden="true" />
+      {state.label}
+    </Badge>
+  )
+}
+
+function InfoField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <div className="readout truncate text-sm text-foreground">{value}</div>
+    </div>
+  )
 }
 
 export default function SystemStatus() {
@@ -104,7 +115,10 @@ export default function SystemStatus() {
         setSystemInfo(await infoRes.json())
       }
     } catch {
-      toast.error('Failed to fetch system status')
+      toast.error('Could not reach the Hamster server', {
+        description:
+          '/health and /api/v1/system/info did not respond. Check that the container is running, then hit Refresh.',
+      })
     } finally {
       setLoading(false)
     }
@@ -121,6 +135,10 @@ export default function SystemStatus() {
     toast.success('Status refreshed')
   }
 
+  const memoryPercent = systemInfo
+    ? Math.min(Math.round((systemInfo.memory.used / systemInfo.memory.total) * 100), 100)
+    : 0
+
   return (
     <AppLayout
       title="System Status"
@@ -128,7 +146,8 @@ export default function SystemStatus() {
         <Button onClick={handleRefresh} disabled={refreshing}>
           <HugeiconsIcon
             icon={RefreshIcon}
-            className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
+            aria-hidden="true"
+            className={refreshing ? 'animate-spin' : undefined}
           />
           Refresh
         </Button>
@@ -154,52 +173,48 @@ export default function SystemStatus() {
             {/* System Info */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle>System Information</CardTitle>
                   {health && <StatusBadge status={health.status} />}
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Version</div>
-                    <div className="text-sm font-medium">
-                      {systemInfo?.version || health?.version || '-'}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Node.js</div>
-                    <div className="text-sm font-medium">{systemInfo?.nodeVersion || '-'}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Platform</div>
-                    <div className="text-sm font-medium">
-                      {systemInfo ? `${systemInfo.platform} (${systemInfo.arch})` : '-'}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-sm text-muted-foreground">Uptime</div>
-                    <div className="text-sm font-medium">
-                      {systemInfo ? formatUptime(systemInfo.uptime) : '-'}
-                    </div>
-                  </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <InfoField
+                    label="Version"
+                    value={systemInfo?.version || health?.version || '-'}
+                  />
+                  <InfoField label="Node.js" value={systemInfo?.nodeVersion || '-'} />
+                  <InfoField
+                    label="Platform"
+                    value={systemInfo ? `${systemInfo.platform} (${systemInfo.arch})` : '-'}
+                  />
+                  <InfoField
+                    label="Uptime"
+                    value={systemInfo ? formatUptime(systemInfo.uptime) : '-'}
+                  />
                 </div>
 
                 {systemInfo && (
-                  <div className="mt-4 pt-4 border-t">
-                    <div className="text-sm text-muted-foreground mb-2">Memory Usage</div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 bg-muted rounded-full h-2.5">
-                        <div
-                          className="bg-primary rounded-full h-2.5 transition-all"
-                          style={{
-                            width: `${Math.min((systemInfo.memory.used / systemInfo.memory.total) * 100, 100)}%`,
-                          }}
-                        />
-                      </div>
-                      <span className="text-sm font-medium whitespace-nowrap">
-                        {systemInfo.memory.used} / {systemInfo.memory.total} MB
+                  <div className="mt-6 border-t border-border pt-4">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-xs font-medium text-muted-foreground">Memory</span>
+                      <span className="readout text-xs text-foreground">
+                        {systemInfo.memory.used} / {systemInfo.memory.total} MB · {memoryPercent}%
                       </span>
+                    </div>
+                    <div
+                      role="progressbar"
+                      aria-label="Memory usage"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={memoryPercent}
+                      className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                    >
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
+                        style={{ width: `${memoryPercent}%` }}
+                      />
                     </div>
                   </div>
                 )}
@@ -209,45 +224,52 @@ export default function SystemStatus() {
             {/* Health Checks */}
             <Card>
               <CardHeader>
-                <CardTitle>Health Checks</CardTitle>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle>Health Checks</CardTitle>
+                  {health && (
+                    <span className="readout text-xs text-muted-foreground">
+                      checked {formatCheckedAt(health.timestamp)}
+                    </span>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {health ? (
-                  <div className="space-y-3">
+                  <div className="-mx-6 divide-y divide-border border-t border-border">
                     {health.checks.map((check) => (
                       <div
                         key={check.name}
-                        className="flex items-center justify-between p-3 rounded-md border"
+                        className="flex items-center justify-between gap-4 px-6 py-3"
                       >
-                        <div className="flex items-center gap-3">
-                          <StatusIcon status={check.status} />
-                          <div>
-                            <div className="text-sm font-medium">
-                              {CHECK_LABELS[check.name] || check.name}
-                            </div>
-                            {check.message && (
-                              <div className="text-xs text-muted-foreground">{check.message}</div>
-                            )}
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">
+                            {CHECK_LABELS[check.name] || check.name}
                           </div>
+                          {check.message && (
+                            <div className="mt-0.5 text-xs text-muted-foreground">
+                              {check.message}
+                            </div>
+                          )}
                         </div>
-                        <Badge
-                          variant="outline"
-                          className={
-                            check.status === 'ok'
-                              ? 'border-green-500 text-green-500'
-                              : check.status === 'warning'
-                                ? 'border-yellow-500 text-yellow-500'
-                                : 'border-red-500 text-red-500'
-                          }
-                        >
-                          {check.status}
-                        </Badge>
+                        <StatusBadge status={check.status} />
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <p>Unable to fetch health status.</p>
+                  <div className="flex flex-col items-center py-12 text-center">
+                    <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                      <HugeiconsIcon
+                        icon={PulseIcon}
+                        aria-hidden="true"
+                        className="size-6 text-muted-foreground"
+                      />
+                    </div>
+                    <p className="mt-4 text-lg font-medium">Health checks did not report</p>
+                    <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                      The <span className="readout">/health</span> endpoint returned nothing, so the
+                      state of the database, root folders, indexers and download clients is unknown.
+                      Refresh once the server has finished starting.
+                    </p>
                   </div>
                 )}
               </CardContent>

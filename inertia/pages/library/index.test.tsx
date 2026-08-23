@@ -46,6 +46,7 @@ vi.mock('@hugeicons/core-free-icons', () => {
     Download01Icon: m('Download01Icon'),
     Clock01Icon: m('Clock01Icon'),
     FolderSearchIcon: m('FolderSearchIcon'),
+    Tick02Icon: m('Tick02Icon'),
   }
 })
 
@@ -218,7 +219,7 @@ describe('Library', () => {
       render(<Library />)
 
       await waitFor(() => {
-        expect(screen.getByText(/Showing 3 of 3 movies/)).toBeInTheDocument()
+        expect(screen.getByText(/Showing/).textContent).toContain('3 of 3 movies')
       })
     })
   })
@@ -239,7 +240,7 @@ describe('Library', () => {
         expect(screen.getByText('Inception')).toBeInTheDocument()
       })
 
-      const input = screen.getByPlaceholderText('Filter movies...')
+      const input = screen.getByPlaceholderText('Filter movies…')
       await user.type(input, 'Inter')
 
       expect(screen.getByText('Interstellar')).toBeInTheDocument()
@@ -256,10 +257,10 @@ describe('Library', () => {
         expect(screen.getByText('Inception')).toBeInTheDocument()
       })
 
-      const input = screen.getByPlaceholderText('Filter movies...')
+      const input = screen.getByPlaceholderText('Filter movies…')
       await user.type(input, 'In')
 
-      expect(screen.getByText(/Showing 2 of 3 movies/)).toBeInTheDocument()
+      expect(screen.getByText(/Showing/).textContent).toContain('2 of 3 movies')
     })
 
     it('shows empty state when no items match search', async () => {
@@ -271,11 +272,11 @@ describe('Library', () => {
         expect(screen.getByText('Inception')).toBeInTheDocument()
       })
 
-      const input = screen.getByPlaceholderText('Filter movies...')
+      const input = screen.getByPlaceholderText('Filter movies…')
       await user.type(input, 'zzzznotfound')
 
-      expect(screen.getByText('No items found')).toBeInTheDocument()
-      expect(screen.getByText('Try adjusting your search or filters')).toBeInTheDocument()
+      expect(screen.getByText('No movies match this filter')).toBeInTheDocument()
+      expect(screen.getByText(/Clear them to see everything again/)).toBeInTheDocument()
     })
   })
 

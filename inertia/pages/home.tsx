@@ -19,12 +19,12 @@ export default function Home() {
     <>
       <Head title="Hamster - Your Personal Media Library" />
 
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen bg-background">
         {/* Header */}
-        <header className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
+        <header className="border-b border-border">
+          <div className="container mx-auto flex flex-wrap items-center justify-between gap-3 px-4 py-3">
             <HamsterLogo size="md" />
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {isLoggedIn ? (
                 <Button asChild>
                   <Link href="/dashboard">Dashboard</Link>
@@ -44,27 +44,24 @@ export default function Home() {
         </header>
 
         {/* Hero Section */}
-        <main className="container mx-auto px-4 py-16 md:py-24">
-          <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
-              Your Personal
-              <span className="text-primary"> Media Library</span>
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+        <main className="container mx-auto px-4 py-16">
+          <div className="mx-auto max-w-3xl text-center">
+            <h1 className="text-2xl font-bold tracking-[-0.01em]">Your Personal Media Library</h1>
+            <p className="mx-auto mt-3 max-w-[70ch] text-sm text-muted-foreground">
               Organize, discover, and manage your movies, TV shows, music, and books all in one
               place. Hamster automatically fetches metadata and keeps your collection organized.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
               {isLoggedIn ? (
-                <Button size="lg" asChild>
+                <Button asChild>
                   <Link href="/dashboard">Go to Dashboard</Link>
                 </Button>
               ) : (
                 <>
-                  <Button size="lg" asChild>
+                  <Button asChild>
                     <Link href="/register">Create Account</Link>
                   </Button>
-                  <Button size="lg" variant="outline" asChild>
+                  <Button variant="outline" asChild>
                     <Link href="/getting-started">Learn More</Link>
                   </Button>
                 </>
@@ -73,7 +70,7 @@ export default function Home() {
           </div>
 
           {/* Features Grid */}
-          <div className="mt-24 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+          <div className="mx-auto mt-16 grid max-w-5xl grid-cols-1 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-2 lg:grid-cols-4">
             <FeatureCard
               icon={Film01Icon}
               title="Movies"
@@ -97,7 +94,7 @@ export default function Home() {
           </div>
 
           {/* Additional Features */}
-          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+          <div className="mx-auto mt-12 grid max-w-5xl grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-3">
             <MiniFeature
               icon={Search01Icon}
               title="Smart Search"
@@ -117,10 +114,10 @@ export default function Home() {
         </main>
 
         {/* Footer */}
-        <footer className="container mx-auto px-4 py-8 mt-16 border-t">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
+        <footer className="border-t border-border">
+          <div className="container mx-auto flex flex-col items-center justify-between gap-4 px-4 py-6 text-sm text-muted-foreground md:flex-row">
             <HamsterLogo size="sm" />
-            <p>Your personal media management solution</p>
+            <p>Music, movies, TV and books in one self-hosted library.</p>
           </div>
         </footer>
       </div>
@@ -138,12 +135,10 @@ function FeatureCard({
   description: string
 }) {
   return (
-    <div className="p-6 rounded-xl border bg-card hover:shadow-lg transition-shadow">
-      <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-        <HugeiconsIcon icon={icon} className="h-6 w-6 text-primary" />
-      </div>
-      <h3 className="font-semibold text-lg mb-2">{title}</h3>
-      <p className="text-sm text-muted-foreground">{description}</p>
+    <div className="bg-card p-5">
+      <HugeiconsIcon icon={icon} aria-hidden="true" className="size-5 text-muted-foreground" />
+      <h3 className="mt-3 text-sm font-semibold">{title}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
     </div>
   )
 }
@@ -158,13 +153,15 @@ function MiniFeature({
   description: string
 }) {
   return (
-    <div className="flex items-start gap-3 p-4">
-      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-        <HugeiconsIcon icon={icon} className="h-5 w-5 text-primary" />
-      </div>
-      <div>
-        <h3 className="font-medium mb-1">{title}</h3>
-        <p className="text-sm text-muted-foreground">{description}</p>
+    <div className="flex gap-3">
+      <HugeiconsIcon
+        icon={icon}
+        aria-hidden="true"
+        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+      />
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
     </div>
   )

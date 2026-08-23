@@ -2,8 +2,9 @@ import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -30,7 +31,6 @@ import {
   Calendar01Icon,
   MusicNote01Icon,
   CheckmarkCircle01Icon,
-  Cancel01Icon,
   Delete01Icon,
   FileDownloadIcon,
   PlayIcon,
@@ -38,6 +38,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
+import { MediaHero } from '@/components/media-hero'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
@@ -355,12 +356,13 @@ export default function AlbumDetail() {
       <AppLayout title="Loading...">
         <Head title="Loading..." />
         <div className="space-y-6">
-          <div className="flex gap-6">
-            <Skeleton className="h-48 w-48 rounded-lg" />
+          <div className="flex gap-4 md:gap-6">
+            <Skeleton className="w-28 sm:w-40 md:w-48 aspect-square rounded-lg shrink-0" />
             <div className="flex-1 space-y-4">
               <Skeleton className="h-8 w-1/3" />
               <Skeleton className="h-4 w-1/4" />
               <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-4 w-2/3" />
             </div>
           </div>
         </div>
@@ -372,9 +374,11 @@ export default function AlbumDetail() {
     return (
       <AppLayout title="Not Found">
         <Head title="Not Found" />
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Album not found</p>
-        </div>
+        <EmptyState
+          icon={<HugeiconsIcon icon={CdIcon} />}
+          title="Album not found"
+          message="This album is no longer in your library — it may have been removed. Head back to the music library to pick another."
+        />
       </AppLayout>
     )
   }
@@ -397,7 +401,7 @@ export default function AlbumDetail() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="outline" onClick={playAlbum}>
-                    <HugeiconsIcon icon={PlayIcon} className="h-4 w-4 md:mr-2" />
+                    <HugeiconsIcon icon={PlayIcon} className="h-4 w-4" />
                     <span className="hidden md:inline">Play</span>
                   </Button>
                 </TooltipTrigger>
@@ -413,9 +417,9 @@ export default function AlbumDetail() {
                   disabled={downloading || percentComplete === 100}
                 >
                   {downloading ? (
-                    <Spinner className="md:mr-2" />
+                    <Spinner />
                   ) : (
-                    <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
+                    <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
                   )}
                   <span className="hidden md:inline">
                     {downloading ? 'Downloading...' : 'Download'}
@@ -434,9 +438,9 @@ export default function AlbumDetail() {
                   disabled={searching || percentComplete === 100}
                 >
                   {searching ? (
-                    <Spinner className="md:mr-2" />
+                    <Spinner />
                   ) : (
-                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
                   )}
                   <span className="hidden md:inline">
                     {searching ? 'Searching...' : 'Browse releases'}
@@ -457,7 +461,7 @@ export default function AlbumDetail() {
                 <DropdownMenuItem onClick={enrichAlbum} disabled={enriching}>
                   <HugeiconsIcon
                     icon={Search01Icon}
-                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                    className={`h-4 w-4 ${enriching ? 'animate-spin' : ''}`}
                   />
                   {enriching ? 'Enriching...' : 'Enrich from MusicBrainz'}
                 </DropdownMenuItem>
@@ -468,7 +472,7 @@ export default function AlbumDetail() {
                   className="text-destructive"
                   onClick={() => setDeleteFileDialogOpen(true)}
                 >
-                  <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                  <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
                   Delete Files
                 </DropdownMenuItem>
               )}
@@ -482,7 +486,7 @@ export default function AlbumDetail() {
                   }
                 }}
               >
-                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
                 Remove from Library
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -493,97 +497,101 @@ export default function AlbumDetail() {
       <Head title={`${album.title} - ${album.artistName}`} />
 
       <div className="space-y-6">
-        {/* Album header */}
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Album art */}
-          <div className="w-full md:w-48 aspect-square md:aspect-auto md:h-48 bg-muted rounded-lg overflow-hidden flex-shrink-0">
-            {album.imageUrl ? (
-              <img src={album.imageUrl} alt={album.title} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon icon={CdIcon} className="h-16 w-16 text-muted-foreground/50" />
-              </div>
-            )}
+        <MediaHero
+          title={album.title}
+          posterUrl={album.imageUrl}
+          posterAspect="square"
+          posterFallback={
+            <HugeiconsIcon icon={CdIcon} className="h-16 w-16 text-muted-foreground/50" />
+          }
+          overview={album.overview}
+        >
+          <div>
+            <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-[-0.01em]">{album.title}</h1>
+            </div>
+            <Link
+              href={`/artist/${album.artistId}`}
+              className="rounded-sm text-sm text-muted-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+            >
+              {album.artistName}
+            </Link>
           </div>
 
-          {/* Album info */}
-          <div className="flex-1 space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl font-bold">{album.title}</h1>
-              </div>
-              <Link
-                href={`/artist/${album.artistId}`}
-                className="text-muted-foreground hover:text-primary transition-colors"
-              >
-                {album.artistName}
-              </Link>
-            </div>
+          {/* Status */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <MediaStatusBadge
+              status={
+                album.trackFiles.length > 0 && tracksWithFiles === totalTracks
+                  ? 'downloaded'
+                  : album.requested
+                    ? 'requested'
+                    : 'none'
+              }
+              onToggleRequest={toggleRequested}
+            />
+          </div>
 
-            {/* Status */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <MediaStatusBadge
-                status={
-                  album.trackFiles.length > 0 && tracksWithFiles === totalTracks
-                    ? 'downloaded'
-                    : album.requested
-                      ? 'requested'
-                      : 'none'
-                }
-                onToggleRequest={toggleRequested}
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-              {album.releaseDate && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
-                  {album.releaseDate}
-                </div>
-              )}
+          {/* Meta info */}
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {album.releaseDate && (
               <div className="flex items-center gap-1 text-muted-foreground">
-                <HugeiconsIcon icon={MusicNote01Icon} className="h-4 w-4" />
-                {totalTracks} tracks
-              </div>
-            </div>
-
-            {/* Progress */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {tracksWithFiles} of {totalTracks} tracks
-                </span>
-                <span className="font-medium">{percentComplete}%</span>
-              </div>
-              <Progress value={percentComplete} className="h-2" />
-            </div>
-
-            {/* Tags */}
-            <div className="flex flex-wrap gap-2">
-              <Badge className="capitalize">{album.albumType}</Badge>
-              {album.secondaryTypes.map((type) => (
-                <Badge key={type} variant="outline" className="capitalize">
-                  {type}
-                </Badge>
-              ))}
-            </div>
-
-            {/* Quality, download client, and folder info */}
-            {(album.qualityProfile || album.rootFolder || downloadClients.length > 0) && (
-              <div className="flex flex-wrap gap-2 text-sm">
-                {album.qualityProfile && (
-                  <Badge variant="secondary">{album.qualityProfile.name}</Badge>
-                )}
-                <DownloadClientIndicator
-                  clients={downloadClients}
-                  selectedClientId={selectedClientId}
-                  onClientChange={setSelectedClientId}
-                />
-                {album.rootFolder && <Badge variant="secondary">{album.rootFolder.path}</Badge>}
+                <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
+                <span className="readout">{album.releaseDate}</span>
               </div>
             )}
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <HugeiconsIcon icon={MusicNote01Icon} className="h-4 w-4" />
+              <span className="readout">{totalTracks}</span> tracks
+            </div>
           </div>
-        </div>
+
+          {/* Completeness — media state, so it wears the status ramp, not the accent */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                <span className="readout">{tracksWithFiles}</span> of{' '}
+                <span className="readout">{totalTracks}</span> tracks
+              </span>
+              <span className="readout font-medium">{percentComplete}%</span>
+            </div>
+            <Progress
+              value={percentComplete}
+              className="h-2 [&_[data-slot=progress-indicator]]:bg-status-complete"
+            />
+          </div>
+
+          {/* Tags */}
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="capitalize">
+              {album.albumType}
+            </Badge>
+            {album.secondaryTypes.map((type) => (
+              <Badge key={type} variant="outline" className="capitalize">
+                {type}
+              </Badge>
+            ))}
+          </div>
+
+          {/* Quality, download client, and folder info */}
+          {(album.qualityProfile || album.rootFolder || downloadClients.length > 0) && (
+            <div className="flex flex-wrap gap-2 text-sm">
+              {album.qualityProfile && (
+                <Badge variant="secondary">{album.qualityProfile.name}</Badge>
+              )}
+              <DownloadClientIndicator
+                clients={downloadClients}
+                selectedClientId={selectedClientId}
+                onClientChange={setSelectedClientId}
+              />
+              {album.rootFolder && (
+                <Badge variant="secondary" className="readout">
+                  {album.rootFolder.path}
+                </Badge>
+              )}
+            </div>
+          )}
+        </MediaHero>
 
         {albumDownloads.length > 0 && <DownloadProgressCard downloads={albumDownloads} />}
 
@@ -599,104 +607,120 @@ export default function AlbumDetail() {
 
           <TabsContent value="tracks">
             {album.tracks.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <p className="text-muted-foreground">
-                    No tracks available. Try refreshing the artist metadata.
-                  </p>
-                </CardContent>
-              </Card>
+              <EmptyState
+                icon={<HugeiconsIcon icon={MusicNote01Icon} />}
+                title="No track listing yet"
+                message="MusicBrainz has not returned tracks for this release. Refresh the artist's metadata to pull the listing in."
+              />
             ) : (
-              <Card>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12"></TableHead>
-                        <TableHead className="w-12">#</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead className="w-24 text-right">Duration</TableHead>
-                        <TableHead className="w-16 text-center">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {tracksPage.visibleItems.map((track, index) => {
-                        const isCurrentTrack = player.currentTrack?.trackId === track.id
-                        const isPlaying = isCurrentTrack && player.isPlaying
+              <Card className="py-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <span className="sr-only">Play</span>
+                      </TableHead>
+                      <TableHead className="w-14" data-numeric>
+                        #
+                      </TableHead>
+                      <TableHead>Title</TableHead>
+                      <TableHead className="w-24" data-numeric>
+                        Duration
+                      </TableHead>
+                      <TableHead className="w-16 text-center">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tracksPage.visibleItems.map((track, index) => {
+                      const isCurrentTrack = player.currentTrack?.trackId === track.id
+                      const isPlaying = isCurrentTrack && player.isPlaying
 
-                        return (
-                          <TableRow
-                            key={track.id}
-                            className={track.hasFile ? 'cursor-pointer hover:bg-muted/50' : ''}
-                            onClick={() => track.hasFile && playTrack(track, index)}
-                          >
-                            <TableCell>
-                              {track.hasFile && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    if (isPlaying) {
-                                      player.pause()
-                                    } else {
-                                      playTrack(track, index)
-                                    }
-                                  }}
-                                >
-                                  <HugeiconsIcon
-                                    icon={isPlaying ? PauseIcon : PlayIcon}
-                                    className="h-4 w-4"
-                                  />
-                                </Button>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {track.discNumber > 1
-                                ? `${track.discNumber}-${track.trackNumber}`
-                                : track.trackNumber}
-                            </TableCell>
-                            <TableCell className="font-medium">{track.title}</TableCell>
-                            <TableCell className="text-right text-muted-foreground">
-                              {formatDuration(track.durationMs)}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {track.hasFile ? (
+                      return (
+                        <TableRow
+                          key={track.id}
+                          className={track.hasFile ? 'cursor-pointer' : ''}
+                          onClick={() => track.hasFile && playTrack(track, index)}
+                        >
+                          <TableCell>
+                            {track.hasFile && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={
+                                  isPlaying ? `Pause ${track.title}` : `Play ${track.title}`
+                                }
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (isPlaying) {
+                                    player.pause()
+                                  } else {
+                                    playTrack(track, index)
+                                  }
+                                }}
+                              >
                                 <HugeiconsIcon
-                                  icon={CheckmarkCircle01Icon}
-                                  className="h-5 w-5 text-green-500 mx-auto"
+                                  icon={isPlaying ? PauseIcon : PlayIcon}
+                                  className="h-4 w-4"
                                 />
-                              ) : (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    searchAndDownload(track.id)
-                                  }}
-                                  disabled={downloading}
-                                  title="Search for this track (single/EP)"
-                                >
-                                  {downloading ? (
-                                    <Spinner />
-                                  ) : (
-                                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                              </Button>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground" data-numeric>
+                            {track.discNumber > 1
+                              ? `${track.discNumber}-${track.trackNumber}`
+                              : track.trackNumber}
+                          </TableCell>
+                          <TableCell className="font-medium">{track.title}</TableCell>
+                          <TableCell className="text-muted-foreground" data-numeric>
+                            {formatDuration(track.durationMs)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {track.hasFile ? (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex size-5 items-center justify-center rounded-full bg-status-complete text-white">
+                                      <HugeiconsIcon
+                                        icon={CheckmarkCircle01Icon}
+                                        className="size-3"
+                                      />
+                                      <span className="sr-only">On disk</span>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>On disk</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-muted-foreground hover:text-primary"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  searchAndDownload(track.id)
+                                }}
+                                disabled={downloading}
+                                aria-label={`Search indexers for ${track.title} as a single or EP`}
+                                title="Search for this track (single/EP)"
+                              >
+                                {downloading ? (
+                                  <Spinner />
+                                ) : (
+                                  <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
                 {tracksPage.hasMore && (
-                  <div className="flex justify-center py-3">
-                    <Button variant="outline" onClick={tracksPage.showMore}>
-                      Show more ({tracksPage.shownCount} of {tracksPage.totalCount})
+                  <div className="flex justify-center border-t border-border py-3">
+                    <Button variant="outline" size="sm" onClick={tracksPage.showMore}>
+                      Show more (<span className="readout">{tracksPage.shownCount}</span> of{' '}
+                      <span className="readout">{tracksPage.totalCount}</span>)
                     </Button>
                   </div>
                 )}
@@ -706,108 +730,117 @@ export default function AlbumDetail() {
 
           <TabsContent value="files">
             {album.trackFiles.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <p className="text-muted-foreground">No files imported for this album yet.</p>
-                </CardContent>
-              </Card>
+              <EmptyState
+                icon={<HugeiconsIcon icon={FileDownloadIcon} />}
+                title="No files imported yet"
+                message="Nothing has landed on disk for this album. Grab a release from Browse releases, or check Activity if a download is already running."
+              />
             ) : (
-              <Card>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Path</TableHead>
-                        <TableHead className="w-24">Quality</TableHead>
-                        <TableHead className="w-24">Format</TableHead>
-                        <TableHead className="w-24 text-right">Size</TableHead>
-                        <TableHead className="w-16"></TableHead>
+              <Card className="py-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Path</TableHead>
+                      <TableHead className="w-24">Quality</TableHead>
+                      <TableHead className="w-24">Format</TableHead>
+                      <TableHead className="w-24" data-numeric>
+                        Size
+                      </TableHead>
+                      <TableHead className="w-16">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {album.trackFiles.map((file) => (
+                      <TableRow key={file.id}>
+                        <TableCell className="readout truncate max-w-[200px] sm:max-w-xs">
+                          {file.path}
+                        </TableCell>
+                        <TableCell>
+                          {file.quality && <Badge variant="outline">{file.quality}</Badge>}
+                        </TableCell>
+                        <TableCell className="readout uppercase text-muted-foreground">
+                          {file.format}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground" data-numeric>
+                          {formatSize(file.size)}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            asChild
+                            aria-label={`Download ${file.path.split('/').pop()}`}
+                          >
+                            <a href={file.downloadUrl} download>
+                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {album.trackFiles.map((file) => (
-                        <TableRow key={file.id}>
-                          <TableCell className="font-mono text-sm truncate max-w-[200px] sm:max-w-xs">
-                            {file.path}
-                          </TableCell>
-                          <TableCell>
-                            {file.quality && <Badge variant="outline">{file.quality}</Badge>}
-                          </TableCell>
-                          <TableCell className="uppercase text-muted-foreground">
-                            {file.format}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {formatSize(file.size)}
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="outline" size="sm" asChild>
-                              <a href={file.downloadUrl} download>
-                                <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                              </a>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                    ))}
+                  </TableBody>
+                </Table>
               </Card>
             )}
           </TabsContent>
 
           {searchResults.length > 0 && (
             <TabsContent value="search">
-              <Card>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Release</TableHead>
-                        <TableHead className="w-32">Indexer</TableHead>
-                        <TableHead className="w-24">Quality</TableHead>
-                        <TableHead className="w-24 text-right">Size</TableHead>
-                        <TableHead className="w-24 text-right">Grabs</TableHead>
-                        <TableHead className="w-24">
-                          <span className="sr-only">Actions</span>
-                        </TableHead>
+              <Card className="py-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Release</TableHead>
+                      <TableHead className="w-32">Indexer</TableHead>
+                      <TableHead className="w-24">Quality</TableHead>
+                      <TableHead className="w-24" data-numeric>
+                        Size
+                      </TableHead>
+                      <TableHead className="w-20" data-numeric>
+                        Grabs
+                      </TableHead>
+                      <TableHead className="w-16">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {searchResults.map((result) => (
+                      <TableRow key={result.id}>
+                        <TableCell className="readout max-w-md truncate">{result.title}</TableCell>
+                        <TableCell className="readout text-muted-foreground">
+                          {result.indexer}
+                        </TableCell>
+                        <TableCell>
+                          {result.quality && <Badge variant="outline">{result.quality}</Badge>}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground" data-numeric>
+                          {formatSize(result.size)}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground" data-numeric>
+                          {result.grabs ?? result.seeders ?? '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="icon-sm"
+                            variant="outline"
+                            onClick={() => grabRelease(result)}
+                            disabled={grabbing === result.id}
+                            aria-label={`Download ${result.title}`}
+                          >
+                            {grabbing === result.id ? (
+                              <Spinner />
+                            ) : (
+                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {searchResults.map((result) => (
-                        <TableRow key={result.id}>
-                          <TableCell className="font-medium max-w-md truncate">
-                            {result.title}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
-                          <TableCell>
-                            {result.quality && <Badge variant="outline">{result.quality}</Badge>}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {formatSize(result.size)}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {result.grabs ?? result.seeders ?? '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => grabRelease(result)}
-                              disabled={grabbing === result.id}
-                              aria-label={`Download ${result.title}`}
-                            >
-                              {grabbing === result.id ? (
-                                <Spinner />
-                              ) : (
-                                <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                    ))}
+                  </TableBody>
+                </Table>
               </Card>
             </TabsContent>
           )}

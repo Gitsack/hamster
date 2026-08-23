@@ -641,39 +641,15 @@ export default class TvShowsController {
         }
       }
 
-      // If episode has a file, return error - frontend should show confirmation dialog
-      if (episode.hasFile) {
-        return response.badRequest({
-          error: 'Item has downloaded files',
-          hasFile: true,
-          message: 'Use destroyEpisode endpoint with deleteFile=true to remove files and record',
-        })
-      }
+      // Unrequesting means "I no longer want this", not "remove it from the
+      // library". Episodes are part of the show's canonical structure from TMDB,
+      // not user-added entries — deleting the row here made the episode vanish
+      // and left it un-re-requestable until the next metadata refresh recreated
+      // it. Removal has its own explicit endpoint (destroyEpisode).
+      episode.requested = false
+      await episode.save()
 
-      // Episode has no file - delete it and trigger cascade removal
-      const seasonId = episode.seasonId
-      const showId = episode.tvShowId
-      console.log(
-        `[TvShowsController] Unrequesting episode without file, deleting: S${episode.seasonNumber}E${episode.episodeNumber}`
-      )
-      await episode.delete()
-
-      // Check if season should be removed
-      const seasonRemoved = await libraryCleanupService.removeSeasonIfEmpty(seasonId)
-
-      // Check if show should be removed
-      if (!seasonRemoved) {
-        await libraryCleanupService.removeTvShowIfEmpty(showId)
-      } else {
-        // If season was removed, still need to check show
-        await libraryCleanupService.removeTvShowIfEmpty(showId)
-      }
-
-      return response.json({
-        id: episode.id,
-        deleted: true,
-        message: 'Removed from library',
-      })
+      return response.json({ id: episode.id, requested: false })
     }
 
     // Requesting (setting to true)
@@ -736,36 +712,16 @@ export default class TvShowsController {
         }
       }
 
-      // Check if any episodes have files
-      const episodesWithFiles = season.episodes.filter((e) => e.hasFile)
-      if (episodesWithFiles.length > 0) {
-        return response.badRequest({
-          error: 'Season has episodes with downloaded files',
-          hasFile: true,
-          episodesWithFiles: episodesWithFiles.length,
-          message: 'Delete episode files first before unrequesting the season',
-        })
-      }
-
-      // No episodes have files - delete all episodes in the season
-      const showId = params.id
-      console.log(
-        `[TvShowsController] Unrequesting season without files, deleting: Season ${season.seasonNumber}`
-      )
-
-      // Delete all episodes
-      await Episode.query().where('seasonId', season.id).delete()
-
-      // Delete the season
-      await season.delete()
-
-      // Check if show should be removed
-      await libraryCleanupService.removeTvShowIfEmpty(showId)
+      // As with individual episodes, unrequesting a season marks it unwanted
+      // rather than deleting it. Deleting dropped every episode row (files and
+      // all) and could cascade the whole show out of the library.
+      season.requested = false
+      await season.save()
+      await Episode.query().where('seasonId', season.id).update({ requested: false })
 
       return response.json({
         seasonNumber: params.seasonNumber,
-        deleted: true,
-        message: 'Season removed from library',
+        requested: false,
       })
     }
 

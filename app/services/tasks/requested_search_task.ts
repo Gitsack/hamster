@@ -11,6 +11,28 @@ import { downloadManager } from '#services/download_clients/download_manager'
 import { blacklistService } from '#services/blacklist/blacklist_service'
 import { scoreAndRankReleases } from '#services/quality/quality_scorer'
 import type { MediaType } from '#services/quality/quality_parser'
+import { DateTime } from 'luxon'
+
+/**
+ * Guard conditions grab() raises to decline a release.
+ *
+ * These are normal control flow — the item already has a file, the release was
+ * already taken, the guid has failed too often — not faults. Recording them as
+ * task errors marks an otherwise healthy search run as failed, which trains
+ * everyone to ignore the status that is supposed to surface real problems.
+ */
+const EXPECTED_SKIP_PATTERNS: RegExp[] = [
+  /already been downloaded/i,
+  /failed repeatedly/i,
+  /completed recently/i,
+  /already has a file/i,
+  /already exists in library/i,
+]
+
+export function isExpectedSkip(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return EXPECTED_SKIP_PATTERNS.some((pattern) => pattern.test(message))
+}
 
 /**
  * Normalize a title for comparison by:
@@ -187,17 +209,21 @@ function selectBestRelease(
 ): UnifiedSearchResult | null {
   if (results.length === 0) return null
 
-  // If we have a quality profile, use quality-based scoring
+  // If we have a quality profile, it decides — including deciding to grab nothing.
   if (profileItems && profileItems.length > 0 && cutoff !== null) {
     const scored = scoreAndRankReleases(results, mediaType, profileItems, cutoff, sizeOptions)
     if (scored.length > 0) {
       return scored[0].release
     }
-    // All releases were rejected by quality filter -- fall back to size-based
-    // so we still grab something rather than nothing
+
+    // Every candidate was rejected. Falling through to a size-sorted pick here
+    // made the profile advisory: it grabbed the largest release on offer, which
+    // is how CAM/TELESYNC rips kept being selected against a profile that
+    // explicitly disallowed them. Waiting for a release that passes is correct.
+    return null
   }
 
-  // Fallback: sort by size descending, but still respect size limits
+  // No usable profile: sort by size descending, but still respect size limits.
   let fallback = [...results]
   if (sizeOptions?.minSizeBytes) {
     fallback = fallback.filter((r) => r.size >= sizeOptions.minSizeBytes!)
@@ -451,6 +477,13 @@ class RequestedSearchTask {
         result.albums.grabbed++
         await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
+        if (isExpectedSkip(error)) {
+          logger.debug(
+            { err: error },
+            'RequestedSearch: Skipping album (guard declined the release)'
+          )
+          continue
+        }
         const errorMsg = `Failed to search/grab album ${album.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
         logger.error(
           { album: album.title, err: error },
@@ -570,6 +603,13 @@ class RequestedSearchTask {
         result.movies.grabbed++
         await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
+        if (isExpectedSkip(error)) {
+          logger.debug(
+            { err: error },
+            'RequestedSearch: Skipping movie (guard declined the release)'
+          )
+          continue
+        }
         const errorMsg = `Failed to search/grab movie ${movie.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
         logger.error(
           { movie: movie.title, err: error },
@@ -681,6 +721,13 @@ class RequestedSearchTask {
         result.books.grabbed++
         await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
+        if (isExpectedSkip(error)) {
+          logger.debug(
+            { err: error },
+            'RequestedSearch: Skipping book (guard declined the release)'
+          )
+          continue
+        }
         const errorMsg = `Failed to search/grab book ${book.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
         logger.error(
           { book: book.title, err: error },
@@ -700,9 +747,14 @@ class RequestedSearchTask {
     // Limit episodes per run to prevent blocking the server for too long
     const MAX_EPISODES_PER_RUN = 10
 
+    // Least-recently-searched first, never-searched before that. Without an
+    // explicit order the database returned the same rows every run, so with a
+    // per-run cap the tail of the wanted list was never searched at all.
     const requestedEpisodes = await Episode.query()
       .where('requested', true)
       .where('hasFile', false)
+      .orderByRaw('last_search_at asc nulls first')
+      .orderBy('airDate', 'desc')
       .preload('tvShow')
       .limit(MAX_EPISODES_PER_RUN * 3) // Fetch a few more in case some are skipped
 
@@ -765,6 +817,12 @@ class RequestedSearchTask {
 
       processedCount++
       result.episodes.searched++
+
+      // Stamp before searching, not after: an episode whose search throws must
+      // still move to the back of the queue, or it would block everything behind
+      // it on every run.
+      episode.lastSearchAt = DateTime.now()
+      await episode.save()
 
       try {
         const tvShow = episode.tvShow
@@ -874,6 +932,13 @@ class RequestedSearchTask {
         result.episodes.grabbed++
         await new Promise((resolve) => setTimeout(resolve, 2000))
       } catch (error) {
+        if (isExpectedSkip(error)) {
+          logger.debug(
+            { err: error },
+            'RequestedSearch: Skipping episode (guard declined the release)'
+          )
+          continue
+        }
         const errorMsg = `Failed to search/grab episode ${episode.tvShow.title} S${episode.seasonNumber}E${episode.episodeNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`
         logger.error(
           {

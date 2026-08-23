@@ -247,7 +247,9 @@ describe('openMoviePreview', () => {
     await user.click(screen.getByText('Open'))
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith('Failed to load movie details')
+      expect(toast.error).toHaveBeenCalledWith(
+        'Could not reach TMDB for movie details. Check the connection, then retry.'
+      )
     })
 
     // Sheet should be closed after error
@@ -278,7 +280,9 @@ describe('openMoviePreview', () => {
     await user.click(screen.getByText('Open'))
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith('Failed to load movie details')
+      expect(toast.error).toHaveBeenCalledWith(
+        'TMDB did not return details for this movie. Try again in a moment.'
+      )
     })
   })
 
@@ -450,7 +454,9 @@ describe('openTvShowPreview', () => {
     await user.click(screen.getByText('Open'))
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith('Failed to load TV show details')
+      expect(toast.error).toHaveBeenCalledWith(
+        'Could not reach TMDB for show details. Check the connection, then retry.'
+      )
     })
   })
 
@@ -478,7 +484,9 @@ describe('openTvShowPreview', () => {
     await user.click(screen.getByText('Open'))
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith('Failed to load TV show details')
+      expect(toast.error).toHaveBeenCalledWith(
+        'TMDB did not return details for this show. Try again in a moment.'
+      )
     })
   })
 

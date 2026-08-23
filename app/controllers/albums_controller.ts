@@ -381,33 +381,10 @@ export default class AlbumsController {
 
     const data = await request.validateUsing(updateAlbumValidator)
 
-    // Handle unrequesting
-    if (data.requested === false && album.requested === true) {
-      // Check if album has any files
-      const hasFiles = await libraryCleanupService.albumHasFiles(album.id)
-
-      if (hasFiles) {
-        return response.badRequest({
-          error: 'Album has downloaded files',
-          hasFile: true,
-          message: 'Delete album files first before unrequesting',
-        })
-      }
-
-      // Album has no files - delete it and cascade to artist
-      const artistId = album.artistId
-      console.log(`[AlbumsController] Unrequesting album without files, deleting: ${album.title}`)
-      await album.delete()
-
-      // Check if artist should be removed
-      await libraryCleanupService.removeArtistIfEmpty(artistId)
-
-      return response.json({
-        id: album.id,
-        deleted: true,
-        message: 'Removed from library',
-      })
-    }
+    // Unrequesting marks the album unwanted; it does not remove it. Albums come
+    // from the artist's discography, so deleting the row made the album vanish
+    // and left it un-re-requestable until the artist's metadata was refreshed.
+    // Removal has its own endpoint (destroy).
 
     album.merge({
       requested: data.requested ?? album.requested,

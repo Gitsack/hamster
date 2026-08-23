@@ -19,6 +19,8 @@ export default class ScheduledTasksController {
         lastRunAt: task.lastRunAt?.toISO() || null,
         nextRunAt: task.nextRunAt?.toISO() || null,
         lastDurationMs: task.lastDurationMs,
+        lastStatus: task.lastStatus,
+        lastError: task.lastError,
       })),
     })
   }
@@ -63,6 +65,8 @@ export default class ScheduledTasksController {
         lastRunAt: task.lastRunAt?.toISO() || null,
         nextRunAt: task.nextRunAt?.toISO() || null,
         lastDurationMs: task.lastDurationMs,
+        lastStatus: task.lastStatus,
+        lastError: task.lastError,
       },
     })
   }

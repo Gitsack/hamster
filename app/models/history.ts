@@ -16,6 +16,7 @@ import BookFile from './book_file.js'
 export type HistoryEventType =
   | 'grabbed'
   | 'download_completed'
+  | 'download_failed'
   | 'import_completed'
   | 'import_failed'
   | 'deleted'

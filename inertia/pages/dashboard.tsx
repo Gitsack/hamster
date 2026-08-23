@@ -124,6 +124,64 @@ function typeLabel(type: string): string {
   }
 }
 
+/**
+ * Queue status → the status ramp. Transfer cyan while bytes are moving,
+ * transit magenta while the file is being imported, queued amber while it is
+ * waiting, complete green on disk, alarm red on failure. Every state carries an
+ * icon and a label as well as a fill.
+ */
+function downloadState(status: string): {
+  label: string
+  badge: string
+  bar: string
+  icon: typeof Film01Icon
+} {
+  switch (status) {
+    case 'downloading':
+      return {
+        label: 'Downloading',
+        badge: 'border-transparent bg-status-transfer text-white',
+        bar: '[&_[data-slot=progress-indicator]]:bg-status-transfer',
+        icon: ArrowDown01Icon,
+      }
+    case 'importing':
+      return {
+        label: 'Importing',
+        badge: 'border-transparent bg-status-transit text-white',
+        bar: '[&_[data-slot=progress-indicator]]:bg-status-transit',
+        icon: Download04Icon,
+      }
+    case 'completed':
+      return {
+        label: 'Completed',
+        badge: 'border-transparent bg-status-complete text-white',
+        bar: '[&_[data-slot=progress-indicator]]:bg-status-complete',
+        icon: CheckmarkCircle01Icon,
+      }
+    case 'failed':
+      return {
+        label: 'Failed',
+        badge: 'border-transparent bg-status-failed text-white',
+        bar: '[&_[data-slot=progress-indicator]]:bg-status-failed',
+        icon: Cancel01Icon,
+      }
+    case 'paused':
+      return {
+        label: 'Paused',
+        badge: 'border-transparent bg-status-queued text-white',
+        bar: '[&_[data-slot=progress-indicator]]:bg-status-queued',
+        icon: Download04Icon,
+      }
+    default:
+      return {
+        label: status === 'queued' ? 'Queued' : status,
+        badge: 'border-transparent bg-status-queued text-white',
+        bar: '[&_[data-slot=progress-indicator]]:bg-status-queued',
+        icon: Download04Icon,
+      }
+  }
+}
+
 function typeUrl(type: string, id: string): string {
   switch (type) {
     case 'movie':
@@ -143,6 +201,7 @@ function typeUrl(type: string, id: string): string {
 // Components
 // ---------------------------------------------------------------------------
 
+/** One cell of the library inventory strip. Counts, not a hero metric. */
 function StatCard({
   title,
   value,
@@ -157,28 +216,38 @@ function StatCard({
   href?: string
 }) {
   const content = (
-    <Card className={href ? 'transition-shadow hover:shadow-md' : ''}>
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-3xl font-bold">{value.toLocaleString()}</p>
-            {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
-          </div>
-          <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-            <HugeiconsIcon icon={icon} className="h-6 w-6 text-primary" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div
+      className={`flex h-full items-center gap-3 bg-card px-4 py-3 ${
+        href ? 'transition-colors hover:bg-accent' : ''
+      }`}
+    >
+      <HugeiconsIcon icon={icon} className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0">
+        <p className="readout text-lg leading-6 font-medium">{value.toLocaleString()}</p>
+        <p className="truncate text-xs text-muted-foreground">{title}</p>
+        {subtitle && <p className="readout truncate text-xs text-muted-foreground">{subtitle}</p>}
+      </div>
+    </div>
   )
 
   if (href) {
-    return <Link href={href}>{content}</Link>
+    return (
+      <Link
+        href={href}
+        className="block h-full focus-visible:z-10 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        {content}
+      </Link>
+    )
   }
   return content
 }
 
+/**
+ * A missing row. Queued Amber is the ramp value for "monitored and waiting" —
+ * nothing is broken, nothing has arrived yet — so the count carries it only
+ * when there is actually something outstanding.
+ */
 function MissingCard({
   title,
   count,
@@ -189,18 +258,14 @@ function MissingCard({
   icon: typeof Film01Icon
 }) {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border">
-      <div className="h-9 w-9 rounded-md bg-orange-500/10 flex items-center justify-center flex-shrink-0">
-        <HugeiconsIcon icon={icon} className="h-4 w-4 text-orange-500" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{title}</p>
-        <p className="text-xs text-muted-foreground">{count} missing</p>
+    <div className="flex items-center gap-3 py-2">
+      <HugeiconsIcon icon={icon} className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{title}</p>
+        <p className="readout text-xs text-muted-foreground">{count} missing</p>
       </div>
       {count > 0 && (
-        <Badge variant="secondary" className="text-orange-600 bg-orange-500/10">
-          {count}
-        </Badge>
+        <Badge className="readout border-transparent bg-status-queued text-white">{count}</Badge>
       )}
     </div>
   )
@@ -235,12 +300,10 @@ function DownloadActivity() {
     return (
       <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="flex items-center gap-3">
-            <Skeleton className="h-10 w-10 rounded" />
-            <div className="flex-1 space-y-1">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-3 w-1/2" />
-            </div>
+          <div key={i} className="space-y-1.5">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-1.5 w-full" />
+            <Skeleton className="h-3 w-1/2" />
           </div>
         ))}
       </div>
@@ -249,47 +312,52 @@ function DownloadActivity() {
 
   if (queue.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-        <HugeiconsIcon icon={Download04Icon} className="h-8 w-8 mb-2 opacity-50" />
-        <p className="text-sm">No active downloads</p>
+      <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+        <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+          <HugeiconsIcon icon={Download04Icon} className="h-6 w-6 text-muted-foreground" />
+        </div>
+        <p className="text-sm font-medium">No active downloads</p>
+        <p className="max-w-[28ch] text-xs text-muted-foreground">
+          Grabs appear here while they transfer. Nothing running means nothing was grabbed — search
+          a title, or check Activity for failures.
+        </p>
       </div>
     )
   }
 
   return (
     <div className="space-y-3">
-      {queue.map((item) => (
-        <div key={item.id} className="space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium truncate flex-1">{item.title}</p>
-            <Badge
-              variant={
-                item.status === 'downloading'
-                  ? 'default'
-                  : item.status === 'completed'
-                    ? 'default'
-                    : 'secondary'
-              }
-              className="text-xs flex-shrink-0"
-            >
-              {item.status}
-            </Badge>
+      {queue.map((item) => {
+        const state = downloadState(item.status)
+        return (
+          <div key={item.id} className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="flex-1 truncate text-sm font-medium">{item.title}</p>
+              <Badge className={`flex-shrink-0 gap-1 text-xs ${state.badge}`}>
+                <HugeiconsIcon icon={state.icon} className="h-3 w-3" />
+                {state.label}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <Progress
+                value={item.progress}
+                aria-label={`${item.title} progress`}
+                className={`h-1.5 flex-1 ${state.bar}`}
+              />
+              <span className="readout w-12 text-right text-xs text-muted-foreground">
+                {Math.round(item.progress)}%
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span className="readout">{item.sizeBytes ? formatBytes(item.sizeBytes) : '--'}</span>
+              <span className="readout">{formatEta(item.etaSeconds)} left</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Progress value={item.progress} className="flex-1 h-1.5" />
-            <span className="text-xs text-muted-foreground w-12 text-right">
-              {Math.round(item.progress)}%
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{item.sizeBytes ? formatBytes(item.sizeBytes) : '--'}</span>
-            <span>ETA: {formatEta(item.etaSeconds)}</span>
-          </div>
-        </div>
-      ))}
+        )
+      })}
       <Link
         href="/activity/queue"
-        className="block text-center text-sm text-primary hover:underline pt-2"
+        className="block pt-2 text-center text-sm text-primary hover:underline"
       >
         View all activity
       </Link>
@@ -303,61 +371,61 @@ function HealthStatus({ health }: { health: DashboardProps['health'] }) {
   const enabledClients = allClients.filter((c) => c.enabled)
   const enabledIndexers = allIndexers.filter((i) => i.enabled)
 
+  // "Enabled" is a configuration fact, not a reachability check, so a disabled
+  // service reads as neutral rather than as a failure.
+  const serviceRow = (service: HealthService) => (
+    <div key={service.id} className="flex items-center justify-between gap-2 py-1.5">
+      <div className="flex min-w-0 items-center gap-2">
+        <HugeiconsIcon
+          icon={service.enabled ? CheckmarkCircle01Icon : Cancel01Icon}
+          className={`h-4 w-4 shrink-0 ${
+            service.enabled ? 'text-status-complete-ink' : 'text-muted-foreground'
+          }`}
+        />
+        <span className="truncate text-sm">{service.name}</span>
+        <span className="sr-only">{service.enabled ? 'enabled' : 'disabled'}</span>
+      </div>
+      <Badge variant="outline" className="readout text-xs">
+        {service.type}
+      </Badge>
+    </div>
+  )
+
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="text-sm font-medium mb-2">Download Clients</h4>
+        <h4 className="mb-1 text-xs font-medium text-muted-foreground">Download clients</h4>
         {allClients.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No download clients configured</p>
+          <p className="text-sm text-muted-foreground">
+            No download clients configured
+            <span className="mt-0.5 block text-xs">
+              Nothing can be grabbed until one is added in Settings → Download Clients.
+            </span>
+          </p>
         ) : (
-          <div className="space-y-2">
-            {allClients.map((client) => (
-              <div key={client.id} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <HugeiconsIcon
-                    icon={client.enabled ? CheckmarkCircle01Icon : Cancel01Icon}
-                    className={`h-4 w-4 ${client.enabled ? 'text-green-500' : 'text-red-500'}`}
-                  />
-                  <span className="text-sm">{client.name}</span>
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  {client.type}
-                </Badge>
-              </div>
-            ))}
-          </div>
+          <div className="divide-y divide-border">{allClients.map(serviceRow)}</div>
         )}
         {allClients.length > 0 && (
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="readout mt-1 text-xs text-muted-foreground">
             {enabledClients.length} of {allClients.length} enabled
           </p>
         )}
       </div>
 
       <div>
-        <h4 className="text-sm font-medium mb-2">Indexers</h4>
+        <h4 className="mb-1 text-xs font-medium text-muted-foreground">Indexers</h4>
         {allIndexers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No indexers configured</p>
+          <p className="text-sm text-muted-foreground">
+            No indexers configured
+            <span className="mt-0.5 block text-xs">
+              Add Prowlarr or a Newznab indexer in Settings → Indexers so searches return releases.
+            </span>
+          </p>
         ) : (
-          <div className="space-y-2">
-            {allIndexers.map((indexer) => (
-              <div key={indexer.id} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <HugeiconsIcon
-                    icon={indexer.enabled ? CheckmarkCircle01Icon : Cancel01Icon}
-                    className={`h-4 w-4 ${indexer.enabled ? 'text-green-500' : 'text-red-500'}`}
-                  />
-                  <span className="text-sm">{indexer.name}</span>
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  {indexer.type}
-                </Badge>
-              </div>
-            ))}
-          </div>
+          <div className="divide-y divide-border">{allIndexers.map(serviceRow)}</div>
         )}
         {allIndexers.length > 0 && (
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="readout mt-1 text-xs text-muted-foreground">
             {enabledIndexers.length} of {allIndexers.length} enabled
           </p>
         )}
@@ -383,9 +451,50 @@ export default function Dashboard({
     <AppLayout title="Dashboard">
       <Head title="Dashboard" />
 
-      <div className="space-y-6">
-        {/* Library Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="space-y-4">
+        {/* What needs the operator first: what is moving, and what is still missing. */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Downloads</CardTitle>
+                {activeDownloadCount > 0 && (
+                  <Badge className="readout border-transparent bg-status-transfer text-white">
+                    <HugeiconsIcon icon={ArrowDown01Icon} className="mr-1 h-3 w-3" />
+                    {activeDownloadCount}
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <DownloadActivity />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Missing</CardTitle>
+                {totalMissing > 0 && (
+                  <Badge className="readout border-transparent bg-status-queued text-white">
+                    {totalMissing}
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="divide-y divide-border">
+                <MissingCard title="Movies" count={missing.movies} icon={Film01Icon} />
+                <MissingCard title="Episodes" count={missing.episodes} icon={Tv01Icon} />
+                <MissingCard title="Albums" count={missing.albums} icon={MusicNote01Icon} />
+                <MissingCard title="Books" count={missing.books} icon={Book01Icon} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Library inventory — one panel, four figures, hairline seams. */}
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-4">
           <StatCard
             title="Movies"
             value={stats.movies}
@@ -415,7 +524,7 @@ export default function Dashboard({
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {/* Recent Additions */}
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -423,7 +532,7 @@ export default function Dashboard({
             </CardHeader>
             <CardContent>
               {recentAdditions.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
+                <p className="py-4 text-center text-sm text-muted-foreground">
                   No items in your library yet. Start by adding some media!
                 </p>
               ) : (
@@ -432,9 +541,9 @@ export default function Dashboard({
                     <Link
                       key={`${item.type}-${item.id}`}
                       href={typeUrl(item.type, item.id)}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
+                      className="flex items-center gap-3 rounded-md p-2 transition-colors hover:bg-accent"
                     >
-                      <div className="h-10 w-10 rounded bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                         {item.imageUrl ? (
                           <img
                             src={item.imageUrl}
@@ -464,7 +573,7 @@ export default function Dashboard({
                           {typeLabel(item.type)}
                         </p>
                       </div>
-                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                      <span className="readout flex-shrink-0 text-xs text-muted-foreground">
                         {formatRelativeTime(item.addedAt)}
                       </span>
                     </Link>
@@ -474,58 +583,15 @@ export default function Dashboard({
             </CardContent>
           </Card>
 
-          {/* Sidebar column */}
-          <div className="space-y-6">
-            {/* Missing / Wanted */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Missing</CardTitle>
-                  {totalMissing > 0 && (
-                    <Badge variant="secondary" className="text-orange-600 bg-orange-500/10">
-                      {totalMissing}
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <MissingCard title="Movies" count={missing.movies} icon={Film01Icon} />
-                  <MissingCard title="Episodes" count={missing.episodes} icon={Tv01Icon} />
-                  <MissingCard title="Albums" count={missing.albums} icon={MusicNote01Icon} />
-                  <MissingCard title="Books" count={missing.books} icon={Book01Icon} />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Download Activity */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Downloads</CardTitle>
-                  {activeDownloadCount > 0 && (
-                    <Badge>
-                      <HugeiconsIcon icon={ArrowDown01Icon} className="h-3 w-3 mr-1" />
-                      {activeDownloadCount}
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <DownloadActivity />
-              </CardContent>
-            </Card>
-
-            {/* Health Status */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">System Health</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <HealthStatus health={health} />
-              </CardContent>
-            </Card>
-          </div>
+          {/* Health Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">System Health</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <HealthStatus health={health} />
+            </CardContent>
+          </Card>
         </div>
       </div>
     </AppLayout>

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Table,
@@ -43,6 +44,15 @@ import {
   CleanIcon,
   Cancel01Icon,
   MoreVerticalIcon,
+  Download01Icon,
+  Clock01Icon,
+  PauseIcon,
+  PackageMovingIcon,
+  Alert02Icon,
+  ViewOffIcon,
+  Copy01Icon,
+  Archive01Icon,
+  InboxIcon,
 } from '@hugeicons/core-free-icons'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
@@ -164,37 +174,78 @@ function timeAgoMs(ms: number): string {
   return `${Math.floor(seconds / 86400)}d ago`
 }
 
+/**
+ * Every row state in the control room resolves to the status ramp:
+ *   transfer  — bytes are moving
+ *   transit   — the file landed and is being imported
+ *   queued    — waiting; nothing is wrong, nothing has happened yet
+ *   complete  — the file is on disk
+ *   failed    — it did not work, and the row says why
+ * States the operator caused (paused, ignored) stay neutral: chroma is
+ * reserved for what the media is doing. Colour never travels alone — each
+ * badge carries an icon and a word as well.
+ */
+const STATUS_STYLES: Record<
+  string,
+  { label: string; className: string; icon: typeof RefreshIcon }
+> = {
+  downloading: {
+    label: 'Downloading',
+    className: 'border-transparent bg-status-transfer text-white',
+    icon: Download01Icon,
+  },
+  importing: {
+    label: 'Importing',
+    className: 'border-transparent bg-status-transit text-white',
+    icon: PackageMovingIcon,
+  },
+  queued: {
+    label: 'Queued',
+    className: 'border-transparent bg-status-queued text-white',
+    icon: Clock01Icon,
+  },
+  pending: {
+    label: 'Pending',
+    className: 'border-transparent bg-status-queued text-white',
+    icon: Clock01Icon,
+  },
+  completed: {
+    label: 'Completed',
+    className: 'border-transparent bg-status-complete text-white',
+    icon: CheckmarkCircle01Icon,
+  },
+  failed: {
+    label: 'Failed',
+    className: 'border-transparent bg-status-failed text-white',
+    icon: Alert02Icon,
+  },
+  paused: {
+    label: 'Paused',
+    className: 'border-border bg-muted text-muted-foreground',
+    icon: PauseIcon,
+  },
+  ignored: {
+    label: 'Ignored',
+    className: 'border-border bg-muted text-muted-foreground',
+    icon: ViewOffIcon,
+  },
+}
+
 function getStatusBadge(status: string) {
-  switch (status) {
-    case 'downloading':
-      return <Badge className="bg-blue-500">Downloading</Badge>
-    case 'paused':
-      return <Badge variant="secondary">Paused</Badge>
-    case 'queued':
-      return <Badge variant="outline">Queued</Badge>
-    case 'importing':
-      return <Badge className="bg-purple-500">Importing</Badge>
-    case 'completed':
-      return (
-        <Badge className="bg-green-500">
-          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3 mr-1" />
-          Completed
-        </Badge>
-      )
-    case 'failed':
-      return (
-        <Badge variant="destructive">
-          <HugeiconsIcon icon={Cancel01Icon} className="h-3 w-3 mr-1" />
-          Failed
-        </Badge>
-      )
-    case 'pending':
-      return <Badge variant="outline">Pending</Badge>
-    case 'ignored':
-      return <Badge variant="secondary">Ignored</Badge>
-    default:
-      return <Badge variant="outline">{status}</Badge>
+  const style = STATUS_STYLES[status]
+  if (!style) {
+    return (
+      <Badge variant="outline" className="readout">
+        {status}
+      </Badge>
+    )
   }
+  return (
+    <Badge variant="outline" className={`gap-1 ${style.className}`}>
+      <HugeiconsIcon icon={style.icon} className="h-3 w-3" />
+      {style.label}
+    </Badge>
+  )
 }
 
 function getMediaTypeBadge(mediaType: string | null) {
@@ -218,37 +269,15 @@ function getMediaTypeBadge(mediaType: string | null) {
 
 function TableSkeleton({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center gap-4">
-          <Skeleton className="h-4 w-20" />
           <Skeleton className="h-4 flex-1" />
           <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-24" />
         </div>
       ))}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Empty state
-// ---------------------------------------------------------------------------
-
-function EmptyState({
-  icon,
-  title,
-  subtitle,
-}: {
-  icon?: React.ReactNode
-  title: string
-  subtitle?: string
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      {icon && <div className="rounded-full bg-muted p-6 mb-4">{icon}</div>}
-      <h3 className="text-lg font-medium mb-2">{title}</h3>
-      {subtitle && <p className="text-muted-foreground">{subtitle}</p>}
     </div>
   )
 }
@@ -423,7 +452,9 @@ export default function Activity() {
           break
       }
     } catch {
-      toast.error('Failed to refresh')
+      toast.error('Refresh failed — the server did not answer', {
+        description: 'Hamster may be restarting. Try again in a moment.',
+      })
     }
     setRefreshing(false)
   }
@@ -436,10 +467,14 @@ export default function Activity() {
         toast.success(data.message || successMsg)
         fetchQueue()
       } else {
-        toast.error(data.error || 'Action failed')
+        toast.error(data.error || `The server rejected the request (HTTP ${response.status})`, {
+          description: 'Nothing was changed. Check System → Logs for the full response.',
+        })
       }
     } catch {
-      toast.error('Action failed')
+      toast.error('The request never reached the server', {
+        description: 'Nothing was changed. Check that Hamster is still running, then retry.',
+      })
     }
   }
 
@@ -451,7 +486,9 @@ export default function Activity() {
     try {
       const response = await fetch('/api/v1/files/scan-all-stream', { method: 'POST' })
       if (!response.ok || !response.body) {
-        toast.error('Failed to process downloads')
+        toast.error(`Could not start the download scan (HTTP ${response.status})`, {
+          description: 'The completed folder was left untouched. Retry, or check the server logs.',
+        })
         return
       }
 
@@ -502,7 +539,10 @@ export default function Activity() {
       fetchUnmatched(false)
       fetchRecent(false)
     } catch {
-      toast.error('Failed to process downloads')
+      toast.error('The download scan stopped early', {
+        description:
+          'Anything already imported is kept. Run Process Downloads again to finish the rest.',
+      })
     } finally {
       setProcessing(false)
     }
@@ -515,13 +555,17 @@ export default function Activity() {
       const response = await fetch(`/api/v1/queue/${cancelId}`, { method: 'DELETE' })
       if (response.ok) {
         setQueueOverride((prev) => (prev ?? sharedQueue).filter((item) => item.id !== cancelId))
-        toast.success('Download cancelled')
+        toast.success('Download cancelled and removed from the queue')
         refreshSharedQueue()
       } else {
-        toast.error('Failed to cancel download')
+        toast.error('The download client refused to cancel this item', {
+          description: 'It is still in the queue. Cancel it in the client itself, then refresh.',
+        })
       }
     } catch {
-      toast.error('Failed to cancel download')
+      toast.error('Could not reach the server to cancel this download', {
+        description: 'The item is unchanged. Refresh the queue and try again.',
+      })
     } finally {
       setCancelling(false)
       setCancelId(null)
@@ -538,10 +582,14 @@ export default function Activity() {
         fetchRecent(false)
         fetchQueue()
       } else {
-        toast.error(data.error || 'Retry failed')
+        toast.error(data.error || 'Retry rejected — no new grab was made', {
+          description: 'The release may be blacklisted. Search the item again from its page.',
+        })
       }
     } catch {
-      toast.error('Retry failed')
+      toast.error('Could not reach the server to retry this grab', {
+        description: 'Nothing was re-sent. Refresh and try again.',
+      })
     } finally {
       setActioningId(null)
     }
@@ -554,10 +602,14 @@ export default function Activity() {
       if (response.ok) {
         setRecentErrors((prev) => prev.filter((e) => e.id !== id))
       } else {
-        toast.error('Failed to dismiss')
+        toast.error('The error record could not be dismissed', {
+          description: 'It is still listed. Refresh the tab and try again.',
+        })
       }
     } catch {
-      toast.error('Failed to dismiss')
+      toast.error('Could not reach the server to dismiss this error', {
+        description: 'The record is unchanged. Refresh and try again.',
+      })
     } finally {
       setActioningId(null)
     }
@@ -572,10 +624,14 @@ export default function Activity() {
         toast.success(data.message || `Cleared ${data.count ?? ''} errors`)
         setRecentErrors([])
       } else {
-        toast.error('Failed to clear errors')
+        toast.error('The failed records could not be cleared', {
+          description: 'They are still listed, and no files were touched. Try again.',
+        })
       }
     } catch {
-      toast.error('Failed to clear errors')
+      toast.error('Could not reach the server to clear failed records', {
+        description: 'Nothing was removed. Refresh and try again.',
+      })
     } finally {
       setClearingFailed(false)
       setConfirmClearFailed(false)
@@ -592,10 +648,14 @@ export default function Activity() {
         toast.success(`Removed ${data.deleted} items${freedMB}`)
         fetchCompleted(false)
       } else {
-        toast.error(data.error || 'Cleanup failed')
+        toast.error(data.error || 'Cleanup failed — nothing was deleted', {
+          description: 'Check that the completed folder is writable by Hamster, then retry.',
+        })
       }
     } catch {
-      toast.error('Cleanup failed')
+      toast.error('Could not reach the server to clean up the completed folder', {
+        description: 'No files were deleted. Refresh and try again.',
+      })
     } finally {
       setCleaningUp(false)
     }
@@ -609,10 +669,14 @@ export default function Activity() {
         toast.success(data.message || 'Import retried')
         fetchCompleted(false)
       } else {
-        toast.error(data.error || 'Retry failed')
+        toast.error(data.error || 'The import could not be retried', {
+          description: 'The files are still in the completed folder. Check the error on the row.',
+        })
       }
     } catch {
-      toast.error('Retry failed')
+      toast.error('Could not reach the server to retry this import', {
+        description: 'The files are untouched. Refresh and try again.',
+      })
     }
   }
 
@@ -626,10 +690,14 @@ export default function Activity() {
         toast.success('Download removed')
         fetchCompleted(false)
       } else {
-        toast.error('Failed to remove download')
+        toast.error('The download could not be removed', {
+          description: 'It is still queued and its files are untouched. Refresh and try again.',
+        })
       }
     } catch {
-      toast.error('Failed to remove download')
+      toast.error('Could not reach the server to remove this download', {
+        description: 'Nothing was deleted. Refresh and try again.',
+      })
     }
   }
 
@@ -641,10 +709,14 @@ export default function Activity() {
         toast.success('File ignored')
         fetchUnmatched(false)
       } else {
-        toast.error('Failed to ignore file')
+        toast.error('The file could not be marked as ignored', {
+          description: 'It is still listed as pending. Try again.',
+        })
       }
     } catch {
-      toast.error('Failed to ignore file')
+      toast.error('Could not reach the server to ignore this file', {
+        description: 'The file is still listed as pending. Refresh and try again.',
+      })
     } finally {
       setActioningId(null)
     }
@@ -659,10 +731,14 @@ export default function Activity() {
         setUnmatched((prev) => prev.filter((item) => item.id !== deleteUnmatchedId))
         toast.success('File deleted')
       } else {
-        toast.error('Failed to delete file')
+        toast.error('The unmatched record could not be deleted', {
+          description: 'It is still listed. Refresh and try again.',
+        })
       }
     } catch {
-      toast.error('Failed to delete file')
+      toast.error('Could not reach the server to delete this record', {
+        description: 'Nothing was removed. Refresh and try again.',
+      })
     } finally {
       setDeletingUnmatched(false)
       setDeleteUnmatchedId(null)
@@ -687,10 +763,14 @@ export default function Activity() {
         toast.success('All pending files ignored')
         fetchUnmatched(false)
       } else {
-        toast.error('Failed to ignore files')
+        toast.error('The pending files could not be ignored', {
+          description: 'They are still listed as pending. Try again.',
+        })
       }
     } catch {
-      toast.error('Failed to ignore files')
+      toast.error('Could not reach the server to ignore these files', {
+        description: 'Nothing changed. Refresh and try again.',
+      })
     } finally {
       setBulkActioning(false)
     }
@@ -751,8 +831,7 @@ export default function Activity() {
     // Fall back to startedAt when completedAt is null — failed rows often
     // have no completedAt (e.g. when a download fails at import time before
     // the client marks it complete), but they always have a startedAt.
-    const tsOf = (iso: string | null): number =>
-      iso ? new Date(iso).getTime() : 0
+    const tsOf = (iso: string | null): number => (iso ? new Date(iso).getTime() : 0)
 
     for (const e of recentErrors) {
       const iso = e.completedAt ?? e.startedAt
@@ -844,18 +923,22 @@ export default function Activity() {
       <Head title="Activity" />
 
       {processing && (
-        <Card className="mb-4 border-blue-500/30 bg-blue-500/5">
-          <CardContent className="py-4">
-            <div className="flex items-center gap-3 mb-2">
-              <Spinner className="size-4" />
-              <span className="text-sm font-medium">Processing downloads...</span>
+        // Import in progress — Transit Magenta, tinted, no side stripe.
+        <Card className="mb-4 border-status-transit/30 bg-status-transit/5 py-4">
+          <CardContent>
+            <div className="mb-2 flex items-center gap-3">
+              <Spinner className="size-4 text-status-transit-ink" />
+              <span className="text-sm font-medium">Scanning completed downloads…</span>
+              <span className="readout ml-auto text-xs text-muted-foreground">
+                {processingMessages.length} steps
+              </span>
             </div>
             {processingMessages.length > 0 && (
-              <div className="ml-7 space-y-0.5 max-h-32 overflow-y-auto">
+              <div className="ml-7 max-h-32 space-y-0.5 overflow-y-auto">
                 {processingMessages.slice(-8).map((msg, i) => (
                   <p
                     key={i}
-                    className={`text-xs ${
+                    className={`readout text-xs ${
                       i === processingMessages.slice(-8).length - 1
                         ? 'text-foreground'
                         : 'text-muted-foreground'
@@ -877,7 +960,7 @@ export default function Activity() {
             {(queue.length > 0 || recentErrors.length > 0) && (
               <Badge
                 variant="default"
-                className="ml-1.5 text-xs px-1.5 py-0 group-data-[active]:bg-white group-data-[active]:text-primary"
+                className="readout ml-1.5 px-1.5 py-0 text-xs group-data-[active]:bg-primary-foreground group-data-[active]:text-primary"
               >
                 {queue.length + recentErrors.length}
               </Badge>
@@ -888,7 +971,7 @@ export default function Activity() {
             {pendingImportCount > 0 && (
               <Badge
                 variant="default"
-                className="ml-1.5 text-xs px-1.5 py-0 group-data-[active]:bg-white group-data-[active]:text-primary"
+                className="readout ml-1.5 px-1.5 py-0 text-xs group-data-[active]:bg-primary-foreground group-data-[active]:text-primary"
               >
                 {pendingImportCount}
               </Badge>
@@ -899,7 +982,7 @@ export default function Activity() {
             {pendingUnmatchedCount > 0 && (
               <Badge
                 variant="default"
-                className="ml-1.5 text-xs px-1.5 py-0 group-data-[active]:bg-white group-data-[active]:text-primary"
+                className="readout ml-1.5 px-1.5 py-0 text-xs group-data-[active]:bg-primary-foreground group-data-[active]:text-primary"
               >
                 {pendingUnmatchedCount}
               </Badge>
@@ -931,25 +1014,26 @@ export default function Activity() {
                 <TableSkeleton rows={5} />
               ) : feed.length === 0 ? (
                 <EmptyState
-                  icon={
-                    <HugeiconsIcon
-                      icon={CheckmarkCircle01Icon}
-                      className="h-12 w-12 text-muted-foreground"
-                    />
-                  }
-                  title="Nothing happening"
-                  subtitle="Active downloads and recently finished items will show up here."
+                  icon={<HugeiconsIcon icon={InboxIcon} />}
+                  title="Queue is empty"
+                  message="Nothing is downloading, and nothing has failed recently. Grabs appear here the moment they are sent to a download client."
                 />
               ) : (
                 <div className="overflow-x-auto -mx-6 px-6">
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {/* Below md, Size and When fold into the Title cell so the
+                            table reflows at 375px instead of scrolling sideways.
+                            The action column stays: cancelling from a phone is the
+                            reason the operator opened this screen. */}
                         <TableHead>Title</TableHead>
-                        <TableHead className="w-32">Status</TableHead>
-                        <TableHead className="w-24 text-right">Size</TableHead>
-                        <TableHead className="w-40">When</TableHead>
-                        <TableHead className="w-24"></TableHead>
+                        <TableHead className="md:w-32">Status</TableHead>
+                        <TableHead className="hidden text-right md:table-cell md:w-24">
+                          Size
+                        </TableHead>
+                        <TableHead className="hidden md:table-cell md:w-40">When</TableHead>
+                        <TableHead className="md:w-24"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -977,52 +1061,60 @@ export default function Activity() {
                           <TableRow key={`${item.kind}-${item.id}`}>
                             <TableCell className="py-2 max-w-md">
                               <div className="flex items-baseline gap-2 min-w-0">
-                                <span
-                                  className="font-medium truncate text-sm"
-                                  title={item.title}
-                                >
+                                <span className="readout truncate text-sm" title={item.title}>
                                   {item.title}
                                 </span>
                                 {item.subtitle && (
-                                  <span className="text-xs text-muted-foreground shrink-0">
+                                  <span className="readout shrink-0 text-xs text-muted-foreground">
                                     · {item.subtitle}
                                   </span>
                                 )}
                               </div>
+                              {/* What came back, on the row itself — not hidden
+                                  behind a hover on the badge. */}
+                              {isError && item.errorMessage && (
+                                <Tooltip>
+                                  <TooltipTrigger className="readout mt-0.5 block max-w-full cursor-help truncate text-left text-xs text-status-failed-ink">
+                                    {item.errorMessage}
+                                  </TooltipTrigger>
+                                  <TooltipContent className="readout max-w-sm break-words whitespace-pre-wrap text-left">
+                                    {item.errorMessage}
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
                               {isDownloading && item.progress !== null && (
                                 <div className="mt-1 flex items-center gap-2">
                                   <Progress
                                     value={item.progress}
-                                    className="h-1 flex-1"
+                                    className={`h-1 flex-1 ${
+                                      item.status === 'downloading'
+                                        ? '[&_[data-slot=progress-indicator]]:bg-status-transfer'
+                                        : '[&_[data-slot=progress-indicator]]:bg-status-queued'
+                                    }`}
                                     aria-label="Download progress"
                                   />
-                                  <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                                  <span className="readout shrink-0 text-xs text-muted-foreground">
                                     {item.progress.toFixed(0)}%
                                   </span>
                                 </div>
                               )}
+                              {/* Size and When live here below md, where their own
+                                  columns are hidden. */}
+                              <div
+                                className="readout mt-0.5 flex gap-2 text-xs text-muted-foreground md:hidden"
+                                title={item.timestampIso ?? ''}
+                              >
+                                <span>{formatSize(item.size)}</span>
+                                <span aria-hidden="true">·</span>
+                                <span>{when}</span>
+                              </div>
                             </TableCell>
-                            <TableCell className="py-2">
-                              {isError && item.errorMessage ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="cursor-help">
-                                      {getStatusBadge(item.status)}
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-sm break-words whitespace-pre-wrap text-left">
-                                    {item.errorMessage}
-                                  </TooltipContent>
-                                </Tooltip>
-                              ) : (
-                                getStatusBadge(item.status)
-                              )}
-                            </TableCell>
-                            <TableCell className="py-2 text-right text-muted-foreground text-sm tabular-nums">
+                            <TableCell className="py-2">{getStatusBadge(item.status)}</TableCell>
+                            <TableCell className="readout hidden py-2 text-right text-sm text-muted-foreground md:table-cell">
                               {formatSize(item.size)}
                             </TableCell>
                             <TableCell
-                              className="py-2 text-muted-foreground text-sm"
+                              className="readout hidden py-2 text-sm text-muted-foreground md:table-cell"
                               title={item.timestampIso ?? ''}
                             >
                               {when}
@@ -1138,46 +1230,56 @@ export default function Activity() {
                 <TableSkeleton rows={5} />
               ) : completedEntries.length === 0 && importingItems.length === 0 ? (
                 <EmptyState
-                  icon={
-                    <HugeiconsIcon
-                      icon={CheckmarkCircle01Icon}
-                      className="h-12 w-12 text-muted-foreground"
-                    />
-                  }
-                  title="Nothing pending"
-                  subtitle="Downloads waiting to be imported will appear here."
+                  icon={<HugeiconsIcon icon={CheckmarkCircle01Icon} />}
+                  title="Nothing pending import"
+                  message="The completed folder is clear. Finished downloads land here first, then move into the library. If a file is stuck in the client, use Actions → Process Downloads."
                 />
               ) : (
                 <div className="space-y-6">
                   {importingItems.length > 0 && (
                     <div className="overflow-x-auto -mx-6 px-6">
+                      <h3 className="mb-2 text-xs font-medium text-muted-foreground">
+                        Being imported — <span className="readout">{importingItems.length}</span>
+                      </h3>
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            {/* Type and Time fold into the Name cell below md. */}
                             <TableHead>Name</TableHead>
-                            <TableHead className="w-24">Type</TableHead>
-                            <TableHead className="w-32">Status</TableHead>
-                            <TableHead className="w-40">Time</TableHead>
-                            <TableHead className="w-24"></TableHead>
+                            <TableHead className="hidden md:table-cell md:w-24">Type</TableHead>
+                            <TableHead className="md:w-32">Status</TableHead>
+                            <TableHead className="hidden md:table-cell md:w-40">Time</TableHead>
+                            <TableHead className="md:w-24"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {importingItems.map((item) => (
                             <TableRow key={item.id}>
                               <TableCell className="max-w-md">
-                                <div className="font-medium truncate" title={item.title}>
+                                <div className="readout truncate text-sm" title={item.title}>
                                   {item.title}
                                 </div>
-                                <div className="text-xs text-muted-foreground">
+                                <div className="readout text-xs text-muted-foreground">
                                   {item.downloadClient ?? 'Unknown client'}
-                                  {item.errorMessage && (
-                                    <span className="text-destructive ml-2">
-                                      {item.errorMessage}
-                                    </span>
-                                  )}
+                                  <span className="md:hidden">
+                                    {item.mediaType ? ` · ${item.mediaType}` : ''}
+                                    {item.completedAt
+                                      ? ` · downloaded ${timeAgo(item.completedAt)}`
+                                      : item.startedAt
+                                        ? ` · started ${timeAgo(item.startedAt)}`
+                                        : ''}
+                                  </span>
                                 </div>
+                                {item.errorMessage && (
+                                  <div
+                                    className="readout truncate text-xs text-status-failed-ink"
+                                    title={item.errorMessage}
+                                  >
+                                    {item.errorMessage}
+                                  </div>
+                                )}
                               </TableCell>
-                              <TableCell>
+                              <TableCell className="hidden md:table-cell">
                                 {item.mediaType ? (
                                   getMediaTypeBadge(
                                     item.mediaType as 'tv' | 'music' | 'movies' | 'books'
@@ -1187,12 +1289,12 @@ export default function Activity() {
                                 )}
                               </TableCell>
                               <TableCell>
-                                <Badge className="bg-purple-500">
-                                  <Spinner className="h-3 w-3 mr-1" />
+                                <Badge className="gap-1 border-transparent bg-status-transit text-white">
+                                  <Spinner className="h-3 w-3" />
                                   Importing
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-muted-foreground text-sm">
+                              <TableCell className="readout hidden text-sm text-muted-foreground md:table-cell">
                                 {item.completedAt ? (
                                   <div title={formatDateTime(item.completedAt)}>
                                     Downloaded {timeAgo(item.completedAt)}
@@ -1238,17 +1340,27 @@ export default function Activity() {
                   )}
 
                   {filteredCompleted.length === 0 && completedEntries.length > 0 ? (
-                    <EmptyState title="No matching entries" subtitle="Try a different filter." />
+                    <EmptyState
+                      title="No entries match this filter"
+                      message="The completed folder is not empty — switch the filter back to All to see everything in it."
+                    />
                   ) : filteredCompleted.length > 0 ? (
                     <div className="overflow-x-auto -mx-6 px-6">
+                      <h3 className="mb-2 text-xs font-medium text-muted-foreground">
+                        In the completed folder —{' '}
+                        <span className="readout">{filteredCompleted.length}</span>
+                      </h3>
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            {/* Type, Parsed and Dups fold into the Name cell below md. */}
                             <TableHead>Name</TableHead>
-                            <TableHead className="w-24">Type</TableHead>
-                            <TableHead className="w-48">Parsed</TableHead>
-                            <TableHead className="w-16 text-center">Dups</TableHead>
-                            <TableHead className="w-24">Flags</TableHead>
+                            <TableHead className="hidden md:table-cell md:w-24">Type</TableHead>
+                            <TableHead className="hidden md:table-cell md:w-48">Parsed</TableHead>
+                            <TableHead className="hidden text-center md:table-cell md:w-16">
+                              Dups
+                            </TableHead>
+                            <TableHead className="md:w-24">Flags</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1260,21 +1372,31 @@ export default function Activity() {
                               }
                             >
                               <TableCell className="max-w-md">
-                                <div className="font-medium truncate" title={entry.name}>
+                                <div className="readout truncate text-sm" title={entry.name}>
                                   {entry.name}
                                 </div>
-                                <div className="text-xs text-muted-foreground">
+                                <div className="readout text-xs text-muted-foreground">
                                   {entry.downloadClientName}
+                                  <span className="md:hidden">
+                                    {` · ${entry.mediaType}`}
+                                    {entry.title ? ` · ${entry.title}` : ''}
+                                    {entry.year ? ` (${entry.year})` : ''}
+                                    {entry.duplicateCount > 1 ? ` · ×${entry.duplicateCount}` : ''}
+                                  </span>
                                 </div>
                               </TableCell>
-                              <TableCell>{getMediaTypeBadge(entry.mediaType)}</TableCell>
-                              <TableCell className="text-muted-foreground">
+                              <TableCell className="hidden md:table-cell">
+                                {getMediaTypeBadge(entry.mediaType)}
+                              </TableCell>
+                              <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
                                 {entry.title}
                                 {entry.year ? ` (${entry.year})` : ''}
                               </TableCell>
-                              <TableCell className="text-center">
+                              <TableCell className="hidden text-center md:table-cell">
                                 {entry.duplicateCount > 1 && (
-                                  <Badge variant="secondary">{entry.duplicateCount}</Badge>
+                                  <Badge variant="secondary" className="readout">
+                                    {entry.duplicateCount}
+                                  </Badge>
                                 )}
                               </TableCell>
                               <TableCell>
@@ -1282,17 +1404,21 @@ export default function Activity() {
                                   {entry.isDuplicate && (
                                     <Badge
                                       variant="outline"
-                                      className="text-yellow-600 border-yellow-600 text-xs"
+                                      className="gap-1 border-transparent bg-status-queued text-xs text-white"
+                                      title="A copy of this release is already in the library"
                                     >
-                                      dup
+                                      <HugeiconsIcon icon={Copy01Icon} className="h-3 w-3" />
+                                      Duplicate
                                     </Badge>
                                   )}
                                   {entry.isUnpacking && (
                                     <Badge
                                       variant="outline"
-                                      className="text-orange-600 border-orange-600 text-xs"
+                                      className="gap-1 border-transparent bg-status-transit text-xs text-white"
+                                      title="The download client is still unpacking this release"
                                     >
-                                      temp
+                                      <HugeiconsIcon icon={Archive01Icon} className="h-3 w-3" />
+                                      Unpacking
                                     </Badge>
                                   )}
                                 </div>
@@ -1354,46 +1480,57 @@ export default function Activity() {
                 <TableSkeleton rows={3} />
               ) : unmatched.length === 0 ? (
                 <EmptyState
-                  icon={
-                    <HugeiconsIcon
-                      icon={CheckmarkCircle01Icon}
-                      className="h-12 w-12 text-muted-foreground"
-                    />
-                  }
+                  icon={<HugeiconsIcon icon={CheckmarkCircle01Icon} />}
                   title="No unmatched files"
-                  subtitle="Files that couldn't be matched to library items will appear here."
+                  message="Every scanned file was matched to a library item. Files the scanner cannot identify land here, where you can ignore or delete them."
                 />
               ) : (
                 <div className="overflow-x-auto -mx-6 px-6">
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {/* Type, Parsed Info and Size fold into the File Name cell below md. */}
                         <TableHead>File Name</TableHead>
-                        <TableHead className="w-24">Type</TableHead>
-                        <TableHead className="w-48">Parsed Info</TableHead>
-                        <TableHead className="w-24 text-right">Size</TableHead>
-                        <TableHead className="w-24">Status</TableHead>
-                        <TableHead className="w-28"></TableHead>
+                        <TableHead className="hidden md:table-cell md:w-24">Type</TableHead>
+                        <TableHead className="hidden md:table-cell md:w-48">Parsed Info</TableHead>
+                        <TableHead className="hidden text-right md:table-cell md:w-24">
+                          Size
+                        </TableHead>
+                        <TableHead className="md:w-24">Status</TableHead>
+                        <TableHead className="md:w-28"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {unmatched.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell className="max-w-xs">
-                            <div className="font-medium truncate">{item.fileName}</div>
+                            <div className="readout truncate text-sm" title={item.fileName}>
+                              {item.fileName}
+                            </div>
+                            <div className="readout text-xs text-muted-foreground md:hidden">
+                              {item.mediaType}
+                              {item.parsedInfo?.title
+                                ? ` · ${item.parsedInfo.title}${
+                                    item.parsedInfo.year ? ` (${item.parsedInfo.year})` : ''
+                                  }`
+                                : ' · could not be parsed'}
+                              {` · ${formatSize(item.fileSizeBytes)}`}
+                            </div>
                           </TableCell>
-                          <TableCell>{getMediaTypeBadge(item.mediaType)}</TableCell>
-                          <TableCell className="text-muted-foreground">
+                          <TableCell className="hidden md:table-cell">
+                            {getMediaTypeBadge(item.mediaType)}
+                          </TableCell>
+                          <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
                             {item.parsedInfo?.title ? (
                               <span>
                                 {item.parsedInfo.title}
                                 {item.parsedInfo.year ? ` (${item.parsedInfo.year})` : ''}
                               </span>
                             ) : (
-                              '-'
+                              <span className="text-xs">Could not be parsed</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
+                          <TableCell className="readout hidden text-right text-sm text-muted-foreground md:table-cell">
                             {formatSize(item.fileSizeBytes)}
                           </TableCell>
                           <TableCell>{getStatusBadge(item.status)}</TableCell>
@@ -1417,6 +1554,8 @@ export default function Activity() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => setDeleteUnmatchedId(item.id)}
+                                title="Delete record"
+                                aria-label="Delete unmatched file record"
                               >
                                 <HugeiconsIcon
                                   icon={Delete01Icon}
@@ -1442,7 +1581,8 @@ export default function Activity() {
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel download?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will cancel and remove the download from the queue.
+              The download client stops the transfer and the item leaves the queue. Partial files in
+              the download folder are removed by the client; nothing already imported is touched.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1464,8 +1604,8 @@ export default function Activity() {
           <AlertDialogHeader>
             <AlertDialogTitle>Clear all errors?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the {recentErrors.length} failed download records. Files on disk are
-              not affected.
+              This removes the {recentErrors.length} failed download records. Files on disk are not
+              affected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1490,7 +1630,8 @@ export default function Activity() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete file?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the unmatched file record.
+              This removes the unmatched record from Hamster. The file itself stays on disk and will
+              be picked up again by the next scan unless you ignore it instead.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

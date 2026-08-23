@@ -1,4 +1,4 @@
-import { Head, Link, router, usePage } from '@inertiajs/react'
+import { Head, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,16 +27,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ConfirmDialog } from '@/components/confirm-dialog'
-import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   MoreVerticalIcon,
   Delete01Icon,
   Tv01Icon,
-  ViewIcon,
-  ViewOffIcon,
   Calendar01Icon,
   StarIcon,
   ArrowDown01Icon,
@@ -54,7 +50,6 @@ import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { useOperationTrackerContext } from '@/hooks/use_operation_tracker'
-import { cn } from '@/lib/utils'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
@@ -182,18 +177,13 @@ export default function TvShowDetail() {
     title: string
     seasonNumber: number
   } | null>(null)
-  const [removeWithFileDialogOpen, setRemoveWithFileDialogOpen] = useState(false)
-  const [episodeToRemove, setEpisodeToRemove] = useState<{
-    id: number
-    title: string
-    seasonNumber: number
-    hasFile: boolean
-  } | null>(null)
   const [requestingAllSeasons, setRequestingAllSeasons] = useState(false)
   const { runBulk } = useOperationTrackerContext()
   const [enriching, setEnriching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [episodeSearchResults, setEpisodeSearchResults] = useState<Record<number, SearchResult[]>>({})
+  const [episodeSearchResults, setEpisodeSearchResults] = useState<Record<number, SearchResult[]>>(
+    {}
+  )
   const [searchingEpisode, setSearchingEpisode] = useState<number | null>(null)
   const [grabbingRelease, setGrabbingRelease] = useState<string | null>(null)
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
@@ -408,39 +398,8 @@ export default function TvShowDetail() {
       const data = await response.json()
 
       if (response.ok) {
-        if (data.deleted) {
-          // Season was deleted - check if show still exists
-          toast.success('Season removed from library')
-          fetchShow()
-        } else {
-          toast.success(currentlyRequested ? 'Season unrequested' : 'Season requested')
-          fetchShow()
-        }
-      } else if (data.hasFile) {
-        // Season has episodes with files - show error
-        toast.error(
-          `Cannot unrequest: ${data.episodesWithFiles} episode(s) have downloaded files. Delete files first.`
-        )
-        // Revert
-        setShow({
-          ...show,
-          seasons: show.seasons.map((s) =>
-            s.seasonNumber === seasonNumber ? { ...s, requested: currentlyRequested } : s
-          ),
-        })
-        if (seasonDetails[seasonNumber]) {
-          setSeasonDetails((prev) => ({
-            ...prev,
-            [seasonNumber]: {
-              ...prev[seasonNumber],
-              requested: currentlyRequested,
-              episodes: prev[seasonNumber].episodes.map((ep) => ({
-                ...ep,
-                requested: currentlyRequested,
-              })),
-            },
-          }))
-        }
+        toast.success(currentlyRequested ? 'Season unrequested' : 'Season requested')
+        fetchShow()
       } else {
         // Revert on error
         setShow({
@@ -470,26 +429,15 @@ export default function TvShowDetail() {
     }
   }
 
+  // Requesting is purely about wantedness. Unrequesting an episode that already
+  // has a file just marks it unwanted and leaves the file alone — use the
+  // per-episode delete button to remove a file.
   const toggleEpisodeRequested = async (
     episodeId: number,
     currentlyRequested: boolean,
-    seasonNumber: number,
-    hasFile?: boolean,
-    title?: string
+    seasonNumber: number
   ) => {
     if (!show) return
-
-    // If unrequesting an episode with a file, show confirmation dialog
-    if (currentlyRequested && hasFile) {
-      setEpisodeToRemove({
-        id: episodeId,
-        title: title || 'Episode',
-        seasonNumber,
-        hasFile: hasFile ?? false,
-      })
-      setRemoveWithFileDialogOpen(true)
-      return
-    }
 
     // Optimistically update UI immediately
     setSeasonDetails((prev) => ({
@@ -515,32 +463,8 @@ export default function TvShowDetail() {
       const data = await response.json()
 
       if (response.ok) {
-        if (data.deleted) {
-          // Episode was deleted - refresh show to check if season/show still exist
-          toast.success('Episode removed from library')
-          fetchShow()
-        } else {
-          toast.success(currentlyRequested ? 'Episode unrequested' : 'Episode requested')
-          fetchShow()
-        }
-      } else if (data.hasFile) {
-        // Episode has a file - show confirmation dialog
-        setSeasonDetails((prev) => ({
-          ...prev,
-          [seasonNumber]: {
-            ...prev[seasonNumber],
-            episodes: prev[seasonNumber].episodes.map((ep) =>
-              ep.id === episodeId ? { ...ep, requested: currentlyRequested } : ep
-            ),
-          },
-        }))
-        setEpisodeToRemove({
-          id: episodeId,
-          title: title || 'Episode',
-          seasonNumber,
-          hasFile: hasFile ?? false,
-        })
-        setRemoveWithFileDialogOpen(true)
+        toast.success(currentlyRequested ? 'Episode unrequested' : 'Episode requested')
+        fetchShow()
       } else {
         // Revert on error
         setSeasonDetails((prev) => ({
@@ -573,27 +497,6 @@ export default function TvShowDetail() {
         next.delete(episodeId)
         return next
       })
-    }
-  }
-
-  const removeEpisodeWithFile = async (deleteFiles: boolean) => {
-    if (!episodeToRemove) return
-
-    const url = deleteFiles
-      ? `/api/v1/tvshows/${showId}/episodes/${episodeToRemove.id}?deleteFile=true`
-      : `/api/v1/tvshows/${showId}/episodes/${episodeToRemove.id}`
-
-    const response = await fetch(url, { method: 'DELETE' })
-    if (response.ok) {
-      toast.success(
-        deleteFiles ? 'Episode and files removed from library' : 'Episode removed from library'
-      )
-      setRemoveWithFileDialogOpen(false)
-      setEpisodeToRemove(null)
-      fetchShow()
-    } else {
-      const data = await response.json()
-      toast.error(data.error || 'Failed to remove episode')
     }
   }
 
@@ -837,12 +740,13 @@ export default function TvShowDetail() {
       <AppLayout title="Loading...">
         <Head title="Loading..." />
         <div className="space-y-6">
-          <div className="flex gap-6">
-            <Skeleton className="h-72 w-48 rounded-lg" />
+          <div className="flex gap-4 md:gap-6">
+            <Skeleton className="w-28 sm:w-40 md:w-48 aspect-[2/3] rounded-lg shrink-0" />
             <div className="flex-1 space-y-4">
               <Skeleton className="h-8 w-1/3" />
               <Skeleton className="h-4 w-1/4" />
               <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
             </div>
           </div>
         </div>
@@ -854,9 +758,11 @@ export default function TvShowDetail() {
     return (
       <AppLayout title="Not Found">
         <Head title="Not Found" />
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">TV show not found</p>
-        </div>
+        <EmptyState
+          icon={<HugeiconsIcon icon={Tv01Icon} />}
+          title="TV show not found"
+          message="This show is no longer in your library — it may have been removed. Head back to the TV library to pick another."
+        />
       </AppLayout>
     )
   }
@@ -870,10 +776,10 @@ export default function TvShowDetail() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={toggleMonitored}>
+                <Button variant="outline" onClick={toggleMonitored} aria-pressed={show.monitored}>
                   <HugeiconsIcon
                     icon={show.monitored ? Notification01Icon : NotificationOff01Icon}
-                    className="h-4 w-4 md:mr-2"
+                    className="h-4 w-4"
                   />
                   <span className="hidden md:inline">
                     {show.monitored ? 'Monitored' : 'Monitor'}
@@ -888,9 +794,9 @@ export default function TvShowDetail() {
               <TooltipTrigger asChild>
                 <Button variant="outline" onClick={searchReleases} disabled={searching}>
                   {searching ? (
-                    <Spinner className="md:mr-2" />
+                    <Spinner />
                   ) : (
-                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
                   )}
                   <span className="hidden md:inline">
                     {searching ? 'Searching...' : 'Browse releases'}
@@ -911,7 +817,7 @@ export default function TvShowDetail() {
                 <DropdownMenuItem onClick={refreshMetadata} disabled={enriching}>
                   <HugeiconsIcon
                     icon={Search01Icon}
-                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                    className={`h-4 w-4 ${enriching ? 'animate-spin' : ''}`}
                   />
                   {enriching ? 'Enriching...' : 'Enrich from TMDB'}
                 </DropdownMenuItem>
@@ -920,7 +826,7 @@ export default function TvShowDetail() {
                 <DropdownMenuItem onClick={refreshMetadata} disabled={refreshing}>
                   <HugeiconsIcon
                     icon={Refresh01Icon}
-                    className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`}
+                    className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
                   />
                   {refreshing ? 'Refreshing...' : 'Refresh metadata'}
                 </DropdownMenuItem>
@@ -930,7 +836,7 @@ export default function TvShowDetail() {
                 className="text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
                 Remove from Library
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -958,12 +864,14 @@ export default function TvShowDetail() {
           overview={show.overview}
         >
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-2xl font-bold">{show.title}</h1>
-              {show.year && <span className="text-muted-foreground">({show.year})</span>}
+            <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-[-0.01em]">{show.title}</h1>
+              {show.year && (
+                <span className="readout text-sm text-muted-foreground">({show.year})</span>
+              )}
             </div>
             {show.originalTitle && show.originalTitle !== show.title && (
-              <p className="text-muted-foreground">{show.originalTitle}</p>
+              <p className="text-sm text-muted-foreground">{show.originalTitle}</p>
             )}
           </div>
 
@@ -978,17 +886,18 @@ export default function TvShowDetail() {
             {show.firstAired && (
               <div className="flex items-center gap-1 text-muted-foreground">
                 <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
-                {show.firstAired}
+                <span className="readout">{show.firstAired}</span>
               </div>
             )}
             {show.rating && (
               <div className="flex items-center gap-1 text-muted-foreground">
                 <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
-                {show.rating.toFixed(1)}
+                <span className="readout">{show.rating.toFixed(1)}</span>
               </div>
             )}
             <div className="text-muted-foreground">
-              {show.seasonCount} seasons · {show.episodeCount} episodes
+              <span className="readout">{show.seasonCount}</span> seasons ·{' '}
+              <span className="readout">{show.episodeCount}</span> episodes
             </div>
           </div>
 
@@ -1011,17 +920,21 @@ export default function TvShowDetail() {
               selectedClientId={selectedClientId}
               onClientChange={setSelectedClientId}
             />
-            {show.rootFolder && <Badge variant="secondary">{show.rootFolder.path}</Badge>}
+            {show.rootFolder && (
+              <Badge variant="secondary" className="readout">
+                {show.rootFolder.path}
+              </Badge>
+            )}
           </div>
 
           {/* External links */}
           {show.tmdbId && (
-            <div className="text-sm">
+            <div className="flex gap-4 text-xs">
               <a
                 href={`https://www.themoviedb.org/tv/${show.tmdbId}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-primary"
+                className="rounded-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
               >
                 TMDB
               </a>
@@ -1035,9 +948,9 @@ export default function TvShowDetail() {
 
         {/* Seasons */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold">Seasons</h2>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">Seasons</h2>
               {show.seasons.some((s) => !s.requested) && (
                 <Button
                   variant="outline"
@@ -1047,12 +960,12 @@ export default function TvShowDetail() {
                 >
                   {requestingAllSeasons ? (
                     <>
-                      <Spinner className="mr-2" />
+                      <Spinner />
                       Requesting...
                     </>
                   ) : (
                     <>
-                      <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                      <HugeiconsIcon icon={Add01Icon} className="h-4 w-4" />
                       Request All
                     </>
                   )}
@@ -1061,26 +974,27 @@ export default function TvShowDetail() {
             </div>
             {show.seasons.length === 0 ? (
               <EmptyState
-                icon={<HugeiconsIcon icon={Tv01Icon} className="h-12 w-12 text-muted-foreground" />}
+                icon={<HugeiconsIcon icon={Tv01Icon} />}
                 title="No seasons found"
-                message="Try refreshing to fetch season data."
+                message="TMDB has not returned season data for this show. Run Refresh metadata from the actions menu to fetch it again."
               />
             ) : (
               <div className="space-y-2">
                 {show.seasons.map((season) => (
-                  <div key={season.id} className="border rounded-lg overflow-hidden">
+                  <div key={season.id} className="border border-border rounded-lg overflow-hidden">
                     <button
                       onClick={() => toggleSeason(season.seasonNumber)}
-                      className="flex items-center gap-4 w-full p-4 hover:bg-muted/50 transition-colors text-left"
+                      aria-expanded={expandedSeason === season.seasonNumber}
+                      className="flex items-center gap-4 w-full p-4 hover:bg-accent transition-colors duration-150 text-left outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:ring-inset"
                     >
                       {season.posterUrl ? (
                         <img
                           src={season.posterUrl}
                           alt={season.title}
-                          className="h-16 w-12 rounded object-cover"
+                          className="h-16 w-12 shrink-0 rounded-lg object-cover"
                         />
                       ) : (
-                        <div className="h-16 w-12 rounded bg-muted flex items-center justify-center">
+                        <div className="h-16 w-12 shrink-0 rounded-lg bg-muted flex items-center justify-center">
                           <HugeiconsIcon
                             icon={Tv01Icon}
                             className="h-6 w-6 text-muted-foreground"
@@ -1088,27 +1002,38 @@ export default function TvShowDetail() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium">{season.title}</p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                          <span>{season.episodeCount} episodes</span>
-                          {(season.downloadedCount > 0 ||
-                            season.downloadingCount > 0 ||
-                            season.requestedCount > 0) && (
-                            <span className="text-muted-foreground/50 hidden sm:inline">•</span>
-                          )}
+                        <p className="font-medium truncate">{season.title}</p>
+                        {/* Tally: the dot carries the status colour, the word carries the
+                            label, so no state is signalled by colour alone. */}
+                        <div className="flex items-center gap-x-3 gap-y-1 text-xs text-muted-foreground flex-wrap">
+                          <span>
+                            <span className="readout">{season.episodeCount}</span> episodes
+                          </span>
                           {season.downloadedCount > 0 && (
-                            <span className="text-green-600 font-medium">
-                              {season.downloadedCount} downloaded
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                className="size-1.5 rounded-full bg-status-complete"
+                                aria-hidden="true"
+                              />
+                              <span className="readout">{season.downloadedCount}</span> downloaded
                             </span>
                           )}
                           {season.downloadingCount > 0 && (
-                            <span className="text-blue-600 font-medium">
-                              {season.downloadingCount} downloading
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                className="size-1.5 rounded-full bg-status-transfer"
+                                aria-hidden="true"
+                              />
+                              <span className="readout">{season.downloadingCount}</span> downloading
                             </span>
                           )}
                           {season.requestedCount > 0 && (
-                            <span className="text-yellow-600 font-medium">
-                              {season.requestedCount} requested
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                className="size-1.5 rounded-full bg-status-queued"
+                                aria-hidden="true"
+                              />
+                              <span className="readout">{season.requestedCount}</span> requested
                             </span>
                           )}
                         </div>
@@ -1129,13 +1054,13 @@ export default function TvShowDetail() {
                         icon={
                           expandedSeason === season.seasonNumber ? ArrowUp01Icon : ArrowDown01Icon
                         }
-                        className="h-5 w-5 text-muted-foreground"
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
                       />
                     </button>
                     {expandedSeason === season.seasonNumber && (
-                      <div className="border-t p-4">
+                      <div className="border-t border-border px-4">
                         {loadingSeasons.has(season.seasonNumber) ? (
-                          <div className="space-y-2">
+                          <div className="space-y-2 py-4">
                             {Array.from({ length: 3 }).map((_, i) => (
                               <Skeleton key={i} className="h-12 w-full" />
                             ))}
@@ -1144,42 +1069,43 @@ export default function TvShowDetail() {
                           seasonDetails[season.seasonNumber].episodes.length === 0 ? (
                             <EmptyState
                               title="No episodes found"
-                              message="Episode information may not be available yet."
+                              message="TMDB has not published an episode list for this season yet. Run Refresh metadata once it does."
                               className="py-8"
                             />
                           ) : (
-                            <div className="space-y-2">
+                            <div className="divide-y divide-border">
                               {getVisibleEpisodes(season.seasonNumber).map((episode) => (
                                 <div
+                                  key={episode.id}
                                   role="group"
                                   aria-label={`Episode ${episode.episodeNumber}: ${episode.title}`}
-                                  className="flex items-center gap-2 sm:gap-4 p-3 rounded-lg bg-muted/50"
+                                  className="flex items-center gap-3 sm:gap-4 py-3 transition-colors duration-150 hover:bg-accent"
                                 >
-                                  <div className="w-6 sm:w-8 text-center font-mono text-muted-foreground text-sm sm:text-base flex-shrink-0">
+                                  <div className="readout w-6 sm:w-8 shrink-0 text-right text-xs text-muted-foreground">
                                     {episode.episodeNumber}
                                   </div>
                                   {episode.stillUrl ? (
                                     <img
                                       src={episode.stillUrl}
                                       alt={episode.title}
-                                      className="h-12 w-20 rounded object-cover hidden sm:block"
+                                      className="h-12 w-20 shrink-0 rounded-lg object-cover hidden sm:block"
                                     />
                                   ) : (
-                                    <div className="h-12 w-20 rounded bg-muted hidden sm:block" />
+                                    <div className="h-12 w-20 shrink-0 rounded-lg bg-muted hidden sm:block" />
                                   )}
                                   <div className="flex-1 min-w-0">
-                                    <p className="font-medium truncate">{episode.title}</p>
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-sm font-medium truncate">{episode.title}</p>
+                                    <p className="readout text-xs text-muted-foreground">
                                       {episode.airDate || 'TBA'}
                                       {episode.runtime && ` • ${episode.runtime}m`}
                                     </p>
                                     {episode.episodeFile && (
-                                      <p className="text-xs text-muted-foreground/70 truncate">
+                                      <p className="readout text-xs text-muted-foreground truncate">
                                         {episode.episodeFile.path}
                                       </p>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                                  <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                                     {(() => {
                                       const { status, progress } = getEpisodeStatus(episode)
 
@@ -1192,8 +1118,8 @@ export default function TvShowDetail() {
                                               <>
                                                 <Button
                                                   variant="default"
-                                                  size="icon"
-                                                  className="h-7 w-7"
+                                                  size="icon-sm"
+                                                  aria-label={`Play episode ${episode.episodeNumber}`}
                                                   onClick={() => {
                                                     audioPlayer.pause()
                                                     setPlayingEpisode({
@@ -1206,14 +1132,14 @@ export default function TvShowDetail() {
                                                 >
                                                   <HugeiconsIcon
                                                     icon={PlayIcon}
-                                                    className="h-3.5 w-3.5"
+                                                    className="h-4 w-4"
                                                   />
                                                 </Button>
                                                 <Button
                                                   variant="outline"
-                                                  size="icon"
-                                                  className="h-7 w-7"
+                                                  size="icon-sm"
                                                   asChild
+                                                  aria-label={`Download episode ${episode.episodeNumber}`}
                                                 >
                                                   <a
                                                     href={episode.episodeFile.downloadUrl}
@@ -1221,7 +1147,7 @@ export default function TvShowDetail() {
                                                   >
                                                     <HugeiconsIcon
                                                       icon={FileDownloadIcon}
-                                                      className="h-3.5 w-3.5"
+                                                      className="h-4 w-4"
                                                     />
                                                   </a>
                                                 </Button>
@@ -1229,8 +1155,9 @@ export default function TvShowDetail() {
                                             )}
                                             <Button
                                               variant="outline"
-                                              size="icon"
-                                              className="h-7 w-7 text-destructive hover:text-destructive"
+                                              size="icon-sm"
+                                              className="text-destructive hover:text-destructive"
+                                              aria-label={`Delete file for episode ${episode.episodeNumber}`}
                                               onClick={() => {
                                                 const epId = episode.id
                                                 const epSeasonNumber = season.seasonNumber
@@ -1244,7 +1171,7 @@ export default function TvShowDetail() {
                                             >
                                               <HugeiconsIcon
                                                 icon={Delete01Icon}
-                                                className="h-3.5 w-3.5"
+                                                className="h-4 w-4"
                                               />
                                             </Button>
                                           </>
@@ -1257,9 +1184,8 @@ export default function TvShowDetail() {
                                           {(status === 'requested' || status === 'none') && (
                                             <Button
                                               variant="outline"
-                                              size="icon"
-                                              className="h-7 w-7"
-                                              aria-label="Manual search"
+                                              size="icon-sm"
+                                              aria-label={`Search releases for episode ${episode.episodeNumber}`}
                                               onClick={() =>
                                                 searchEpisodeReleases(
                                                   episode.id,
@@ -1269,7 +1195,7 @@ export default function TvShowDetail() {
                                             >
                                               <HugeiconsIcon
                                                 icon={Search01Icon}
-                                                className="h-3.5 w-3.5"
+                                                className="h-4 w-4"
                                               />
                                             </Button>
                                           )}
@@ -1281,9 +1207,7 @@ export default function TvShowDetail() {
                                               toggleEpisodeRequested(
                                                 episode.id,
                                                 episode.requested,
-                                                season.seasonNumber,
-                                                episode.hasFile,
-                                                episode.title || `Episode ${episode.episodeNumber}`
+                                                season.seasonNumber
                                               )
                                             }
                                           />
@@ -1294,7 +1218,7 @@ export default function TvShowDetail() {
                                 </div>
                               ))}
                               {hasMoreEpisodes(season.seasonNumber) && (
-                                <div className="flex justify-center pt-2">
+                                <div className="flex justify-center py-3">
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -1303,8 +1227,15 @@ export default function TvShowDetail() {
                                       showMoreEpisodes(season.seasonNumber)
                                     }}
                                   >
-                                    Show more ({getVisibleEpisodes(season.seasonNumber).length} of{' '}
-                                    {seasonDetails[season.seasonNumber].episodes.length})
+                                    Show more (
+                                    <span className="readout">
+                                      {getVisibleEpisodes(season.seasonNumber).length}
+                                    </span>{' '}
+                                    of{' '}
+                                    <span className="readout">
+                                      {seasonDetails[season.seasonNumber].episodes.length}
+                                    </span>
+                                    )
                                   </Button>
                                 </div>
                               )}
@@ -1346,19 +1277,6 @@ export default function TvShowDetail() {
         onConfirm={deleteEpisodeFile}
       />
 
-      <DeleteMediaDialog
-        open={removeWithFileDialogOpen}
-        onOpenChange={(open) => {
-          setRemoveWithFileDialogOpen(open)
-          if (!open) setEpisodeToRemove(null)
-        }}
-        title={episodeToRemove?.title || 'Episode'}
-        mediaType="episode"
-        hasFile={episodeToRemove?.hasFile ?? false}
-        mode="remove"
-        onConfirm={removeEpisodeWithFile}
-      />
-
       {/* Release picker dialog */}
       <Dialog open={releasePickerOpen} onOpenChange={setReleasePickerOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
@@ -1372,7 +1290,11 @@ export default function TvShowDetail() {
               <span className="ml-3 text-muted-foreground">Searching indexers...</span>
             </div>
           ) : searchResults.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">No releases found</div>
+            <EmptyState
+              icon={<HugeiconsIcon icon={Search01Icon} />}
+              title="No releases found"
+              message="Your indexers returned nothing for this title. Check that the indexers are enabled and healthy in Settings, or widen the quality profile."
+            />
           ) : (
             <div className="overflow-auto flex-1">
               <Table>
@@ -1381,33 +1303,40 @@ export default function TvShowDetail() {
                     <TableHead>Release</TableHead>
                     <TableHead className="w-32">Indexer</TableHead>
                     <TableHead className="w-24">Quality</TableHead>
-                    <TableHead className="w-24 text-right">Size</TableHead>
-                    <TableHead className="w-24 text-right">Grabs</TableHead>
-                    <TableHead className="w-16"></TableHead>
+                    <TableHead className="w-24" data-numeric>
+                      Size
+                    </TableHead>
+                    <TableHead className="w-20" data-numeric>
+                      Grabs
+                    </TableHead>
+                    <TableHead className="w-16">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {searchResults.map((result) => (
                     <TableRow key={result.id}>
-                      <TableCell className="font-medium max-w-md truncate">
-                        {result.title}
+                      <TableCell className="readout max-w-md truncate">{result.title}</TableCell>
+                      <TableCell className="readout text-muted-foreground">
+                        {result.indexer}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
                       <TableCell>
                         {result.quality && <Badge variant="outline">{result.quality}</Badge>}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
+                      <TableCell className="text-muted-foreground" data-numeric>
                         {formatFileSize(result.size)}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {result.grabs ?? result.seeders ?? '-'}
+                      <TableCell className="text-muted-foreground" data-numeric>
+                        {result.grabs ?? result.seeders ?? '—'}
                       </TableCell>
                       <TableCell>
                         <Button
-                          size="sm"
+                          size="icon-sm"
                           variant="outline"
                           onClick={() => grabRelease(result)}
                           disabled={grabbing === result.id}
+                          aria-label={`Download ${result.title}`}
                         >
                           {grabbing === result.id ? (
                             <Spinner />

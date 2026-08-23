@@ -38,8 +38,12 @@ export function MediaImage({
 
   if (!src || hasError) {
     return (
-      <div className={`w-full h-full flex items-center justify-center ${className}`}>
-        <HugeiconsIcon icon={Icon} className={`text-muted-foreground/50 ${iconClassName}`} />
+      <div className={`w-full h-full flex items-center justify-center bg-muted ${className}`}>
+        <HugeiconsIcon
+          icon={Icon}
+          aria-hidden="true"
+          className={`text-muted-foreground/50 ${iconClassName}`}
+        />
       </div>
     )
   }

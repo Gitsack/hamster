@@ -23,7 +23,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Add01Icon, Edit01Icon, Delete01Icon, LockPasswordIcon } from '@hugeicons/core-free-icons'
+import {
+  Add01Icon,
+  Edit01Icon,
+  Delete01Icon,
+  LockPasswordIcon,
+  UserGroupIcon,
+} from '@hugeicons/core-free-icons'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
@@ -67,7 +74,7 @@ export default function UsersSettings() {
         setUsers(await response.json())
       }
     } catch {
-      toast.error('Failed to load users')
+      toast.error('The user list could not be loaded — Hamster is unreachable. Reload to retry.')
     } finally {
       setLoading(false)
     }
@@ -79,7 +86,7 @@ export default function UsersSettings() {
 
   const handleCreate = async () => {
     if (!createForm.email || !createForm.password || !createForm.fullName) {
-      toast.error('Please fill in all required fields')
+      toast.error('Name, email and password are all required to create an account.')
       return
     }
     setCreating(true)
@@ -96,10 +103,14 @@ export default function UsersSettings() {
         fetchUsers()
       } else {
         const data = await response.json()
-        toast.error(data.errors?.[0]?.message || data.error || 'Failed to create user')
+        toast.error(
+          data.errors?.[0]?.message ||
+            data.error ||
+            'User not created — the server rejected the details. That email may already be in use.'
+        )
       }
     } catch {
-      toast.error('Failed to create user')
+      toast.error('User not created — Hamster is unreachable. Check the server and try again.')
     } finally {
       setCreating(false)
     }
@@ -120,10 +131,14 @@ export default function UsersSettings() {
         fetchUsers()
       } else {
         const data = await response.json()
-        toast.error(data.errors?.[0]?.message || data.error || 'Failed to update user')
+        toast.error(
+          data.errors?.[0]?.message ||
+            data.error ||
+            'User not updated — the server rejected the change. Check the email is valid and unused.'
+        )
       }
     } catch {
-      toast.error('Failed to update user')
+      toast.error('User not updated — Hamster is unreachable. Check the server and try again.')
     } finally {
       setSaving(false)
     }
@@ -142,10 +157,10 @@ export default function UsersSettings() {
         fetchUsers()
       } else {
         const data = await response.json()
-        toast.error(data.error || 'Failed to delete user')
+        toast.error(data.error || 'User not deleted — the server refused the request. Try again.')
       }
     } catch {
-      toast.error('Failed to delete user')
+      toast.error('User not deleted — Hamster is unreachable. Check the server and try again.')
     } finally {
       setDeleting(false)
     }
@@ -154,7 +169,7 @@ export default function UsersSettings() {
   const handleResetPassword = async () => {
     if (!resetUser) return
     if (!resetPassword || resetPassword.length < 8) {
-      toast.error('Password must be at least 8 characters')
+      toast.error('The new password must be at least 8 characters.')
       return
     }
     setResetting(true)
@@ -170,10 +185,12 @@ export default function UsersSettings() {
         setResetPassword('')
       } else {
         const data = await response.json()
-        toast.error(data.error || 'Failed to reset password')
+        toast.error(
+          data.error || 'Password not reset — the server rejected it. Try a longer password.'
+        )
       }
     } catch {
-      toast.error('Failed to reset password')
+      toast.error('Password not reset — Hamster is unreachable. Check the server and try again.')
     } finally {
       setResetting(false)
     }
@@ -195,21 +212,45 @@ export default function UsersSettings() {
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Users</CardTitle>
-                <CardDescription>Manage user accounts and permissions.</CardDescription>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2">
+                <CardTitle>Accounts</CardTitle>
+                <CardDescription>
+                  Everyone who can sign in to this install. Administrators can change settings and
+                  manage other accounts; users can only browse and request.
+                </CardDescription>
               </div>
-              <Button onClick={() => setShowCreateDialog(true)}>
-                <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
-                Add User
+              <Button onClick={() => setShowCreateDialog(true)} className="sm:shrink-0">
+                <HugeiconsIcon icon={Add01Icon} />
+                Add user
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Spinner />
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 flex-1" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            ) : users.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <HugeiconsIcon
+                    icon={UserGroupIcon}
+                    className="size-6 text-muted-foreground"
+                    strokeWidth={1.5}
+                  />
+                </div>
+                <p className="text-lg font-medium">No accounts listed</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Nothing came back from the server. Reload the page, and if the list stays empty
+                  check that this account still has administrator rights.
+                </p>
               </div>
             ) : (
               <Table>
@@ -217,9 +258,11 @@ export default function UsersSettings() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-24">Role</TableHead>
+                    <TableHead data-numeric className="w-32">
+                      Created
+                    </TableHead>
+                    <TableHead className="w-32 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -228,25 +271,31 @@ export default function UsersSettings() {
                       <TableCell className="font-medium">
                         {user.fullName || <span className="text-muted-foreground">No name</span>}
                       </TableCell>
-                      <TableCell>{user.email}</TableCell>
+                      <TableCell className="text-muted-foreground">{user.email}</TableCell>
                       <TableCell>
                         {user.isAdmin ? (
-                          <Badge className="bg-primary">Admin</Badge>
+                          <Badge>Admin</Badge>
                         ) : (
                           <Badge variant="secondary">User</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell data-numeric className="text-muted-foreground">
                         {new Date(user.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(user)}>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Edit ${user.fullName || user.email}`}
+                            onClick={() => openEdit(user)}
+                          >
                             <HugeiconsIcon icon={Edit01Icon} className="size-4" />
                           </Button>
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="icon-sm"
+                            aria-label={`Reset password for ${user.fullName || user.email}`}
                             onClick={() => {
                               setResetUser(user)
                               setResetPassword('')
@@ -254,7 +303,12 @@ export default function UsersSettings() {
                           >
                             <HugeiconsIcon icon={LockPasswordIcon} className="size-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setDeletingUser(user)}>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Delete ${user.fullName || user.email}`}
+                            onClick={() => setDeletingUser(user)}
+                          >
                             <HugeiconsIcon
                               icon={Delete01Icon}
                               className="size-4 text-destructive"
@@ -276,39 +330,46 @@ export default function UsersSettings() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create User</DialogTitle>
-            <DialogDescription>Add a new user account.</DialogDescription>
+            <DialogDescription>
+              The account can sign in immediately. Tell the person their password yourself — Hamster
+              does not send mail.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="create-name">Full Name</Label>
-              <Input
-                id="create-name"
-                value={createForm.fullName}
-                onChange={(e) => setCreateForm({ ...createForm, fullName: e.target.value })}
-                placeholder="John Doe"
-              />
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="create-name">Full Name</Label>
+                <Input
+                  id="create-name"
+                  value={createForm.fullName}
+                  onChange={(e) => setCreateForm({ ...createForm, fullName: e.target.value })}
+                  placeholder="John Doe"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-email">Email</Label>
+                <Input
+                  id="create-email"
+                  type="email"
+                  autoComplete="off"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                  placeholder="user@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-password">Password</Label>
+                <Input
+                  id="create-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                  placeholder="At least 8 characters"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="create-email">Email</Label>
-              <Input
-                id="create-email"
-                type="email"
-                value={createForm.email}
-                onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                placeholder="user@example.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create-password">Password</Label>
-              <Input
-                id="create-password"
-                type="password"
-                value={createForm.password}
-                onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                placeholder="Minimum 8 characters"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2 border-t border-border pt-6">
               <Checkbox
                 id="create-admin"
                 checked={createForm.isAdmin}
@@ -316,7 +377,9 @@ export default function UsersSettings() {
                   setCreateForm({ ...createForm, isAdmin: checked === true })
                 }
               />
-              <Label htmlFor="create-admin">Administrator</Label>
+              <Label htmlFor="create-admin" className="cursor-pointer font-normal">
+                Administrator — can change settings and manage accounts
+              </Label>
             </div>
           </div>
           <DialogFooter>
@@ -324,7 +387,7 @@ export default function UsersSettings() {
               Cancel
             </Button>
             <Button onClick={handleCreate} disabled={creating}>
-              {creating && <Spinner className="mr-2" />}
+              {creating && <Spinner />}
               Create User
             </Button>
           </DialogFooter>
@@ -336,27 +399,31 @@ export default function UsersSettings() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>Update user account details.</DialogDescription>
+            <DialogDescription>
+              Changing the email changes the address this person signs in with.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-name">Full Name</Label>
-              <Input
-                id="edit-name"
-                value={editForm.fullName}
-                onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
-              />
+          <div className="space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Full Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editForm.fullName}
+                  onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-email">Email</Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={editForm.email}
-                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-              />
-            </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2 border-t border-border pt-6">
               <Checkbox
                 id="edit-admin"
                 checked={editForm.isAdmin}
@@ -364,7 +431,9 @@ export default function UsersSettings() {
                   setEditForm({ ...editForm, isAdmin: checked === true })
                 }
               />
-              <Label htmlFor="edit-admin">Administrator</Label>
+              <Label htmlFor="edit-admin" className="cursor-pointer font-normal">
+                Administrator — can change settings and manage accounts
+              </Label>
             </div>
           </div>
           <DialogFooter>
@@ -372,7 +441,7 @@ export default function UsersSettings() {
               Cancel
             </Button>
             <Button onClick={handleEdit} disabled={saving}>
-              {saving && <Spinner className="mr-2" />}
+              {saving && <Spinner />}
               Save Changes
             </Button>
           </DialogFooter>
@@ -385,8 +454,8 @@ export default function UsersSettings() {
           <DialogHeader>
             <DialogTitle>Delete User</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete {deletingUser?.fullName || deletingUser?.email}? This
-              action cannot be undone.
+              {deletingUser?.fullName || deletingUser?.email} loses access immediately. Media and
+              history stay in the library. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -394,7 +463,7 @@ export default function UsersSettings() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting && <Spinner className="mr-2" />}
+              {deleting && <Spinner />}
               Delete User
             </Button>
           </DialogFooter>
@@ -407,7 +476,8 @@ export default function UsersSettings() {
           <DialogHeader>
             <DialogTitle>Reset Password</DialogTitle>
             <DialogDescription>
-              Set a new password for {resetUser?.fullName || resetUser?.email}.
+              Sets a new password for {resetUser?.fullName || resetUser?.email}. Pass it on yourself
+              — Hamster does not send mail.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -416,9 +486,10 @@ export default function UsersSettings() {
               <Input
                 id="reset-password"
                 type="password"
+                autoComplete="new-password"
                 value={resetPassword}
                 onChange={(e) => setResetPassword(e.target.value)}
-                placeholder="Minimum 8 characters"
+                placeholder="At least 8 characters"
               />
             </div>
           </div>
@@ -427,7 +498,7 @@ export default function UsersSettings() {
               Cancel
             </Button>
             <Button onClick={handleResetPassword} disabled={resetting}>
-              {resetting && <Spinner className="mr-2" />}
+              {resetting && <Spinner />}
               Reset Password
             </Button>
           </DialogFooter>

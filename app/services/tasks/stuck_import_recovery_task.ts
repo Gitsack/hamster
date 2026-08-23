@@ -36,6 +36,9 @@ const TRANSIENT_ERROR_PATTERNS: RegExp[] = [
   /resource busy/i,
   /file not found/i,
   /enoent/i,
+  // Archives were still unextracted when we tried to import. Retrying is exactly
+  // right: the download client may finish post-processing after we first looked.
+  /not unpacked/i,
 ]
 
 /**
@@ -253,6 +256,7 @@ class StuckImportRecoveryTask {
 
     download.status = 'importing'
     download.completedAt = download.completedAt ?? DateTime.now()
+    download.nzbInfo = { ...download.nzbInfo, importRetries: attemptCount + 1 }
     await download.save()
 
     logger.info(
@@ -270,11 +274,20 @@ class StuckImportRecoveryTask {
   }
 
   /**
-   * Returns the number of prior attempts inferred from the row.
-   * Currently a heuristic — we don't have a dedicated counter column. A
-   * non-null errorMessage means at least one attempt has been made.
+   * Number of times this task has already re-driven the import.
+   *
+   * This used to return `errorMessage ? 1 : 0`, which could never reach
+   * MAX_AUTOMATIC_RETRIES — so the ceiling below it was unreachable and a
+   * download whose error matched a transient pattern was retried every 15
+   * minutes indefinitely. The count is now carried on the row itself.
    */
   private async countPriorAttempts(download: Download): Promise<number> {
+    const recorded = download.nzbInfo?.importRetries
+    if (typeof recorded === 'number' && Number.isFinite(recorded)) {
+      return Math.max(0, Math.trunc(recorded))
+    }
+    // Pre-existing rows have no counter; fall back to the old heuristic so a row
+    // that has already failed once is not treated as untouched.
     return download.errorMessage ? 1 : 0
   }
 

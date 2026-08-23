@@ -76,6 +76,30 @@ const MUSIC_CATEGORIES = [
   3060, // Foreign
 ]
 
+/**
+ * Pick the most specific non-empty category list.
+ *
+ * `[]` is truthy, so a plain `a || b || fallback` chain stops at an empty array
+ * and then the `length > 0` guard drops the `cat` parameter entirely — an
+ * indexer saved with no categories silently searched its whole catalog instead
+ * of the media type we asked for.
+ */
+/**
+ * Newznab expects a bare IMDB id, not the "tt"-prefixed form TMDB hands us.
+ * With the prefix, indexers match nothing and return an empty result set rather
+ * than an error, so the id search silently degrades to free-text matching.
+ */
+function normalizeImdbId(id: string): string {
+  return id.replace(/^tt/i, '')
+}
+
+function resolveCategories(...candidates: Array<number[] | undefined | null>): number[] {
+  for (const candidate of candidates) {
+    if (candidate && candidate.length > 0) return candidate
+  }
+  return []
+}
+
 export class NewznabService {
   private parser = new XMLParser({
     ignoreAttributes: false,
@@ -196,7 +220,7 @@ export class NewznabService {
     if (options.label) params.set('label', options.label)
     if (options.year) params.set('year', String(options.year))
 
-    const categories = options.categories || config.categories || MUSIC_CATEGORIES
+    const categories = resolveCategories(options.categories, config.categories, MUSIC_CATEGORIES)
     if (categories.length > 0) {
       params.set('cat', categories.join(','))
     }
@@ -228,13 +252,18 @@ export class NewznabService {
     const params = new URLSearchParams({
       t: 'search',
       apikey: config.apiKey,
-      q: query,
       limit: String(options.limit || 100),
       offset: String(options.offset || 0),
       extended: '1', // Request extended attributes (grabs, etc.)
     })
 
-    const categories = options.categories || config.categories || MUSIC_CATEGORIES
+    // An empty q is not the same as no q. RSS sync calls this with '' to mean
+    // "everything recent", but newznab rejects a present-but-empty q outright
+    // (nzbfinder: error 201 "q must not be empty"), which made RSS sync return
+    // nothing on every run.
+    if (query) params.set('q', query)
+
+    const categories = resolveCategories(options.categories, config.categories, MUSIC_CATEGORIES)
     if (categories.length > 0) {
       params.set('cat', categories.join(','))
     }
@@ -280,7 +309,7 @@ export class NewznabService {
 
     if (options.query) params.set('q', options.query)
     if (options.tvdbId) params.set('tvdbid', options.tvdbId)
-    if (options.imdbId) params.set('imdbid', options.imdbId)
+    if (options.imdbId) params.set('imdbid', normalizeImdbId(options.imdbId))
 
     // For daily shows, use date-based season/ep: season=YYYY, ep=MM/DD
     if (options.airDate) {
@@ -292,7 +321,7 @@ export class NewznabService {
       if (options.episode !== undefined) params.set('ep', String(options.episode))
     }
 
-    const categories = options.categories || config.categories || tvCategories
+    const categories = resolveCategories(options.categories, config.categories, tvCategories)
     if (categories.length > 0) {
       params.set('cat', categories.join(','))
     }
@@ -334,9 +363,9 @@ export class NewznabService {
     })
 
     if (options.query) params.set('q', options.query)
-    if (options.imdbId) params.set('imdbid', options.imdbId)
+    if (options.imdbId) params.set('imdbid', normalizeImdbId(options.imdbId))
 
-    const categories = options.categories || config.categories || movieCategories
+    const categories = resolveCategories(options.categories, config.categories, movieCategories)
     if (categories.length > 0) {
       params.set('cat', categories.join(','))
     }
@@ -391,8 +420,12 @@ export class NewznabService {
           link: item.link,
           size: Number.parseInt(attrs.size || '0', 10),
           pubDate: item.pubDate,
-          category: attrs.category || '',
-          categoryId: Number.parseInt(attrs.categoryId || '0', 10),
+          // The numeric category lives in the newznab:attr named "category" —
+          // there is no "categoryId" attribute. Reading a name that never
+          // exists left categoryId at 0 for every result, so downstream media
+          // type classification saw 'other' 100% of the time.
+          category: this.categoryText(item) || attrs.category || '',
+          categoryId: Number.parseInt(attrs.category || '0', 10),
           indexer: config.name,
           indexerId: config.id,
           downloadUrl: item.link,
@@ -406,6 +439,17 @@ export class NewznabService {
           year: attrs.year ? Number.parseInt(attrs.year, 10) : undefined,
         }
       })
+  }
+
+  /**
+   * The item's human-readable category (e.g. "TV > HD"), which lives in the RSS
+   * <category> element rather than the numeric newznab:attr of the same name.
+   */
+  private categoryText(item: any): string {
+    const category = item?.category
+    if (Array.isArray(category)) return String(category[0] ?? '')
+    if (category && typeof category === 'object') return String(category['#text'] ?? '')
+    return category ? String(category) : ''
   }
 
   private parseNewznabAttributes(attrs: any): Record<string, string> {

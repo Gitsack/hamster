@@ -34,6 +34,14 @@ const BLACKLISTABLE_PATTERNS: string[] = [
   'encrypted',
   'damaged',
   'corrupt',
+  // The download client could not retrieve the NZB from the indexer. Either the
+  // release is gone or the indexer rejected us; retrying the same guid is futile.
+  'url fetching failed',
+  'maximum retries',
+  // The download completed but contained nothing importable for its media type.
+  'no video files found',
+  'no audio files found',
+  'unknown media type',
 ]
 
 // Failure patterns that should NOT trigger blacklisting (usually config/path issues)
@@ -52,6 +60,26 @@ const NON_BLACKLISTABLE_PATTERNS: string[] = [
   'read-only file system',
   'directory not found',
   'cannot create',
+  // Transient connectivity problems say nothing about the release itself.
+  // Without these, an outage between us and the indexer/usenet provider would
+  // poison the blacklist with every release we happened to try during it.
+  'timed out',
+  'timeout',
+  'connection refused',
+  'connection reset',
+  'temporarily unavailable',
+  'network is unreachable',
+  'could not resolve',
+  'name resolution',
+  'dns',
+  // We could not reach the indexer at all. That is about the indexer or our
+  // network, never about the release — blacklisting here would burn every
+  // candidate we happened to try during an outage.
+  'could not reach indexer',
+  // The download client finished but never extracted the archives. The release
+  // is fine; the client's post-processing is not. Blacklisting here discards a
+  // complete, valid download and sends us off to grab a needless replacement.
+  'not unpacked',
 ]
 
 class BlacklistService {
@@ -272,9 +300,11 @@ class BlacklistService {
       }
     }
 
-    // Default to blacklisting unknown errors from SABnzbd
-    // (if it's a 'Failed' status, we should blacklist)
-    return false
+    // Default to blacklisting unknown errors from the download client. We only
+    // ever get here for a slot the client already reported as Failed, and the
+    // lists above are the explicit opt-outs. Failing open here is what let the
+    // same broken release be re-grabbed every hour indefinitely.
+    return true
   }
 
   /**
@@ -294,13 +324,20 @@ class BlacklistService {
     ) {
       return 'verification_failed'
     }
-    if (lowerError.includes('import')) {
+    if (
+      lowerError.includes('import') ||
+      lowerError.includes('no video files') ||
+      lowerError.includes('no audio files') ||
+      lowerError.includes('unknown media type')
+    ) {
       return 'import_failed'
     }
     if (lowerError.includes('missing')) {
       return 'missing_files'
     }
 
+    // Includes 'URL Fetching failed; Maximum retries', the client's way of
+    // saying it never got the NZB.
     return 'download_failed'
   }
 }

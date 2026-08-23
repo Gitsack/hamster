@@ -86,9 +86,37 @@ test.group('BlacklistService | shouldBlacklist', () => {
     assert.isFalse(blacklistService.shouldBlacklist('Remote path mapping error'))
   })
 
+  test('returns false for transient network errors', ({ assert }) => {
+    assert.isFalse(blacklistService.shouldBlacklist('The operation timed out.'))
+    assert.isFalse(blacklistService.shouldBlacklist('Connection refused'))
+    assert.isFalse(blacklistService.shouldBlacklist('Could not resolve host: nzbfinder.ws'))
+  })
+
+  // Blacklistable failures seen in the wild
+  test('returns true for "URL Fetching failed; Maximum retries"', ({ assert }) => {
+    assert.isTrue(blacklistService.shouldBlacklist('URL Fetching failed; Maximum retries'))
+  })
+
+  test('returns true for an import that found nothing usable', ({ assert }) => {
+    assert.isTrue(blacklistService.shouldBlacklist('No video files found in download'))
+    assert.isTrue(blacklistService.shouldBlacklist('No audio files found in download'))
+  })
+
+  test('returns false when the client simply never unpacked the download', ({ assert }) => {
+    // A complete, valid release whose archives the client failed to extract.
+    // Blacklisting it would discard a good download and grab a needless replacement.
+    assert.isFalse(
+      blacklistService.shouldBlacklist(
+        'Download not unpacked - archives present but no media files. Waiting for the download client to extract.'
+      )
+    )
+  })
+
   // Edge cases
-  test('returns false for unknown error', ({ assert }) => {
-    assert.isFalse(blacklistService.shouldBlacklist('Some completely unknown error'))
+  test('defaults to blacklisting unknown errors', ({ assert }) => {
+    // shouldBlacklist is only consulted for a slot the client already reported
+    // as Failed, so an unrecognised message still means this release is bad.
+    assert.isTrue(blacklistService.shouldBlacklist('Some completely unknown error'))
   })
 
   test('is case-insensitive', ({ assert }) => {

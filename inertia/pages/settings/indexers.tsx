@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -26,6 +25,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Table,
   TableBody,
@@ -41,6 +42,7 @@ import {
   Edit02Icon,
   CheckmarkCircle02Icon,
   Alert02Icon,
+  Satellite01Icon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 
@@ -102,7 +104,7 @@ export default function Indexers() {
         setProwlarr(await prowlarrRes.json())
       }
     } catch (error) {
-      toast.error('Failed to load settings')
+      toast.error('Indexer settings could not be loaded — Hamster is unreachable. Reload to retry.')
     } finally {
       setLoading(false)
     }
@@ -132,7 +134,7 @@ export default function Indexers() {
 
   const handleTestIndexer = async () => {
     if (!indexerUrl || !indexerApiKey) {
-      toast.error('URL and API key are required')
+      toast.error('Enter the indexer URL and API key before testing.')
       return
     }
 
@@ -146,12 +148,17 @@ export default function Indexers() {
 
       const result = await response.json()
       if (result.success) {
-        toast.success('Connection successful')
+        toast.success('Indexer responded — the URL and API key work.')
       } else {
-        toast.error(result.error || 'Connection failed')
+        toast.error(
+          result.error ||
+            'The indexer rejected the request. Check the API key is current and not rate-limited.'
+        )
       }
     } catch (error) {
-      toast.error('Test failed')
+      toast.error(
+        'Could not reach the indexer. Check the URL and that this box can resolve and reach that host.'
+      )
     } finally {
       setTesting(false)
     }
@@ -159,7 +166,7 @@ export default function Indexers() {
 
   const handleSaveIndexer = async () => {
     if (!indexerName.trim() || !indexerUrl.trim() || !indexerApiKey.trim()) {
-      toast.error('All fields are required')
+      toast.error('Name, URL and API key are all required before an indexer can be saved.')
       return
     }
 
@@ -185,10 +192,12 @@ export default function Indexers() {
         fetchData()
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to save indexer')
+        toast.error(
+          error.error || 'Indexer not saved — the server rejected it. Check the URL and API key.'
+        )
       }
     } catch (error) {
-      toast.error('Failed to save indexer')
+      toast.error('Indexer not saved — Hamster is unreachable. Check the server and try again.')
     } finally {
       setSaving(false)
     }
@@ -201,10 +210,10 @@ export default function Indexers() {
         toast.success('Indexer deleted')
         fetchData()
       } else {
-        toast.error('Failed to delete indexer')
+        toast.error('Indexer not deleted — the server rejected the request. Try again.')
       }
     } catch (error) {
-      toast.error('Failed to delete indexer')
+      toast.error('Indexer not deleted — Hamster is unreachable. Check the server and try again.')
     }
   }
 
@@ -220,7 +229,9 @@ export default function Indexers() {
         fetchData()
       }
     } catch (error) {
-      toast.error('Failed to update indexer')
+      toast.error(
+        `${indexer.name} was not switched ${indexer.enabled ? 'off' : 'on'} — Hamster is unreachable. Try again.`
+      )
     }
   }
 
@@ -240,7 +251,7 @@ export default function Indexers() {
 
   const handleTestProwlarr = async () => {
     if (!prowlarrUrl || !prowlarrApiKey) {
-      toast.error('URL and API key are required')
+      toast.error('Enter the Prowlarr URL and API key before testing.')
       return
     }
 
@@ -256,10 +267,15 @@ export default function Indexers() {
       if (result.success) {
         toast.success(`Connected to Prowlarr ${result.version}`)
       } else {
-        toast.error(result.error || 'Connection failed')
+        toast.error(
+          result.error ||
+            'Prowlarr rejected the request. Check the API key under Settings → General.'
+        )
       }
     } catch (error) {
-      toast.error('Test failed')
+      toast.error(
+        'Could not reach Prowlarr. Check the URL and that this box can reach that host and port.'
+      )
     } finally {
       setTesting(false)
     }
@@ -267,7 +283,7 @@ export default function Indexers() {
 
   const handleSaveProwlarr = async () => {
     if (!prowlarrUrl.trim() || !prowlarrApiKey.trim()) {
-      toast.error('URL and API key are required')
+      toast.error('Enter the Prowlarr URL and API key before saving.')
       return
     }
 
@@ -288,10 +304,14 @@ export default function Indexers() {
         setProwlarrDialogOpen(false)
         fetchData()
       } else {
-        toast.error('Failed to save settings')
+        toast.error(
+          'Prowlarr settings not saved — the server rejected them. Check the URL and API key.'
+        )
       }
     } catch (error) {
-      toast.error('Failed to save settings')
+      toast.error(
+        'Prowlarr settings not saved — Hamster is unreachable. Check the server and try again.'
+      )
     } finally {
       setSaving(false)
     }
@@ -305,40 +325,44 @@ export default function Indexers() {
         {/* Prowlarr Configuration */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Prowlarr Integration</CardTitle>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2">
+                <CardTitle>Prowlarr</CardTitle>
                 <CardDescription>
-                  Connect to Prowlarr for centralized indexer management
+                  One connection that syncs every indexer Prowlarr manages, instead of adding them
+                  here one at a time.
                 </CardDescription>
               </div>
-              <Button onClick={openProwlarrDialog}>
-                {prowlarr?.configured ? 'Edit' : 'Configure'}
+              <Button onClick={openProwlarrDialog} className="sm:shrink-0">
+                {prowlarr?.configured ? 'Edit connection' : 'Connect'}
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-center py-4 text-muted-foreground">Loading...</div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-64" />
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
             ) : prowlarr?.configured ? (
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="font-medium">{prowlarr.url}</p>
-                  <div className="flex items-center gap-2">
-                    {prowlarr.enabled ? (
-                      <Badge variant="default" className="bg-green-600">
-                        <HugeiconsIcon icon={CheckmarkCircle02Icon} className="mr-1 size-3" />
-                        Enabled
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">Disabled</Badge>
-                    )}
-                  </div>
-                </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="readout truncate text-sm">{prowlarr.url}</span>
+                {prowlarr.enabled ? (
+                  <Badge className="border-transparent bg-status-complete text-white">
+                    <HugeiconsIcon icon={CheckmarkCircle02Icon} />
+                    Syncing
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">
+                    <HugeiconsIcon icon={Alert02Icon} />
+                    Paused
+                  </Badge>
+                )}
               </div>
             ) : (
-              <p className="text-muted-foreground">
-                Prowlarr is not configured. Connect to Prowlarr to automatically sync your indexers.
+              <p className="text-sm text-muted-foreground">
+                Not connected. Add a Prowlarr URL and API key and its indexers appear here
+                automatically — otherwise add each indexer by hand below.
               </p>
             )}
           </CardContent>
@@ -361,7 +385,12 @@ export default function Indexers() {
                   placeholder="http://localhost:9696"
                   value={prowlarrUrl}
                   onChange={(e) => setProwlarrUrl(e.target.value)}
+                  className="readout"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Reachable from this box. Behind Docker that is usually the container name, not
+                  localhost.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="prowlarr-apikey">API Key</Label>
@@ -371,23 +400,31 @@ export default function Indexers() {
                   placeholder="Your Prowlarr API key"
                   value={prowlarrApiKey}
                   onChange={(e) => setProwlarrApiKey(e.target.value)}
+                  className="readout"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Prowlarr → Settings → General → API Key.
+                </p>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2 border-t border-border pt-4">
                 <Switch
                   id="prowlarr-enabled"
                   checked={prowlarrEnabled}
                   onCheckedChange={setProwlarrEnabled}
                 />
-                <Label htmlFor="prowlarr-enabled">Enabled</Label>
+                <Label htmlFor="prowlarr-enabled" className="cursor-pointer font-normal">
+                  Sync indexers from this Prowlarr
+                </Label>
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={handleTestProwlarr} disabled={testing}>
-                {testing ? 'Testing...' : 'Test'}
+                {testing && <Spinner />}
+                Test
               </Button>
               <Button onClick={handleSaveProwlarr} disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
+                {saving && <Spinner />}
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -419,7 +456,11 @@ export default function Indexers() {
                   placeholder="https://indexer.example.com"
                   value={indexerUrl}
                   onChange={(e) => setIndexerUrl(e.target.value)}
+                  className="readout"
                 />
+                <p className="text-xs text-muted-foreground">
+                  The site root, without the /api path — Hamster appends it.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="indexer-apikey">API Key</Label>
@@ -429,23 +470,28 @@ export default function Indexers() {
                   placeholder="Your indexer API key"
                   value={indexerApiKey}
                   onChange={(e) => setIndexerApiKey(e.target.value)}
+                  className="readout"
                 />
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2 border-t border-border pt-4">
                 <Switch
                   id="indexer-enabled"
                   checked={indexerEnabled}
                   onCheckedChange={setIndexerEnabled}
                 />
-                <Label htmlFor="indexer-enabled">Enabled</Label>
+                <Label htmlFor="indexer-enabled" className="cursor-pointer font-normal">
+                  Search this indexer
+                </Label>
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={handleTestIndexer} disabled={testing}>
-                {testing ? 'Testing...' : 'Test'}
+                {testing && <Spinner />}
+                Test
               </Button>
               <Button onClick={handleSaveIndexer} disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
+                {saving && <Spinner />}
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -454,23 +500,49 @@ export default function Indexers() {
         {/* Direct Indexers */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Direct Indexers</CardTitle>
-                <CardDescription>Add Newznab-compatible indexers directly</CardDescription>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2">
+                <CardTitle>Direct indexers</CardTitle>
+                <CardDescription>
+                  Newznab-compatible indexers Hamster queries itself. Switch one off to keep it
+                  configured but out of every search.
+                </CardDescription>
               </div>
-              <Button onClick={() => openIndexerDialog()}>
-                <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />
-                Add Indexer
+              <Button onClick={() => openIndexerDialog()} className="sm:shrink-0">
+                <HugeiconsIcon icon={Add01Icon} />
+                Add indexer
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 flex-1" />
+                    <Skeleton className="h-5 w-9 rounded-full" />
+                  </div>
+                ))}
+              </div>
             ) : indexers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No indexers configured. Add an indexer or connect to Prowlarr.
+              <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <HugeiconsIcon
+                    icon={Satellite01Icon}
+                    className="size-6 text-muted-foreground"
+                    strokeWidth={1.5}
+                  />
+                </div>
+                <p className="text-lg font-medium">No indexers yet</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Hamster has nowhere to search for releases. Add a Newznab indexer, or connect
+                  Prowlarr above to pull them in automatically.
+                </p>
+                <Button variant="outline" onClick={() => openIndexerDialog()}>
+                  <HugeiconsIcon icon={Add01Icon} />
+                  Add indexer
+                </Button>
               </div>
             ) : (
               <Table>
@@ -478,33 +550,38 @@ export default function Indexers() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>URL</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-[120px]">Actions</TableHead>
+                    <TableHead className="w-20">Searched</TableHead>
+                    <TableHead className="w-24 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {indexers.map((indexer) => (
                     <TableRow key={indexer.id}>
                       <TableCell className="font-medium">{indexer.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{indexer.url}</TableCell>
+                      <TableCell className="readout max-w-[24rem] truncate text-muted-foreground">
+                        {indexer.url}
+                      </TableCell>
                       <TableCell>
                         <Switch
                           checked={indexer.enabled}
+                          aria-label={`Search ${indexer.name}`}
                           onCheckedChange={() => handleToggleIndexer(indexer)}
                         />
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="icon-sm"
+                            aria-label={`Edit ${indexer.name}`}
                             onClick={() => openIndexerDialog(indexer)}
                           >
                             <HugeiconsIcon icon={Edit02Icon} className="size-4" />
                           </Button>
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="icon-sm"
+                            aria-label={`Delete ${indexer.name}`}
                             onClick={() => setDeleteIndexerId(indexer.id)}
                           >
                             <HugeiconsIcon
@@ -529,7 +606,8 @@ export default function Indexers() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete indexer?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove the indexer. This action cannot be undone.
+              The indexer and its API key are removed and future searches will skip it. Releases
+              already grabbed are unaffected. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -541,7 +619,7 @@ export default function Indexers() {
                   setDeleteIndexerId(null)
                 }
               }}
-              className="bg-destructive text-destructive-foreground"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
             </AlertDialogAction>

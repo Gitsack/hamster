@@ -29,10 +29,15 @@ export function ConfirmDialog({ state, close, loading, handleConfirm }: ConfirmD
           <Button variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={handleConfirm} disabled={loading}>
+          <Button
+            variant="destructive"
+            onClick={handleConfirm}
+            disabled={loading}
+            aria-busy={loading}
+          >
             {loading ? (
               <>
-                <Spinner className="mr-2" />
+                <Spinner className="size-4" />
                 {state.loadingLabel}
               </>
             ) : (

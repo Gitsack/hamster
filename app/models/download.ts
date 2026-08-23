@@ -26,6 +26,12 @@ export interface NzbInfo {
   size?: number
   indexer?: string
   replaceExisting?: boolean
+  /**
+   * How many times automatic recovery has re-driven this download through the
+   * import pipeline. Persisted here rather than in a column so the retry ceiling
+   * survives a restart without a schema change.
+   */
+  importRetries?: number
 }
 
 export default class Download extends BaseModel {

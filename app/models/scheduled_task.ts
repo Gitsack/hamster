@@ -36,6 +36,14 @@ export default class ScheduledTask extends BaseModel {
   @column()
   declare lastDurationMs: number | null
 
+  /** Outcome of the most recent run: 'success', 'failed', or null if never run. */
+  @column()
+  declare lastStatus: string | null
+
+  /** Error from the most recent run, or the errors the run reported. */
+  @column()
+  declare lastError: string | null
+
   @column()
   declare enabled: boolean
 

@@ -33,13 +33,65 @@ import {
   EyeIcon,
   ViewOffIcon,
   Delete02Icon,
-  Settings01Icon,
   Globe02Icon,
   StarIcon,
   Refresh01Icon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 import { FolderBrowser } from '@/components/folder-browser'
+import { cn } from '@/lib/utils'
+
+/**
+ * One configuration row inside a settings card. Rows bleed to the card edge and
+ * are separated by a hairline seam rather than nested in their own boxes.
+ */
+function SettingRow({
+  icon,
+  title,
+  description,
+  children,
+}: {
+  icon?: any
+  title: React.ReactNode
+  description?: React.ReactNode
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 gap-3">
+        {icon && (
+          <HugeiconsIcon
+            icon={icon}
+            className="mt-0.5 size-5 shrink-0 text-muted-foreground"
+            strokeWidth={1.5}
+          />
+        )}
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-medium">{title}</p>
+          {description && <div className="text-xs text-muted-foreground">{description}</div>}
+        </div>
+      </div>
+      {children && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">{children}</div>
+      )}
+    </div>
+  )
+}
+
+/** Credential presence, carrying an icon and a word as well as a fill. */
+function CredentialBadge({ present, noun }: { present: boolean; noun: string }) {
+  return present ? (
+    <Badge className="border-transparent bg-status-complete text-white">
+      <HugeiconsIcon icon={CheckmarkCircle02Icon} />
+      {noun} set
+    </Badge>
+  ) : (
+    <Badge className="border-transparent bg-status-queued text-white">
+      <HugeiconsIcon icon={Alert02Icon} />
+      {noun} missing
+    </Badge>
+  )
+}
 
 type MediaType = 'music' | 'movies' | 'tv' | 'books'
 
@@ -334,7 +386,9 @@ export default function MediaManagement() {
         setQualityProfiles(data)
       }
     } catch (error) {
-      toast.error('Failed to load settings')
+      toast.error(
+        'Settings could not be loaded — Hamster is unreachable. Reload the page to retry.'
+      )
     } finally {
       setLoading(false)
     }
@@ -380,11 +434,15 @@ export default function MediaManagement() {
         body: JSON.stringify({ selectedStreamingProviders: updated }),
       })
       if (!response.ok) {
-        toast.error('Failed to save streaming providers')
+        toast.error(
+          'Streaming services not saved — the server rejected the change. Your previous selection is restored.'
+        )
         fetchData()
       }
     } catch {
-      toast.error('Failed to save streaming providers')
+      toast.error(
+        'Streaming services not saved — Hamster is unreachable. Your previous selection is restored.'
+      )
       fetchData()
     }
   }
@@ -393,7 +451,7 @@ export default function MediaManagement() {
     // Check if TMDB API key is needed
     if (enabled && mediaTypeInfo[mediaType].needsApiKey && !settings.hasTmdbApiKey) {
       toast.error(
-        `Please configure your TMDB API key first to enable ${mediaTypeInfo[mediaType].label}`
+        `${mediaTypeInfo[mediaType].label} need TMDB metadata. Add a TMDB API key first — the dialog is open.`
       )
       setApiKeyDialogOpen(true)
       return
@@ -411,10 +469,14 @@ export default function MediaManagement() {
         setSettings((prev) => ({ ...prev, enabledMediaTypes: data.enabledMediaTypes }))
         toast.success(`${mediaTypeInfo[mediaType].label} ${enabled ? 'enabled' : 'disabled'}`)
       } else {
-        toast.error('Failed to update media type')
+        toast.error(
+          `${mediaTypeInfo[mediaType].label} could not be turned ${enabled ? 'on' : 'off'} — the server rejected the change.`
+        )
       }
     } catch (error) {
-      toast.error('Failed to update media type')
+      toast.error(
+        `${mediaTypeInfo[mediaType].label} could not be turned ${enabled ? 'on' : 'off'} — Hamster is unreachable. Try again.`
+      )
     }
   }
 
@@ -436,10 +498,13 @@ export default function MediaManagement() {
       const response = await fetch(`/api/v1/rootfolders/${folderId}/scan`, { method: 'POST' })
 
       if (response.status === 409) {
-        toast.info('A scan is already in progress for this folder')
+        toast.info('A scan is already running for this folder. Wait for it to finish.')
       } else if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        toast.error(data.error || 'Failed to start scan')
+        toast.error(
+          data.error ||
+            'Scan did not start — the server rejected the request. Check the folder is readable.'
+        )
         setScanningFolderIds((prev) => {
           const next = new Set(prev)
           next.delete(folderId)
@@ -450,7 +515,7 @@ export default function MediaManagement() {
         toast.success('Library scan started')
       }
     } catch {
-      toast.error('Failed to start scan')
+      toast.error('Scan did not start — Hamster is unreachable. Try again.')
       setScanningFolderIds((prev) => {
         const next = new Set(prev)
         next.delete(folderId)
@@ -513,7 +578,7 @@ export default function MediaManagement() {
 
   const handleSaveFolder = async () => {
     if (!newPath.trim()) {
-      toast.error('Path is required')
+      toast.error('Pick a folder before saving — the library needs somewhere to look.')
       return
     }
 
@@ -537,7 +602,10 @@ export default function MediaManagement() {
           fetchData()
         } else {
           const error = await response.json()
-          toast.error(error.error || 'Failed to update folder')
+          toast.error(
+            error.error ||
+              'Folder not updated — the server rejected the path. Check it exists and Hamster can read it.'
+          )
         }
       } else {
         // Create new folder
@@ -558,11 +626,14 @@ export default function MediaManagement() {
           fetchData()
         } else {
           const error = await response.json()
-          toast.error(error.error || 'Failed to add folder')
+          toast.error(
+            error.error ||
+              'Folder not added — the server rejected the path. Check it exists and Hamster can read it.'
+          )
         }
       }
     } catch (error) {
-      toast.error('Failed to save folder')
+      toast.error('Folder not saved — Hamster is unreachable. Check the server and try again.')
     } finally {
       setSaving(false)
     }
@@ -570,7 +641,7 @@ export default function MediaManagement() {
 
   const handleSaveApiKey = async () => {
     if (!tmdbApiKey.trim()) {
-      toast.error('API key is required')
+      toast.error('Paste the TMDB v3 API key before saving.')
       return
     }
 
@@ -589,10 +660,10 @@ export default function MediaManagement() {
         setApiKeyDialogOpen(false)
         setTmdbApiKey('')
       } else {
-        toast.error('Failed to save API key')
+        toast.error('TMDB key not saved — the server rejected it. Check you copied the v3 key.')
       }
     } catch (error) {
-      toast.error('Failed to save API key')
+      toast.error('TMDB key not saved — Hamster is unreachable. Check the server and try again.')
     } finally {
       setSavingApiKey(false)
     }
@@ -600,7 +671,7 @@ export default function MediaManagement() {
 
   const handleSaveTraktKey = async () => {
     if (!traktClientId.trim()) {
-      toast.error('Client ID is required')
+      toast.error('Paste the Trakt client ID before saving.')
       return
     }
 
@@ -619,10 +690,14 @@ export default function MediaManagement() {
         setTraktDialogOpen(false)
         setTraktClientId('')
       } else {
-        toast.error('Failed to save Trakt client ID')
+        toast.error(
+          'Trakt client ID not saved — the server rejected it. Check you copied it in full.'
+        )
       }
     } catch (error) {
-      toast.error('Failed to save Trakt client ID')
+      toast.error(
+        'Trakt client ID not saved — Hamster is unreachable. Check the server and try again.'
+      )
     } finally {
       setSavingTraktKey(false)
     }
@@ -638,11 +713,15 @@ export default function MediaManagement() {
       })
 
       if (!response.ok) {
-        toast.error('Failed to save recommendation settings')
+        toast.error(
+          'Recommendation settings not saved — the server rejected the change. The old values are restored.'
+        )
         fetchData()
       }
     } catch (error) {
-      toast.error('Failed to save recommendation settings')
+      toast.error(
+        'Recommendation settings not saved — Hamster is unreachable. The old values are restored.'
+      )
       fetchData()
     }
   }
@@ -664,11 +743,15 @@ export default function MediaManagement() {
         }),
       })
       if (!response.ok) {
-        toast.error('Failed to save settings')
+        toast.error(
+          'JustWatch setting not saved — the server rejected the change. The old value is restored.'
+        )
         fetchData()
       }
     } catch {
-      toast.error('Failed to save settings')
+      toast.error(
+        'JustWatch setting not saved — Hamster is unreachable. The old value is restored.'
+      )
       fetchData()
     }
   }
@@ -682,11 +765,13 @@ export default function MediaManagement() {
         body: JSON.stringify({ justwatchLocale: locale }),
       })
       if (!response.ok) {
-        toast.error('Failed to save locale')
+        toast.error(
+          'Region not saved — the server rejected the change. The old region is restored.'
+        )
         fetchData()
       }
     } catch {
-      toast.error('Failed to save locale')
+      toast.error('Region not saved — Hamster is unreachable. The old region is restored.')
       fetchData()
     }
   }
@@ -743,10 +828,13 @@ export default function MediaManagement() {
         toast.success(`${mediaTypeInfo[mediaType].label} naming patterns saved`)
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to save patterns')
+        toast.error(
+          error.error ||
+            'Naming patterns not saved — the server rejected them. Check every {variable} is spelled as listed.'
+        )
       }
     } catch (error) {
-      toast.error('Failed to save patterns')
+      toast.error('Naming patterns not saved — Hamster is unreachable. Try again.')
     } finally {
       setSavingPatterns((prev) => ({ ...prev, [mediaType]: false }))
     }
@@ -791,7 +879,7 @@ export default function MediaManagement() {
 
   const handleSaveQuality = async () => {
     if (!qualityName.trim()) {
-      toast.error('Profile name is required')
+      toast.error('Give the profile a name so you can pick it later.')
       return
     }
 
@@ -826,10 +914,13 @@ export default function MediaManagement() {
         setQualityDialogOpen(false)
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to save profile')
+        toast.error(
+          error.error ||
+            'Quality profile not saved — the server rejected it. Check at least one quality is allowed.'
+        )
       }
     } catch (error) {
-      toast.error('Failed to save profile')
+      toast.error('Quality profile not saved — Hamster is unreachable. Try again.')
     } finally {
       setSavingQuality(false)
     }
@@ -855,10 +946,12 @@ export default function MediaManagement() {
         setDeleteDialogOpen(false)
         setDeletingProfile(null)
       } else {
-        toast.error('Failed to delete profile')
+        toast.error(
+          'Quality profile not deleted — the server refused. It may still be in use by a title.'
+        )
       }
     } catch (error) {
-      toast.error('Failed to delete profile')
+      toast.error('Quality profile not deleted — Hamster is unreachable. Try again.')
     } finally {
       setDeleting(false)
     }
@@ -874,27 +967,34 @@ export default function MediaManagement() {
     return qualityProfiles.filter((p) => p.mediaType === mediaType)
   }
 
+  // Enabled types in the canonical order, so the cards below stay in step with
+  // the Media types card rather than following server response order.
+  const enabledTypes = (Object.keys(mediaTypeInfo) as MediaType[]).filter((mediaType) =>
+    settings.enabledMediaTypes.includes(mediaType)
+  )
+
   return (
     <AppLayout title="Media Management">
       <Head title="Media Management" />
 
       <div className="space-y-6">
-        {/* API Keys */}
+        {/* Metadata providers */}
         <Card>
           <CardHeader>
-            <CardTitle>API Keys</CardTitle>
-            <CardDescription>Configure API keys for metadata providers</CardDescription>
+            <CardTitle>Metadata providers</CardTitle>
+            <CardDescription>
+              Where titles, artwork and release dates come from. Movies and TV need a TMDB key;
+              music and books use MusicBrainz and OpenLibrary, which need none.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <HugeiconsIcon icon={Key01Icon} className="size-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <span className="font-medium">TMDB API Key</span>
-                  <p className="text-sm text-muted-foreground">
-                    Required for Movies and TV Shows metadata.{' '}
+          <CardContent className="px-0">
+            <div className="divide-y divide-border border-y border-border">
+              <SettingRow
+                icon={Key01Icon}
+                title="TMDB API key"
+                description={
+                  <>
+                    Required before Movies or TV Shows can be enabled.{' '}
                     <a
                       href="https://www.themoviedb.org/settings/api"
                       target="_blank"
@@ -903,25 +1003,14 @@ export default function MediaManagement() {
                     >
                       Get one free
                     </a>
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {settings.hasTmdbApiKey ? (
-                  <span className="text-sm text-green-600 flex items-center gap-1">
-                    <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-4" />
-                    Configured
-                  </span>
-                ) : (
-                  <span className="text-sm text-orange-500 flex items-center gap-1">
-                    <HugeiconsIcon icon={Alert02Icon} className="size-4" />
-                    Not configured
-                  </span>
-                )}
+                  </>
+                }
+              >
+                <CredentialBadge present={settings.hasTmdbApiKey} noun="Key" />
                 <Button variant="outline" size="sm" onClick={() => setApiKeyDialogOpen(true)}>
-                  {settings.hasTmdbApiKey ? 'Change' : 'Add'}
+                  {settings.hasTmdbApiKey ? 'Replace key' : 'Add key'}
                 </Button>
-              </div>
+              </SettingRow>
             </div>
           </CardContent>
         </Card>
@@ -929,47 +1018,35 @@ export default function MediaManagement() {
         {/* Recommendations */}
         <Card>
           <CardHeader>
-            <CardTitle>Recommendations</CardTitle>
+            <CardTitle>Discovery sources</CardTitle>
             <CardDescription>
-              Configure recommendation sources for the search page discover lanes
+              What fills the lanes on the Search page. Each source is independent — turning one off
+              leaves the others running.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Trakt.tv row */}
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <HugeiconsIcon icon={Globe02Icon} className="size-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <span className="font-medium">Trakt.tv</span>
-                  <p className="text-sm text-muted-foreground">
-                    Community-powered trending, anticipated, and recommended lists.{' '}
+          <CardContent className="px-0">
+            <div className="divide-y divide-border border-y border-border">
+              <SettingRow
+                icon={Globe02Icon}
+                title="Trakt.tv"
+                description={
+                  <>
+                    Community trending, anticipated and recommended lists. Needs its own client ID.{' '}
                     <a
                       href="https://trakt.tv/oauth/applications"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary hover:underline"
                     >
-                      Get a free client ID
+                      Get one free
                     </a>
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {settings.hasTraktClientId ? (
-                  <span className="text-sm text-green-600 flex items-center gap-1">
-                    <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-4" />
-                    Configured
-                  </span>
-                ) : (
-                  <span className="text-sm text-orange-500 flex items-center gap-1">
-                    <HugeiconsIcon icon={Alert02Icon} className="size-4" />
-                    Not configured
-                  </span>
-                )}
+                  </>
+                }
+              >
+                <CredentialBadge present={settings.hasTraktClientId} noun="Client ID" />
                 <Switch
                   checked={settings.recommendationSettings.traktEnabled}
+                  aria-label="Show Trakt lanes"
                   onCheckedChange={(checked) =>
                     handleSaveRecommendationSettings({
                       ...settings.recommendationSettings,
@@ -979,31 +1056,21 @@ export default function MediaManagement() {
                   disabled={!settings.hasTraktClientId}
                 />
                 <Button variant="outline" size="sm" onClick={() => setTraktDialogOpen(true)}>
-                  {settings.hasTraktClientId ? 'Change' : 'Set Client ID'}
+                  {settings.hasTraktClientId ? 'Replace ID' : 'Set client ID'}
                 </Button>
-              </div>
-            </div>
+              </SettingRow>
 
-            {/* JustWatch row */}
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <HugeiconsIcon icon={Tv01Icon} className="size-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <span className="font-medium">JustWatch</span>
-                  <p className="text-sm text-muted-foreground">
-                    Show streaming availability and popular streaming content.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
+              <SettingRow
+                icon={Tv01Icon}
+                title="JustWatch"
+                description="Streaming availability badges and a lane of what is popular on the services you subscribe to."
+              >
                 {settings.justwatchEnabled && (
                   <Select
                     value={settings.justwatchLocale}
                     onValueChange={(value) => handleJustWatchLocaleChange(value)}
                   >
-                    <SelectTrigger className="w-36">
+                    <SelectTrigger className="w-36" aria-label="JustWatch region">
                       <span className="truncate">
                         {LOCALE_DISPLAY_NAMES[settings.justwatchLocale] || settings.justwatchLocale}
                       </span>
@@ -1048,26 +1115,18 @@ export default function MediaManagement() {
                 )}
                 <Switch
                   checked={settings.justwatchEnabled}
+                  aria-label="Show JustWatch availability"
                   onCheckedChange={handleJustWatchToggle}
                 />
-              </div>
-            </div>
+              </SettingRow>
 
-            {/* Personalized Recommendations row */}
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <HugeiconsIcon icon={StarIcon} className="size-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <span className="font-medium">Personalized Recommendations</span>
-                  <p className="text-sm text-muted-foreground">
-                    "Because you have..." lanes based on your library. Uses TMDB recommendations
-                    API.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
+              <SettingRow
+                icon={StarIcon}
+                title="Personalised lanes"
+                description={
+                  '"Because you have…" lanes built from titles already in your library, using TMDB recommendations.'
+                }
+              >
                 {settings.recommendationSettings.personalizedEnabled && (
                   <Select
                     value={settings.recommendationSettings.maxPersonalizedLanes.toString()}
@@ -1078,7 +1137,7 @@ export default function MediaManagement() {
                       })
                     }
                   >
-                    <SelectTrigger className="w-24">
+                    <SelectTrigger className="w-24" aria-label="Maximum personalised lanes">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectPopup>
@@ -1091,6 +1150,7 @@ export default function MediaManagement() {
                 )}
                 <Switch
                   checked={settings.recommendationSettings.personalizedEnabled}
+                  aria-label="Show personalised lanes"
                   onCheckedChange={(checked) =>
                     handleSaveRecommendationSettings({
                       ...settings.recommendationSettings,
@@ -1098,7 +1158,7 @@ export default function MediaManagement() {
                     })
                   }
                 />
-              </div>
+              </SettingRow>
             </div>
           </CardContent>
         </Card>
@@ -1107,41 +1167,44 @@ export default function MediaManagement() {
         {settings.hasTmdbApiKey && (
           <Card>
             <CardHeader>
-              <CardTitle>Streaming Services</CardTitle>
+              <CardTitle>Your streaming services</CardTitle>
               <CardDescription>
-                Select your streaming subscriptions to see availability badges on teasers
+                Pick the subscriptions you actually hold. Titles already streaming on one of them
+                are marked in search results, so you can skip downloading them.
               </CardDescription>
             </CardHeader>
             <CardContent>
               {loadingProviders ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                   {Array.from({ length: 8 }).map((_, i) => (
-                    <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
+                    <div key={i} className="h-14 animate-pulse rounded-md bg-muted" />
                   ))}
                 </div>
               ) : availableProviders.length > 0 ? (
                 <div className="space-y-4">
                   {/* Selected providers */}
                   {settings.selectedStreamingProviders.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                       {availableProviders
                         .filter((p) => settings.selectedStreamingProviders.includes(p.id))
                         .map((provider) => (
                           <div
                             key={provider.id}
-                            className="flex items-center gap-3 rounded-lg border border-primary bg-primary/5 ring-1 ring-primary/30 p-3"
+                            className="flex items-center gap-3 rounded-md border border-primary bg-primary/5 p-3"
                           >
                             <img
                               src={provider.logoPath}
-                              alt={provider.name}
-                              className="h-8 w-8 rounded-md flex-shrink-0"
+                              alt=""
+                              className="size-8 shrink-0 rounded-sm"
                             />
-                            <span className="text-sm font-medium truncate">{provider.name}</span>
+                            <span className="truncate text-sm font-medium">{provider.name}</span>
                           </div>
                         ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No services selected</p>
+                    <p className="text-sm text-muted-foreground">
+                      None selected, so nothing is marked as already streaming.
+                    </p>
                   )}
 
                   {/* Toggle selection panel */}
@@ -1151,14 +1214,17 @@ export default function MediaManagement() {
                       size="sm"
                       onClick={() => setShowProviderSelection(true)}
                     >
-                      <HugeiconsIcon icon={Add01Icon} className="size-4 mr-1" />
-                      Select services
+                      <HugeiconsIcon icon={Add01Icon} />
+                      Choose services
                     </Button>
                   ) : (
-                    <div className="space-y-3 rounded-lg border border-border p-4">
-                      <div className="flex items-center justify-between">
+                    <div className="space-y-3 rounded-md border border-border p-4">
+                      <div className="flex items-center justify-between gap-3">
                         <span className="text-sm font-medium">
-                          {settings.selectedStreamingProviders.length} service
+                          <span className="readout">
+                            {settings.selectedStreamingProviders.length}
+                          </span>{' '}
+                          service
                           {settings.selectedStreamingProviders.length !== 1 ? 's' : ''} selected
                         </span>
                         <Button
@@ -1173,11 +1239,12 @@ export default function MediaManagement() {
                         </Button>
                       </div>
                       <Input
-                        placeholder="Search services..."
+                        placeholder="Search services…"
+                        aria-label="Search streaming services"
                         value={providerSearch}
                         onChange={(e) => setProviderSearch(e.target.value)}
                       />
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-80 overflow-y-auto">
+                      <div className="grid max-h-80 grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">
                         {availableProviders
                           .filter((p) =>
                             p.name.toLowerCase().includes(providerSearch.toLowerCase())
@@ -1190,25 +1257,28 @@ export default function MediaManagement() {
                               <button
                                 key={provider.id}
                                 type="button"
+                                aria-pressed={isSelected}
                                 onClick={() => handleToggleStreamingProvider(provider.id)}
-                                className={`flex items-center gap-3 rounded-lg border p-3 transition-all text-left ${
+                                className={cn(
+                                  'flex items-center gap-3 rounded-md border p-3 text-left outline-none transition-colors duration-150',
+                                  'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
                                   isSelected
-                                    ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                                    : 'border-border hover:border-muted-foreground/30'
-                                }`}
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-border hover:bg-accent'
+                                )}
                               >
                                 <img
                                   src={provider.logoPath}
-                                  alt={provider.name}
-                                  className="h-8 w-8 rounded-md flex-shrink-0"
+                                  alt=""
+                                  className="size-8 shrink-0 rounded-sm"
                                 />
-                                <span className="text-sm font-medium truncate">
+                                <span className="truncate text-sm font-medium">
                                   {provider.name}
                                 </span>
                                 {isSelected && (
                                   <HugeiconsIcon
                                     icon={CheckmarkCircle02Icon}
-                                    className="size-4 text-primary flex-shrink-0 ml-auto"
+                                    className="ml-auto size-4 shrink-0 text-primary"
                                   />
                                 )}
                               </button>
@@ -1220,267 +1290,304 @@ export default function MediaManagement() {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No providers available. Make sure a locale is configured above.
+                  TMDB returned no providers for this region. Set a JustWatch region above, then
+                  reload the page.
                 </p>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* Media Types */}
+        {/* Media types and their root folders */}
         <Card>
           <CardHeader>
-            <CardTitle>Media Types</CardTitle>
+            <CardTitle>Media types</CardTitle>
             <CardDescription>
-              Enable media types and configure their library folders
+              Which libraries this install manages, and the folder on disk each one owns. A type
+              with no folder is enabled but inert — nothing is scanned and nothing can be imported.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {(Object.keys(mediaTypeInfo) as MediaType[]).map((mediaType) => {
-              const info = mediaTypeInfo[mediaType]
-              const isEnabled = settings.enabledMediaTypes.includes(mediaType)
-              const folder = getFolderForMediaType(mediaType)
+          <CardContent className="px-0">
+            <div className="divide-y divide-border border-y border-border">
+              {(Object.keys(mediaTypeInfo) as MediaType[]).map((mediaType) => {
+                const info = mediaTypeInfo[mediaType]
+                const isEnabled = settings.enabledMediaTypes.includes(mediaType)
+                const folder = getFolderForMediaType(mediaType)
+                const scanning = folder ? scanningFolderIds.has(folder.id) : false
 
-              return (
-                <div
-                  key={mediaType}
-                  className={`rounded-lg border ${isEnabled ? 'border-primary/50' : ''}`}
-                >
-                  {/* Media type header */}
-                  <div
-                    className={`flex items-center justify-between p-4 ${
-                      isEnabled ? 'bg-primary/5' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                          isEnabled
-                            ? 'bg-primary/10 text-primary'
-                            : 'bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        <HugeiconsIcon icon={info.icon} className="size-5" />
-                      </div>
-                      <div>
-                        <span className="font-medium">{info.label}</span>
-                        <p className="text-sm text-muted-foreground">{info.description}</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={isEnabled}
-                      onCheckedChange={(checked) => handleToggleMediaType(mediaType, checked)}
-                    />
-                  </div>
-
-                  {/* Folder configuration and file naming (shown when enabled) */}
-                  {isEnabled && (
-                    <div className="border-t bg-muted/30">
-                      {/* Library Folder */}
-                      <div className="flex items-center justify-between p-4">
-                        <div className="flex items-center gap-2">
-                          <HugeiconsIcon
-                            icon={Folder01Icon}
-                            className="size-4 text-muted-foreground"
-                          />
-                          <span className="text-sm font-medium">Library Folder</span>
+                return (
+                  <div key={mediaType} className="px-6 py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex min-w-0 gap-3">
+                        <HugeiconsIcon
+                          icon={info.icon}
+                          className={cn(
+                            'mt-0.5 size-5 shrink-0',
+                            isEnabled ? 'text-foreground' : 'text-muted-foreground'
+                          )}
+                          strokeWidth={1.5}
+                        />
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-sm font-medium">{info.label}</p>
+                          <p className="text-xs text-muted-foreground">{info.description}</p>
                         </div>
+                      </div>
+                      <Switch
+                        checked={isEnabled}
+                        aria-label={`Manage ${info.label}`}
+                        onCheckedChange={(checked) => handleToggleMediaType(mediaType, checked)}
+                      />
+                    </div>
+
+                    {isEnabled && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2 pl-8">
+                        <HugeiconsIcon
+                          icon={Folder01Icon}
+                          className="size-4 shrink-0 text-muted-foreground"
+                          strokeWidth={1.5}
+                        />
                         {folder ? (
-                          <div className="flex items-center gap-2">
-                            <code className="text-sm bg-muted px-2 py-1 rounded">
+                          <>
+                            <code className="readout rounded-sm bg-muted px-1.5 py-0.5 text-xs">
                               {folder.path}
                             </code>
                             {folder.accessible ? (
-                              <HugeiconsIcon
-                                icon={CheckmarkCircle02Icon}
-                                className="size-4 text-green-600"
-                              />
+                              <Badge className="border-transparent bg-status-complete text-white">
+                                <HugeiconsIcon icon={CheckmarkCircle02Icon} />
+                                Readable
+                              </Badge>
                             ) : (
-                              <HugeiconsIcon
-                                icon={Alert02Icon}
-                                className="size-4 text-destructive"
-                              />
+                              <Badge className="border-transparent bg-status-failed text-white">
+                                <HugeiconsIcon icon={Alert02Icon} />
+                                Unreachable
+                              </Badge>
                             )}
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon-sm"
+                              aria-label={`Rescan the ${info.label} folder`}
                               title="Rescan this folder to reconcile files on disk with the library"
-                              disabled={
-                                scanningFolderIds.has(folder.id) || !folder.accessible
-                              }
+                              disabled={scanning || !folder.accessible}
                               onClick={() => handleRescan(folder.id)}
                             >
                               <HugeiconsIcon
                                 icon={Refresh01Icon}
-                                className={`size-4 ${
-                                  scanningFolderIds.has(folder.id) ? 'animate-spin' : ''
-                                }`}
+                                className={cn('size-4', scanning && 'animate-spin')}
                               />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon-sm"
+                              aria-label={`Change the ${info.label} folder`}
                               onClick={() => openFolderDialog(mediaType)}
                             >
                               <HugeiconsIcon icon={Edit01Icon} className="size-4" />
                             </Button>
-                          </div>
+                            {!folder.accessible && (
+                              <span className="text-xs text-muted-foreground">
+                                Hamster cannot read this path. Check the mount and permissions.
+                              </span>
+                            )}
+                          </>
                         ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openFolderDialog(mediaType)}
-                          >
-                            <HugeiconsIcon icon={Add01Icon} className="size-4 mr-1" />
-                            Set Folder
-                          </Button>
-                        )}
-                      </div>
-
-                      {/* File Naming (collapsible) */}
-                      <CollapsibleRoot className="border-t">
-                        <div className="p-4">
-                          <CollapsibleTrigger className="text-muted-foreground hover:text-foreground">
-                            File Organization
-                          </CollapsibleTrigger>
-                        </div>
-                        <CollapsiblePanel>
-                          <div className="space-y-4 px-4 pb-4">
-                            {namingData &&
-                              editedPatterns[mediaType] &&
-                              Object.entries(editedPatterns[mediaType]).map(([field, pattern]) => {
-                                const variables = namingData.variables[mediaType]?.[field] || []
-                                const example = getExampleForPattern(mediaType, field, pattern)
-                                return (
-                                  <div key={field} className="space-y-1.5">
-                                    <Label className="text-xs text-muted-foreground">
-                                      {fieldLabels[field] || field}
-                                    </Label>
-                                    <Input
-                                      value={pattern}
-                                      onChange={(e) =>
-                                        handlePatternChange(mediaType, field, e.target.value)
-                                      }
-                                      className="h-8 text-sm font-mono"
-                                    />
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {variables.map((v) => (
-                                        <button
-                                          key={v.name}
-                                          type="button"
-                                          onClick={() =>
-                                            handlePatternChange(
-                                              mediaType,
-                                              field,
-                                              pattern + `{${v.name}}`
-                                            )
-                                          }
-                                          className="text-xs px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-muted-foreground font-mono"
-                                          title={v.description}
-                                        >
-                                          {`{${v.name}}`}
-                                        </button>
-                                      ))}
-                                    </div>
-                                    {example && (
-                                      <p className="text-xs text-muted-foreground">
-                                        Example: {example}
-                                      </p>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            {hasPatternChanges(mediaType) && (
-                              <Button
-                                size="sm"
-                                onClick={() => handleSavePatterns(mediaType)}
-                                disabled={savingPatterns[mediaType]}
-                              >
-                                {savingPatterns[mediaType] ? 'Saving...' : 'Save Changes'}
-                              </Button>
-                            )}
-                          </div>
-                        </CollapsiblePanel>
-                      </CollapsibleRoot>
-
-                      {/* Quality Profiles (collapsible) */}
-                      <CollapsibleRoot className="border-t">
-                        <div className="p-4">
-                          <CollapsibleTrigger className="text-muted-foreground hover:text-foreground">
-                            Quality Profiles
-                          </CollapsibleTrigger>
-                        </div>
-                        <CollapsiblePanel>
-                          <div className="space-y-3 px-4 pb-4">
-                            <p className="text-sm text-muted-foreground">
-                              Define which quality levels are acceptable for downloads.
-                            </p>
-                            {getProfilesForMediaType(mediaType).length > 0 ? (
-                              <div className="space-y-2">
-                                {getProfilesForMediaType(mediaType).map((profile) => (
-                                  <div
-                                    key={profile.id}
-                                    className="flex items-center justify-between rounded-md border p-3"
-                                  >
-                                    <div>
-                                      <span className="font-medium">{profile.name}</span>
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                        {profile.items
-                                          .filter((i) => i.allowed)
-                                          .map((item) => (
-                                            <Badge
-                                              key={item.id}
-                                              variant="secondary"
-                                              className="text-xs"
-                                            >
-                                              {item.name}
-                                            </Badge>
-                                          ))}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => openQualityDialog(mediaType, profile)}
-                                      >
-                                        <HugeiconsIcon icon={Edit01Icon} className="size-4" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => openDeleteDialog(profile)}
-                                      >
-                                        <HugeiconsIcon
-                                          icon={Delete02Icon}
-                                          className="size-4 text-destructive"
-                                        />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground italic">
-                                No quality profiles configured.
-                              </p>
-                            )}
+                          <>
+                            <Badge className="border-transparent bg-status-queued text-white">
+                              <HugeiconsIcon icon={Alert02Icon} />
+                              No folder set
+                            </Badge>
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => openQualityDialog(mediaType)}
+                              onClick={() => openFolderDialog(mediaType)}
                             >
-                              <HugeiconsIcon icon={Add01Icon} className="size-4 mr-1" />
-                              Add Profile
+                              <HugeiconsIcon icon={Add01Icon} />
+                              Set folder
                             </Button>
-                          </div>
-                        </CollapsiblePanel>
-                      </CollapsibleRoot>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* File organization */}
+        <Card>
+          <CardHeader>
+            <CardTitle>File organization</CardTitle>
+            <CardDescription>
+              The folder and file names Hamster writes when it imports. Click a variable to append
+              it; the example under each field is rendered from the pattern as it stands.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className={enabledTypes.length === 0 ? undefined : 'px-0'}>
+            {enabledTypes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No media type is on yet. Turn one on above and its naming patterns appear here.
+              </p>
+            ) : (
+              <div className="divide-y divide-border border-y border-border">
+                {enabledTypes.map((mediaType) => (
+                  <CollapsibleRoot key={mediaType} className="px-6 py-4">
+                    <CollapsibleTrigger className="text-foreground">
+                      {mediaTypeInfo[mediaType].label}
+                    </CollapsibleTrigger>
+                    <CollapsiblePanel>
+                      <div className="space-y-6 pt-4">
+                        {namingData &&
+                          editedPatterns[mediaType] &&
+                          Object.entries(editedPatterns[mediaType]).map(([field, pattern]) => {
+                            const variables = namingData.variables[mediaType]?.[field] || []
+                            const example = getExampleForPattern(mediaType, field, pattern)
+                            return (
+                              <div key={field} className="space-y-2">
+                                <Label htmlFor={`${mediaType}-${field}`}>
+                                  {fieldLabels[field] || field}
+                                </Label>
+                                <Input
+                                  id={`${mediaType}-${field}`}
+                                  value={pattern}
+                                  onChange={(e) =>
+                                    handlePatternChange(mediaType, field, e.target.value)
+                                  }
+                                  className="readout"
+                                />
+                                {example && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Renders as <span className="readout">{example}</span>
+                                  </p>
+                                )}
+                                {variables.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 pt-1">
+                                    {variables.map((v) => (
+                                      <button
+                                        key={v.name}
+                                        type="button"
+                                        onClick={() =>
+                                          handlePatternChange(
+                                            mediaType,
+                                            field,
+                                            pattern + `{${v.name}}`
+                                          )
+                                        }
+                                        className="readout rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                        title={v.description}
+                                      >
+                                        {`{${v.name}}`}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        {hasPatternChanges(mediaType) && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleSavePatterns(mediaType)}
+                            disabled={savingPatterns[mediaType]}
+                          >
+                            {savingPatterns[mediaType] ? 'Saving…' : 'Save changes'}
+                          </Button>
+                        )}
+                      </div>
+                    </CollapsiblePanel>
+                  </CollapsibleRoot>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Quality profiles */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Quality profiles</CardTitle>
+            <CardDescription>
+              Which releases Hamster is allowed to accept, and whether it replaces a file it already
+              has when something better appears. Every monitored title uses one.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className={enabledTypes.length === 0 ? undefined : 'px-0'}>
+            {enabledTypes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No media type is on yet. Turn one on above, then come back here to say which quality
+                levels are acceptable for it.
+              </p>
+            ) : (
+              <div className="divide-y divide-border border-y border-border">
+                {enabledTypes.map((mediaType) => {
+                  const profiles = getProfilesForMediaType(mediaType)
+                  return (
+                    <div key={mediaType} className="space-y-3 px-6 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-semibold">{mediaTypeInfo[mediaType].label}</h3>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openQualityDialog(mediaType)}
+                        >
+                          <HugeiconsIcon icon={Add01Icon} />
+                          Add profile
+                        </Button>
+                      </div>
+                      {profiles.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No profile yet. Add one to say which releases are acceptable for{' '}
+                          {mediaTypeInfo[mediaType].label.toLowerCase()}.
+                        </p>
+                      ) : (
+                        <div className="divide-y divide-border rounded-md border border-border">
+                          {profiles.map((profile) => (
+                            <div
+                              key={profile.id}
+                              className="flex items-start justify-between gap-3 p-3"
+                            >
+                              <div className="min-w-0 space-y-1.5">
+                                <p className="text-sm font-medium">{profile.name}</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {profile.items
+                                    .filter((i) => i.allowed)
+                                    .map((item) => (
+                                      <Badge key={item.id} variant="secondary" className="readout">
+                                        {item.name}
+                                      </Badge>
+                                    ))}
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label={`Edit ${profile.name}`}
+                                  onClick={() => openQualityDialog(mediaType, profile)}
+                                >
+                                  <HugeiconsIcon icon={Edit01Icon} className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label={`Delete ${profile.name}`}
+                                  onClick={() => openDeleteDialog(profile)}
+                                >
+                                  <HugeiconsIcon
+                                    icon={Delete02Icon}
+                                    className="size-4 text-destructive"
+                                  />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              )
-            })}
+                  )
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1493,18 +1600,18 @@ export default function MediaManagement() {
               {editingFolderId ? 'Edit' : 'Set'} {mediaTypeInfo[editingMediaType].label} Folder
             </DialogTitle>
             <DialogDescription>
-              Select a folder where your {mediaTypeInfo[editingMediaType].label.toLowerCase()} files
-              are stored.
+              The folder Hamster scans for {mediaTypeInfo[editingMediaType].label.toLowerCase()} and
+              writes imports into. Inside Docker this is the container path, not the host path.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-6 py-4">
             <FolderBrowser
               value={newPath}
               onChange={setNewPath}
               createIfMissing={createIfMissing}
               onCreateIfMissingChange={setCreateIfMissing}
             />
-            <div className="space-y-2">
+            <div className="space-y-2 border-t border-border pt-6">
               <Label htmlFor="name">Name (optional)</Label>
               <Input
                 id="name"
@@ -1512,6 +1619,9 @@ export default function MediaManagement() {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                Shown instead of the raw path where the folder is referred to.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -1519,7 +1629,7 @@ export default function MediaManagement() {
               Cancel
             </Button>
             <Button onClick={handleSaveFolder} disabled={saving || !newPath}>
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1531,8 +1641,7 @@ export default function MediaManagement() {
           <DialogHeader>
             <DialogTitle>TMDB API Key</DialogTitle>
             <DialogDescription>
-              Enter your TMDB API key to enable Movies and TV Shows metadata. You can get a free API
-              key at{' '}
+              Movies and TV Shows cannot be enabled without one. Free, and issued instantly at{' '}
               <a
                 href="https://www.themoviedb.org/settings/api"
                 target="_blank"
@@ -1541,6 +1650,7 @@ export default function MediaManagement() {
               >
                 themoviedb.org
               </a>
+              .
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1550,21 +1660,25 @@ export default function MediaManagement() {
                 <Input
                   id="apiKey"
                   type={showApiKey ? 'text' : 'password'}
-                  placeholder="Enter your TMDB API key"
+                  placeholder="Paste the v3 API key"
                   value={tmdbApiKey}
                   onChange={(e) => setTmdbApiKey(e.target.value)}
-                  className="pr-10"
+                  className="readout pr-10"
                 />
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3"
+                  size="icon-sm"
+                  aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                  className="absolute right-1 top-1/2 -translate-y-1/2"
                   onClick={() => setShowApiKey(!showApiKey)}
                 >
                   <HugeiconsIcon icon={showApiKey ? ViewOffIcon : EyeIcon} className="size-4" />
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                The v3 key, not the v4 read access token.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -1572,7 +1686,7 @@ export default function MediaManagement() {
               Cancel
             </Button>
             <Button onClick={handleSaveApiKey} disabled={savingApiKey || !tmdbApiKey.trim()}>
-              {savingApiKey ? 'Saving...' : 'Save'}
+              {savingApiKey ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1584,8 +1698,8 @@ export default function MediaManagement() {
           <DialogHeader>
             <DialogTitle>Trakt Client ID</DialogTitle>
             <DialogDescription>
-              Enter your Trakt client ID to enable community-powered recommendations. You can get a
-              free client ID at{' '}
+              Unlocks the Trakt lanes on the Search page. Register an application — any name will do
+              — at{' '}
               <a
                 href="https://trakt.tv/oauth/applications"
                 target="_blank"
@@ -1594,6 +1708,7 @@ export default function MediaManagement() {
               >
                 trakt.tv
               </a>
+              .
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -1603,21 +1718,23 @@ export default function MediaManagement() {
                 <Input
                   id="traktClientId"
                   type={showTraktKey ? 'text' : 'password'}
-                  placeholder="Enter your Trakt client ID"
+                  placeholder="Paste the client ID"
                   value={traktClientId}
                   onChange={(e) => setTraktClientId(e.target.value)}
-                  className="pr-10"
+                  className="readout pr-10"
                 />
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3"
+                  size="icon-sm"
+                  aria-label={showTraktKey ? 'Hide client ID' : 'Show client ID'}
+                  className="absolute right-1 top-1/2 -translate-y-1/2"
                   onClick={() => setShowTraktKey(!showTraktKey)}
                 >
                   <HugeiconsIcon icon={showTraktKey ? ViewOffIcon : EyeIcon} className="size-4" />
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">The client ID, not the client secret.</p>
             </div>
           </div>
           <DialogFooter>
@@ -1625,7 +1742,7 @@ export default function MediaManagement() {
               Cancel
             </Button>
             <Button onClick={handleSaveTraktKey} disabled={savingTraktKey || !traktClientId.trim()}>
-              {savingTraktKey ? 'Saving...' : 'Save'}
+              {savingTraktKey ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1637,22 +1754,29 @@ export default function MediaManagement() {
           <DialogHeader>
             <DialogTitle>{editingQuality ? 'Edit' : 'Add'} Quality Profile</DialogTitle>
             <DialogDescription>
-              Define which quality levels are acceptable for{' '}
-              {mediaTypeInfo[qualityMediaType].label.toLowerCase()} downloads.
+              Which releases Hamster may accept for{' '}
+              {mediaTypeInfo[qualityMediaType].label.toLowerCase()}, and the size band it will stay
+              inside.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-6 py-4">
             <div className="space-y-2">
               <Label htmlFor="qualityName">Profile Name</Label>
               <Input
                 id="qualityName"
-                placeholder="e.g., High Quality"
+                placeholder="e.g. High Quality"
                 value={qualityName}
                 onChange={(e) => setQualityName(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Allowed Qualities</Label>
+            <fieldset className="space-y-3 border-t border-border pt-6">
+              <legend className="sr-only">Allowed qualities</legend>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Allowed qualities</h3>
+                <p className="text-xs text-muted-foreground">
+                  Releases outside this set are skipped. At least one is required.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 {QUALITY_OPTIONS[qualityMediaType].map((option) => {
                   const item = qualityItems.find((i) => i.id === option.id)
@@ -1665,7 +1789,7 @@ export default function MediaManagement() {
                       />
                       <Label
                         htmlFor={`quality-${option.id}`}
-                        className="font-normal cursor-pointer text-sm"
+                        className="readout cursor-pointer font-normal"
                       >
                         {option.name}
                       </Label>
@@ -1673,29 +1797,39 @@ export default function MediaManagement() {
                   )
                 })}
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="qualityMinSize">Min Size (MB)</Label>
-                <Input
-                  id="qualityMinSize"
-                  type="number"
-                  min="0"
-                  placeholder="No minimum"
-                  value={qualityMinSize}
-                  onChange={(e) => setQualityMinSize(e.target.value)}
-                />
+            </fieldset>
+            <div className="space-y-3 border-t border-border pt-6">
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Size band</h3>
+                <p className="text-xs text-muted-foreground">
+                  Optional guard against mislabelled releases. Leave blank for no limit.
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="qualityMaxSize">Max Size (MB)</Label>
-                <Input
-                  id="qualityMaxSize"
-                  type="number"
-                  min="0"
-                  placeholder="No maximum"
-                  value={qualityMaxSize}
-                  onChange={(e) => setQualityMaxSize(e.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="qualityMinSize">Min size (MB)</Label>
+                  <Input
+                    id="qualityMinSize"
+                    type="number"
+                    min="0"
+                    placeholder="No minimum"
+                    value={qualityMinSize}
+                    onChange={(e) => setQualityMinSize(e.target.value)}
+                    className="readout"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="qualityMaxSize">Max size (MB)</Label>
+                  <Input
+                    id="qualityMaxSize"
+                    type="number"
+                    min="0"
+                    placeholder="No maximum"
+                    value={qualityMaxSize}
+                    onChange={(e) => setQualityMaxSize(e.target.value)}
+                    className="readout"
+                  />
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -1704,8 +1838,8 @@ export default function MediaManagement() {
                 checked={qualityUpgradeAllowed}
                 onCheckedChange={setQualityUpgradeAllowed}
               />
-              <Label htmlFor="upgradeAllowed" className="font-normal cursor-pointer">
-                Upgrade existing files when better quality is available
+              <Label htmlFor="upgradeAllowed" className="cursor-pointer font-normal">
+                Replace a file already on disk when a better release appears
               </Label>
             </div>
           </div>
@@ -1719,7 +1853,7 @@ export default function MediaManagement() {
                 savingQuality || !qualityName.trim() || !qualityItems.some((i) => i.allowed)
               }
             >
-              {savingQuality ? 'Saving...' : editingQuality ? 'Save' : 'Add'}
+              {savingQuality ? 'Saving…' : editingQuality ? 'Save' : 'Add'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1731,8 +1865,8 @@ export default function MediaManagement() {
           <DialogHeader>
             <DialogTitle>Delete Profile</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the quality profile "{deletingProfile?.name}"? This
-              action cannot be undone.
+              "{deletingProfile?.name}" is removed and can no longer be assigned. Titles already
+              using it keep their files; only the rule goes. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1746,7 +1880,7 @@ export default function MediaManagement() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleting}>
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? 'Deleting…' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

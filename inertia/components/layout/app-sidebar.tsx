@@ -16,6 +16,7 @@ import {
   Settings02Icon,
   UserMultipleIcon,
   DashboardSquare01Icon,
+  Clock01Icon,
 } from '@hugeicons/core-free-icons'
 import { HamsterIcon } from '@/components/icons/hamster-icon'
 import {
@@ -73,6 +74,11 @@ const activityNavItems: NavItem[] = [
     title: 'Activity',
     url: '/activity/queue',
     icon: Download04Icon,
+  },
+  {
+    title: 'History',
+    url: '/activity/history',
+    icon: Clock01Icon,
   },
 ]
 
@@ -144,13 +150,13 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar variant="inset">
+    <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
+            <SidebarMenuButton size="lg" asChild tooltip="Hamster">
               <Link href="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                   <HamsterIcon className="size-6" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
@@ -164,12 +170,12 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Library</SidebarGroupLabel>
+          <SidebarGroupLabel>Main</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                  <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
                     <Link href={item.url}>
                       <HugeiconsIcon icon={item.icon} className="size-4" />
                       <span>{item.title}</span>
@@ -186,7 +192,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {activityNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                  <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
                     <Link href={item.url}>
                       <HugeiconsIcon icon={item.icon} className="size-4" />
                       <span>{item.title}</span>
@@ -204,7 +210,7 @@ export function AppSidebar() {
               <SidebarMenu>
                 {settingsNavItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
                       <Link href={item.url}>
                         <HugeiconsIcon icon={item.icon} className="size-4" />
                         <span>{item.title}</span>
@@ -223,7 +229,7 @@ export function AppSidebar() {
               <SidebarMenu>
                 {systemNavItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
                       <Link href={item.url}>
                         <HugeiconsIcon icon={item.icon} className="size-4" />
                         <span>{item.title}</span>
@@ -237,7 +243,9 @@ export function AppSidebar() {
         )}
       </SidebarContent>
       <SidebarFooter>
-        <div className="px-2 text-xs text-muted-foreground/50">v{version}</div>
+        <div className="readout px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+          v{version}
+        </div>
         <SidebarMenu>
           <SidebarMenuItem>
             {mounted ? (
@@ -245,16 +253,16 @@ export function AppSidebar() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="ring-sidebar-ring/50 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-[3px] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:px-0"
                   >
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarFallback className="rounded-lg">
+                    <Avatar className="size-8 shrink-0">
+                      <AvatarFallback>
                         {user?.fullName?.[0]?.toUpperCase() ||
                           user?.email?.[0]?.toUpperCase() ||
                           'U'}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
+                    <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                       <span className="truncate font-semibold">{user?.fullName || 'User'}</span>
                       <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
                     </div>
@@ -268,14 +276,14 @@ export function AppSidebar() {
                 >
                   <DropdownMenuItem asChild>
                     <Link href="/settings/profile">
-                      <HugeiconsIcon icon={UserIcon} className="mr-2 size-4" />
+                      <HugeiconsIcon icon={UserIcon} className="size-4" />
                       Profile Settings
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link href="/logout" method="post" as="button" className="w-full">
-                      <HugeiconsIcon icon={LogoutSquare01Icon} className="mr-2 size-4" />
+                      <HugeiconsIcon icon={LogoutSquare01Icon} className="size-4" />
                       Log out
                     </Link>
                   </DropdownMenuItem>
@@ -284,14 +292,14 @@ export function AppSidebar() {
             ) : (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm group-data-[collapsible=icon]:px-0"
               >
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarFallback className="rounded-lg">
+                <Avatar className="size-8 shrink-0">
+                  <AvatarFallback>
                     {user?.fullName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
                   </AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
+                <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                   <span className="truncate font-semibold">{user?.fullName || 'User'}</span>
                   <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
                 </div>

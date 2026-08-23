@@ -10,6 +10,25 @@
       Hamster
     </title>
 
+    <script>
+      /* Paint in the operator's theme before first paint. Key must match THEME_STORAGE_KEY. */
+      (function() {
+        try {
+          var stored = null;
+          try {
+            stored = window.localStorage.getItem("hamster-theme");
+          } catch (e) {}
+          var theme = stored === "light" || stored === "dark" ? stored : null;
+          if (!theme) {
+            theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          var root = document.documentElement;
+          root.classList.toggle("dark", theme === "dark");
+          root.style.colorScheme = theme;
+        } catch (e) {}
+      })();
+    </script>
+
     @stack('dumper')
     @viteReactRefresh()
     @inertiaHead()

@@ -10,9 +10,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Label } from '@/components/ui/label'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowDown01Icon, ArrowUp01Icon } from '@hugeicons/core-free-icons'
+import { ArrowDown01Icon, ArrowUp01Icon, Alert02Icon, Tv01Icon } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 
@@ -291,8 +290,8 @@ export function SeasonPickerDialog({
         <DialogHeader>
           <DialogTitle>Select Episodes</DialogTitle>
           <DialogDescription>
-            Choose which seasons and episodes of "{showTitle}" you want to request. Click on a
-            season to select individual episodes.
+            Choose which seasons and episodes of &ldquo;{showTitle}&rdquo; you want to request.
+            Click a season to select individual episodes.
           </DialogDescription>
         </DialogHeader>
 
@@ -307,13 +306,22 @@ export function SeasonPickerDialog({
           </div>
         )}
 
-        {error && <div className="text-sm text-destructive py-4 text-center">{error}</div>}
+        {error && (
+          <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4 shrink-0 mt-0.5" />
+            <p>
+              Could not load seasons for this show — {error}. Check that TMDB is reachable in
+              Settings, then reopen this dialog.
+            </p>
+          </div>
+        )}
 
         {!loading && !error && seasons.length > 0 && (
           <>
             <div className="flex items-center justify-between border-b pb-2 mb-2">
               <span className="text-sm text-muted-foreground">
-                {totalSelected} of {totalEpisodes} episodes selected
+                <span className="readout">{totalSelected}</span> of{' '}
+                <span className="readout">{totalEpisodes}</span> episodes selected
               </span>
               <div className="flex gap-2">
                 <Button
@@ -344,10 +352,14 @@ export function SeasonPickerDialog({
                 const isLoadingEpisodes = loadingEpisodes.has(season.seasonNumber)
 
                 return (
-                  <div key={season.seasonNumber} className="border rounded-md overflow-hidden">
+                  <div
+                    key={season.seasonNumber}
+                    className="border border-border rounded-lg overflow-hidden"
+                  >
                     <div
-                      className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer"
+                      className="flex items-center gap-3 p-3 hover:bg-accent transition-colors duration-150 cursor-pointer"
                       onClick={() => toggleSeasonExpanded(season.seasonNumber)}
+                      aria-expanded={isExpanded}
                     >
                       <Checkbox
                         checked={isFullySelected}
@@ -363,10 +375,15 @@ export function SeasonPickerDialog({
                         )}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm">{season.title}</div>
+                        <div className="font-medium text-sm truncate">{season.title}</div>
                         <div className="text-xs text-muted-foreground">
-                          {season.episodeCount} episodes
-                          {season.airDate && ` • ${season.airDate.substring(0, 4)}`}
+                          <span className="readout">{season.episodeCount}</span> episodes
+                          {season.airDate && (
+                            <>
+                              {' • '}
+                              <span className="readout">{season.airDate.substring(0, 4)}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                       <HugeiconsIcon
@@ -391,7 +408,7 @@ export function SeasonPickerDialog({
                             return (
                               <div
                                 key={episode.episodeNumber}
-                                className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
+                                className="flex items-center gap-3 p-2 rounded-md hover:bg-accent transition-colors duration-150 cursor-pointer"
                                 onClick={() =>
                                   toggleEpisode(season.seasonNumber, episode.episodeNumber)
                                 }
@@ -402,14 +419,14 @@ export function SeasonPickerDialog({
                                     toggleEpisode(season.seasonNumber, episode.episodeNumber)
                                   }
                                 />
-                                <span className="font-mono text-xs text-muted-foreground w-6">
+                                <span className="readout text-xs text-muted-foreground w-6 text-right">
                                   {episode.episodeNumber}
                                 </span>
                                 <div className="flex-1 min-w-0">
                                   <span className="text-sm truncate block">{episode.title}</span>
                                 </div>
                                 {episode.airDate && (
-                                  <span className="text-xs text-muted-foreground">
+                                  <span className="readout text-xs text-muted-foreground">
                                     {episode.airDate.substring(0, 4)}
                                   </span>
                                 )}
@@ -427,7 +444,16 @@ export function SeasonPickerDialog({
         )}
 
         {!loading && !error && seasons.length === 0 && (
-          <div className="text-sm text-muted-foreground py-4 text-center">No seasons found</div>
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <HugeiconsIcon icon={Tv01Icon} className="size-6" />
+            </div>
+            <h3 className="text-lg font-medium">No seasons listed</h3>
+            <p className="mt-2 max-w-sm text-sm text-muted-foreground text-balance">
+              TMDB returned no season data for this show. Add it anyway and run Refresh metadata
+              from the show page once TMDB catches up.
+            </p>
+          </div>
         )}
 
         <DialogFooter>
@@ -437,7 +463,7 @@ export function SeasonPickerDialog({
           <Button onClick={handleConfirm} disabled={loading || totalSelected === 0}>
             {loading ? (
               <>
-                <Spinner className="mr-2" />
+                <Spinner />
                 Loading...
               </>
             ) : (

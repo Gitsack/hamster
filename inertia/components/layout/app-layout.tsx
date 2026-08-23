@@ -19,12 +19,12 @@ export function AppLayout({ children, title, headerPrefix, actions }: AppLayoutP
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex min-h-14 shrink-0 items-center gap-2 border-b px-4 py-2 flex-wrap">
+        <header className="bg-background flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b border-border px-4 py-2">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           {headerPrefix}
-          {title && <h1 className="text-lg font-semibold truncate">{title}</h1>}
-          {actions && <div className="ml-auto flex items-center gap-2 flex-wrap">{actions}</div>}
+          {title && <h1 className="min-w-0 truncate text-lg font-semibold">{title}</h1>}
+          {actions && <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>}
         </header>
         <main
           className={`flex-1 overflow-y-auto overflow-x-hidden p-4 min-w-0 ${hasPlayer ? 'pb-24' : ''}`}

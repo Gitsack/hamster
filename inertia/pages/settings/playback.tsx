@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 
 interface TranscodingSettings {
@@ -40,7 +41,9 @@ export default function PlaybackSettingsPage() {
         setSettings(data)
       }
     } catch (error) {
-      toast.error('Failed to load playback settings')
+      toast.error(
+        'Playback settings could not be loaded — Hamster is unreachable. Reload to retry.'
+      )
     } finally {
       setLoading(false)
     }
@@ -68,10 +71,14 @@ export default function PlaybackSettingsPage() {
         setSettings(data)
         toast.success('Playback settings updated')
       } else {
-        toast.error('Failed to update settings')
+        toast.error(
+          'Transcoding settings not saved — the server rejected the change. Check the server log and try again.'
+        )
       }
     } catch (error) {
-      toast.error('Failed to update settings')
+      toast.error(
+        'Transcoding settings not saved — Hamster is unreachable. Check the server and try again.'
+      )
     } finally {
       setSaving(false)
     }
@@ -81,79 +88,100 @@ export default function PlaybackSettingsPage() {
     return (
       <AppLayout title="Playback Settings">
         <Head title="Playback Settings" />
-        <div className="text-muted-foreground">Loading...</div>
+        <div className="max-w-2xl space-y-6">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-3 w-72" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-2/3" />
+            </CardContent>
+          </Card>
+        </div>
       </AppLayout>
     )
   }
+
+  const hardwareEnabled = settings?.transcoding.useHardwareAcceleration ?? false
+  const detected = settings?.availableHardwareAccel ?? []
 
   return (
     <AppLayout title="Playback Settings">
       <Head title="Playback Settings" />
 
-      <div className="space-y-6">
+      <div className="max-w-2xl space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Video Transcoding</CardTitle>
             <CardDescription>
-              Configure how videos with incompatible audio codecs (AC3, DTS, TrueHD) are transcoded
-              for browser playback.
+              How Hamster handles files whose audio a browser cannot play natively — AC3, DTS and
+              TrueHD. The video stream is copied untouched; only the audio is re-encoded to AAC.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Hardware Acceleration Toggle */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="hw-accel">Hardware Acceleration</Label>
-                <p className="text-sm text-muted-foreground">
-                  Use GPU for faster video processing when seeking
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 space-y-1">
+                <Label htmlFor="hw-accel">Hardware acceleration</Label>
+                <p className="text-xs text-muted-foreground">
+                  Use the GPU to demux video, which speeds up seeking in large 4K HEVC files.
+                  Experimental — some files may stutter or fail to play.
                 </p>
               </div>
               <Switch
                 id="hw-accel"
-                checked={settings?.transcoding.useHardwareAcceleration ?? false}
+                checked={hardwareEnabled}
                 onCheckedChange={(checked) => updateSettings({ useHardwareAcceleration: checked })}
                 disabled={saving}
               />
             </div>
 
             {/* Hardware Acceleration Type */}
-            {settings?.transcoding.useHardwareAcceleration && (
-              <div className="space-y-2">
-                <Label htmlFor="hw-type">Acceleration Type</Label>
-                <Select
-                  value={settings?.transcoding.hardwareAccelType ?? 'auto'}
-                  onValueChange={(value) =>
-                    updateSettings({
-                      hardwareAccelType: value as TranscodingSettings['hardwareAccelType'],
-                    })
-                  }
-                  disabled={saving}
-                >
-                  <SelectTrigger className="w-64">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectItem value="auto">Auto-detect (Recommended)</SelectItem>
-                    <SelectItem value="videotoolbox">VideoToolbox (macOS)</SelectItem>
-                    <SelectItem value="cuda">CUDA (NVIDIA)</SelectItem>
-                    <SelectItem value="qsv">Quick Sync (Intel)</SelectItem>
-                    <SelectItem value="vaapi">VAAPI (Linux)</SelectItem>
-                    <SelectItem value="none">None (CPU only)</SelectItem>
-                  </SelectPopup>
-                </Select>
+            {hardwareEnabled && (
+              <div className="space-y-6 border-t border-border pt-6">
+                <div className="space-y-2">
+                  <Label htmlFor="hw-type">Acceleration type</Label>
+                  <Select
+                    value={settings?.transcoding.hardwareAccelType ?? 'auto'}
+                    onValueChange={(value) =>
+                      updateSettings({
+                        hardwareAccelType: value as TranscodingSettings['hardwareAccelType'],
+                      })
+                    }
+                    disabled={saving}
+                  >
+                    <SelectTrigger id="hw-type" className="w-64">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value="auto">Auto-detect (Recommended)</SelectItem>
+                      <SelectItem value="videotoolbox">VideoToolbox (macOS)</SelectItem>
+                      <SelectItem value="cuda">CUDA (NVIDIA)</SelectItem>
+                      <SelectItem value="qsv">Quick Sync (Intel)</SelectItem>
+                      <SelectItem value="vaapi">VAAPI (Linux)</SelectItem>
+                      <SelectItem value="none">None (CPU only)</SelectItem>
+                    </SelectPopup>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Auto-detect picks the first backend this machine reports.
+                  </p>
+                </div>
 
                 {/* Available Hardware */}
-                <div className="pt-2">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Detected hardware acceleration:
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Detected on this machine
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {settings?.availableHardwareAccel.length === 0 ? (
-                      <Badge variant="outline" className="text-muted-foreground">
-                        None available
-                      </Badge>
+                    {detected.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No GPU backend detected. Playback falls back to the CPU, which still works
+                        but seeks more slowly.
+                      </p>
                     ) : (
-                      settings?.availableHardwareAccel.map((hw) => (
+                      detected.map((hw) => (
                         <Badge key={hw} variant="secondary">
                           {hwAccelLabels[hw] || hw}
                         </Badge>
@@ -163,21 +191,26 @@ export default function PlaybackSettingsPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
 
-            {/* Info Box */}
-            <div className="rounded-lg border bg-muted/50 p-4 mt-4">
-              <h4 className="font-medium mb-2">About Transcoding</h4>
-              <p className="text-sm text-muted-foreground">
-                Video transcoding is only used when the source file has audio codecs that browsers
-                cannot play natively (such as AC3, DTS, or TrueHD commonly found in Blu-ray rips).
-                The video stream is copied without re-encoding, only the audio is transcoded to AAC.
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                <strong>Hardware acceleration</strong> can speed up seeking in large files (like 4K
-                HEVC content) by using your GPU for video demuxing. Note: This is experimental and
-                may cause playback issues with some files.
-              </p>
-            </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>When transcoding runs</CardTitle>
+            <CardDescription>
+              What triggers a transcode, and what it costs. Nothing here is configurable.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              A transcode starts only when the source file carries an audio codec the browser cannot
+              decode — typically AC3, DTS or TrueHD from a Blu-ray rip. Everything else streams
+              directly from disk.
+            </p>
+            <p>
+              The video stream is remuxed, never re-encoded, so picture quality is unchanged and CPU
+              cost stays low. Only the audio track is converted to AAC.
+            </p>
           </CardContent>
         </Card>
       </div>

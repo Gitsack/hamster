@@ -32,8 +32,7 @@ export function StreamingProviderLoader({ fadeOut = false }: { fadeOut?: boolean
   // Two arc segments per ring — inner rotates clockwise, outer counter-clockwise
   return (
     <div
-      className={`h-5 w-5 rounded-sm overflow-hidden flex items-center justify-center ${fadeOut ? 'streaming-fade-out' : 'streaming-fade-in'}`}
-      style={{ backgroundColor: 'oklch(0.15 0.06 277 / 0.6)' }}
+      className={`h-5 w-5 rounded-sm overflow-hidden flex items-center justify-center bg-black/60 ring-1 ring-black/40 ${fadeOut ? 'streaming-fade-out' : 'streaming-fade-in'}`}
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
         {/* Inner ring (r=4) — two 120° arcs with 60° gaps, rotates clockwise */}
@@ -180,28 +179,29 @@ export function MediaTeaser({
           <img
             src={posterUrl!}
             alt={title}
-            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+            className="w-full h-full object-cover"
             onError={handleImageError}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <HugeiconsIcon
               icon={IconComponent}
-              className={`${iconSize} text-muted-foreground/30`}
+              aria-hidden="true"
+              className={`${iconSize} text-muted-foreground/50`}
             />
           </div>
         )}
         {/* Genre badge */}
         {genres && genres.length > 0 && (
           <Badge
-            className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-black/40 backdrop-blur-sm text-white/90 border-0"
+            className="absolute top-2 left-2 rounded-sm text-[10px] font-medium tracking-[0.01em] px-1.5 py-0.5 bg-black/60 text-white border-0 ring-1 ring-black/40"
             variant="secondary"
           >
             {genres[0].toUpperCase()}
           </Badge>
         )}
         {/* Hover gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-150 ease-out pointer-events-none" />
         {/* Status badge */}
         <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
           <CardStatusBadge
@@ -229,11 +229,11 @@ export function MediaTeaser({
                 src={provider.logoUrl}
                 alt={provider.name}
                 title={provider.name}
-                className="h-5 w-5 rounded-sm ring-1 ring-black/40 shadow-sm"
+                className="h-5 w-5 rounded-sm ring-1 ring-black/40"
               />
             ))}
             {extraCount > 0 && (
-              <span className="text-[9px] font-medium text-white bg-black/50 rounded-sm px-1 py-0.5 ring-1 ring-black/40 ml-0.5">
+              <span className="text-[10px] font-medium leading-3.5 tracking-[0.01em] tabular-nums text-white bg-black/60 rounded-sm px-1 py-0.5 ring-1 ring-black/40 ml-0.5">
                 +{extraCount}
               </span>
             )}
@@ -246,20 +246,20 @@ export function MediaTeaser({
                 src={provider.logoUrl}
                 alt={provider.name}
                 title={provider.name}
-                className="h-5 w-5 rounded-sm ring-1 ring-black/40 shadow-sm"
+                className="h-5 w-5 rounded-sm ring-1 ring-black/40"
               />
             ))}
             {extraCount > 0 && (
-              <span className="text-[9px] font-medium text-white bg-black/50 rounded-sm px-1 py-0.5 ring-1 ring-black/40 ml-0.5">
+              <span className="text-[10px] font-medium leading-3.5 tracking-[0.01em] tabular-nums text-white bg-black/60 rounded-sm px-1 py-0.5 ring-1 ring-black/40 ml-0.5">
                 +{extraCount}
               </span>
             )}
           </div>
         ) : null}
         {/* Hover info */}
-        <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 ease-out">
           <p className={`text-white ${titleSize} font-medium line-clamp-2`}>{title}</p>
-          {year ? <p className={`text-white/70 ${yearSize}`}>{year}</p> : null}
+          {year ? <p className={`text-white/70 tabular-nums ${yearSize}`}>{year}</p> : null}
         </div>
       </div>
     </div>

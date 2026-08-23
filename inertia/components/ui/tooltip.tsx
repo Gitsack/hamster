@@ -65,7 +65,7 @@ function TooltipContent({
         <BaseTooltip.Popup
           data-slot="tooltip-content"
           className={cn(
-            'bg-foreground text-background z-50 w-fit rounded-md px-3 py-1.5 text-xs text-balance',
+            'bg-foreground text-background z-50 w-fit rounded-md px-2.5 py-1.5 text-xs shadow-lg text-balance',
             className
           )}
           {...props}

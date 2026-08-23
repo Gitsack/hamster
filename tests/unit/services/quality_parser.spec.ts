@@ -116,6 +116,51 @@ test.group('quality_parser | parseVideoQuality - source', () => {
     assert.equal(result.source, 'CAM')
   })
 
+  test('detects HDTS as CAM', ({ assert }) => {
+    // Real release that was repeatedly grabbed against a profile disallowing CAM,
+    // because HDTS matched no source branch and scored as an acceptable unknown.
+    const result = parseVideoQuality('Spider.Man.Brand.New.Day.2026.1080p.HDTS.DD2.0.x264-PTM')
+    assert.equal(result.source, 'CAM')
+  })
+
+  test('detects HDTC, TELESYNC, TELECINE and screeners as CAM', ({ assert }) => {
+    assert.equal(parseVideoQuality('Movie.Title.2024.1080p.HDTC.x264').source, 'CAM')
+    assert.equal(parseVideoQuality('Supergirl.2026.1080p.TELESYNC.x264').source, 'CAM')
+    assert.equal(parseVideoQuality('Movie.Title.2024.TELECINE.x264').source, 'CAM')
+    assert.equal(parseVideoQuality('Movie.Title.2024.DVDSCR.x264').source, 'CAM')
+    assert.equal(parseVideoQuality('Movie.Title.2024.CAMRIP.x264').source, 'CAM')
+  })
+
+  test('detects junk sources in underscore-separated titles', ({ assert }) => {
+    // Underscore is a word character, so \b-anchored patterns do not match
+    // around it. This exact release was grabbed against a CAM-disallowing
+    // profile because of it.
+    assert.equal(
+      parseVideoQuality('Spider-Man_Brand_New_Day_2026_1080p_HDTS_DD2_0_H_264-GP-M-NLsubs').source,
+      'CAM'
+    )
+    assert.equal(parseVideoQuality('Movie_Title_2024_1080p_TELESYNC_x264').source, 'CAM')
+  })
+
+  test('parses ordinary sources in underscore-separated titles', ({ assert }) => {
+    assert.equal(parseVideoQuality('Movie_Title_2024_1080p_BluRay_x264-GRP').source, 'BluRay')
+    assert.equal(parseVideoQuality('Show_S01E01_2160p_WEB-DL_x265').source, 'WEB')
+    assert.equal(parseVideoQuality('Movie_Title_2024_REMUX_1080p').source, 'BluRay')
+  })
+
+  test('a junk marker outranks a resolution claim', ({ assert }) => {
+    const result = parseVideoQuality('Movie.Title.2026.1080p.HDTS.x264')
+    assert.equal(result.source, 'CAM')
+    assert.equal(result.resolution, '1080p')
+  })
+
+  test('does not misread legitimate sources as CAM', ({ assert }) => {
+    assert.equal(parseVideoQuality('Movie.Title.2024.1080p.BluRay.x264').source, 'BluRay')
+    assert.equal(parseVideoQuality('Show.S01E01.2160p.WEB-DL.x265').source, 'WEB')
+    assert.equal(parseVideoQuality('Show.S01E01.720p.HDTV.x264').source, 'HDTV')
+    assert.equal(parseVideoQuality('Movie.Title.2024.DVDRip.x264').source, 'DVD')
+  })
+
   test('returns null for unknown source', ({ assert }) => {
     const result = parseVideoQuality('Movie.Title.2024.1080p')
     assert.isNull(result.source)

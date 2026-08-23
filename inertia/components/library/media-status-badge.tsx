@@ -29,15 +29,40 @@ interface MediaStatusBadgeProps {
 }
 
 /**
- * Unified status badge component for all media types.
+ * Unified status badge component for all media types — the system's signature control.
  *
- * Design principles (based on TV Shows reference):
- * - Downloaded: Green badge, not interactive (can't unrequest downloaded items)
- * - Requested: Yellow badge, hover shows "Unrequest" with destructive color
- * - Downloading: Blue badge with progress %, hover shows "Cancel"
- * - Importing: Purple badge with pulse animation, hover shows "Cancel"
- * - None: Shows "Request" button (outline variant)
+ * Colour is drawn exclusively from the named status ramp (theme-independent, white text):
+ * - Downloaded: Complete Green — the file exists on disk
+ * - Downloading: Transfer Cyan, carrying a live readout percentage
+ * - Importing: Transit Magenta, icon pulsing while the file is moved and renamed
+ * - Requested: Queued Amber — monitored, waiting for a release
+ * - None: the Request affordance (outline button, or a 20px icon button on artwork)
+ *
+ * The badge IS the control: where the action is reversible, hovering swaps both the icon
+ * and the label in place and the fill switches to Alarm Red to name the consequence.
+ * It never grows a second button — state and reversal occupy the same pixels.
  */
+
+/**
+ * Shell shared by every interactive state so hover, motion and text colour stay identical.
+ * Applied to a real `<button>` (via `Badge asChild`) so the control is reachable by keyboard
+ * and inherits the focus ring from `badgeVariants`. Every ramp fill carries white text in
+ * both themes, including the Alarm Red hover fill.
+ */
+const interactiveBadge =
+  'group gap-1 cursor-pointer text-white border-transparent transition-colors duration-150 ease-out'
+
+/** tiny = 20px icon-only (poster overlays) · sm = 24px (grids, tables) · default = 28px (detail pages) */
+function badgeSizeClasses(size: 'default' | 'sm' | 'tiny') {
+  if (size === 'tiny') return 'h-5 w-5 p-0'
+  if (size === 'sm') return 'h-6 px-2 text-xs'
+  return 'h-7 px-2 text-xs'
+}
+
+function badgeIconClasses(size: 'default' | 'sm' | 'tiny') {
+  return size === 'default' ? 'h-3.5 w-3.5' : 'h-3 w-3'
+}
+
 export function MediaStatusBadge({
   status,
   progress = 0,
@@ -47,11 +72,9 @@ export function MediaStatusBadge({
   size = 'default',
   showRequestButton = true,
 }: MediaStatusBadgeProps) {
-  const sizeClasses =
-    size === 'tiny' ? 'h-5 text-[10px] px-1.5' : size === 'sm' ? 'h-6 text-xs' : 'h-7 text-sm'
-
-  const iconSize = size === 'tiny' ? 'h-2.5 w-2.5' : size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'
-  const buttonIconSize = size === 'tiny' ? 'h-2.5 w-2.5' : size === 'sm' ? 'h-3 w-3' : 'h-4 w-4'
+  const sizeClasses = badgeSizeClasses(size)
+  const iconSize = badgeIconClasses(size)
+  const buttonIconSize = size === 'default' ? 'h-4 w-4' : 'h-3 w-3'
   const showText = size !== 'tiny'
 
   // Loading state while toggling
@@ -62,168 +85,203 @@ export function MediaStatusBadge({
         className={cn('bg-muted text-muted-foreground gap-1', sizeClasses, className)}
       >
         <Spinner className={iconSize} />
-        {showText && <span>{status === 'none' ? 'Requesting...' : 'Unrequesting...'}</span>}
+        {showText && <span>{status === 'none' ? 'Requesting…' : 'Unrequesting…'}</span>}
       </Badge>
     )
   }
 
-  // Downloaded - Green, can remove (hover shows destructive)
+  // Downloaded — Complete Green, hover reveals the destructive consequence
   if (status === 'downloaded') {
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Badge
+              asChild
               variant="default"
               className={cn(
-                'gap-1 cursor-pointer bg-green-600 hover:bg-destructive text-white transition-colors group',
+                interactiveBadge,
+                'bg-status-complete hover:bg-status-failed',
                 sizeClasses,
                 className
               )}
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleRequest?.()
-              }}
             >
-              <HugeiconsIcon
-                icon={CheckmarkCircle01Icon}
-                className={cn(iconSize, 'group-hover:hidden')}
-              />
-              <HugeiconsIcon
-                icon={Delete02Icon}
-                className={cn(iconSize, 'hidden group-hover:block')}
-              />
-              {showText && (
-                <>
-                  <span className="group-hover:hidden">Downloaded</span>
-                  <span className="hidden group-hover:inline">Remove</span>
-                </>
-              )}
+              <button
+                type="button"
+                aria-label="Downloaded — remove from library"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleRequest?.()
+                }}
+              >
+                <HugeiconsIcon
+                  icon={CheckmarkCircle01Icon}
+                  className={cn(iconSize, 'group-hover:hidden')}
+                />
+                <HugeiconsIcon
+                  icon={Delete02Icon}
+                  className={cn(iconSize, 'hidden group-hover:block')}
+                />
+                {showText && (
+                  <>
+                    <span className="group-hover:hidden">Downloaded</span>
+                    <span className="hidden group-hover:inline">Remove</span>
+                  </>
+                )}
+              </button>
             </Badge>
           </TooltipTrigger>
-          <TooltipContent>Click to delete file and remove from library</TooltipContent>
+          <TooltipContent>
+            Deletes the file from disk and removes it from the library
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     )
   }
 
-  // Downloading - Blue with progress, can cancel
+  // Downloading — Transfer Cyan with a live readout percentage, cancellable
   if (status === 'downloading') {
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Badge
+              asChild
               variant="default"
               className={cn(
-                'gap-1 cursor-pointer bg-blue-600 hover:bg-destructive text-white transition-colors group',
+                interactiveBadge,
+                'bg-status-transfer hover:bg-status-failed',
                 sizeClasses,
                 className
               )}
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleRequest?.()
-              }}
             >
-              <HugeiconsIcon icon={Download01Icon} className={cn(iconSize, 'group-hover:hidden')} />
-              <HugeiconsIcon
-                icon={Cancel01Icon}
-                className={cn(iconSize, 'hidden group-hover:block')}
-              />
-              {showText && (
-                <>
-                  <span className="group-hover:hidden">{Math.round(progress)}%</span>
-                  <span className="hidden group-hover:inline">Cancel</span>
-                </>
-              )}
+              <button
+                type="button"
+                aria-label={`Downloading, ${Math.round(progress)}% — cancel this download`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleRequest?.()
+                }}
+              >
+                <HugeiconsIcon
+                  icon={Download01Icon}
+                  className={cn(iconSize, 'group-hover:hidden')}
+                />
+                <HugeiconsIcon
+                  icon={Cancel01Icon}
+                  className={cn(iconSize, 'hidden group-hover:block')}
+                />
+                {showText && (
+                  <>
+                    <span className="readout group-hover:hidden">{Math.round(progress)}%</span>
+                    <span className="hidden group-hover:inline">Cancel</span>
+                  </>
+                )}
+              </button>
             </Badge>
           </TooltipTrigger>
-          <TooltipContent>Click to cancel download</TooltipContent>
+          <TooltipContent>Cancels the download and removes it from the queue</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     )
   }
 
-  // Importing - Purple with animation, can cancel
+  // Importing — Transit Magenta, the one state that animates
   if (status === 'importing') {
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Badge
+              asChild
               variant="default"
               className={cn(
-                'gap-1 cursor-pointer bg-purple-600 hover:bg-destructive text-white transition-colors group',
+                interactiveBadge,
+                'bg-status-transit hover:bg-status-failed',
                 sizeClasses,
                 className
               )}
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleRequest?.()
-              }}
             >
-              <HugeiconsIcon
-                icon={PackageMovingIcon}
-                className={cn(iconSize, 'group-hover:hidden animate-pulse')}
-              />
-              <HugeiconsIcon
-                icon={Cancel01Icon}
-                className={cn(iconSize, 'hidden group-hover:block')}
-              />
-              {showText && (
-                <>
-                  <span className="group-hover:hidden">Importing</span>
-                  <span className="hidden group-hover:inline">Cancel</span>
-                </>
-              )}
+              <button
+                type="button"
+                aria-label="Importing — cancel this import"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleRequest?.()
+                }}
+              >
+                <HugeiconsIcon
+                  icon={PackageMovingIcon}
+                  className={cn(iconSize, 'group-hover:hidden animate-pulse')}
+                />
+                <HugeiconsIcon
+                  icon={Cancel01Icon}
+                  className={cn(iconSize, 'hidden group-hover:block')}
+                />
+                {showText && (
+                  <>
+                    <span className="group-hover:hidden">Importing</span>
+                    <span className="hidden group-hover:inline">Cancel</span>
+                  </>
+                )}
+              </button>
             </Badge>
           </TooltipTrigger>
-          <TooltipContent>Processing download, click to cancel</TooltipContent>
+          <TooltipContent>
+            Moving and renaming the finished download — cancel to stop it
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     )
   }
 
-  // Requested - Yellow, can unrequest
+  // Requested — Queued Amber, nothing is wrong and nothing has happened yet
   if (status === 'requested') {
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Badge
+              asChild
               variant="secondary"
               className={cn(
-                'gap-1 cursor-pointer bg-yellow-600 hover:bg-destructive text-white transition-colors group',
+                interactiveBadge,
+                'bg-status-queued hover:bg-status-failed',
                 sizeClasses,
                 className
               )}
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleRequest?.()
-              }}
             >
-              <HugeiconsIcon icon={Clock01Icon} className={cn(iconSize, 'group-hover:hidden')} />
-              <HugeiconsIcon
-                icon={Cancel01Icon}
-                className={cn(iconSize, 'hidden group-hover:block')}
-              />
-              {showText && (
-                <>
-                  <span className="group-hover:hidden">Requested</span>
-                  <span className="hidden group-hover:inline">Unrequest</span>
-                </>
-              )}
+              <button
+                type="button"
+                aria-label="Requested — stop monitoring"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleRequest?.()
+                }}
+              >
+                <HugeiconsIcon icon={Clock01Icon} className={cn(iconSize, 'group-hover:hidden')} />
+                <HugeiconsIcon
+                  icon={Cancel01Icon}
+                  className={cn(iconSize, 'hidden group-hover:block')}
+                />
+                {showText && (
+                  <>
+                    <span className="group-hover:hidden">Requested</span>
+                    <span className="hidden group-hover:inline">Unrequest</span>
+                  </>
+                )}
+              </button>
             </Badge>
           </TooltipTrigger>
-          <TooltipContent>Click to unrequest</TooltipContent>
+          <TooltipContent>Stops monitoring — no release will be grabbed</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     )
   }
 
-  // None - Show Request button
+  // None — Show Request affordance
   if (status === 'none' && showRequestButton) {
-    // Tiny size: icon-only button
+    // Tiny size: 20px icon-only button, matching the tiny badge footprint on artwork
     if (size === 'tiny') {
       return (
         <TooltipProvider>
@@ -232,13 +290,14 @@ export function MediaStatusBadge({
               <Button
                 variant="secondary"
                 size="icon"
+                aria-label="Add to library"
                 className={cn('h-5 w-5', className)}
                 onClick={(e) => {
                   e.stopPropagation()
                   onToggleRequest?.()
                 }}
               >
-                <HugeiconsIcon icon={Add01Icon} className={buttonIconSize} />
+                <HugeiconsIcon icon={Add01Icon} className="h-3 w-3" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Add to library</TooltipContent>
@@ -251,13 +310,13 @@ export function MediaStatusBadge({
       <Button
         variant="outline"
         size="sm"
-        className={cn('h-7 px-2 text-xs', size === 'sm' && 'h-6', className)}
+        className={cn('gap-1 px-2 text-xs', size === 'sm' ? 'h-6' : 'h-7', className)}
         onClick={(e) => {
           e.stopPropagation()
           onToggleRequest?.()
         }}
       >
-        <HugeiconsIcon icon={Add01Icon} className={cn(buttonIconSize, 'mr-1')} />
+        <HugeiconsIcon icon={Add01Icon} className={buttonIconSize} />
         Request
       </Button>
     )
@@ -324,9 +383,8 @@ export function CardStatusBadge({
     )
   }
 
-  const sizeClasses =
-    size === 'tiny' ? 'h-5 text-[10px] px-1.5' : size === 'sm' ? 'h-6 text-xs' : 'h-7 text-sm'
-  const iconSize = size === 'tiny' ? 'h-2.5 w-2.5' : size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'
+  const sizeClasses = badgeSizeClasses(size)
+  const iconSize = badgeIconClasses(size)
   const showText = size !== 'tiny'
 
   // Loading state
@@ -337,13 +395,13 @@ export function CardStatusBadge({
         className={cn('bg-muted text-muted-foreground gap-1', sizeClasses, className)}
       >
         <Spinner className={iconSize} />
-        {showText && <span>Requesting...</span>}
+        {showText && <span>Requesting…</span>}
       </Badge>
     )
   }
 
   // None - Show Request button (with optional hover effect)
-  // Tiny size: icon-only button
+  // Tiny size: 20px icon-only button on artwork
   if (size === 'tiny') {
     return (
       <TooltipProvider>
@@ -352,9 +410,10 @@ export function CardStatusBadge({
             <Button
               variant="secondary"
               size="icon"
+              aria-label="Add to library"
               className={cn(
                 'h-5 w-5',
-                showOnHover && 'opacity-0 group-hover:opacity-100 transition-opacity',
+                showOnHover && 'opacity-0 group-hover:opacity-100 transition-opacity duration-150',
                 className
               )}
               onClick={(e) => {
@@ -373,12 +432,12 @@ export function CardStatusBadge({
 
   return (
     <Button
-      variant="secondary"
+      variant="outline"
       size="sm"
       className={cn(
-        'h-7 px-2 text-xs',
-        size === 'sm' && 'h-6',
-        showOnHover && 'opacity-0 group-hover:opacity-100 transition-opacity',
+        'gap-1 px-2 text-xs',
+        size === 'sm' ? 'h-6' : 'h-7',
+        showOnHover && 'opacity-0 group-hover:opacity-100 transition-opacity duration-150',
         className
       )}
       onClick={(e) => {
@@ -386,7 +445,7 @@ export function CardStatusBadge({
         onToggleRequest?.()
       }}
     >
-      <HugeiconsIcon icon={Add01Icon} className={cn(iconSize, 'mr-1')} />
+      <HugeiconsIcon icon={Add01Icon} className={iconSize} />
       Request
     </Button>
   )

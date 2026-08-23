@@ -12,6 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +34,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
+import { MediaHero } from '@/components/media-hero'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
@@ -299,6 +301,8 @@ export default function BookDetail() {
     }
   }
 
+  // One byte formatter for the whole page so the release table and the file row
+  // line up under the Readout Rule.
   const formatSize = (bytes: number) => {
     if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`
     if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} MB`
@@ -319,19 +323,13 @@ export default function BookDetail() {
     setDeleteFileDialogOpen(false)
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
   if (loading) {
     return (
       <AppLayout title="Loading...">
         <Head title="Loading..." />
         <div className="space-y-6">
-          <div className="flex gap-6">
-            <Skeleton className="h-72 w-48 rounded-lg" />
+          <div className="flex gap-4 md:gap-6">
+            <Skeleton className="w-28 sm:w-40 md:w-48 aspect-[2/3] rounded-lg shrink-0" />
             <div className="flex-1 space-y-4">
               <Skeleton className="h-8 w-1/3" />
               <Skeleton className="h-4 w-1/4" />
@@ -348,9 +346,11 @@ export default function BookDetail() {
     return (
       <AppLayout title="Not Found">
         <Head title="Not Found" />
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Book not found</p>
-        </div>
+        <EmptyState
+          icon={<HugeiconsIcon icon={Book01Icon} />}
+          title="Book not found"
+          message="This book is no longer in your library — it may have been removed. Head back to the book library to pick another."
+        />
       </AppLayout>
     )
   }
@@ -376,9 +376,9 @@ export default function BookDetail() {
                 <TooltipTrigger asChild>
                   <Button onClick={downloadBook} disabled={downloading}>
                     {downloading ? (
-                      <Spinner className="md:mr-2" />
+                      <Spinner />
                     ) : (
-                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
+                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
                     )}
                     <span className="hidden md:inline">
                       {downloading ? 'Downloading...' : 'Download'}
@@ -394,9 +394,9 @@ export default function BookDetail() {
               <TooltipTrigger asChild>
                 <Button variant="outline" onClick={searchReleases} disabled={searching}>
                   {searching ? (
-                    <Spinner className="md:mr-2" />
+                    <Spinner />
                   ) : (
-                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
                   )}
                   <span className="hidden md:inline">
                     {searching ? 'Searching...' : 'Browse releases'}
@@ -408,7 +408,7 @@ export default function BookDetail() {
           </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" aria-label="More actions">
                 <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -416,7 +416,7 @@ export default function BookDetail() {
               <DropdownMenuItem onClick={enrichBook} disabled={enriching}>
                 <HugeiconsIcon
                   icon={Search01Icon}
-                  className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                  className={`h-4 w-4 ${enriching ? 'animate-spin' : ''}`}
                 />
                 {enriching ? 'Refreshing...' : 'Refresh metadata'}
               </DropdownMenuItem>
@@ -425,7 +425,7 @@ export default function BookDetail() {
                 className="text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
                 Remove from Library
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -436,122 +436,106 @@ export default function BookDetail() {
       <Head title={book.title} />
 
       <div className="space-y-6">
-        {/* Book header */}
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Book cover */}
-          <div className="w-full md:w-48 aspect-[2/3] md:aspect-auto md:h-72 bg-muted rounded-lg overflow-hidden flex-shrink-0">
-            {book.coverUrl ? (
-              <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon icon={Book01Icon} className="h-16 w-16 text-muted-foreground/50" />
-              </div>
-            )}
-          </div>
-
-          {/* Book info */}
-          <div className="flex-1 space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl font-bold">{book.title}</h1>
-              </div>
-              {book.author && (
-                <Link
-                  href={`/author/${book.author.id}`}
-                  className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
-                >
-                  <HugeiconsIcon icon={UserIcon} className="h-4 w-4" />
-                  {book.author.name}
-                </Link>
-              )}
-            </div>
-
-            {/* Status */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {(() => {
-                const { status, progress } = getBookStatus()
-                return (
-                  <MediaStatusBadge
-                    status={status}
-                    progress={progress}
-                    isToggling={toggling}
-                    onToggleRequest={toggleWanted}
-                  />
-                )
-              })()}
-            </div>
-
-            {/* Meta info */}
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        <MediaHero
+          title={book.title}
+          posterUrl={book.coverUrl}
+          posterFallback={
+            <HugeiconsIcon icon={Book01Icon} className="h-16 w-16 text-muted-foreground/50" />
+          }
+          overview={book.overview}
+        >
+          <div>
+            <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-[-0.01em]">{book.title}</h1>
               {book.releaseDate && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
-                  {book.releaseDate.split('-')[0]}
-                </div>
+                <span className="readout text-sm text-muted-foreground">
+                  ({book.releaseDate.split('-')[0]})
+                </span>
               )}
-              {book.pageCount && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={Book01Icon} className="h-4 w-4" />
-                  {book.pageCount} pages
-                </div>
-              )}
-              {book.publisher && <div className="text-muted-foreground">{book.publisher}</div>}
             </div>
+            {book.author && (
+              <Link
+                href={`/author/${book.author.id}`}
+                className="inline-flex items-center gap-1 rounded-sm text-sm text-muted-foreground underline-offset-4 transition-colors duration-150 hover:text-primary hover:underline outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+              >
+                <HugeiconsIcon icon={UserIcon} className="h-4 w-4" />
+                {book.author.name}
+              </Link>
+            )}
+          </div>
 
-            {/* Series info */}
+          {/* Status */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {(() => {
+              const { status, progress } = getBookStatus()
+              return (
+                <MediaStatusBadge
+                  status={status}
+                  progress={progress}
+                  isToggling={toggling}
+                  onToggleRequest={toggleWanted}
+                />
+              )
+            })()}
+          </div>
+
+          {/* Meta info */}
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {book.releaseDate && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
+                <span className="readout">{book.releaseDate}</span>
+              </div>
+            )}
+            {book.pageCount && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <HugeiconsIcon icon={Book01Icon} className="h-4 w-4" />
+                <span className="readout">{book.pageCount}</span> pages
+              </div>
+            )}
+            {book.publisher && <div className="text-muted-foreground">{book.publisher}</div>}
             {book.seriesName && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Series: </span>
-                <span>{book.seriesName}</span>
-                {book.seriesPosition && (
-                  <span className="text-muted-foreground"> #{book.seriesPosition}</span>
-                )}
-              </div>
-            )}
-
-            {/* ISBN */}
-            {(book.isbn || book.isbn13) && (
-              <div className="text-sm text-muted-foreground">
-                {book.isbn13 && <span>ISBN-13: {book.isbn13}</span>}
-                {book.isbn13 && book.isbn && <span> • </span>}
-                {book.isbn && <span>ISBN-10: {book.isbn}</span>}
-              </div>
-            )}
-
-            {/* Genres */}
-            {book.genres && book.genres.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {book.genres.slice(0, 5).map((genre, i) => (
-                  <Badge key={i} variant="outline">
-                    {genre}
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            {/* Quality and folder info */}
-            {(book.qualityProfile || book.rootFolder) && (
-              <div className="flex flex-wrap gap-2 text-sm">
-                {book.qualityProfile && (
-                  <Badge variant="secondary">{book.qualityProfile.name}</Badge>
-                )}
-                {book.rootFolder && <Badge variant="secondary">{book.rootFolder.path}</Badge>}
+              <div className="text-muted-foreground">
+                {book.seriesName}
+                {book.seriesPosition && <span className="readout"> #{book.seriesPosition}</span>}
               </div>
             )}
           </div>
-        </div>
+
+          {/* Identifiers */}
+          {(book.isbn || book.isbn13) && (
+            <div className="readout text-xs text-muted-foreground">
+              {book.isbn13 && <span>ISBN-13 {book.isbn13}</span>}
+              {book.isbn13 && book.isbn && <span> • </span>}
+              {book.isbn && <span>ISBN-10 {book.isbn}</span>}
+            </div>
+          )}
+
+          {/* Genres */}
+          {book.genres && book.genres.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {book.genres.slice(0, 5).map((genre, i) => (
+                <Badge key={i} variant="outline">
+                  {genre}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {/* Quality and folder info */}
+          {(book.qualityProfile || book.rootFolder) && (
+            <div className="flex flex-wrap gap-2 text-sm">
+              {book.qualityProfile && <Badge variant="secondary">{book.qualityProfile.name}</Badge>}
+              {book.rootFolder && (
+                <Badge variant="secondary" className="readout">
+                  {book.rootFolder.path}
+                </Badge>
+              )}
+            </div>
+          )}
+        </MediaHero>
 
         {activeDownload && <DownloadProgressCard downloads={[activeDownload]} />}
-
-        {/* Overview */}
-        {book.overview && (
-          <Card>
-            <CardContent className="pt-6">
-              <h2 className="font-semibold mb-2">Overview</h2>
-              <p className="text-muted-foreground whitespace-pre-line">{book.overview}</p>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Search results */}
         {searchResults.length > 0 && (
@@ -568,56 +552,58 @@ export default function BookDetail() {
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Release</TableHead>
-                      <TableHead className="w-32">Indexer</TableHead>
-                      <TableHead className="w-24">Quality</TableHead>
-                      <TableHead className="w-24 text-right">Size</TableHead>
-                      <TableHead className="w-24 text-right">Grabs</TableHead>
-                      <TableHead className="w-24">
-                        <span className="sr-only">Actions</span>
-                      </TableHead>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Release</TableHead>
+                    <TableHead className="w-32">Indexer</TableHead>
+                    <TableHead className="w-24">Quality</TableHead>
+                    <TableHead className="w-24" data-numeric>
+                      Size
+                    </TableHead>
+                    <TableHead className="w-20" data-numeric>
+                      Grabs
+                    </TableHead>
+                    <TableHead className="w-16">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {searchResults.map((result) => (
+                    <TableRow key={result.id}>
+                      <TableCell className="readout max-w-md truncate">{result.title}</TableCell>
+                      <TableCell className="readout text-muted-foreground">
+                        {result.indexer}
+                      </TableCell>
+                      <TableCell>
+                        {result.quality && <Badge variant="outline">{result.quality}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground" data-numeric>
+                        {formatSize(result.size)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground" data-numeric>
+                        {result.grabs ?? result.seeders ?? '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="icon-sm"
+                          variant="outline"
+                          onClick={() => grabRelease(result)}
+                          disabled={grabbing === result.id}
+                          aria-label={`Download ${result.title}`}
+                        >
+                          {grabbing === result.id ? (
+                            <Spinner />
+                          ) : (
+                            <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {searchResults.map((result) => (
-                      <TableRow key={result.id}>
-                        <TableCell className="font-medium max-w-md truncate">
-                          {result.title}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
-                        <TableCell>
-                          {result.quality && <Badge variant="outline">{result.quality}</Badge>}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {formatSize(result.size)}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {result.grabs ?? result.seeders ?? '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => grabRelease(result)}
-                            disabled={grabbing === result.id}
-                            aria-label={`Download ${result.title}`}
-                          >
-                            {grabbing === result.id ? (
-                              <Spinner />
-                            ) : (
-                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         )}
@@ -625,29 +611,31 @@ export default function BookDetail() {
         {/* File info */}
         {book.bookFile && (
           <Card>
-            <CardContent className="pt-6">
-              <h2 className="font-semibold mb-4">File</h2>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted rounded-lg">
+            <CardContent className="space-y-3">
+              <h2 className="text-base font-semibold">File</h2>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-md border border-border p-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <HugeiconsIcon
                     icon={Book01Icon}
-                    className="h-8 w-8 text-muted-foreground flex-shrink-0"
+                    className="h-8 w-8 text-muted-foreground shrink-0"
                   />
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{book.bookFile.path.split('/').pop()}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {book.bookFile.format && `${book.bookFile.format.toUpperCase()} • `}
-                      {formatFileSize(book.bookFile.size)}
+                    <p className="readout text-sm font-medium truncate">
+                      {book.bookFile.path.split('/').pop()}
                     </p>
-                    <p className="text-xs text-muted-foreground/70 truncate">
+                    <p className="readout text-xs text-muted-foreground">
+                      {book.bookFile.format && `${book.bookFile.format.toUpperCase()} • `}
+                      {formatSize(book.bookFile.size)}
+                    </p>
+                    <p className="readout text-xs text-muted-foreground truncate">
                       {book.bookFile.path}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <Button variant="outline" size="sm" asChild>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="outline" size="sm" asChild aria-label="Download">
                     <a href={book.bookFile.downloadUrl} download>
-                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 sm:mr-2" />
+                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
                       <span className="hidden sm:inline">Download</span>
                     </a>
                   </Button>
@@ -656,8 +644,9 @@ export default function BookDetail() {
                     size="sm"
                     className="text-destructive hover:text-destructive"
                     onClick={() => setDeleteFileDialogOpen(true)}
+                    aria-label="Delete"
                   >
-                    <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 sm:mr-2" />
+                    <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
                     <span className="hidden sm:inline">Delete</span>
                   </Button>
                 </div>

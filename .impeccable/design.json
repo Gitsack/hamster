@@ -1,0 +1,435 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-16T00:00:00.000Z",
+  "title": "Design System: Hamster",
+  "extensions": {
+    "colorMeta": {
+      "signal-violet": {
+        "role": "primary",
+        "displayName": "Signal Violet",
+        "canonical": "oklch(0.52 0.27 277)",
+        "darkValue": "oklch(0.65 0.24 277)",
+        "purpose": "The application's own voice: primary action, focus ring, selection, active navigation, links. Never encodes media state.",
+        "tonalRamp": [
+          "oklch(0.18 0.10 277)",
+          "oklch(0.26 0.16 277)",
+          "oklch(0.34 0.21 277)",
+          "oklch(0.43 0.25 277)",
+          "oklch(0.52 0.27 277)",
+          "oklch(0.65 0.24 277)",
+          "oklch(0.80 0.14 277)",
+          "oklch(0.94 0.04 277)"
+        ]
+      },
+      "chassis-black": {
+        "role": "neutral",
+        "displayName": "Chassis Black",
+        "canonical": "oklch(0.141 0.005 285.823)",
+        "purpose": "Primary text in light theme; page background in dark theme.",
+        "tonalRamp": [
+          "oklch(0.141 0.005 285.823)",
+          "oklch(0.21 0.006 285.885)",
+          "oklch(0.274 0.006 286.033)",
+          "oklch(0.42 0.008 286.0)",
+          "oklch(0.552 0.016 285.938)",
+          "oklch(0.705 0.015 286.067)",
+          "oklch(0.92 0.004 286.32)",
+          "oklch(1 0 0)"
+        ]
+      },
+      "panel-graphite": {
+        "role": "neutral",
+        "displayName": "Panel Graphite",
+        "canonical": "oklch(0.21 0.006 285.885)",
+        "purpose": "Card, popover and sidebar surface in dark theme; strong secondary text in light theme.",
+        "tonalRamp": [
+          "oklch(0.141 0.005 285.823)",
+          "oklch(0.21 0.006 285.885)",
+          "oklch(0.274 0.006 286.033)",
+          "oklch(0.42 0.008 286.0)",
+          "oklch(0.552 0.016 285.938)",
+          "oklch(0.705 0.015 286.067)",
+          "oklch(0.92 0.004 286.32)",
+          "oklch(0.985 0 0)"
+        ]
+      },
+      "tray-ash": {
+        "role": "neutral",
+        "displayName": "Tray Ash",
+        "canonical": "oklch(0.967 0.001 286.375)",
+        "darkValue": "oklch(0.274 0.006 286.033)",
+        "purpose": "Muted fills, hover states, secondary buttons, inactive chips.",
+        "tonalRamp": [
+          "oklch(0.20 0.004 286.3)",
+          "oklch(0.274 0.006 286.033)",
+          "oklch(0.38 0.006 286.3)",
+          "oklch(0.50 0.005 286.3)",
+          "oklch(0.63 0.004 286.3)",
+          "oklch(0.78 0.003 286.3)",
+          "oklch(0.90 0.002 286.3)",
+          "oklch(0.967 0.001 286.375)"
+        ]
+      },
+      "readout-grey": {
+        "role": "neutral",
+        "displayName": "Readout Grey",
+        "canonical": "oklch(0.552 0.016 285.938)",
+        "darkValue": "oklch(0.705 0.015 286.067)",
+        "purpose": "Supporting metadata: years, runtimes, paths, timestamps, counts. Must stay readable at 12px.",
+        "tonalRamp": [
+          "oklch(0.20 0.010 286.0)",
+          "oklch(0.30 0.013 286.0)",
+          "oklch(0.40 0.015 286.0)",
+          "oklch(0.475 0.016 286.0)",
+          "oklch(0.552 0.016 285.938)",
+          "oklch(0.705 0.015 286.067)",
+          "oklch(0.85 0.010 286.0)",
+          "oklch(0.95 0.004 286.0)"
+        ]
+      },
+      "seam-light": {
+        "role": "neutral",
+        "displayName": "Seam",
+        "canonical": "oklch(0.92 0.004 286.32)",
+        "darkValue": "oklch(1 0 0 / 10%)",
+        "purpose": "The 1px hairline that does the work shadows would otherwise do: card edges, table rules, header underline, sidebar divider.",
+        "tonalRamp": [
+          "oklch(0.25 0.005 286.3)",
+          "oklch(0.35 0.005 286.3)",
+          "oklch(0.47 0.005 286.3)",
+          "oklch(0.59 0.005 286.3)",
+          "oklch(0.71 0.005 286.3)",
+          "oklch(0.82 0.004 286.3)",
+          "oklch(0.92 0.004 286.32)",
+          "oklch(0.97 0.002 286.3)"
+        ]
+      },
+      "status-complete-green": {
+        "role": "tertiary",
+        "displayName": "Complete Green",
+        "canonical": "oklch(0.55 0.15 152)",
+        "purpose": "Status ramp — the file exists on disk. Theme-independent, always carries white text.",
+        "tonalRamp": [
+          "oklch(0.18 0.05 152)",
+          "oklch(0.27 0.08 152)",
+          "oklch(0.36 0.11 152)",
+          "oklch(0.45 0.13 152)",
+          "oklch(0.55 0.15 152)",
+          "oklch(0.68 0.15 152)",
+          "oklch(0.82 0.11 152)",
+          "oklch(0.94 0.04 152)"
+        ]
+      },
+      "status-transfer-cyan": {
+        "role": "tertiary",
+        "displayName": "Transfer Cyan",
+        "canonical": "oklch(0.55 0.14 228)",
+        "purpose": "Status ramp — actively downloading, paired with a live percentage. Theme-independent.",
+        "tonalRamp": [
+          "oklch(0.18 0.05 228)",
+          "oklch(0.27 0.08 228)",
+          "oklch(0.36 0.10 228)",
+          "oklch(0.45 0.12 228)",
+          "oklch(0.55 0.14 228)",
+          "oklch(0.68 0.13 228)",
+          "oklch(0.82 0.09 228)",
+          "oklch(0.94 0.03 228)"
+        ]
+      },
+      "status-transit-magenta": {
+        "role": "tertiary",
+        "displayName": "Transit Magenta",
+        "canonical": "oklch(0.55 0.19 330)",
+        "purpose": "Status ramp — importing: the download landed and is being moved and renamed. The one state that animates.",
+        "tonalRamp": [
+          "oklch(0.18 0.07 330)",
+          "oklch(0.27 0.11 330)",
+          "oklch(0.36 0.15 330)",
+          "oklch(0.45 0.17 330)",
+          "oklch(0.55 0.19 330)",
+          "oklch(0.68 0.17 330)",
+          "oklch(0.82 0.11 330)",
+          "oklch(0.94 0.04 330)"
+        ]
+      },
+      "status-queued-amber": {
+        "role": "tertiary",
+        "displayName": "Queued Amber",
+        "canonical": "oklch(0.56 0.12 70)",
+        "purpose": "Status ramp — requested and monitored, waiting for a release. Replaces the incumbent bg-yellow-600, which failed white-text contrast at roughly 2.6:1.",
+        "tonalRamp": [
+          "oklch(0.19 0.04 70)",
+          "oklch(0.28 0.07 70)",
+          "oklch(0.37 0.09 70)",
+          "oklch(0.46 0.11 70)",
+          "oklch(0.56 0.12 70)",
+          "oklch(0.70 0.13 70)",
+          "oklch(0.84 0.09 70)",
+          "oklch(0.95 0.03 70)"
+        ]
+      },
+      "alarm-red": {
+        "role": "tertiary",
+        "displayName": "Alarm Red",
+        "canonical": "oklch(0.577 0.245 27.325)",
+        "darkValue": "oklch(0.704 0.191 22.216)",
+        "purpose": "Failure, destructive action, and the hover state of any cancellable status badge. The only status colour that shifts between themes, because it doubles as the destructive UI colour.",
+        "tonalRamp": [
+          "oklch(0.19 0.09 27)",
+          "oklch(0.28 0.14 27)",
+          "oklch(0.37 0.19 27)",
+          "oklch(0.47 0.22 27)",
+          "oklch(0.577 0.245 27.325)",
+          "oklch(0.704 0.191 22.216)",
+          "oklch(0.84 0.11 25)",
+          "oklch(0.95 0.04 25)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page-level titles on library detail views and dashboard sections. Rare — most screens open at Title."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The app header h1 and the dominant heading of a detail view."
+      },
+      "subtitle": {
+        "displayName": "Subtitle",
+        "purpose": "Section headings inside a page, card titles, dialog titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "The working size and the system's centre of gravity: table cells, descriptions, form values, list rows. Prose caps at 65-75ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Metadata, badge text, form labels, column headers, timestamps."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Annotations that sit on artwork: genre chip, tiny status badge, provider overflow counter. Legitimate only over an image. The ramp bottoms out here — 9px and 11px are off-system."
+      },
+      "readout": {
+        "displayName": "Readout",
+        "purpose": "Monospaced tabular figures for every comparable number: byte counts, percentages, durations, bitrates, plus paths, release names and log lines."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay",
+        "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+        "purpose": "Dialogs, dropdown menus, popovers, sheets, toasts. The only resting shadow in the system, and only on surfaces that genuinely leave the plane."
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 3px oklch(0.52 0.27 277 / 0.5)",
+        "purpose": "Keyboard visibility contract, paired with a border shift to Signal Violet. Never removed."
+      },
+      {
+        "name": "poster-ring",
+        "value": "inset 0 0 0 1px rgb(0 0 0 / 0.4)",
+        "purpose": "Keeps a pale provider logo or overlay badge from bleeding into pale artwork. Used on artwork only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-state",
+        "value": "150ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Default for colour, background and box-shadow state transitions on controls."
+      },
+      {
+        "name": "ease-rail",
+        "value": "200ms linear",
+        "purpose": "Sidebar expand/collapse width transition."
+      },
+      {
+        "name": "ease-swap",
+        "value": "250ms ease-out",
+        "purpose": "Content swapping in place — the streaming-provider loader fading out and its badges fading in. Scale 0.85 to 1 with opacity."
+      },
+      {
+        "name": "ease-orbit",
+        "value": "1.4s cubic-bezier(0.34, 1.56, 0.64, 1) infinite",
+        "purpose": "The dual counter-rotating arc loader shown while streaming availability resolves. Debounced by 400ms so fast fetches never show it."
+      },
+      {
+        "name": "poster-lift",
+        "value": "transform 150ms cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Poster scales to 1.05 inside its clip on hover while the gradient scrim fades in."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1536px" },
+      { "name": "rail-collapse", "value": "768px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one action a screen wants you to take. Signal Violet fill, white text, 36px tall.",
+      "html": "<button class=\"ds-btn-primary\">Search all indexers</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 16px; border: none; border-radius: 0.425rem; background: var(--primary, oklch(0.52 0.27 277)); color: #fff; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 500; line-height: 1; white-space: nowrap; cursor: pointer; transition: background 150ms cubic-bezier(0.4,0,0.2,1), box-shadow 150ms cubic-bezier(0.4,0,0.2,1); } .ds-btn-primary:hover { background: color-mix(in oklab, var(--primary, oklch(0.52 0.27 277)) 90%, transparent); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px oklch(0.52 0.27 277 / 0.5); } .ds-btn-primary:disabled { opacity: 0.5; pointer-events: none; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary actions and the Request affordance. Seam border, fills with Tray Ash on hover.",
+      "html": "<button class=\"ds-btn-outline\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M12 5v14M5 12h14\"/></svg>Request</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 12px; border: 1px solid var(--border, oklch(0.92 0.004 286.32)); border-radius: 0.425rem; background: var(--background, #fff); color: var(--foreground, oklch(0.141 0.005 285.823)); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 500; line-height: 1; white-space: nowrap; cursor: pointer; transition: background 150ms cubic-bezier(0.4,0,0.2,1), color 150ms cubic-bezier(0.4,0,0.2,1); } .ds-btn-outline svg { flex-shrink: 0; } .ds-btn-outline:hover { background: var(--accent, oklch(0.967 0.001 286.375)); color: var(--accent-foreground, oklch(0.21 0.006 285.885)); } .ds-btn-outline:focus-visible { outline: none; border-color: oklch(0.52 0.27 277); box-shadow: 0 0 0 3px oklch(0.52 0.27 277 / 0.5); }"
+    },
+    {
+      "name": "Ghost Icon Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Row and header actions. No resting border, so a dense table does not fill with boxes.",
+      "html": "<button class=\"ds-btn-ghost\" aria-label=\"Refresh metadata\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 12a9 9 0 1 1-3-6.7L21 8\"/><path d=\"M21 3v5h-5\"/></svg></button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: none; border-radius: 0.425rem; background: transparent; color: var(--foreground, oklch(0.141 0.005 285.823)); cursor: pointer; transition: background 150ms cubic-bezier(0.4,0,0.2,1); } .ds-btn-ghost:hover { background: var(--accent, oklch(0.967 0.001 286.375)); } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 3px oklch(0.52 0.27 277 / 0.5); }"
+    },
+    {
+      "name": "Status Badge — Complete",
+      "kind": "chip",
+      "refersTo": "status-badge-complete",
+      "description": "Signature component. The file exists on disk; hovering swaps icon and label in place and turns Alarm Red, because the badge is also the control that removes it.",
+      "html": "<span class=\"ds-badge-status ds-badge-complete\" role=\"button\" tabindex=\"0\"><svg class=\"ds-badge-icon-rest\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"m8.5 12.5 2.5 2.5 4.5-5\"/></svg><svg class=\"ds-badge-icon-hover\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13\"/></svg><span class=\"ds-badge-label-rest\">Downloaded</span><span class=\"ds-badge-label-hover\">Remove</span></span>",
+      "css": ".ds-badge-status { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 24px; padding: 0 8px; border: none; border-radius: 9999px; color: #fff; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; font-weight: 500; line-height: 1; white-space: nowrap; cursor: pointer; transition: background 150ms cubic-bezier(0.4,0,0.2,1); } .ds-badge-complete { background: oklch(0.55 0.15 152); } .ds-badge-status .ds-badge-icon-hover, .ds-badge-status .ds-badge-label-hover { display: none; } .ds-badge-status:hover { background: oklch(0.577 0.245 27.325); } .ds-badge-status:hover .ds-badge-icon-rest, .ds-badge-status:hover .ds-badge-label-rest { display: none; } .ds-badge-status:hover .ds-badge-icon-hover { display: inline; } .ds-badge-status:hover .ds-badge-label-hover { display: inline; } .ds-badge-status:focus-visible { outline: none; box-shadow: 0 0 0 3px oklch(0.52 0.27 277 / 0.5); }"
+    },
+    {
+      "name": "Status Badge — Transfer",
+      "kind": "chip",
+      "refersTo": "status-badge-transfer",
+      "description": "Actively downloading, carrying a live percentage in tabular figures. Hover swaps to Cancel.",
+      "html": "<span class=\"ds-badge-status ds-badge-transfer\" role=\"button\" tabindex=\"0\"><svg class=\"ds-badge-icon-rest\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 4v11m0 0 4-4m-4 4-4-4\"/><path d=\"M5 19h14\"/></svg><svg class=\"ds-badge-icon-hover\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\"><path d=\"M6 6l12 12M18 6 6 18\"/></svg><span class=\"ds-badge-label-rest ds-readout\">72%</span><span class=\"ds-badge-label-hover\">Cancel</span></span>",
+      "css": ".ds-badge-transfer { background: oklch(0.55 0.14 228); } .ds-readout { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Transparent fill, Seam border, 36px tall. Focus shifts the border to Signal Violet and adds the 3px ring.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Search your library\" />",
+      "css": ".ds-input { display: block; width: 100%; height: 36px; padding: 4px 12px; border: 1px solid var(--input, oklch(0.92 0.004 286.32)); border-radius: 0.425rem; background: transparent; color: var(--foreground, oklch(0.141 0.005 285.823)); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; outline: none; transition: border-color 150ms cubic-bezier(0.4,0,0.2,1), box-shadow 150ms cubic-bezier(0.4,0,0.2,1); } .ds-input::placeholder { color: var(--muted-foreground, oklch(0.552 0.016 285.938)); } .ds-input:focus-visible { border-color: oklch(0.52 0.27 277); box-shadow: 0 0 0 3px oklch(0.52 0.27 277 / 0.5); } .ds-input[aria-invalid=\"true\"] { border-color: oklch(0.577 0.245 27.325); box-shadow: 0 0 0 3px oklch(0.577 0.245 27.325 / 0.2); }"
+    },
+    {
+      "name": "Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Left-rail entry at 32px. Identified when active by fill plus weight, never by a second accent colour.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-nav-group\">Activity</span><a class=\"ds-nav-item ds-nav-item-active\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 4v11m0 0 4-4m-4 4-4-4\"/><path d=\"M5 19h14\"/></svg>Activity</a><a class=\"ds-nav-item\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 2\"/></svg>History</a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 2px; width: 200px; } .ds-nav-group { padding: 0 8px 4px; color: var(--muted-foreground, oklch(0.552 0.016 285.938)); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; font-weight: 500; } .ds-nav-item { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 0.425rem; color: var(--sidebar-foreground, oklch(0.141 0.005 285.823)); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 400; text-decoration: none; transition: background 150ms cubic-bezier(0.4,0,0.2,1); } .ds-nav-item:hover { background: var(--sidebar-accent, oklch(0.967 0.001 286.375)); } .ds-nav-item-active { background: var(--sidebar-accent, oklch(0.967 0.001 286.375)); color: var(--sidebar-accent-foreground, oklch(0.21 0.006 285.885)); font-weight: 500; } .ds-nav-item:focus-visible { outline: none; box-shadow: 0 0 0 3px oklch(0.52 0.27 277 / 0.5); }"
+    },
+    {
+      "name": "Card Surface",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "Flat panel separated by a 1px Seam and a tone step. No resting shadow, ever.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-head\"><div class=\"ds-card-title\">SABnzbd</div><div class=\"ds-card-desc\">Primary download client</div></div><div class=\"ds-card-body\"><span class=\"ds-badge-status ds-badge-complete\" style=\"cursor:default\">Connected</span> <span class=\"ds-readout ds-card-meta\">3 active · 1.4 GB/s</span></div></div>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 24px; padding: 24px; border: 1px solid var(--border, oklch(0.92 0.004 286.32)); border-radius: 0.825rem; background: var(--card, #fff); color: var(--card-foreground, oklch(0.141 0.005 285.823)); box-shadow: none; } .ds-card-title { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 16px; font-weight: 600; line-height: 1.5; } .ds-card-desc { margin-top: 4px; color: var(--muted-foreground, oklch(0.552 0.016 285.938)); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; } .ds-card-body { display: flex; align-items: center; gap: 8px; } .ds-card-meta { color: var(--muted-foreground, oklch(0.552 0.016 285.938)); font-size: 12px; }"
+    },
+    {
+      "name": "Media Poster Card",
+      "kind": "custom",
+      "refersTo": "card-surface",
+      "description": "The library's atom: a 2:3 poster clipped at the lg radius, with a genre chip, a status badge, and a scrim that reveals title and year on hover. The artwork is allowed to be the loudest thing in the frame.",
+      "html": "<div class=\"ds-poster\"><div class=\"ds-poster-art\"></div><span class=\"ds-poster-genre\">SCI-FI</span><span class=\"ds-badge-status ds-badge-queued ds-poster-status\">Requested</span><div class=\"ds-poster-scrim\"></div><div class=\"ds-poster-meta\"><p class=\"ds-poster-title\">Arrival</p><p class=\"ds-poster-year\">2016</p></div></div>",
+      "css": ".ds-poster { position: relative; width: 150px; aspect-ratio: 2 / 3; border-radius: 0.625rem; overflow: hidden; background: var(--muted, oklch(0.967 0.001 286.375)); cursor: pointer; } .ds-poster-art { position: absolute; inset: 0; background: linear-gradient(160deg, oklch(0.35 0.06 265), oklch(0.18 0.03 285)); transition: transform 150ms cubic-bezier(0.4,0,0.2,1); } .ds-poster:hover .ds-poster-art { transform: scale(1.05); } .ds-poster-genre { position: absolute; top: 8px; left: 8px; padding: 2px 6px; border-radius: 9999px; background: rgb(0 0 0 / 0.4); backdrop-filter: blur(4px); color: rgb(255 255 255 / 0.9); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 10px; font-weight: 500; } .ds-poster-status { position: absolute; top: 8px; right: 8px; height: 20px; padding: 0 6px; font-size: 10px; z-index: 2; } .ds-badge-queued { background: oklch(0.56 0.12 70); } .ds-poster-scrim { position: absolute; inset: 0; background: linear-gradient(to top, rgb(0 0 0 / 0.8), transparent 60%); opacity: 0; transition: opacity 150ms cubic-bezier(0.4,0,0.2,1); pointer-events: none; } .ds-poster:hover .ds-poster-scrim { opacity: 1; } .ds-poster-meta { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px; opacity: 0; transition: opacity 150ms cubic-bezier(0.4,0,0.2,1); } .ds-poster:hover .ds-poster-meta { opacity: 1; } .ds-poster-title { margin: 0; color: #fff; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 500; } .ds-poster-year { margin: 0; color: rgb(255 255 255 / 0.7); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; }"
+    },
+    {
+      "name": "Empty State",
+      "kind": "custom",
+      "refersTo": "card-surface",
+      "description": "Deliberately plain: a Tray Ash disc, a title, one Readout Grey line. No illustration, no mascot — an empty state here usually means something is not configured, so it names the next action.",
+      "html": "<div class=\"ds-empty\"><div class=\"ds-empty-disc\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/></svg></div><h3 class=\"ds-empty-title\">No root folders yet</h3><p class=\"ds-empty-msg\">Add a root folder to tell Hamster where your media lives.</p></div>",
+      "css": ".ds-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 0; text-align: center; } .ds-empty-disc { display: flex; align-items: center; justify-content: center; padding: 24px; margin-bottom: 16px; border-radius: 9999px; background: var(--muted, oklch(0.967 0.001 286.375)); color: var(--muted-foreground, oklch(0.552 0.016 285.938)); } .ds-empty-title { margin: 0 0 8px; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 18px; font-weight: 500; color: var(--foreground, oklch(0.141 0.005 285.823)); } .ds-empty-msg { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; color: var(--muted-foreground, oklch(0.552 0.016 285.938)); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Control Room",
+    "overview": "Hamster is the panel a single operator stands in front of. Four media types, a dozen external services, and a queue that is always doing something — all of it legible at a glance, all of it truthful about its own state. The chassis is deliberately quiet: near-neutral cool greys, hairline seams, flat surfaces. Everything that carries chroma carries meaning. A green badge is a fact. A magenta badge is a fact. The violet accent is the application speaking in its own voice, and it appears rarely enough that you notice when it does.\n\nThis is an expert's instrument, not an onboarding experience. Density is a feature: release names, quality strings, byte counts and progress percentages are the payload, and the system's job is to rank them, align them, and get out of the way. Type is small and tight (14px is the working size, not 16px), rows are compact, and the eye travels down aligned columns rather than across decorated cards. Where the interface is showing artwork — posters, covers, backdrops — the art is allowed to be the loudest thing in the frame, because at that moment identification is the task.\n\nThe system is designed to be read in two lighting conditions with equal fidelity. Dark is not a courtesy mode here; a homelab tool lives on a second monitor in a dim room as often as it lives in daylight. Every surface, every status colour and every border is specified in both ramps, and a surface that only resolves in one of them is unfinished.\n\nTwo things this is explicitly not. It is not the *arr apps: no Bootstrap-era chrome, no cramped undifferentiated tables, no settings screens that are a thousand identical form rows with no hierarchy. And it is not the untouched shadcn/new-york default: generic rounded cards floating on white with uniform grey text and no point of view is the starting kit, not the destination. The measure of this system is whether a screenshot is recognisable as Hamster with the logo cropped out.",
+    "keyCharacteristics": [
+      "Neutral cool-grey chassis; chroma is reserved for meaning",
+      "One accent voice (Signal Violet), used sparingly and consistently",
+      "A named status ramp that is the same in both themes",
+      "Flat surfaces, hairline seams, shadow only where something truly floats",
+      "Compact density: 14px body, 36px controls, 24px status badges",
+      "Dual-theme parity as a hard requirement, not a setting",
+      "Monospaced tabular numerals wherever numbers are compared"
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "Signal Violet means \"Hamster is speaking.\" Status colour means \"your media is in this state.\" A screen never uses violet to indicate media state, and never uses a status colour for an interface affordance. When both would apply to the same element, status wins — the operator came for the media, not the app.",
+        "section": "colors"
+      },
+      {
+        "name": "The Chroma Budget Rule",
+        "body": "Outside artwork, saturated colour covers under 5% of any screen. If a layout needs more colour than that to feel alive, the layout is failing, not the palette.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Ramps, One System Rule",
+        "body": "Every colour decision is specified in both themes before it ships. A surface that has only been looked at in light mode is not done.",
+        "section": "colors"
+      },
+      {
+        "name": "The Readout Rule",
+        "body": "Any number an operator might compare against another number is set in mono with tabular figures. Percentages, sizes, durations, counts. A column of proportional digits that will not align is a defect, not a style choice.",
+        "section": "typography"
+      },
+      {
+        "name": "The 14 Is Normal Rule",
+        "body": "Body text is 14px, not 16px. This is an expert tool with a lot of true content per screen, and inflating the base size to consumer defaults costs rows without adding comprehension.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Ramp Rule",
+        "body": "2/3/4/5/6 at the standard breakpoints. A grid that needs different counts is a different component, and needs a reason.",
+        "section": "layout"
+      },
+      {
+        "name": "The 768 Reflow Rule",
+        "body": "768px is the real boundary: the rail becomes a sheet, side-by-side hero layouts stack, and action clusters wrap. Every screen is verified at 375px and 1440px before it is called done — the operator checks the queue from a phone, and a horizontally scrolling table is a bug.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat at rest. If a card needs a shadow to be findable, its border, background tone or spacing is wrong. Fix the layer, not the lighting.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Radius Ladder Rule",
+        "body": "Radius encodes containment depth: chip < control < artwork < panel. A 12px radius on a button or a 4px radius on a card breaks the ladder and reads as a mistake.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do reserve Signal Violet for the application's own voice — primary action, focus, selection, active nav — and let the status ramp own everything about media state.",
+      "Do set every comparable number in Readout mono with tabular-nums: percentages, sizes, durations, bitrates, counts.",
+      "Do specify and verify both themes for every surface. Dark parity is a requirement of this system, not an option.",
+      "Do use the canonical grid ramp (2/3/4/5/6 at sm/md/lg/xl) for any media grid.",
+      "Do separate surfaces with the 1px Seam border and a tone step, not with a resting shadow.",
+      "Do keep the status badge as the control — hover swaps icon and label in place and turns Alarm Red to signal the consequence.",
+      "Do let artwork be the loudest element in the frame; the chrome around a poster grid should be almost colourless.",
+      "Do check every screen at 375px and 1440px before calling it done."
+    ],
+    "donts": [
+      "Don't add a second brand accent. Secondary emphasis comes from neutral tone steps.",
+      "Don't use raw Tailwind palette classes (bg-green-600, text-blue-500) for state. Use the named status ramp so the mapping stays learnable and themable.",
+      "Don't put white text on a fill lighter than roughly oklch(0.62 ...); that is exactly how the incumbent bg-yellow-600 badge failed contrast.",
+      "Don't add resting shadows to cards, rows or grid items. Overlays only.",
+      "Don't raise body text to 16px on desktop or loosen the spacing steps to consumer proportions. Density is the product.",
+      "Don't ship a colour-only state signal. Every status carries an icon and a label alongside its fill (the 20px tiny badge is the sole exception, and it is always tooltip-backed).",
+      "Don't remove or restyle the focus ring. 3px, Signal Violet at 50%, plus the border shift.",
+      "Don't let a settings screen become an undifferentiated wall of form rows — group into cards with subtitles. That is the *arr failure this product exists to correct.",
+      "Don't introduce full-bleed cinematic backdrop heroes with heavy gradient scrims; Hamster manages media, it is not a lean-back streaming surface."
+    ]
+  }
+}

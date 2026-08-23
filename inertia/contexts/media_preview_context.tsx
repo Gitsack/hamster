@@ -133,7 +133,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
       setQualityProfiles(qp)
       setConfigLoaded(true)
     } catch {
-      toast.error('Failed to load configuration')
+      toast.error('Could not load quality profiles and root folders. Check Settings, then retry.')
     }
   }, [configLoaded])
 
@@ -151,11 +151,11 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
         const data = await response.json()
         setMovieDetails(data)
       } else {
-        toast.error('Failed to load movie details')
+        toast.error('TMDB did not return details for this movie. Try again in a moment.')
         setSheetOpen(false)
       }
     } catch {
-      toast.error('Failed to load movie details')
+      toast.error('Could not reach TMDB for movie details. Check the connection, then retry.')
       setSheetOpen(false)
     } finally {
       setDetailsLoading(false)
@@ -176,11 +176,11 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
         const data = await response.json()
         setTvShowDetails(data)
       } else {
-        toast.error('Failed to load TV show details')
+        toast.error('TMDB did not return details for this show. Try again in a moment.')
         setSheetOpen(false)
       }
     } catch {
-      toast.error('Failed to load TV show details')
+      toast.error('Could not reach TMDB for show details. Check the connection, then retry.')
       setSheetOpen(false)
     } finally {
       setDetailsLoading(false)
@@ -221,11 +221,13 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
         }
       } else {
         setMovieDetails({ ...movieDetails, requested: wasRequested })
-        toast.error(data.error || 'Failed to update movie')
+        toast.error(
+          data.error || `Could not change the request state of ${movieDetails.title}. Retry.`
+        )
       }
     } catch {
       setMovieDetails({ ...movieDetails, requested: wasRequested })
-      toast.error('Failed to update movie')
+      toast.error(`Could not reach the server to update ${movieDetails.title}. Retry.`)
     } finally {
       setTogglingDetails(false)
     }
@@ -249,11 +251,11 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
         toast.success(wasRequested ? 'TV show unrequested' : 'TV show requested')
       } else {
         setTvShowDetails({ ...tvShowDetails, requested: wasRequested })
-        toast.error('Failed to update TV show')
+        toast.error(`Could not change the request state of ${tvShowDetails.title}. Retry.`)
       }
     } catch {
       setTvShowDetails({ ...tvShowDetails, requested: wasRequested })
-      toast.error('Failed to update TV show')
+      toast.error(`Could not reach the server to update ${tvShowDetails.title}. Retry.`)
     } finally {
       setTogglingDetails(false)
     }
@@ -295,10 +297,12 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
         })
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add movie')
+        toast.error(
+          error.error || `Could not add ${movieDetails.title}. Retry, or check System > Events.`
+        )
       }
     } catch {
-      toast.error('Failed to add movie')
+      toast.error(`Could not reach the server to add ${movieDetails.title}. Retry.`)
     } finally {
       setAdding(false)
     }
@@ -346,10 +350,12 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
         })
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add TV show')
+        toast.error(
+          error.error || `Could not add ${tvShowDetails.title}. Retry, or check System > Events.`
+        )
       }
     } catch {
-      toast.error('Failed to add TV show')
+      toast.error(`Could not reach the server to add ${tvShowDetails.title}. Retry.`)
     } finally {
       setAdding(false)
     }
@@ -410,7 +416,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
           ) : detailsType === 'movie' && movieDetails ? (
             <>
               <SheetHeader className="pb-4">
-                <SheetTitle className="text-xl pr-8">{movieDetails.title}</SheetTitle>
+                <SheetTitle className="pr-8">{movieDetails.title}</SheetTitle>
               </SheetHeader>
               <div className="space-y-4 px-6 pb-6 overflow-y-auto">
                 {/* Gallery: Trailer + Backdrop Images */}
@@ -452,21 +458,24 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                   {movieDetails.year && (
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <HugeiconsIcon icon={Calendar03Icon} className="h-4 w-4" />
-                      <span>{movieDetails.year}</span>
+                      <span className="readout">{movieDetails.year}</span>
                     </div>
                   )}
                   {movieDetails.runtime && (
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <HugeiconsIcon icon={Time01Icon} className="h-4 w-4" />
-                      <span>{movieDetails.runtime} min</span>
+                      <span className="readout">{movieDetails.runtime} min</span>
                     </div>
                   )}
                   {movieDetails.rating && (
-                    <div className="flex items-center gap-1.5 text-yellow-500">
-                      <HugeiconsIcon icon={StarIcon} className="h-4 w-4 fill-current" />
-                      <span className="font-medium">{movieDetails.rating.toFixed(1)}</span>
+                    <div className="flex items-center gap-1.5">
+                      <HugeiconsIcon
+                        icon={StarIcon}
+                        className="h-4 w-4 fill-current text-muted-foreground"
+                      />
+                      <span className="readout font-medium">{movieDetails.rating.toFixed(1)}</span>
                       {movieDetails.votes && (
-                        <span className="text-muted-foreground">
+                        <span className="readout text-muted-foreground">
                           ({movieDetails.votes.toLocaleString()})
                         </span>
                       )}
@@ -494,7 +503,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                 {/* Overview */}
                 {movieDetails.overview && (
                   <div>
-                    <h4 className="font-medium mb-2">Overview</h4>
+                    <h4 className="text-base font-semibold mb-2">Overview</h4>
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {movieDetails.overview}
                     </p>
@@ -545,7 +554,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
           ) : detailsType === 'tv' && tvShowDetails ? (
             <>
               <SheetHeader className="pb-4">
-                <SheetTitle className="text-xl pr-8">{tvShowDetails.title}</SheetTitle>
+                <SheetTitle className="pr-8">{tvShowDetails.title}</SheetTitle>
               </SheetHeader>
               <div className="space-y-4 px-6 pb-6 overflow-y-auto">
                 {/* Gallery: Trailer + Backdrop Images */}
@@ -579,24 +588,27 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                   {tvShowDetails.year && (
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <HugeiconsIcon icon={Calendar03Icon} className="h-4 w-4" />
-                      <span>{tvShowDetails.year}</span>
+                      <span className="readout">{tvShowDetails.year}</span>
                     </div>
                   )}
                   {tvShowDetails.seasonCount && (
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <HugeiconsIcon icon={Tv01Icon} className="h-4 w-4" />
-                      <span>
+                      <span className="readout">
                         {tvShowDetails.seasonCount} Season
                         {tvShowDetails.seasonCount !== 1 ? 's' : ''}
                       </span>
                     </div>
                   )}
                   {tvShowDetails.rating && (
-                    <div className="flex items-center gap-1.5 text-yellow-500">
-                      <HugeiconsIcon icon={StarIcon} className="h-4 w-4 fill-current" />
-                      <span className="font-medium">{tvShowDetails.rating.toFixed(1)}</span>
+                    <div className="flex items-center gap-1.5">
+                      <HugeiconsIcon
+                        icon={StarIcon}
+                        className="h-4 w-4 fill-current text-muted-foreground"
+                      />
+                      <span className="readout font-medium">{tvShowDetails.rating.toFixed(1)}</span>
                       {tvShowDetails.votes && (
-                        <span className="text-muted-foreground">
+                        <span className="readout text-muted-foreground">
                           ({tvShowDetails.votes.toLocaleString()})
                         </span>
                       )}
@@ -631,7 +643,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                 {/* Overview */}
                 {tvShowDetails.overview && (
                   <div>
-                    <h4 className="font-medium mb-2">Overview</h4>
+                    <h4 className="text-base font-semibold mb-2">Overview</h4>
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {tvShowDetails.overview}
                     </p>
@@ -721,7 +733,7 @@ function StreamingOffers({ offers }: { offers?: StreamingOffer[] }) {
 
   return (
     <div>
-      <h4 className="font-medium mb-3">Where to Watch</h4>
+      <h4 className="text-base font-semibold mb-3">Where to Watch</h4>
       {flatrateOffers.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {flatrateOffers.map((offer) => (
@@ -730,18 +742,18 @@ function StreamingOffers({ offers }: { offers?: StreamingOffer[] }) {
               href={offer.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-lg border px-3 py-2 hover:bg-muted transition-colors"
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2 hover:bg-accent transition-colors focus-visible:outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               {offer.providerIconUrl && (
                 <img
                   src={offer.providerIconUrl}
                   alt={offer.providerName}
-                  className="w-6 h-6 rounded"
+                  className="w-6 h-6 rounded-sm ring-1 ring-border"
                 />
               )}
               <span className="text-sm font-medium">{offer.providerName}</span>
               {offer.presentationType && (
-                <Badge variant="outline" className="text-[10px] px-1 py-0">
+                <Badge variant="outline" className="px-1.5 py-0">
                   {offer.presentationType.toUpperCase()}
                 </Badge>
               )}
@@ -759,21 +771,26 @@ function StreamingOffers({ offers }: { offers?: StreamingOffer[] }) {
                 href={offer.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 hover:bg-muted transition-colors text-xs"
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 hover:bg-accent transition-colors text-xs focus-visible:outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 {offer.providerIconUrl && (
                   <img
                     src={offer.providerIconUrl}
                     alt={offer.providerName}
-                    className="w-4 h-4 rounded"
+                    className="w-4 h-4 rounded-sm ring-1 ring-border"
                   />
                 )}
                 <span>{offer.providerName}</span>
                 <span className="text-muted-foreground">
                   {offer.monetizationType === 'rent' ? 'Rent' : 'Buy'}
-                  {offer.retailPrice
-                    ? ` ${offer.currency || 'EUR'} ${offer.retailPrice.toFixed(2)}`
-                    : ''}
+                  {offer.retailPrice ? (
+                    <span className="readout">
+                      {' '}
+                      {offer.currency || 'EUR'} {offer.retailPrice.toFixed(2)}
+                    </span>
+                  ) : (
+                    ''
+                  )}
                 </span>
               </a>
             ))}
@@ -793,14 +810,14 @@ function CastLane({
 
   return (
     <div>
-      <h4 className="font-medium mb-3">Cast</h4>
+      <h4 className="text-base font-semibold mb-3">Cast</h4>
       <div
-        className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+        className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6"
         style={{ scrollbarWidth: 'thin' }}
       >
         {cast.map((actor) => (
-          <div key={actor.id} className="flex-shrink-0 w-16 text-center">
-            <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted mb-1.5">
+          <div key={actor.id} className="flex-shrink-0 w-20 text-center">
+            <div className="w-20 h-20 rounded-lg overflow-hidden bg-muted mb-1.5">
               {actor.profileUrl ? (
                 <img
                   src={actor.profileUrl}
@@ -808,13 +825,13 @@ function CastLane({
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-lg font-medium">
+                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-base font-semibold">
                   {actor.name.charAt(0)}
                 </div>
               )}
             </div>
-            <p className="text-[11px] font-medium leading-tight line-clamp-2">{actor.name}</p>
-            <p className="text-[10px] text-muted-foreground leading-tight line-clamp-2">
+            <p className="text-xs font-medium leading-tight line-clamp-2">{actor.name}</p>
+            <p className="text-xs text-muted-foreground leading-tight line-clamp-2">
               {actor.character}
             </p>
           </div>

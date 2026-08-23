@@ -25,14 +25,14 @@ export default function GettingStarted() {
     <>
       <Head title="Getting Started - Hamster" />
 
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen bg-background">
         {/* Header */}
-        <header className="container mx-auto px-4 py-6 border-b">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="hover:opacity-80 transition-opacity">
+        <header className="border-b border-border">
+          <div className="container mx-auto flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <Link href="/" className="rounded-md transition-opacity hover:opacity-80">
               <HamsterLogo size="md" />
             </Link>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {isLoggedIn ? (
                 <Button asChild>
                   <Link href="/library">Library</Link>
@@ -52,19 +52,20 @@ export default function GettingStarted() {
         </header>
 
         {/* Main Content */}
-        <main className="container mx-auto px-4 py-12 max-w-4xl">
-          {/* Hero */}
-          <div className="text-center mb-16">
-            <h1 className="text-4xl font-bold tracking-tight mb-4">Getting Started</h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Learn how to set up Hamster and start organizing your media collection in minutes.
+        <main className="container mx-auto max-w-4xl px-4 py-12">
+          {/* Intro */}
+          <div className="mb-12">
+            <h1 className="text-2xl font-bold tracking-[-0.01em]">Getting Started</h1>
+            <p className="mt-2 max-w-[70ch] text-sm text-muted-foreground">
+              Four steps take a fresh install to a library that fills itself: an account, a root
+              folder per media type, a quality profile, and the first title added.
             </p>
           </div>
 
           {/* Quick Start Steps */}
-          <section className="mb-16">
-            <h2 className="text-2xl font-semibold mb-6">Quick Start</h2>
-            <div className="space-y-4">
+          <section className="mb-12">
+            <h2 className="mb-3 text-base font-semibold">Quick Start</h2>
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
               <StepCard
                 number={1}
                 icon={UserIcon}
@@ -93,9 +94,9 @@ export default function GettingStarted() {
           </section>
 
           {/* Media Types */}
-          <section className="mb-16">
-            <h2 className="text-2xl font-semibold mb-6">Supported Media Types</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <section className="mb-12">
+            <h2 className="mb-3 text-base font-semibold">Supported Media Types</h2>
+            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-2">
               <MediaTypeCard
                 icon={Film01Icon}
                 title="Movies"
@@ -140,9 +141,9 @@ export default function GettingStarted() {
           </section>
 
           {/* Key Features */}
-          <section className="mb-16">
-            <h2 className="text-2xl font-semibold mb-6">Key Features</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <section className="mb-12">
+            <h2 className="mb-3 text-base font-semibold">Key Features</h2>
+            <div className="grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-2">
               <FeatureCard
                 icon={Download01Icon}
                 title="Download Integration"
@@ -167,8 +168,8 @@ export default function GettingStarted() {
           </section>
 
           {/* Settings Overview */}
-          <section className="mb-16">
-            <h2 className="text-2xl font-semibold mb-6">Configuration</h2>
+          <section className="mb-12">
+            <h2 className="mb-3 text-base font-semibold">Configuration</h2>
             <Card>
               <CardHeader>
                 <CardTitle>Settings Overview</CardTitle>
@@ -176,7 +177,7 @@ export default function GettingStarted() {
                   Access all configuration options from the Settings menu
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3">
                 <SettingItem
                   title="Media Management"
                   description="Configure root folders and quality profiles for each media type"
@@ -198,30 +199,35 @@ export default function GettingStarted() {
           </section>
 
           {/* CTA */}
-          <section className="text-center py-12 border-t">
-            <h2 className="text-2xl font-semibold mb-4">Ready to get started?</h2>
-            <p className="text-muted-foreground mb-6">
+          <section className="border-t border-border pt-12">
+            <h2 className="text-base font-semibold">Ready to get started?</h2>
+            <p className="mt-2 max-w-[70ch] text-sm text-muted-foreground">
               {isLoggedIn
-                ? 'Head to your library and start organizing your media.'
-                : 'Create your account and start building your media library today.'}
+                ? 'Next step: add a root folder for each media type you plan to manage, under Settings → Media Management. Nothing can be imported until one exists.'
+                : 'Create your account, then set a root folder for each media type you plan to manage.'}
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               {isLoggedIn ? (
-                <Button size="lg" asChild>
-                  <Link href="/library">
-                    Go to Library
-                    <HugeiconsIcon icon={ArrowRight01Icon} className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              ) : (
                 <>
-                  <Button size="lg" asChild>
-                    <Link href="/register">
-                      Create Account
-                      <HugeiconsIcon icon={ArrowRight01Icon} className="ml-2 h-4 w-4" />
+                  <Button asChild>
+                    <Link href="/settings/media-management">
+                      Configure root folders
+                      <HugeiconsIcon icon={ArrowRight01Icon} aria-hidden="true" />
                     </Link>
                   </Button>
-                  <Button size="lg" variant="outline" asChild>
+                  <Button variant="outline" asChild>
+                    <Link href="/library">Go to Library</Link>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button asChild>
+                    <Link href="/register">
+                      Create Account
+                      <HugeiconsIcon icon={ArrowRight01Icon} aria-hidden="true" />
+                    </Link>
+                  </Button>
+                  <Button variant="outline" asChild>
                     <Link href="/login">Sign In</Link>
                   </Button>
                 </>
@@ -231,12 +237,12 @@ export default function GettingStarted() {
         </main>
 
         {/* Footer */}
-        <footer className="container mx-auto px-4 py-8 border-t">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-            <Link href="/" className="hover:opacity-80 transition-opacity">
+        <footer className="border-t border-border">
+          <div className="container mx-auto flex flex-col items-center justify-between gap-4 px-4 py-6 text-sm text-muted-foreground md:flex-row">
+            <Link href="/" className="rounded-md transition-opacity hover:opacity-80">
               <HamsterLogo size="sm" />
             </Link>
-            <p>Your personal media management solution</p>
+            <p>Music, movies, TV and books in one self-hosted library.</p>
           </div>
         </footer>
       </div>
@@ -256,18 +262,16 @@ function StepCard({
   description: string
 }) {
   return (
-    <div className="flex gap-4 p-4 rounded-lg border bg-card">
-      <div className="flex-shrink-0 flex items-start gap-3">
-        <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-sm">
-          {number}
-        </div>
-        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-          <HugeiconsIcon icon={icon} className="h-5 w-5 text-primary" />
-        </div>
-      </div>
-      <div>
-        <h3 className="font-semibold mb-1">{title}</h3>
-        <p className="text-sm text-muted-foreground">{description}</p>
+    <div className="flex gap-3 border-b border-border px-4 py-3 last:border-b-0">
+      <span className="readout mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+        {number}
+      </span>
+      <div className="min-w-0">
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <HugeiconsIcon icon={icon} aria-hidden="true" className="size-4 text-muted-foreground" />
+          {title}
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
     </div>
   )
@@ -283,29 +287,24 @@ function MediaTypeCard({
   features: string[]
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <HugeiconsIcon icon={icon} className="h-5 w-5 text-primary" />
-          </div>
-          <CardTitle className="text-lg">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <ul className="space-y-2">
-          {features.map((feature, index) => (
-            <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
-              <HugeiconsIcon
-                icon={CheckmarkCircle01Icon}
-                className="h-4 w-4 text-primary flex-shrink-0"
-              />
-              {feature}
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+    <div className="bg-card p-4">
+      <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <HugeiconsIcon icon={icon} aria-hidden="true" className="size-4 text-muted-foreground" />
+        {title}
+      </h3>
+      <ul className="mt-3 space-y-2">
+        {features.map((feature, index) => (
+          <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
+            <HugeiconsIcon
+              icon={CheckmarkCircle01Icon}
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            />
+            {feature}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -319,24 +318,25 @@ function FeatureCard({
   description: string
 }) {
   return (
-    <div className="p-5 rounded-lg border bg-card">
-      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
-        <HugeiconsIcon icon={icon} className="h-5 w-5 text-primary" />
+    <div className="flex gap-3">
+      <HugeiconsIcon
+        icon={icon}
+        aria-hidden="true"
+        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+      />
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
-      <h3 className="font-semibold mb-2">{title}</h3>
-      <p className="text-sm text-muted-foreground">{description}</p>
     </div>
   )
 }
 
 function SettingItem({ title, description }: { title: string; description: string }) {
   return (
-    <div className="flex items-start gap-3 pb-3 border-b last:border-0 last:pb-0">
-      <div className="h-2 w-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-      <div>
-        <h4 className="font-medium">{title}</h4>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
+    <div className="grid gap-1 border-b border-border pb-3 last:border-0 last:pb-0 sm:grid-cols-[12rem_1fr] sm:gap-4">
+      <h4 className="text-sm font-medium">{title}</h4>
+      <p className="text-sm text-muted-foreground">{description}</p>
     </div>
   )
 }

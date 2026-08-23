@@ -87,8 +87,11 @@ export function AddMediaDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {loading ? (
-          <div className="space-y-4 py-4">
-            <Skeleton className="h-10 w-full" />
+          <div className="space-y-4 py-4" aria-busy="true">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-9 w-full" />
+            </div>
           </div>
         ) : (
           <div className="space-y-4 py-4">
@@ -112,13 +115,13 @@ export function AddMediaDialog({
               </Select>
             </div>
             {episodeSelectionSummary && (
-              <div className="text-sm text-muted-foreground border rounded-md p-3 bg-muted/50">
+              <div className="text-sm text-muted-foreground border border-border rounded-xl p-3 bg-muted/50">
                 {episodeSelectionSummary}
                 {onChangeEpisodeSelection && (
                   <Button
                     variant="link"
                     size="sm"
-                    className="ml-2 h-auto p-0"
+                    className="ml-2 h-auto p-0 text-sm"
                     onClick={onChangeEpisodeSelection}
                   >
                     Change
@@ -145,7 +148,7 @@ export function AddMediaDialog({
             Cancel
           </Button>
           <Button onClick={handleAdd} disabled={adding || !selectedQualityProfile}>
-            {adding && <Spinner className="mr-2" />}
+            {adding && <Spinner className="size-4" />}
             Add {mediaTypeLabels[mediaType]}
           </Button>
         </DialogFooter>

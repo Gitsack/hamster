@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, PropsWithChildren, ReactNode } from 'react'
-import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Alert02Icon, RefreshIcon } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 
 interface ErrorBoundaryProps extends PropsWithChildren {
@@ -51,19 +52,31 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           className={`flex flex-col items-center justify-center gap-4 text-center ${fullPage ? 'min-h-screen p-8' : 'py-16 px-4'}`}
           role="alert"
         >
-          <AlertTriangle className="h-12 w-12 text-muted-foreground" />
+          <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+            <HugeiconsIcon
+              icon={Alert02Icon}
+              aria-hidden="true"
+              className="size-6 text-destructive"
+            />
+          </span>
           <div className="space-y-2">
             <h2 className="text-lg font-semibold">Something went wrong</h2>
             <p className="text-sm text-muted-foreground max-w-md">
-              An unexpected error occurred. You can try again or reload the page.
+              This part of the page stopped rendering, so nothing here is being saved or lost. Try
+              again to re-render it, or reload if it keeps failing.
             </p>
+            {this.state.error?.message ? (
+              <p className="readout text-xs text-muted-foreground max-w-md break-words">
+                {this.state.error.message}
+              </p>
+            ) : null}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             <Button variant="outline" onClick={this.handleReset}>
               Try again
             </Button>
             <Button onClick={this.handleReload}>
-              <RefreshCw className="mr-2 h-4 w-4" />
+              <HugeiconsIcon icon={RefreshIcon} aria-hidden="true" className="size-4" />
               Reload page
             </Button>
           </div>

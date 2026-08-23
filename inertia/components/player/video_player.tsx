@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import Hls from 'hls.js'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Alert02Icon, CpuIcon } from '@hugeicons/core-free-icons'
 
 interface PlaybackInfo {
   needsTranscode: boolean
@@ -165,25 +167,40 @@ export function VideoPlayer({ mediaType, mediaFileId, title, onError }: VideoPla
   if (error) {
     return (
       <div
-        className="relative w-full bg-black flex items-center justify-center"
-        style={{ aspectRatio: '16/9' }}
+        className="relative w-full aspect-video bg-card border border-border flex items-center justify-center rounded-xl overflow-hidden"
+        role="alert"
       >
-        <div className="text-center text-white p-4">
-          <p className="text-red-400 mb-2">Failed to play video</p>
-          <p className="text-sm text-gray-400">{error}</p>
+        <div className="flex flex-col items-center gap-3 px-4 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+            <HugeiconsIcon
+              icon={Alert02Icon}
+              aria-hidden="true"
+              className="size-6 text-destructive"
+            />
+          </span>
+          <div className="space-y-1">
+            <p className="text-lg font-semibold text-foreground">
+              {title ? `Can't play ${title}` : "Can't play this file"}
+            </p>
+            <p className="readout text-xs text-muted-foreground max-w-md break-words">{error}</p>
+            <p className="text-sm text-muted-foreground max-w-md">
+              The file may have moved off disk, or the transcoder could not start. Re-scan the
+              library, then reload this page to try again.
+            </p>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="relative w-full" style={{ aspectRatio: '16/9' }}>
+    <div className="relative w-full aspect-video">
       {loading && (
         <div className="absolute inset-0 bg-black flex items-center justify-center z-10">
-          <div className="text-center">
-            <Spinner className="w-8 h-8 mb-2" />
+          <div className="flex flex-col items-center gap-2">
+            <Spinner className="size-8" />
             <p className="text-white text-sm">
-              {playbackInfo?.needsTranscode ? 'Preparing stream...' : 'Loading...'}
+              {playbackInfo?.needsTranscode ? 'Preparing stream…' : 'Loading…'}
             </p>
           </div>
         </div>
@@ -191,7 +208,11 @@ export function VideoPlayer({ mediaType, mediaFileId, title, onError }: VideoPla
 
       {playbackInfo?.needsTranscode && !loading && (
         <div className="absolute top-2 right-2 z-10">
-          <Badge variant="secondary" className="bg-yellow-600 text-white">
+          <Badge
+            variant="secondary"
+            className="h-6 gap-1 border-transparent bg-status-transit px-2 text-xs text-white"
+          >
+            <HugeiconsIcon icon={CpuIcon} aria-hidden="true" className="h-3 w-3 animate-pulse" />
             Transcoding
           </Badge>
         </div>

@@ -31,7 +31,9 @@ import {
   FlashIcon,
   CheckmarkCircle01Icon,
   Cancel01Icon,
+  Notification01Icon,
 } from '@hugeicons/core-free-icons'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
@@ -113,7 +115,9 @@ export default function Notifications() {
       }
     } catch (error) {
       console.error('Failed to fetch providers:', error)
-      toast.error('Failed to load notification providers')
+      toast.error(
+        'Notification providers could not be loaded — Hamster is unreachable. Reload to retry.'
+      )
     } finally {
       setLoading(false)
     }
@@ -166,7 +170,7 @@ export default function Notifications() {
 
   const testConnection = async () => {
     if (!editingProvider) {
-      toast.error('Save the provider first, then test')
+      toast.error('Save the provider first — the test sends a real message using the stored keys.')
       return
     }
 
@@ -182,13 +186,18 @@ export default function Notifications() {
       setTestResult(result)
 
       if (result.success) {
-        toast.success('Test notification sent successfully!')
+        toast.success('Test message sent — check the app or channel it should have arrived in.')
       } else {
-        toast.error(result.error || 'Test failed')
+        toast.error(
+          result.error ||
+            'The provider rejected the message. Check the token or webhook URL is still valid.'
+        )
       }
     } catch (error) {
-      setTestResult({ success: false, error: 'Connection failed' })
-      toast.error('Connection failed')
+      const message =
+        'Hamster could not reach the provider. Check this box has outbound network access.'
+      setTestResult({ success: false, error: message })
+      toast.error(message)
     } finally {
       setTesting(false)
     }
@@ -196,7 +205,7 @@ export default function Notifications() {
 
   const saveProvider = async () => {
     if (!formData.name) {
-      toast.error('Please enter a name')
+      toast.error('Give the provider a name so you can tell it apart in the list.')
       return
     }
 
@@ -220,11 +229,14 @@ export default function Notifications() {
         fetchProviders()
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to save')
+        toast.error(
+          error.error ||
+            'Provider not saved — the server rejected it. Check the required fields for this type.'
+        )
       }
     } catch (error) {
       console.error('Failed to save:', error)
-      toast.error('Failed to save provider')
+      toast.error('Provider not saved — Hamster is unreachable. Check the server and try again.')
     } finally {
       setSaving(false)
     }
@@ -246,11 +258,11 @@ export default function Notifications() {
         setDialogOpen(false)
         fetchProviders()
       } else {
-        toast.error('Failed to delete provider')
+        toast.error('Provider not deleted — the server rejected the request. Try again.')
       }
     } catch (error) {
       console.error('Failed to delete:', error)
-      toast.error('Failed to delete provider')
+      toast.error('Provider not deleted — Hamster is unreachable. Check the server and try again.')
     } finally {
       setDeleting(false)
     }
@@ -278,6 +290,7 @@ export default function Notifications() {
             })
           }
           placeholder={field.label}
+          className="readout"
         />
       </div>
     ))
@@ -288,8 +301,8 @@ export default function Notifications() {
       title="Notifications"
       actions={
         <Button onClick={openAddDialog}>
-          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-          Add Provider
+          <HugeiconsIcon icon={Add01Icon} />
+          Add provider
         </Button>
       }
     >
@@ -298,31 +311,52 @@ export default function Notifications() {
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Notification Providers</CardTitle>
+            <CardTitle>Providers</CardTitle>
             <CardDescription>
-              Configure notification providers to receive alerts about downloads, imports, and
-              system events.
+              Where Hamster sends word that a grab, an import or a health check happened. Each
+              provider picks its own events and media types.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Spinner className="size-6 text-muted-foreground" />
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-4 flex-1" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                ))}
               </div>
             ) : providers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>No notification providers configured.</p>
-                <p className="mt-2">Add a provider to receive notifications.</p>
+              <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <HugeiconsIcon
+                    icon={Notification01Icon}
+                    className="size-6 text-muted-foreground"
+                    strokeWidth={1.5}
+                  />
+                </div>
+                <p className="text-lg font-medium">No providers yet</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Failed imports and stalled grabs will pass unnoticed. Add Discord, Telegram,
+                  Gotify or email to hear about them.
+                </p>
+                <Button variant="outline" onClick={openAddDialog}>
+                  <HugeiconsIcon icon={Add01Icon} />
+                  Add provider
+                </Button>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
+                    <TableHead className="w-28">Type</TableHead>
                     <TableHead>Events</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-24"></TableHead>
+                    <TableHead className="w-28">Status</TableHead>
+                    <TableHead className="w-16 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -334,7 +368,7 @@ export default function Notifications() {
                           {providerIcons[provider.type] || provider.type}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
+                      <TableCell className="text-muted-foreground">
                         {[
                           provider.onGrab && 'Grab',
                           provider.onImportComplete && 'Import',
@@ -343,20 +377,29 @@ export default function Notifications() {
                           provider.onHealthIssue && 'Health',
                         ]
                           .filter(Boolean)
-                          .join(', ') || 'None'}
+                          .join(', ') || 'No events — nothing will be sent'}
                       </TableCell>
                       <TableCell>
                         {provider.enabled ? (
-                          <Badge variant="default" className="bg-green-500">
-                            Enabled
+                          <Badge className="border-transparent bg-status-complete text-white">
+                            <HugeiconsIcon icon={CheckmarkCircle01Icon} />
+                            Active
                           </Badge>
                         ) : (
-                          <Badge variant="secondary">Disabled</Badge>
+                          <Badge variant="secondary">
+                            <HugeiconsIcon icon={Cancel01Icon} />
+                            Paused
+                          </Badge>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(provider)}>
-                          <HugeiconsIcon icon={Edit01Icon} className="h-4 w-4" />
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Edit ${provider.name}`}
+                          onClick={() => openEditDialog(provider)}
+                        >
+                          <HugeiconsIcon icon={Edit01Icon} className="size-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -375,55 +418,75 @@ export default function Notifications() {
             <DialogTitle>
               {editingProvider ? 'Edit Notification Provider' : 'Add Notification Provider'}
             </DialogTitle>
-            <DialogDescription>Configure your notification provider settings.</DialogDescription>
+            <DialogDescription>
+              Which service to send through, what it should say something about, and for which media
+              types.
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="My Discord"
-              />
-            </div>
+          <div className="space-y-6 py-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="My Discord"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="type">Type</Label>
-              <Select
-                value={formData.type}
-                onValueChange={(value) =>
-                  setFormData({
-                    ...formData,
-                    type: value as typeof formData.type,
-                    settings: {},
-                  })
-                }
-              >
-                <SelectTrigger id="type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectItem value="discord">Discord</SelectItem>
-                  <SelectItem value="telegram">Telegram</SelectItem>
-                  <SelectItem value="pushover">Pushover</SelectItem>
-                  <SelectItem value="slack">Slack</SelectItem>
-                  <SelectItem value="gotify">Gotify</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                </SelectPopup>
-              </Select>
+              <div className="space-y-2">
+                <Label htmlFor="type">Type</Label>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      type: value as typeof formData.type,
+                      settings: {},
+                    })
+                  }
+                >
+                  <SelectTrigger id="type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="discord">Discord</SelectItem>
+                    <SelectItem value="telegram">Telegram</SelectItem>
+                    <SelectItem value="pushover">Pushover</SelectItem>
+                    <SelectItem value="slack">Slack</SelectItem>
+                    <SelectItem value="gotify">Gotify</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                  </SelectPopup>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Changing the type clears the credentials below.
+                </p>
+              </div>
             </div>
 
             {/* Provider-specific settings */}
-            <div className="space-y-4 pt-2 border-t">
-              <Label className="text-base font-medium">Provider Settings</Label>
+            <div className="space-y-4 border-t border-border pt-6">
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Credentials</h3>
+                <p className="text-xs text-muted-foreground">
+                  Taken straight from the provider. Stored on this server and never shown again in
+                  full.
+                </p>
+              </div>
               {renderSettingsFields()}
             </div>
 
             {/* Events */}
-            <div className="space-y-4 pt-2 border-t">
-              <Label className="text-base font-medium">Trigger on Events</Label>
+            <fieldset className="space-y-3 border-t border-border pt-6">
+              <legend className="sr-only">Trigger on events</legend>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Trigger on events</h3>
+                <p className="text-xs text-muted-foreground">
+                  Each ticked event sends one message. Import Failed is the one worth keeping on.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -496,11 +559,17 @@ export default function Notifications() {
                   </Label>
                 </div>
               </div>
-            </div>
+            </fieldset>
 
             {/* Media Types */}
-            <div className="space-y-4 pt-2 border-t">
-              <Label className="text-base font-medium">Include Media Types</Label>
+            <fieldset className="space-y-3 border-t border-border pt-6">
+              <legend className="sr-only">Include media types</legend>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Include media types</h3>
+                <p className="text-xs text-muted-foreground">
+                  Events about unticked types are dropped before this provider sees them.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -551,64 +620,64 @@ export default function Notifications() {
                   </Label>
                 </div>
               </div>
-            </div>
+            </fieldset>
 
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex items-center gap-2 border-t border-border pt-6">
               <Checkbox
                 id="enabled"
                 checked={formData.enabled}
                 onCheckedChange={(checked) => setFormData({ ...formData, enabled: !!checked })}
               />
               <Label htmlFor="enabled" className="font-normal cursor-pointer">
-                Enabled
+                Send through this provider
               </Label>
             </div>
 
             {/* Test result */}
             {testResult && (
               <div
-                className={`flex items-center gap-2 p-3 rounded-md ${
+                role="status"
+                className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
                   testResult.success
-                    ? 'bg-green-500/10 text-green-600'
-                    : 'bg-destructive/10 text-destructive'
+                    ? 'border-status-complete/40 bg-status-complete/10'
+                    : 'border-destructive/40 bg-destructive/10'
                 }`}
               >
                 <HugeiconsIcon
                   icon={testResult.success ? CheckmarkCircle01Icon : Cancel01Icon}
-                  className="h-5 w-5"
+                  className={`mt-0.5 size-4 shrink-0 ${
+                    testResult.success ? 'text-status-complete-ink' : 'text-destructive'
+                  }`}
                 />
-                <span>
+                <span className="text-foreground">
                   {testResult.success
-                    ? 'Test notification sent!'
-                    : testResult.error || 'Test failed'}
+                    ? 'Test message sent. If nothing arrived, the credentials are right but the destination is wrong.'
+                    : testResult.error ||
+                      'The provider did not accept the message. Check the token or webhook URL.'}
                 </span>
               </div>
             )}
           </div>
 
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
             {editingProvider && (
               <Button
                 variant="destructive"
                 onClick={() => setDeleteDialogOpen(true)}
                 className="sm:mr-auto"
               >
-                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                <HugeiconsIcon icon={Delete01Icon} />
                 Delete
               </Button>
             )}
             {editingProvider && (
               <Button variant="outline" onClick={testConnection} disabled={testing}>
-                {testing ? (
-                  <Spinner className="mr-2" />
-                ) : (
-                  <HugeiconsIcon icon={FlashIcon} className="h-4 w-4 mr-2" />
-                )}
+                {testing ? <Spinner /> : <HugeiconsIcon icon={FlashIcon} />}
                 Test
               </Button>
             )}
             <Button onClick={saveProvider} disabled={saving}>
-              {saving && <Spinner className="mr-2" />}
+              {saving && <Spinner />}
               {editingProvider ? 'Save' : 'Add'}
             </Button>
           </DialogFooter>
@@ -621,8 +690,8 @@ export default function Notifications() {
           <DialogHeader>
             <DialogTitle>Delete {editingProvider?.name}?</DialogTitle>
             <DialogDescription>
-              This will remove the notification provider. You will no longer receive notifications
-              from this provider.
+              The provider and its stored credentials are removed, and you stop hearing about failed
+              imports through it. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -630,7 +699,7 @@ export default function Notifications() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={deleteProvider} disabled={deleting}>
-              {deleting && <Spinner className="mr-2" />}
+              {deleting && <Spinner />}
               Delete
             </Button>
           </DialogFooter>

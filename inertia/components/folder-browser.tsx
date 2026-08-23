@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useId } from 'react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui/spinner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   Folder01Icon,
@@ -65,6 +67,9 @@ export function FolderBrowser({
   const [inputValue, setInputValue] = useState(value)
   const [pathStatus, setPathStatus] = useState<PathCheckResult | null>(null)
   const [checkingPath, setCheckingPath] = useState(false)
+  // Two browsers can be mounted at once (complete + temporary paths), so the
+  // field ids have to be unique per instance.
+  const fieldId = useId()
 
   // Fetch quick paths on mount
   useEffect(() => {
@@ -140,10 +145,13 @@ export function FolderBrowser({
         setParentPath(data.parent)
       } else {
         const errorData = await response.json()
-        setError(errorData.error || 'Failed to browse directory')
+        setError(
+          errorData.error ||
+            'Could not read that directory. Check the path exists and that Hamster has permission to read it.'
+        )
       }
     } catch {
-      setError('Failed to browse directory')
+      setError('Hamster is unreachable, so the folder list could not be loaded. Try again.')
     } finally {
       setLoading(false)
     }
@@ -196,42 +204,54 @@ export function FolderBrowser({
     <div className={cn('space-y-3', className)}>
       {/* Path input */}
       <div className="space-y-2">
-        <Label>Path</Label>
+        <Label htmlFor={`${fieldId}-path`}>Path</Label>
         <Input
+          id={`${fieldId}-path`}
           value={inputValue}
           onChange={handleInputChange}
           onKeyDown={handleInputKeyDown}
           placeholder="/path/to/folder"
-          className="font-mono text-sm"
+          className="readout"
         />
         {/* Path status indicator */}
         {inputValue && !checkingPath && pathStatus && (
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
             {pathStatus.exists && pathStatus.isDirectory ? (
-              <>
-                <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-4 text-green-600" />
-                <span className="text-green-600">Path exists</span>
-              </>
+              <Badge className="border-transparent bg-status-complete text-white">
+                <HugeiconsIcon icon={CheckmarkCircle02Icon} />
+                Folder found
+              </Badge>
             ) : pathStatus.exists && !pathStatus.isDirectory ? (
               <>
-                <HugeiconsIcon icon={Alert02Icon} className="size-4 text-destructive" />
-                <span className="text-destructive">Path is not a directory</span>
+                <Badge className="border-transparent bg-status-failed text-white">
+                  <HugeiconsIcon icon={Alert02Icon} />
+                  Not a folder
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  That path is a file. Point at the folder that contains it.
+                </span>
               </>
             ) : (
               <>
-                <HugeiconsIcon icon={Alert02Icon} className="size-4 text-amber-500" />
-                <span className="text-amber-600">Path does not exist</span>
-                {onCreateIfMissingChange && (
+                <Badge className="border-transparent bg-status-queued text-white">
+                  <HugeiconsIcon icon={Alert02Icon} />
+                  Not on disk yet
+                </Badge>
+                {onCreateIfMissingChange ? (
                   <div className="ml-auto flex items-center gap-2">
                     <Checkbox
-                      id="createIfMissing"
+                      id={`${fieldId}-create`}
                       checked={createIfMissing}
                       onCheckedChange={handleCreateIfMissingChange}
                     />
-                    <Label htmlFor="createIfMissing" className="text-sm font-normal cursor-pointer">
-                      Create folder
+                    <Label htmlFor={`${fieldId}-create`} className="cursor-pointer font-normal">
+                      Create it on save
                     </Label>
                   </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    Create the folder first, or pick one below.
+                  </span>
                 )}
               </>
             )}
@@ -240,66 +260,58 @@ export function FolderBrowser({
       </div>
 
       {/* Quick access buttons */}
-      <div className="flex flex-wrap gap-1">
-        {quickPaths.map((qp) => (
-          <Button
-            key={qp.path}
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickPath(qp.path)}
-            className="h-7 text-xs"
-          >
-            {qp.name === 'Home' ? (
-              <HugeiconsIcon icon={Home01Icon} className="mr-1 size-3" />
-            ) : (
-              <HugeiconsIcon icon={Folder01Icon} className="mr-1 size-3" />
-            )}
-            {qp.name}
-          </Button>
-        ))}
-      </div>
+      {quickPaths.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {quickPaths.map((qp) => (
+            <Button
+              key={qp.path}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleQuickPath(qp.path)}
+            >
+              <HugeiconsIcon icon={qp.name === 'Home' ? Home01Icon : Folder01Icon} />
+              {qp.name}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {/* Current path and navigation */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2">
         <Button
           type="button"
           variant="ghost"
           size="sm"
           onClick={handleGoUp}
           disabled={parentPath === null || loading}
-          className="h-7 px-2"
         >
-          <HugeiconsIcon icon={ArrowUp01Icon} className="mr-1 size-3" />
+          <HugeiconsIcon icon={ArrowUp01Icon} />
           Up
         </Button>
-        <span className="flex-1 truncate font-mono text-xs">{currentPath || '/'}</span>
+        <span className="readout flex-1 truncate text-xs text-muted-foreground">
+          {currentPath || '/'}
+        </span>
         {!hideSelectButton && (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={handleSelectCurrent}
-            className="h-7"
-          >
-            Select This Folder
+          <Button type="button" variant="secondary" size="sm" onClick={handleSelectCurrent}>
+            Select this folder
           </Button>
         )}
       </div>
 
       {/* Directory listing */}
-      <ScrollArea className="h-48 rounded-md border">
+      <ScrollArea className="h-48 rounded-md border border-border">
         {loading ? (
-          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-            Loading...
+          <div className="flex h-full items-center justify-center">
+            <Spinner className="size-5 text-muted-foreground" />
           </div>
         ) : error ? (
-          <div className="flex items-center justify-center h-full text-sm text-destructive">
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-destructive">
             {error}
           </div>
         ) : directories.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-            No subdirectories
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+            No subfolders here. Type a path above or go up a level.
           </div>
         ) : (
           <div className="p-1">
@@ -308,10 +320,13 @@ export function FolderBrowser({
                 key={dir.path}
                 type="button"
                 onClick={() => handleDirectoryClick(dir)}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent text-left"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
-                <HugeiconsIcon icon={Folder01Icon} className="size-4 text-muted-foreground" />
-                <span className="truncate">{dir.name}</span>
+                <HugeiconsIcon
+                  icon={Folder01Icon}
+                  className="size-4 shrink-0 text-muted-foreground"
+                />
+                <span className="readout truncate">{dir.name}</span>
               </button>
             ))}
           </div>

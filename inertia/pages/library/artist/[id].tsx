@@ -2,8 +2,9 @@ import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -39,7 +40,6 @@ import {
   CdIcon,
   Calendar01Icon,
   Location01Icon,
-  Edit01Icon,
   ViewIcon,
   ViewOffIcon,
   Search01Icon,
@@ -51,6 +51,7 @@ import {
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
+import { MediaHero } from '@/components/media-hero'
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 
@@ -444,12 +445,13 @@ export default function ArtistDetail() {
       <AppLayout title="Loading...">
         <Head title="Loading..." />
         <div className="space-y-6">
-          <div className="flex gap-6">
-            <Skeleton className="h-48 w-48 rounded-lg" />
+          <div className="flex gap-4 md:gap-6">
+            <Skeleton className="w-28 sm:w-40 md:w-48 aspect-square rounded-lg shrink-0" />
             <div className="flex-1 space-y-4">
               <Skeleton className="h-8 w-1/3" />
               <Skeleton className="h-4 w-1/2" />
               <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-1/2" />
             </div>
           </div>
         </div>
@@ -461,9 +463,11 @@ export default function ArtistDetail() {
     return (
       <AppLayout title="Not Found">
         <Head title="Not Found" />
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Artist not found</p>
-        </div>
+        <EmptyState
+          icon={<HugeiconsIcon icon={MusicNote01Icon} />}
+          title="Artist not found"
+          message="This artist is no longer in your library — they may have been removed. Head back to the music library to pick another."
+        />
       </AppLayout>
     )
   }
@@ -477,10 +481,10 @@ export default function ArtistDetail() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={toggleMonitored}>
+                <Button variant="outline" onClick={toggleMonitored} aria-pressed={artist.monitored}>
                   <HugeiconsIcon
                     icon={artist.monitored ? Notification01Icon : NotificationOff01Icon}
-                    className="h-4 w-4 md:mr-2"
+                    className="h-4 w-4"
                   />
                   <span className="hidden md:inline">
                     {artist.monitored ? 'Monitored' : 'Monitor'}
@@ -492,7 +496,7 @@ export default function ArtistDetail() {
           </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" aria-label="More actions">
                 <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -500,14 +504,14 @@ export default function ArtistDetail() {
               <DropdownMenuItem onClick={toggleRequested}>
                 <HugeiconsIcon
                   icon={artist.requested ? ViewOffIcon : ViewIcon}
-                  className="h-4 w-4 mr-2"
+                  className="h-4 w-4"
                 />
                 {artist.requested ? 'Unrequest' : 'Request'}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={refreshMetadata} disabled={refreshing || enriching}>
                 <HugeiconsIcon
                   icon={RefreshIcon}
-                  className={`h-4 w-4 mr-2 ${refreshing || enriching ? 'animate-spin' : ''}`}
+                  className={`h-4 w-4 ${refreshing || enriching ? 'animate-spin' : ''}`}
                 />
                 {refreshing || enriching ? 'Refreshing...' : 'Refresh metadata'}
               </DropdownMenuItem>
@@ -516,8 +520,8 @@ export default function ArtistDetail() {
                 className="text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
-                Delete
+                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
+                Remove from Library
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -527,78 +531,80 @@ export default function ArtistDetail() {
       <Head title={artist.name} />
 
       <div className="space-y-6">
-        {/* Artist header */}
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* Artist image */}
-          <div className="w-full md:w-48 aspect-square md:aspect-auto md:h-48 bg-muted rounded-lg overflow-hidden flex-shrink-0">
-            {artist.imageUrl ? (
-              <img src={artist.imageUrl} alt={artist.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon
-                  icon={MusicNote01Icon}
-                  className="h-16 w-16 text-muted-foreground/50"
-                />
+        <MediaHero
+          title={artist.name}
+          posterUrl={artist.imageUrl}
+          posterAspect="square"
+          posterFallback={
+            <HugeiconsIcon icon={MusicNote01Icon} className="h-16 w-16 text-muted-foreground/50" />
+          }
+          overview={artist.overview}
+        >
+          <div>
+            <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-[-0.01em]">{artist.name}</h1>
+            </div>
+            {artist.disambiguation && (
+              <p className="text-sm text-muted-foreground">{artist.disambiguation}</p>
+            )}
+          </div>
+
+          {/* Meta info */}
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {artist.artistType && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <HugeiconsIcon icon={MusicNote01Icon} className="h-4 w-4" />
+                {artist.artistType}
+              </div>
+            )}
+            {artist.country && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <HugeiconsIcon icon={Location01Icon} className="h-4 w-4" />
+                {artist.country}
+              </div>
+            )}
+            {artist.formedAt && (
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
+                <span className="readout">
+                  {artist.formedAt}
+                  {artist.endedAt && ` – ${artist.endedAt}`}
+                </span>
               </div>
             )}
           </div>
 
-          {/* Artist info */}
-          <div className="flex-1 space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl font-bold">{artist.name}</h1>
-              </div>
-              {artist.disambiguation && (
-                <p className="text-muted-foreground">{artist.disambiguation}</p>
-              )}
+          {/* Library completeness — media state, so it wears the status ramp, not the accent */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                <span className="readout">{totalFiles}</span> of{' '}
+                <span className="readout">{totalTracks}</span> tracks
+              </span>
+              <span className="readout font-medium">{percentComplete}%</span>
             </div>
-
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-              {artist.artistType && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={MusicNote01Icon} className="h-4 w-4" />
-                  {artist.artistType}
-                </div>
-              )}
-              {artist.country && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={Location01Icon} className="h-4 w-4" />
-                  {artist.country}
-                </div>
-              )}
-              {artist.formedAt && (
-                <div className="flex items-center gap-1 text-muted-foreground">
-                  <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
-                  {artist.formedAt}
-                  {artist.endedAt && ` - ${artist.endedAt}`}
-                </div>
-              )}
-            </div>
-
-            {/* Progress */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  {totalFiles} of {totalTracks} tracks
-                </span>
-                <span className="font-medium">{percentComplete}%</span>
-              </div>
-              <Progress value={percentComplete} className="h-2" />
-            </div>
-
-            {/* Tags */}
-            <div className="flex flex-wrap gap-2">
-              {artist.qualityProfile && (
-                <Badge variant="outline">{artist.qualityProfile.name}</Badge>
-              )}
-              {artist.metadataProfile && (
-                <Badge variant="outline">{artist.metadataProfile.name}</Badge>
-              )}
-              <Badge variant="outline">{artist.albums.length} albums</Badge>
-            </div>
+            <Progress
+              value={percentComplete}
+              className="h-2 [&_[data-slot=progress-indicator]]:bg-status-complete"
+            />
           </div>
-        </div>
+
+          {/* Tags */}
+          <div className="flex flex-wrap gap-2">
+            {artist.qualityProfile && <Badge variant="outline">{artist.qualityProfile.name}</Badge>}
+            {artist.metadataProfile && (
+              <Badge variant="outline">{artist.metadataProfile.name}</Badge>
+            )}
+            {artist.rootFolder && (
+              <Badge variant="secondary" className="readout">
+                {artist.rootFolder.path}
+              </Badge>
+            )}
+            <Badge variant="outline">
+              <span className="readout">{artist.albums.length}</span> albums
+            </Badge>
+          </div>
+        </MediaHero>
 
         {/* Albums / Discography */}
         <Tabs defaultValue="all" className="space-y-4">
@@ -616,19 +622,15 @@ export default function ArtistDetail() {
 
           <TabsContent value="all" className="space-y-4">
             {mergedAlbums.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="rounded-full bg-muted p-6 mb-4">
-                    <HugeiconsIcon icon={CdIcon} className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">No albums found</h3>
-                  <p className="text-muted-foreground">
-                    {loadingDiscography
-                      ? 'Loading discography...'
-                      : 'Try refreshing to fetch albums from MusicBrainz.'}
-                  </p>
-                </CardContent>
-              </Card>
+              <EmptyState
+                icon={<HugeiconsIcon icon={CdIcon} />}
+                title="No albums found"
+                message={
+                  loadingDiscography
+                    ? 'Loading the discography from MusicBrainz…'
+                    : 'MusicBrainz has no discography linked to this artist yet. Run Refresh metadata from the actions menu to fetch it.'
+                }
+              />
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {mergedAlbums.map((album) => (
@@ -652,7 +654,11 @@ export default function ArtistDetail() {
 
           <TabsContent value="downloaded" className="space-y-4">
             {downloadedAlbums.length === 0 ? (
-              <EmptyState message="No downloaded albums yet" />
+              <EmptyState
+                icon={<HugeiconsIcon icon={CdIcon} />}
+                title="No downloaded albums yet"
+                message="Nothing from this artist has landed on disk. Request an album below and the next indexer search will pick it up."
+              />
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {downloadedAlbums.map((album) => (
@@ -670,7 +676,11 @@ export default function ArtistDetail() {
 
           <TabsContent value="requested" className="space-y-4">
             {requestedAlbums.length === 0 ? (
-              <EmptyState message="No requested albums" />
+              <EmptyState
+                icon={<HugeiconsIcon icon={CdIcon} />}
+                title="No requested albums"
+                message="Request an album from the discography and Hamster will keep searching your indexers for it."
+              />
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {requestedAlbums.map((album) => (
@@ -688,7 +698,11 @@ export default function ArtistDetail() {
 
           <TabsContent value="available" className="space-y-4">
             {notInLibraryAlbums.length === 0 ? (
-              <EmptyState message="All albums are in library" />
+              <EmptyState
+                icon={<HugeiconsIcon icon={CdIcon} />}
+                title="Every album is already in your library"
+                message="MusicBrainz lists nothing further for this artist."
+              />
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                 {notInLibraryAlbums.map((album) => (
@@ -729,7 +743,7 @@ export default function ArtistDetail() {
             <Button variant="destructive" onClick={deleteArtist} disabled={deleting}>
               {deleting ? (
                 <>
-                  <Spinner className="mr-2" />
+                  <Spinner />
                   Deleting...
                 </>
               ) : (
@@ -756,10 +770,12 @@ export default function ArtistDetail() {
                 />
               </div>
               <div className="min-w-0">
-                <div className="font-semibold truncate">{selectedAlbum?.title}</div>
-                <div className="text-sm text-muted-foreground">
-                  {selectedAlbum?.releaseDate?.split('-')[0] || 'Unknown year'} ·{' '}
-                  {selectedAlbum?.type}
+                <div className="text-base font-semibold truncate">{selectedAlbum?.title}</div>
+                <div className="text-xs font-normal text-muted-foreground">
+                  <span className="readout">
+                    {selectedAlbum?.releaseDate?.split('-')[0] || 'Unknown year'}
+                  </span>{' '}
+                  · <span className="capitalize">{selectedAlbum?.type}</span>
                 </div>
               </div>
             </DialogTitle>
@@ -770,35 +786,39 @@ export default function ArtistDetail() {
                 <Spinner className="h-8 w-8" />
               </div>
             ) : albumTracks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <HugeiconsIcon
-                  icon={MusicNote01Icon}
-                  className="h-12 w-12 text-muted-foreground mb-2"
-                />
-                <p className="text-muted-foreground">No tracks found</p>
-              </div>
+              <EmptyState
+                icon={<HugeiconsIcon icon={MusicNote01Icon} />}
+                title="No tracks found"
+                message="MusicBrainz has no track listing for this release group yet."
+              />
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12">#</TableHead>
+                    <TableHead className="w-12" data-numeric>
+                      #
+                    </TableHead>
                     <TableHead>Title</TableHead>
-                    <TableHead className="w-20 text-right">Duration</TableHead>
+                    <TableHead className="w-20" data-numeric>
+                      Duration
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {albumTracks.map((track) => (
                     <TableRow key={track.musicbrainzId}>
-                      <TableCell className="text-muted-foreground">{track.position}</TableCell>
+                      <TableCell className="text-muted-foreground" data-numeric>
+                        {track.position}
+                      </TableCell>
                       <TableCell className="font-medium">
                         {track.title}
                         {track.artistName && track.artistName !== artist?.name && (
-                          <span className="text-muted-foreground text-sm ml-2">
+                          <span className="text-muted-foreground text-xs ml-2">
                             ({track.artistName})
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
+                      <TableCell className="text-muted-foreground" data-numeric>
                         {formatDuration(track.duration)}
                       </TableCell>
                     </TableRow>
@@ -830,12 +850,12 @@ export default function ArtistDetail() {
               >
                 {addingAlbums.has(selectedAlbum.musicbrainzId) ? (
                   <>
-                    <Spinner className="mr-2" />
+                    <Spinner />
                     Adding...
                   </>
                 ) : (
                   <>
-                    <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                    <HugeiconsIcon icon={Add01Icon} className="h-4 w-4" />
                     Add to Library
                   </>
                 )}
@@ -845,18 +865,6 @@ export default function ArtistDetail() {
         </DialogContent>
       </Dialog>
     </AppLayout>
-  )
-}
-
-// Empty state component
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="rounded-full bg-muted p-6 mb-4">
-        <HugeiconsIcon icon={CdIcon} className="h-12 w-12 text-muted-foreground" />
-      </div>
-      <p className="text-muted-foreground">{message}</p>
-    </div>
   )
 }
 
@@ -940,9 +948,9 @@ function MergedAlbumCard({ album, isAdding, onAdd, onShowTracks }: MergedAlbumCa
   return (
     <div onClick={handleCardClick}>
       <Card
-        className={`py-0 overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group ${
-          isComplete ? 'ring-1 ring-green-500/50' : ''
-        } ${isNotInLibrary ? 'opacity-70' : ''}`}
+        className={`py-0 overflow-hidden transition-colors duration-150 cursor-pointer group hover:border-primary ${
+          isNotInLibrary ? 'opacity-70' : ''
+        }`}
       >
         <div className="aspect-square bg-muted relative">
           {showImage ? (
@@ -959,17 +967,17 @@ function MergedAlbumCard({ album, isAdding, onAdd, onShowTracks }: MergedAlbumCa
             </div>
           )}
 
-          {/* Status badge */}
+          {/* Status badge — status ramp, always icon + label, never colour alone */}
           <div className="absolute top-2 right-2">
             {isComplete && (
-              <Badge variant="default" className="bg-green-600 text-white">
-                <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3 mr-1" />
+              <Badge className="h-6 bg-status-complete text-white shadow-[inset_0_0_0_1px_rgb(0_0_0/0.4)]">
+                <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
                 Downloaded
               </Badge>
             )}
             {isRequested && (
-              <Badge variant="secondary" className="bg-yellow-600 text-white">
-                <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3 mr-1" />
+              <Badge className="h-6 bg-status-queued text-white shadow-[inset_0_0_0_1px_rgb(0_0_0/0.4)]">
+                <HugeiconsIcon icon={Clock01Icon} className="h-3 w-3" />
                 Requested
               </Badge>
             )}
@@ -1013,21 +1021,30 @@ function MergedAlbumCard({ album, isAdding, onAdd, onShowTracks }: MergedAlbumCa
 
           {/* Progress bar at bottom */}
           {album.inLibrary && album.requested && (
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted-foreground/20">
+            <div
+              className="absolute bottom-0 left-0 right-0 h-1 bg-black/40"
+              role="progressbar"
+              aria-valuenow={percentComplete}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${album.title} tracks on disk`}
+            >
               <div
-                className={`h-full transition-all ${isComplete ? 'bg-green-500' : 'bg-primary'}`}
+                className={`h-full transition-all duration-150 ${
+                  isComplete ? 'bg-status-complete' : 'bg-status-queued'
+                }`}
                 style={{ width: `${percentComplete}%` }}
               />
             </div>
           )}
         </div>
         <CardContent className={`p-3 ${isNotInLibrary ? 'opacity-70' : ''}`}>
-          <h3 className="font-medium truncate group-hover:text-primary transition-colors">
+          <h3 className="text-sm font-medium truncate group-hover:text-primary transition-colors duration-150">
             {album.title}
           </h3>
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>{album.releaseDate?.split('-')[0] || 'Unknown'}</span>
-            <span className="capitalize">{album.type}</span>
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span className="readout">{album.releaseDate?.split('-')[0] || '————'}</span>
+            <span className="capitalize truncate">{album.type}</span>
           </div>
         </CardContent>
       </Card>

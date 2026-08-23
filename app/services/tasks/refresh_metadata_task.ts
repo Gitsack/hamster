@@ -113,7 +113,9 @@ class RefreshMetadataTask {
               airDate: tmdbSeason.airDate ? DateTime.fromISO(tmdbSeason.airDate) : null,
               posterUrl: tmdbSeason.posterPath || null,
               episodeCount: tmdbSeason.episodeCount,
-              requested: false,
+              // A new season of a monitored show is wanted by default, for the
+              // same reason as episodes above.
+              requested: show.monitored,
             })
             existingSeasons.set(tmdbSeason.seasonNumber, season)
           } else {
@@ -170,7 +172,11 @@ class RefreshMetadataTask {
                 stillUrl: tmdbEpisode.stillPath || null,
                 rating: tmdbEpisode.voteAverage || null,
                 votes: tmdbEpisode.voteCount || null,
-                requested: false,
+                // Inherit wantedness from the season. A newly announced episode of
+                // a season the user asked for is wanted too — hardcoding false here
+                // meant every episode that aired after the show was added silently
+                // never got searched.
+                requested: season.requested,
                 hasFile: false,
               })
             }

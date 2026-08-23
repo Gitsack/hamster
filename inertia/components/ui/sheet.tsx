@@ -194,7 +194,7 @@ function SheetContent({ className, children, side = 'right', ...props }: SheetCo
         aria-modal="true"
         data-slot="sheet-content"
         className={cn(
-          'bg-background absolute flex flex-col shadow-lg outline-none transition-transform duration-300 ease-out',
+          'bg-popover text-popover-foreground border-border absolute flex flex-col shadow-lg outline-none transition-transform duration-300 ease-out',
           side === 'right' && 'inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-md',
           side === 'left' && 'inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-md',
           side === 'top' && 'inset-x-0 top-0 h-auto border-b',
@@ -208,7 +208,7 @@ function SheetContent({ className, children, side = 'right', ...props }: SheetCo
         <button
           type="button"
           onClick={() => onOpenChange(false)}
-          className="ring-offset-background focus:ring-ring absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none z-10"
+          className="focus-visible:ring-ring/50 focus-visible:border-ring text-muted-foreground hover:bg-accent hover:text-accent-foreground absolute top-4 right-4 z-10 flex size-8 items-center justify-center rounded-md border border-transparent transition-colors outline-none focus-visible:ring-[3px] disabled:pointer-events-none"
         >
           <XIcon className="size-4" />
           <span className="sr-only">Close</span>

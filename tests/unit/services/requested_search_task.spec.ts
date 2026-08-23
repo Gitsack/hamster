@@ -1,4 +1,5 @@
 import { test } from '@japa/runner'
+import { isExpectedSkip } from '#services/tasks/requested_search_task'
 
 /**
  * Tests for the pure helper functions in requested_search_task.ts.
@@ -187,5 +188,34 @@ test.group('doesMovieReleaseTitleMatch', () => {
 
   test('rejects completely different title', ({ assert }) => {
     assert.isFalse(doesMovieReleaseTitleMatch('Inception 2010 1080p', 'The Matrix'))
+  })
+})
+
+test.group('requested_search_task | isExpectedSkip', () => {
+  test('treats grab guard conditions as skips, not failures', ({ assert }) => {
+    // Every one of these is grab() declining a release on purpose. Counting them
+    // as task errors marked healthy search runs as failed.
+    assert.isTrue(isExpectedSkip(new Error('This release has already been downloaded.')))
+    assert.isTrue(isExpectedSkip(new Error('This release has failed repeatedly; skipping.')))
+    assert.isTrue(
+      isExpectedSkip(
+        new Error('A download for this item completed recently. Use manual search to re-grab.')
+      )
+    )
+    assert.isTrue(isExpectedSkip(new Error('Episode already has a file')))
+    assert.isTrue(isExpectedSkip(new Error('Movie already has a file')))
+    assert.isTrue(isExpectedSkip(new Error('File already exists in library')))
+  })
+
+  test('treats real faults as failures', ({ assert }) => {
+    assert.isFalse(isExpectedSkip(new Error('No enabled download client configured')))
+    assert.isFalse(isExpectedSkip(new Error('Could not reach indexer NZBFinder to fetch the NZB')))
+    assert.isFalse(isExpectedSkip(new Error('Indexer returned HTTP 500 for the NZB')))
+    assert.isFalse(isExpectedSkip(new Error('Unknown error')))
+  })
+
+  test('handles non-Error values without throwing', ({ assert }) => {
+    assert.isFalse(isExpectedSkip(undefined))
+    assert.isTrue(isExpectedSkip('This release has already been downloaded.'))
   })
 })

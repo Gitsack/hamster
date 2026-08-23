@@ -249,7 +249,10 @@ export default class MoviesController {
       sortTitle: data.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
       year: data.year,
       requested: data.requested ?? true,
-      monitored: data.monitored ?? false,
+      // Adding a movie means you want it tracked. Defaulting to false here (unlike
+      // shows, artists and authors, which all default to true) left every added
+      // movie unmonitored, so the dashboard's missing-movies count stayed at zero.
+      monitored: data.monitored ?? true,
       hasFile: false,
       qualityProfileId: data.qualityProfileId,
       rootFolderId: data.rootFolderId,

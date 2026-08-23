@@ -74,10 +74,10 @@ export function SimilarLane({ mediaType, mediaId, tmdbId }: SimilarLaneProps) {
   if (loading) {
     return (
       <div className="space-y-3">
-        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-5 w-40" />
         <div className="flex gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="flex-shrink-0 w-32 aspect-[2/3] rounded-lg" />
+            <Skeleton key={i} className="shrink-0 w-32 aspect-[2/3] rounded-lg" />
           ))}
         </div>
       </div>
@@ -87,10 +87,10 @@ export function SimilarLane({ mediaType, mediaId, tmdbId }: SimilarLaneProps) {
 
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-semibold">
+      <h2 className="text-base font-semibold">
         Similar {mediaType === 'movies' ? 'Movies' : 'Shows'}
       </h2>
-      <div className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 [&::-webkit-scrollbar-thumb]:rounded-full">
+      <div className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-[var(--scrollbar-track)] [&::-webkit-scrollbar-thumb]:bg-[var(--scrollbar-thumb)] [&::-webkit-scrollbar-thumb]:rounded-full">
         {items.map((item) => (
           <MediaTeaser
             key={item.tmdbId}

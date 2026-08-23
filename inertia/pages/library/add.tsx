@@ -74,7 +74,9 @@ export default function AddArtist() {
       })
       .catch((error) => {
         console.error('Failed to load options:', error)
-        toast.error('Failed to load configuration options')
+        toast.error(
+          'Could not load quality profiles. Reload the page, or add one in Settings → Media Management.'
+        )
       })
       .finally(() => setLoadingOptions(false))
   }, [])
@@ -93,7 +95,7 @@ export default function AddArtist() {
       }
     } catch (error) {
       console.error('Search failed:', error)
-      toast.error('Search failed')
+      toast.error('MusicBrainz search failed. Check network access to musicbrainz.org, then retry.')
     } finally {
       setSearching(false)
     }
@@ -113,7 +115,7 @@ export default function AddArtist() {
   const addArtist = async () => {
     if (!selectedArtist) return
     if (!selectedQualityProfile) {
-      toast.error('Please select a quality profile')
+      toast.error('Choose a quality profile before adding this artist.')
       return
     }
 
@@ -148,11 +150,13 @@ export default function AddArtist() {
         router.visit(`/artist/${data.id}`)
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add artist')
+        toast.error(
+          error.error || `Could not add ${selectedArtist.name} — nothing was saved. Try again.`
+        )
       }
     } catch (error) {
       console.error('Failed to add artist:', error)
-      toast.error('Failed to add artist')
+      toast.error(`Could not reach the server — ${selectedArtist.name} was not added.`)
     } finally {
       setAdding(false)
     }
@@ -164,7 +168,7 @@ export default function AddArtist() {
       actions={
         <Button variant="outline" asChild>
           <Link href="/library">
-            <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4 mr-2" />
+            <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
             Back to Library
           </Link>
         </Button>
@@ -183,10 +187,12 @@ export default function AddArtist() {
               <div className="relative flex-1">
                 <HugeiconsIcon
                   icon={Search01Icon}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+                  aria-hidden="true"
                 />
                 <Input
-                  placeholder="Search for an artist..."
+                  aria-label="Search MusicBrainz for an artist"
+                  placeholder="Search for an artist…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -198,8 +204,8 @@ export default function AddArtist() {
                 {searching ? <Spinner /> : 'Search'}
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground mt-2">
-              Search for artists on MusicBrainz to add them to your library.
+            <p className="text-sm text-muted-foreground mt-3">
+              Results come from MusicBrainz. Adding an artist starts tracking their releases.
             </p>
           </CardContent>
         </Card>
@@ -208,9 +214,9 @@ export default function AddArtist() {
         {searching ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
-              <Card key={i}>
-                <CardContent className="flex items-center gap-4 p-4">
-                  <Skeleton className="h-16 w-16 rounded" />
+              <Card key={i} className="py-0 gap-0">
+                <CardContent className="flex items-center gap-3 p-3">
+                  <Skeleton className="h-16 w-16 rounded-lg" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-4 w-1/3" />
                     <Skeleton className="h-3 w-1/2" />
@@ -223,16 +229,21 @@ export default function AddArtist() {
         ) : searchResults.length > 0 ? (
           <div className="space-y-2">
             {searchResults.map((artist) => (
-              <Card key={artist.musicbrainzId} className={artist.inLibrary ? 'opacity-60' : ''}>
-                <CardContent className="flex items-center gap-4 p-4">
-                  <div className="h-16 w-16 rounded bg-muted flex-shrink-0 flex items-center justify-center">
+              <Card
+                key={artist.musicbrainzId}
+                className={`py-0 gap-0 transition-colors duration-150 ease-out ${
+                  artist.inLibrary ? 'opacity-60' : 'hover:bg-accent'
+                }`}
+              >
+                <CardContent className="flex items-center gap-3 p-3">
+                  <div className="h-16 w-16 rounded-lg bg-muted flex-shrink-0 flex items-center justify-center">
                     <HugeiconsIcon
                       icon={MusicNote01Icon}
-                      className="h-8 w-8 text-muted-foreground/50"
+                      className="h-6 w-6 text-muted-foreground/40"
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium">
+                    <h3 className="text-sm font-medium truncate">
                       {artist.name}
                       {artist.disambiguation && (
                         <span className="text-muted-foreground ml-2">
@@ -240,28 +251,28 @@ export default function AddArtist() {
                         </span>
                       )}
                     </h3>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                       {artist.type && <span>{artist.type}</span>}
                       {artist.country && (
                         <>
-                          <span>•</span>
+                          <span aria-hidden="true">•</span>
                           <span>{artist.country}</span>
                         </>
                       )}
                       {artist.beginDate && (
                         <>
-                          <span>•</span>
-                          <span>
+                          <span aria-hidden="true">•</span>
+                          <span className="readout">
                             {artist.beginDate}
-                            {artist.endDate ? ` - ${artist.endDate}` : ''}
+                            {artist.endDate ? ` – ${artist.endDate}` : ''}
                           </span>
                         </>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     {artist.inLibrary ? (
-                      <Badge variant="outline" className="gap-1">
+                      <Badge className="border-transparent bg-status-complete text-white">
                         <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
                         In Library
                       </Badge>
@@ -278,12 +289,13 @@ export default function AddArtist() {
         ) : hasSearched ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="rounded-full bg-muted p-6 mb-4">
-                <HugeiconsIcon icon={Search01Icon} className="h-12 w-12 text-muted-foreground" />
+              <div className="rounded-full bg-muted p-4 mb-4">
+                <HugeiconsIcon icon={Search01Icon} className="h-6 w-6 text-muted-foreground" />
               </div>
-              <h3 className="text-lg font-medium mb-2">No artists found</h3>
-              <p className="text-muted-foreground">
-                Try a different search term or check your spelling.
+              <h3 className="text-lg font-medium mb-2">No artists match that search</h3>
+              <p className="text-sm text-muted-foreground max-w-sm">
+                MusicBrainz returned nothing for this term. Check the spelling, or try the name as
+                it appears on the release.
               </p>
             </CardContent>
           </Card>
@@ -350,8 +362,8 @@ export default function AddArtist() {
             >
               {adding ? (
                 <>
-                  <Spinner className="mr-2" />
-                  Adding...
+                  <Spinner className="h-4 w-4" />
+                  Adding…
                 </>
               ) : (
                 'Add Artist'

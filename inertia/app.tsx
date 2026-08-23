@@ -11,6 +11,7 @@ import { MediaPreviewProvider } from '@/contexts/media_preview_context'
 import { AudioPlayer } from '@/components/player/audio_player'
 import { OperationTrackerProvider } from '@/components/operation-tracker'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { ThemeProvider, useTheme } from '@/contexts/theme_context'
 import { Toaster } from 'sonner'
 import { useState, useEffect } from 'react'
 
@@ -18,13 +19,15 @@ const appName = import.meta.env.VITE_APP_NAME || 'Hamster'
 
 function ClientOnlyToaster() {
   const [mounted, setMounted] = useState(false)
+  const { theme } = useTheme()
   useEffect(() => setMounted(true), [])
   if (!mounted) return null
-  return <Toaster position="bottom-right" />
+  return <Toaster position="bottom-right" theme={theme} />
 }
 
 createInertiaApp({
-  progress: { color: '#5468FF' },
+  // Signal Violet — the application's own voice, never a media-state colour.
+  progress: { color: 'oklch(0.52 0.27 277)' },
 
   title: (title) => `${title} - ${appName}`,
 
@@ -39,17 +42,19 @@ createInertiaApp({
     hydrateRoot(
       el,
       <ErrorBoundary fullPage>
-        <ActiveDownloadsProvider>
-          <AudioPlayerProvider>
-            <OperationTrackerProvider>
-              <MediaPreviewProvider>
-                <App {...props} />
-                <AudioPlayer />
-                <ClientOnlyToaster />
-              </MediaPreviewProvider>
-            </OperationTrackerProvider>
-          </AudioPlayerProvider>
-        </ActiveDownloadsProvider>
+        <ThemeProvider>
+          <ActiveDownloadsProvider>
+            <AudioPlayerProvider>
+              <OperationTrackerProvider>
+                <MediaPreviewProvider>
+                  <App {...props} />
+                  <AudioPlayer />
+                  <ClientOnlyToaster />
+                </MediaPreviewProvider>
+              </OperationTrackerProvider>
+            </AudioPlayerProvider>
+          </ActiveDownloadsProvider>
+        </ThemeProvider>
       </ErrorBoundary>
     )
   },

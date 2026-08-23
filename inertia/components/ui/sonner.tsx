@@ -24,12 +24,21 @@ const Toaster = ({ ...props }: ToasterProps) => {
         error: <OctagonXIcon className="size-4" />,
         loading: <Loader2Icon className="size-4 animate-spin" />,
       }}
+      toastOptions={{
+        classNames: {
+          // Sonner's own rule wins on specificity, so the overlay shadow is forced.
+          toast: 'shadow-lg!',
+          description: 'text-muted-foreground!',
+          actionButton: 'bg-primary! text-primary-foreground!',
+          cancelButton: 'bg-muted! text-muted-foreground!',
+        },
+      }}
       style={
         {
-          '--normal-bg': 'var(--popover)',
-          '--normal-text': 'var(--popover-foreground)',
+          '--normal-bg': 'var(--card)',
+          '--normal-text': 'var(--card-foreground)',
           '--normal-border': 'var(--border)',
-          '--border-radius': 'var(--radius)',
+          '--border-radius': 'calc(var(--radius) + 4px)',
         } as React.CSSProperties
       }
       {...props}

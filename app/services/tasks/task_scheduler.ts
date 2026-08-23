@@ -15,6 +15,10 @@ interface DefaultTask {
   enabled: boolean
 }
 
+// How often to check whether any task has come due. Short enough that a task is
+// never late by more than this, cheap enough to run forever (one indexed query).
+const TICK_INTERVAL_MS = 30_000
+
 const DEFAULT_TASKS: DefaultTask[] = [
   { name: 'Download Monitor', type: 'download_monitor', intervalMinutes: 1, enabled: true },
   {
@@ -45,7 +49,12 @@ const DEFAULT_TASKS: DefaultTask[] = [
 
 class TaskScheduler {
   private runners = new Map<TaskType, TaskRunner>()
-  private timers = new Map<TaskType, NodeJS.Timeout>()
+
+  // Tasks currently executing, claimed by this scheduler rather than trusting
+  // each runner's own `running` flag.
+  private inFlight = new Set<TaskType>()
+  private ticker: NodeJS.Timeout | null = null
+  private startupDone = false
   private started = false
 
   /**
@@ -79,68 +88,71 @@ class TaskScheduler {
       }
     }
 
-    // Load all tasks and start them
-    const tasks = await ScheduledTask.query().where('enabled', true)
-    for (const task of tasks) {
-      this.scheduleTask(task)
-    }
+    // A single ticker drives every task off its persisted nextRunAt.
+    this.ticker = setInterval(() => {
+      this.tick().catch((err) => console.error('[TaskScheduler] Tick failed:', err))
+    }, TICK_INTERVAL_MS)
 
-    console.log(`[TaskScheduler] Started ${tasks.length} scheduled tasks`)
+    await this.tick()
+
+    const count = await ScheduledTask.query().where('enabled', true)
+    console.log(`[TaskScheduler] Started, polling ${count.length} scheduled tasks`)
   }
 
   /**
    * Stop all scheduled tasks
    */
   stop() {
-    for (const [type, timer] of this.timers) {
-      clearInterval(timer)
-      const runner = this.runners.get(type)
-      if (runner) {
-        runner.stop()
-      }
+    if (this.ticker) {
+      clearInterval(this.ticker)
+      this.ticker = null
     }
-    this.timers.clear()
+    for (const runner of this.runners.values()) {
+      runner.stop()
+    }
+    this.startupDone = false
     this.started = false
     console.log('[TaskScheduler] All tasks stopped')
   }
 
   /**
-   * Schedule a single task based on its DB configuration
+   * Poll every task's due-ness against the clock.
+   *
+   * This replaces a per-task `setInterval(intervalMinutes)`. That armed each
+   * timer from the moment of scheduling rather than from the task's stored
+   * nextRunAt, so every process restart pushed the next run a full interval into
+   * the future. Any task whose interval exceeded the time between restarts —
+   * hourly search, 4-hourly library scan, 12-hourly metadata refresh — could
+   * therefore never run at all. Ticking against persisted state is restart-safe
+   * and self-correcting.
    */
-  private scheduleTask(task: ScheduledTask) {
-    const runner = this.runners.get(task.type)
-    if (!runner) {
-      console.log(`[TaskScheduler] No runner registered for task type: ${task.type}`)
+  private async tick() {
+    let tasks: ScheduledTask[]
+    try {
+      tasks = await ScheduledTask.query().where('enabled', true)
+    } catch (err) {
+      console.error('[TaskScheduler] Failed to load tasks for tick:', err)
       return
     }
 
-    // Clear any existing timer for this task type
-    const existingTimer = this.timers.get(task.type)
-    if (existingTimer) {
-      clearInterval(existingTimer)
-    }
+    const now = DateTime.now()
 
-    const intervalMs = task.intervalMinutes * 60 * 1000
+    for (const task of tasks) {
+      if (!this.runners.has(task.type)) continue
+      if (task.nextRunAt && task.nextRunAt > now) continue
+      if (this.inFlight.has(task.type)) continue
 
-    // Schedule the task
-    const timer = setInterval(() => {
-      this.executeTask(task.type).catch((err) => {
-        console.error(`[TaskScheduler] Error executing ${task.type}:`, err)
-      })
-    }, intervalMs)
-
-    this.timers.set(task.type, timer)
-
-    // Run immediately if next_run_at is in the past or null
-    if (!task.nextRunAt || task.nextRunAt <= DateTime.now()) {
-      // Slight delay to avoid thundering herd at startup
-      const delay = this.getStartupDelay(task.type)
+      // Stagger the first run of each type so a cold start does not fire
+      // everything into the indexers at once.
+      const delay = this.startupDone ? 0 : this.getStartupDelay(task.type)
       setTimeout(() => {
         this.executeTask(task.type).catch((err) => {
-          console.error(`[TaskScheduler] Error executing ${task.type} on startup:`, err)
+          console.error(`[TaskScheduler] Error executing ${task.type}:`, err)
         })
       }, delay)
     }
+
+    this.startupDone = true
   }
 
   /**
@@ -172,7 +184,11 @@ class TaskScheduler {
       return
     }
 
-    if (runner.running) {
+    // Not all runners report `running` honestly — a few hardcode it to false —
+    // so the scheduler keeps its own claim. Without this a long task (library
+    // scan runs for ~12 minutes) could be started again while still running.
+    if (runner.running || this.inFlight.has(type)) {
+      console.warn(`[TaskScheduler] Task ${type} is still running, skipping this tick`)
       return
     }
 
@@ -181,17 +197,40 @@ class TaskScheduler {
       return
     }
 
+    this.inFlight.add(type)
+
     const startTime = Date.now()
     task.lastRunAt = DateTime.now()
+    // Schedule the next run up front. Doing it only in the `finally` meant a
+    // crash or restart mid-run left nextRunAt permanently in the past, so the
+    // task fired on every subsequent tick.
+    task.nextRunAt = DateTime.now().plus({ minutes: task.intervalMinutes })
     await task.save()
 
+    let status = 'success'
+    let error: string | null = null
+
     try {
-      await runner.run()
+      const result = await runner.run()
+      // Several runners report per-item errors instead of throwing. A task that
+      // fails every run for a recoverable reason must not look like a success.
+      const errors = (result as { errors?: unknown } | undefined)?.errors
+      if (Array.isArray(errors) && errors.length > 0) {
+        status = 'failed'
+        error = errors.slice(0, 5).map(String).join('; ')
+      }
     } catch (err) {
       console.error(`[TaskScheduler] Task ${type} failed:`, err)
+      status = 'failed'
+      error = err instanceof Error ? err.message : String(err)
     } finally {
+      this.inFlight.delete(type)
       const duration = Date.now() - startTime
       task.lastDurationMs = duration
+      task.lastStatus = status
+      task.lastError = error ? error.slice(0, 2000) : null
+      // Recompute from the end of the run so a task that takes longer than its
+      // interval does not immediately re-fire.
       task.nextRunAt = DateTime.now().plus({ minutes: task.intervalMinutes })
       await task.save()
     }
@@ -211,7 +250,10 @@ class TaskScheduler {
       return { success: false, error: `No runner registered for task type: ${task.type}` }
     }
 
-    if (runner.running) {
+    // Same claim check as executeTask, so a manual trigger cannot start a second
+    // copy of a task that is already running. executeTask re-checks anyway; this
+    // exists to give the caller a real error instead of a silent no-op.
+    if (runner.running || this.inFlight.has(task.type)) {
       return { success: false, error: 'Task is already running' }
     }
 
@@ -244,18 +286,8 @@ class TaskScheduler {
     task.nextRunAt = DateTime.now().plus({ minutes: task.intervalMinutes })
     await task.save()
 
-    // Reschedule: clear existing timer
-    const existingTimer = this.timers.get(task.type)
-    if (existingTimer) {
-      clearInterval(existingTimer)
-      this.timers.delete(task.type)
-    }
-
-    // Restart if enabled
-    if (task.enabled) {
-      this.scheduleTask(task)
-    }
-
+    // No rescheduling needed: the ticker reads nextRunAt and enabled from the
+    // row on every pass, so saving is all it takes to take effect.
     return task
   }
 

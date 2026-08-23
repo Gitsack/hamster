@@ -31,14 +31,14 @@ export function DownloadClientIndicator({
   if (clients.length === 0) return null
 
   const activeClient = selectedClientId
-    ? clients.find((c) => c.id === selectedClientId) ?? clients[0]
+    ? (clients.find((c) => c.id === selectedClientId) ?? clients[0])
     : clients[0]
 
   const label = activeClient.name || clientTypeLabels[activeClient.type] || activeClient.type
 
   if (clients.length === 1) {
     return (
-      <Badge variant="secondary" title="Download client">
+      <Badge variant="secondary" className="readout" title="Download client">
         {label}
       </Badge>
     )
@@ -49,7 +49,7 @@ export function DownloadClientIndicator({
       <DropdownMenuTrigger asChild>
         <Badge
           variant="secondary"
-          className="cursor-pointer hover:bg-secondary/80 gap-1"
+          className="readout cursor-pointer gap-1 hover:bg-accent"
           title="Download client (click to change)"
         >
           {label}
@@ -63,9 +63,11 @@ export function DownloadClientIndicator({
             onClick={() => onClientChange(client.id === clients[0].id ? null : client.id)}
             className={client.id === activeClient.id ? 'font-medium' : ''}
           >
-            {client.name || clientTypeLabels[client.type] || client.type}
+            <span className="readout">
+              {client.name || clientTypeLabels[client.type] || client.type}
+            </span>
             {client.id === clients[0].id && (
-              <span className="ml-2 text-xs text-muted-foreground">(default)</span>
+              <span className="ml-2 text-xs text-muted-foreground">default</span>
             )}
           </DropdownMenuItem>
         ))}

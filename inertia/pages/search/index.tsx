@@ -101,15 +101,24 @@ class ErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="p-4 border border-destructive rounded bg-destructive/10 text-destructive">
-          <h2 className="font-bold">Something went wrong</h2>
-          <pre className="text-sm mt-2 whitespace-pre-wrap">{this.state.error?.message}</pre>
-          <button
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4">
+          <h2 className="text-base font-semibold text-destructive">
+            The search screen stopped rendering
+          </h2>
+          <p className="mt-1 text-sm text-destructive/90">
+            Nothing was lost. Retry below, or reload the page if it happens again.
+          </p>
+          <pre className="readout mt-3 text-xs whitespace-pre-wrap text-destructive/90">
+            {this.state.error?.message}
+          </pre>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="mt-3"
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="mt-2 px-3 py-1 bg-destructive text-destructive-foreground rounded"
           >
             Try again
-          </button>
+          </Button>
         </div>
       )
     }
@@ -382,7 +391,7 @@ const DiscoverLane = memo(
             <h3 className="text-lg font-semibold">
               {title}
               {source && (
-                <Badge variant="outline" className="ml-2 text-xs font-normal">
+                <Badge variant="outline" className="ml-2 align-middle">
                   {source === 'trakt' ? 'Trakt' : source === 'justwatch' ? 'JustWatch' : 'For You'}
                 </Badge>
               )}
@@ -390,7 +399,7 @@ const DiscoverLane = memo(
             {moreHref && (
               <button
                 onClick={() => router.visit(moreHref)}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="rounded-md px-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 Show more
               </button>
@@ -399,8 +408,7 @@ const DiscoverLane = memo(
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              size="icon-sm"
               onClick={() => scroll('left')}
               aria-label="Scroll left"
             >
@@ -408,8 +416,7 @@ const DiscoverLane = memo(
             </Button>
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+              size="icon-sm"
               onClick={() => scroll('right')}
               aria-label="Scroll right"
             >
@@ -419,7 +426,7 @@ const DiscoverLane = memo(
         </div>
         <div
           ref={scrollRef}
-          className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+          className="flex gap-3 overflow-x-auto pb-2"
           style={{ scrollbarWidth: 'thin' }}
         >
           {items.map((item) => {
@@ -869,7 +876,7 @@ export default function SearchPage({
             setSkippedIndexers(data.skippedIndexers || [])
           }
         } else {
-          toast.error('Search failed')
+          toast.error('The indexer search failed. Check Settings > Indexers, then try again.')
         }
       } else if (searchMode === 'music') {
         switch (musicSearchType) {
@@ -914,7 +921,7 @@ export default function SearchPage({
       }
     } catch (error) {
       console.error('Search failed:', error)
-      toast.error('Search failed')
+      toast.error('The search never came back. Check the service connection, then try again.')
     } finally {
       setSearching(false)
     }
@@ -1190,12 +1197,15 @@ export default function SearchPage({
         return true
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to grab release')
+        toast.error(
+          error.error ||
+            'The download client refused this release. Check Settings > Download Clients, then retry.'
+        )
         return false
       }
     } catch (error) {
       console.error('Failed to grab release:', error)
-      toast.error('Failed to grab release')
+      toast.error('Could not reach the download client. Check that it is running, then retry.')
       return false
     } finally {
       setDownloading(false)
@@ -1240,7 +1250,9 @@ export default function SearchPage({
       toast.success(`Added ${successCount} release${successCount > 1 ? 's' : ''} to download queue`)
     }
     if (failCount > 0) {
-      toast.error(`Failed to grab ${failCount} release${failCount > 1 ? 's' : ''}`)
+      toast.error(
+        `${failCount} release${failCount > 1 ? 's' : ''} could not be sent to the download client. Check Settings > Download Clients, then retry.`
+      )
     }
 
     setSelectedResults(new Set())
@@ -1276,11 +1288,11 @@ export default function SearchPage({
         )
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add artist')
+        toast.error(error.error || `Could not add ${artist.name}. Retry, or check System > Events.`)
       }
     } catch (error) {
       console.error('Failed to add artist:', error)
-      toast.error('Failed to add artist')
+      toast.error(`Could not reach the server to add ${artist.name}. Retry.`)
     } finally {
       setAddingArtist(false)
     }
@@ -1320,11 +1332,11 @@ export default function SearchPage({
         )
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add album')
+        toast.error(error.error || `Could not add ${album.title}. Retry, or check System > Events.`)
       }
     } catch (error) {
       console.error('Failed to add album:', error)
-      toast.error('Failed to add album')
+      toast.error(`Could not reach the server to add ${album.title}. Retry.`)
     } finally {
       setAddingAlbum(false)
     }
@@ -1402,11 +1414,11 @@ export default function SearchPage({
         }
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add movie')
+        toast.error(error.error || `Could not add ${movie.title}. Retry, or check System > Events.`)
       }
     } catch (error) {
       console.error('Failed to add movie:', error)
-      toast.error('Failed to add movie')
+      toast.error(`Could not reach the server to add ${movie.title}. Retry.`)
     } finally {
       setAddingMovie(false)
     }
@@ -1488,11 +1500,11 @@ export default function SearchPage({
         }
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add TV show')
+        toast.error(error.error || `Could not add ${show.title}. Retry, or check System > Events.`)
       }
     } catch (error) {
       console.error('Failed to add TV show:', error)
-      toast.error('Failed to add TV show')
+      toast.error(`Could not reach the server to add ${show.title}. Retry.`)
     } finally {
       setAddingTvShow(false)
     }
@@ -1568,12 +1580,12 @@ export default function SearchPage({
       } else {
         // Revert on error
         updateMovie((m) => ({ ...m, requested: wasRequested }))
-        toast.error(data.error || 'Failed to update movie')
+        toast.error(data.error || `Could not change the request state of ${movie.title}. Retry.`)
       }
     } catch (error) {
       console.error('Failed to update movie:', error)
       updateMovie((m) => ({ ...m, requested: wasRequested }))
-      toast.error('Failed to update movie')
+      toast.error(`Could not reach the server to update ${movie.title}. Retry.`)
     } finally {
       setTogglingMovies((prev) => {
         const next = new Set(prev)
@@ -1623,12 +1635,12 @@ export default function SearchPage({
       } else {
         // Revert on error
         updateShow((s) => ({ ...s, requested: wasRequested }))
-        toast.error('Failed to update TV show')
+        toast.error(`Could not change the request state of ${show.title}. Retry.`)
       }
     } catch (error) {
       console.error('Failed to update TV show:', error)
       updateShow((s) => ({ ...s, requested: wasRequested }))
-      toast.error('Failed to update TV show')
+      toast.error(`Could not reach the server to update ${show.title}. Retry.`)
     } finally {
       setTogglingTvShows((prev) => {
         const next = new Set(prev)
@@ -1680,11 +1692,11 @@ export default function SearchPage({
         )
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add author')
+        toast.error(error.error || `Could not add ${author.name}. Retry, or check System > Events.`)
       }
     } catch (error) {
       console.error('Failed to add author:', error)
-      toast.error('Failed to add author')
+      toast.error(`Could not reach the server to add ${author.name}. Retry.`)
     } finally {
       setAddingAuthor(false)
     }
@@ -1732,11 +1744,11 @@ export default function SearchPage({
         )
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add book')
+        toast.error(error.error || `Could not add ${book.title}. Retry, or check System > Events.`)
       }
     } catch (error) {
       console.error('Failed to add book:', error)
-      toast.error('Failed to add book')
+      toast.error(`Could not reach the server to add ${book.title}. Retry.`)
     } finally {
       setAddingBook(false)
     }
@@ -1840,12 +1852,21 @@ export default function SearchPage({
   }, [])
 
   // Sortable header component
-  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+  const SortableHeader = ({
+    field,
+    children,
+    numeric = false,
+  }: {
+    field: SortField
+    children: React.ReactNode
+    numeric?: boolean
+  }) => (
     <TableHead
-      className="cursor-pointer hover:bg-muted/50 select-none"
+      data-numeric={numeric ? '' : undefined}
+      className="hover:bg-accent cursor-pointer select-none"
       onClick={() => toggleSort(field)}
     >
-      <div className="flex items-center gap-1">
+      <div className={`flex items-center gap-1 ${numeric ? 'justify-end' : ''}`}>
         {children}
         {sortField === field &&
           (sortDirection === 'asc' ? (
@@ -1862,8 +1883,8 @@ export default function SearchPage({
     item: {
       id: string
       name: string
-      subtitle?: string
-      extra?: string
+      subtitle?: ReactNode
+      extra?: ReactNode
       imageUrl?: string
       inLibrary: boolean
     },
@@ -1879,7 +1900,7 @@ export default function SearchPage({
         key={item.id}
         data-search-result
         tabIndex={0}
-        className={`${item.inLibrary ? 'opacity-60' : ''} cursor-pointer hover:bg-muted/50 focus:ring-2 focus:ring-ring focus:outline-none transition-colors`}
+        className={`${item.inLibrary ? 'opacity-60' : ''} cursor-pointer transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none`}
         onClick={onClick}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -1888,8 +1909,8 @@ export default function SearchPage({
           }
         }}
       >
-        <CardContent className="flex items-center gap-3 p-2.5">
-          <div className="h-10 w-10 rounded bg-muted flex-shrink-0 overflow-hidden">
+        <CardContent className="flex items-center gap-3 p-3">
+          <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
             {showImage ? (
               <img
                 src={item.imageUrl!}
@@ -1909,7 +1930,7 @@ export default function SearchPage({
               {item.subtitle && <span>{item.subtitle}</span>}
               {item.extra && (
                 <>
-                  <span>·</span>
+                  <span aria-hidden="true">·</span>
                   <span>{item.extra}</span>
                 </>
               )}
@@ -1950,12 +1971,12 @@ export default function SearchPage({
   const renderMusicResults = () => {
     if (searching) {
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <Card key={i}>
-              <CardContent className="flex items-center gap-3 p-2.5">
-                <Skeleton className="h-10 w-10 rounded" />
-                <div className="flex-1 space-y-1.5">
+              <CardContent className="flex items-center gap-3 p-3">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <div className="flex-1 space-y-2">
                   <Skeleton className="h-3.5 w-1/3" />
                   <Skeleton className="h-3 w-1/2" />
                 </div>
@@ -1969,9 +1990,9 @@ export default function SearchPage({
 
     if (musicSearchType === 'artist' && artistResults.length > 0) {
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="text-xs text-muted-foreground mb-2">
-            Found {artistResults.length} artists
+            Found <span className="readout">{artistResults.length}</span> artists
           </div>
           {artistResults.map((artist) => {
             const isExpanded = expandedArtistId === artist.musicbrainzId
@@ -1980,9 +2001,9 @@ export default function SearchPage({
 
             return (
               <Card key={artist.musicbrainzId} className={artist.inLibrary ? 'opacity-60' : ''}>
-                <CardContent className="p-2.5">
+                <CardContent className="p-3">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                    <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
                       <HugeiconsIcon
                         icon={MusicNote01Icon}
                         className="h-5 w-5 text-muted-foreground/50"
@@ -1994,7 +2015,7 @@ export default function SearchPage({
                         {artist.type && <span>{artist.type}</span>}
                         {artist.country && (
                           <>
-                            <span>·</span>
+                            <span aria-hidden="true">·</span>
                             <span>{artist.country}</span>
                           </>
                         )}
@@ -2025,7 +2046,7 @@ export default function SearchPage({
 
                   {/* Expanded albums section */}
                   {isExpanded && (
-                    <div className="mt-3 pt-3 border-t">
+                    <div className="mt-3 border-t border-border pt-3">
                       <h4 className="text-sm font-medium mb-3">Albums</h4>
                       {isLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -2048,9 +2069,12 @@ export default function SearchPage({
                             const imageKey = `album-${album.musicbrainzId}`
 
                             return (
-                              <div key={album.musicbrainzId} className="border rounded-md">
-                                <div className="flex items-center gap-2.5 p-2">
-                                  <div className="h-9 w-9 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                              <div
+                                key={album.musicbrainzId}
+                                className="rounded-md border border-border"
+                              >
+                                <div className="flex items-center gap-3 p-2">
+                                  <div className="h-9 w-9 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
                                     {!failedImages.has(imageKey) ? (
                                       <img
                                         src={coverUrl}
@@ -2067,7 +2091,7 @@ export default function SearchPage({
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <p className="font-medium text-sm truncate">{album.title}</p>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="readout text-xs text-muted-foreground">
                                       {album.releaseDate || 'Unknown date'}
                                     </p>
                                   </div>
@@ -2107,7 +2131,7 @@ export default function SearchPage({
 
                                 {/* Expanded tracks section */}
                                 {isAlbumExpanded && (
-                                  <div className="border-t bg-muted/30 p-3">
+                                  <div className="border-t border-border bg-muted p-3">
                                     {isTracksLoading ? (
                                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                         <Spinner className="size-3" />
@@ -2126,12 +2150,12 @@ export default function SearchPage({
                                             key={track.musicbrainzId}
                                             className="flex items-center gap-2 text-xs py-1 group"
                                           >
-                                            <span className="text-muted-foreground w-5 text-right">
+                                            <span className="readout w-5 text-right text-muted-foreground">
                                               {idx + 1}.
                                             </span>
                                             <span className="flex-1 truncate">{track.title}</span>
                                             {track.duration && (
-                                              <span className="text-muted-foreground">
+                                              <span className="readout text-muted-foreground">
                                                 {formatDuration(track.duration)}
                                               </span>
                                             )}
@@ -2171,9 +2195,9 @@ export default function SearchPage({
 
     if (musicSearchType === 'album' && albumResults.length > 0) {
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="text-xs text-muted-foreground mb-2">
-            Found {albumResults.length} albums
+            Found <span className="readout">{albumResults.length}</span> albums
           </div>
           {albumResults.map((album) => {
             const isExpanded = expandedAlbumId === album.musicbrainzId
@@ -2182,9 +2206,9 @@ export default function SearchPage({
 
             return (
               <Card key={album.musicbrainzId} className={album.inLibrary ? 'opacity-60' : ''}>
-                <CardContent className="p-2.5">
+                <CardContent className="p-3">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+                    <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
                       <HugeiconsIcon
                         icon={Album01Icon}
                         className="h-5 w-5 text-muted-foreground/50"
@@ -2194,7 +2218,7 @@ export default function SearchPage({
                       <h3 className="text-sm font-medium truncate">{album.title}</h3>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <button
-                          className="hover:text-primary hover:underline transition-colors"
+                          className="rounded-sm underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                           onClick={() =>
                             navigateToArtist(album.artistName, album.artistMusicbrainzId)
                           }
@@ -2203,8 +2227,8 @@ export default function SearchPage({
                         </button>
                         {album.releaseDate && (
                           <>
-                            <span>·</span>
-                            <span>{album.releaseDate}</span>
+                            <span aria-hidden="true">·</span>
+                            <span className="readout">{album.releaseDate}</span>
                           </>
                         )}
                       </div>
@@ -2242,7 +2266,7 @@ export default function SearchPage({
 
                   {/* Expanded tracks section */}
                   {isExpanded && (
-                    <div className="mt-3 pt-3 border-t">
+                    <div className="mt-3 border-t border-border pt-3">
                       <h4 className="text-sm font-medium mb-2">Tracks</h4>
                       {isLoading ? (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -2260,14 +2284,14 @@ export default function SearchPage({
                           {tracks.map((track, idx) => (
                             <div
                               key={track.musicbrainzId}
-                              className="flex items-center gap-3 text-sm py-1.5 px-2 rounded hover:bg-muted/50"
+                              className="flex items-center gap-3 text-sm py-1.5 px-2 rounded-md hover:bg-accent"
                             >
-                              <span className="text-muted-foreground w-6 text-right">
+                              <span className="readout w-6 text-right text-muted-foreground">
                                 {idx + 1}.
                               </span>
                               <span className="flex-1 truncate">{track.title}</span>
                               {track.duration && (
-                                <span className="text-muted-foreground">
+                                <span className="readout text-muted-foreground">
                                   {formatDuration(track.duration)}
                                 </span>
                               )}
@@ -2287,14 +2311,14 @@ export default function SearchPage({
 
     if (musicSearchType === 'track' && trackResults.length > 0) {
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="text-xs text-muted-foreground mb-2">
-            Found {trackResults.length} tracks
+            Found <span className="readout">{trackResults.length}</span> tracks
           </div>
           {trackResults.map((track) => (
             <Card key={track.musicbrainzId} className={track.inLibrary ? 'opacity-60' : ''}>
-              <CardContent className="flex items-center gap-3 p-2.5">
-                <div className="h-10 w-10 rounded bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
+              <CardContent className="flex items-center gap-3 p-3">
+                <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
                   <HugeiconsIcon
                     icon={MusicNoteSquare01Icon}
                     className="h-5 w-5 text-muted-foreground/50"
@@ -2304,16 +2328,16 @@ export default function SearchPage({
                   <h3 className="text-sm font-medium truncate">{track.title}</h3>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <button
-                      className="hover:text-primary hover:underline transition-colors"
+                      className="rounded-sm underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                       onClick={() => navigateToArtist(track.artistName, track.artistMusicbrainzId)}
                     >
                       {track.artistName}
                     </button>
                     {track.albumTitle && track.albumMusicbrainzId && (
                       <>
-                        <span>·</span>
+                        <span aria-hidden="true">·</span>
                         <button
-                          className="hover:text-primary hover:underline transition-colors"
+                          className="rounded-sm underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                           onClick={() =>
                             navigateToAlbum(track.albumTitle!, track.albumMusicbrainzId!)
                           }
@@ -2324,8 +2348,8 @@ export default function SearchPage({
                     )}
                     {track.duration && (
                       <>
-                        <span>·</span>
-                        <span>{formatDuration(track.duration)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="readout">{formatDuration(track.duration)}</span>
                       </>
                     )}
                   </div>
@@ -2379,17 +2403,21 @@ export default function SearchPage({
     // Show search results if there are any
     if (movieResults.length > 0) {
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="text-xs text-muted-foreground mb-2">
-            Found {movieResults.length} movies
+            Found <span className="readout">{movieResults.length}</span> movies
           </div>
           {movieResults.map((movie) =>
             renderResultCard(
               {
                 id: movie.tmdbId,
                 name: movie.title,
-                subtitle: movie.year?.toString(),
-                extra: movie.rating ? `${movie.rating.toFixed(1)} rating` : undefined,
+                subtitle: movie.year ? <span className="readout">{movie.year}</span> : undefined,
+                extra: movie.rating ? (
+                  <>
+                    <span className="readout">{movie.rating.toFixed(1)}</span> rating
+                  </>
+                ) : undefined,
                 imageUrl: movie.posterUrl,
                 inLibrary: movie.inLibrary,
               },
@@ -2426,17 +2454,16 @@ export default function SearchPage({
     ]
 
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Browse by Genre */}
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-muted-foreground">Browse by Genre</h3>
+          <h3 className="text-lg font-semibold">Browse by Genre</h3>
           <div className="flex flex-wrap gap-2">
             {movieGenres.map((genre) => (
               <Button
                 key={genre.id}
                 variant="outline"
                 size="sm"
-                className="rounded-full h-8 text-xs"
                 onClick={() => router.visit(`/discover/movies/genre?genreId=${genre.id}`)}
               >
                 {genre.name}
@@ -2487,9 +2514,11 @@ export default function SearchPage({
           ) : null
         )}
         {!loadingMovieDiscover && Object.keys(movieDiscoverLanes).length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            <p>Enter a search term to find movies</p>
-          </div>
+          <EmptyState
+            icon={<HugeiconsIcon icon={Search01Icon} />}
+            title="No discover lanes loaded"
+            message="TMDB returned nothing to browse. Search for a title above, or try again in a moment."
+          />
         )}
         {loadingMovieRecs && personalizedMovieLanes.length === 0 && <DiscoverLaneSkeleton />}
         {personalizedMovieLanes.map((lane) => (
@@ -2519,16 +2548,16 @@ export default function SearchPage({
     // Show search results if there are any
     if (tvShowResults.length > 0) {
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="text-xs text-muted-foreground mb-2">
-            Found {tvShowResults.length} TV shows
+            Found <span className="readout">{tvShowResults.length}</span> TV shows
           </div>
           {tvShowResults.map((show) =>
             renderResultCard(
               {
                 id: show.tmdbId,
                 name: show.title,
-                subtitle: show.year?.toString(),
+                subtitle: show.year ? <span className="readout">{show.year}</span> : undefined,
                 extra: show.status,
                 imageUrl: show.posterUrl,
                 inLibrary: show.inLibrary,
@@ -2564,17 +2593,16 @@ export default function SearchPage({
     ]
 
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Browse by Genre */}
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-muted-foreground">Browse by Genre</h3>
+          <h3 className="text-lg font-semibold">Browse by Genre</h3>
           <div className="flex flex-wrap gap-2">
             {tvGenres.map((genre) => (
               <Button
                 key={genre.id}
                 variant="outline"
                 size="sm"
-                className="rounded-full h-8 text-xs"
                 onClick={() => router.visit(`/discover/tv/genre?genreId=${genre.id}`)}
               >
                 {genre.name}
@@ -2625,9 +2653,11 @@ export default function SearchPage({
           ) : null
         )}
         {!loadingTvDiscover && Object.keys(tvDiscoverLanes).length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            <p>Enter a search term to find TV shows</p>
-          </div>
+          <EmptyState
+            icon={<HugeiconsIcon icon={Search01Icon} />}
+            title="No discover lanes loaded"
+            message="TMDB returned nothing to browse. Search for a title above, or try again in a moment."
+          />
         )}
         {loadingTvRecs && personalizedTvLanes.length === 0 && <DiscoverLaneSkeleton />}
         {personalizedTvLanes.map((lane) => (
@@ -2656,16 +2686,18 @@ export default function SearchPage({
 
     if (booksSearchType === 'author' && authorResults.length > 0) {
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="text-xs text-muted-foreground mb-2">
-            Found {authorResults.length} authors
+            Found <span className="readout">{authorResults.length}</span> authors
           </div>
           {authorResults.map((author) =>
             renderResultCard(
               {
                 id: author.openlibraryId,
                 name: author.name,
-                subtitle: author.birthDate,
+                subtitle: author.birthDate ? (
+                  <span className="readout">{author.birthDate}</span>
+                ) : undefined,
                 inLibrary: author.inLibrary,
               },
               Book01Icon,
@@ -2678,15 +2710,17 @@ export default function SearchPage({
 
     if (booksSearchType === 'book' && bookResults.length > 0) {
       return (
-        <div className="space-y-1.5">
-          <div className="text-xs text-muted-foreground mb-2">Found {bookResults.length} books</div>
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground mb-2">
+            Found <span className="readout">{bookResults.length}</span> books
+          </div>
           {bookResults.map((book) =>
             renderResultCard(
               {
                 id: book.openlibraryId,
                 name: book.title,
                 subtitle: book.authorName,
-                extra: book.year?.toString(),
+                extra: book.year ? <span className="readout">{book.year}</span> : undefined,
                 imageUrl: book.coverUrl,
                 inLibrary: book.inLibrary,
               },
@@ -2709,30 +2743,36 @@ export default function SearchPage({
     if (filteredIndexerResults.length > 0) {
       return (
         <Card className="min-w-0 overflow-hidden">
-          <CardContent className="pt-6 min-w-0">
+          <CardContent className="min-w-0">
             {skippedIndexers.length > 0 && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/50 p-3 text-sm mb-4">
+              <div className="mb-4 flex items-start gap-2 rounded-md border border-border bg-muted p-3">
                 <HugeiconsIcon
                   icon={Alert02Icon}
-                  className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+                  className="mt-0.5 h-4 w-4 flex-shrink-0 text-foreground"
                 />
-                <div>
-                  <p className="font-medium text-amber-800 dark:text-amber-200">
-                    {skippedIndexers.length}{' '}
-                    {skippedIndexers.length === 1 ? 'indexer was' : 'indexers were'} skipped due to
-                    rate limiting
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    <span className="readout">{skippedIndexers.length}</span>{' '}
+                    {skippedIndexers.length === 1 ? 'indexer was' : 'indexers were'} skipped for
+                    rate limiting — these results are incomplete
                   </p>
-                  <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
-                    {skippedIndexers.map((s) => `Indexer #${s.indexerId}`).join(', ')} — will be
-                    available again shortly
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    <span className="readout">
+                      {skippedIndexers.map((s) => `Indexer #${s.indexerId}`).join(', ')}
+                    </span>{' '}
+                    — wait a moment and search again to include them
                   </p>
                 </div>
               </div>
             )}
             <div className="text-sm text-muted-foreground mb-4">
-              Found {filteredIndexerResults.length} results
-              {(selectedCategories.length > 0 || selectedMediaTypes.size > 0) &&
-                ` (filtered from ${indexerResults.length})`}
+              Found <span className="readout">{filteredIndexerResults.length}</span> results
+              {(selectedCategories.length > 0 || selectedMediaTypes.size > 0) && (
+                <>
+                  {' '}
+                  (filtered from <span className="readout">{indexerResults.length}</span>)
+                </>
+              )}
             </div>
             <div className="overflow-x-auto">
               <Table className="w-full">
@@ -2752,16 +2792,26 @@ export default function SearchPage({
                     {isColumnVisible('protocol') && (
                       <TableHead className="w-[60px]">Type</TableHead>
                     )}
-                    {isColumnVisible('age') && <SortableHeader field="age">Age</SortableHeader>}
+                    {isColumnVisible('age') && (
+                      <SortableHeader field="age" numeric>
+                        Age
+                      </SortableHeader>
+                    )}
                     {isColumnVisible('title') && (
                       <SortableHeader field="title">Title</SortableHeader>
                     )}
                     {isColumnVisible('indexer') && (
                       <SortableHeader field="indexer">Indexer</SortableHeader>
                     )}
-                    {isColumnVisible('size') && <SortableHeader field="size">Size</SortableHeader>}
+                    {isColumnVisible('size') && (
+                      <SortableHeader field="size" numeric>
+                        Size
+                      </SortableHeader>
+                    )}
                     {isColumnVisible('grabs') && (
-                      <SortableHeader field="grabs">Grabs</SortableHeader>
+                      <SortableHeader field="grabs" numeric>
+                        Grabs
+                      </SortableHeader>
                     )}
                     {isColumnVisible('category') && (
                       <SortableHeader field="category">Category</SortableHeader>
@@ -2775,7 +2825,9 @@ export default function SearchPage({
                   {filteredIndexerResults.map((result) => (
                     <TableRow
                       key={result.id}
-                      className={selectedResults.has(result.id) ? 'bg-muted/50' : ''}
+                      className={
+                        selectedResults.has(result.id) ? 'bg-primary/10 hover:bg-primary/10' : ''
+                      }
                     >
                       {isColumnVisible('select') && (
                         <TableCell>
@@ -2796,14 +2848,14 @@ export default function SearchPage({
                         </TableCell>
                       )}
                       {isColumnVisible('age') && (
-                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                        <TableCell data-numeric className="text-muted-foreground">
                           {formatAge(result.publishDate)}
                         </TableCell>
                       )}
                       {isColumnVisible('title') && (
                         <TableCell>
                           <div
-                            className="font-medium truncate max-w-md cursor-pointer hover:text-primary min-w-0"
+                            className="readout max-w-md min-w-0 cursor-pointer truncate transition-colors hover:text-primary"
                             title={result.title}
                             onClick={() => openDownloadDialog(result)}
                           >
@@ -2812,16 +2864,16 @@ export default function SearchPage({
                         </TableCell>
                       )}
                       {isColumnVisible('indexer') && (
-                        <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
-                      )}
-                      {isColumnVisible('size') && (
-                        <TableCell className="whitespace-nowrap">
-                          {formatBytes(result.size)}
+                        <TableCell className="readout text-muted-foreground">
+                          {result.indexer}
                         </TableCell>
                       )}
+                      {isColumnVisible('size') && (
+                        <TableCell data-numeric>{formatBytes(result.size)}</TableCell>
+                      )}
                       {isColumnVisible('grabs') && (
-                        <TableCell className="text-muted-foreground">
-                          {result.grabs ?? '-'}
+                        <TableCell data-numeric className="text-muted-foreground">
+                          {result.grabs ?? '—'}
                         </TableCell>
                       )}
                       {isColumnVisible('category') && (
@@ -2886,20 +2938,22 @@ export default function SearchPage({
       return (
         <>
           {skippedIndexers.length > 0 && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/50 p-3 text-sm mb-4">
+            <div className="mb-4 flex items-start gap-2 rounded-md border border-border bg-muted p-3">
               <HugeiconsIcon
                 icon={Alert02Icon}
-                className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0"
+                className="mt-0.5 h-4 w-4 flex-shrink-0 text-foreground"
               />
-              <div>
-                <p className="font-medium text-amber-800 dark:text-amber-200">
-                  {skippedIndexers.length}{' '}
-                  {skippedIndexers.length === 1 ? 'indexer was' : 'indexers were'} skipped due to
-                  rate limiting
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  <span className="readout">{skippedIndexers.length}</span>{' '}
+                  {skippedIndexers.length === 1 ? 'indexer was' : 'indexers were'} skipped for rate
+                  limiting — these results are incomplete
                 </p>
-                <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
-                  {skippedIndexers.map((s) => `Indexer #${s.indexerId}`).join(', ')} — will be
-                  available again shortly
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  <span className="readout">
+                    {skippedIndexers.map((s) => `Indexer #${s.indexerId}`).join(', ')}
+                  </span>{' '}
+                  — wait a moment and search again to include them
                 </p>
               </div>
             </div>
@@ -2912,21 +2966,20 @@ export default function SearchPage({
   }
 
   const InitialSearchPrompt = ({ message }: { message: string }) => (
-    <div className="text-center py-12 text-muted-foreground">
-      <div className="rounded-full bg-muted p-6 mb-4 inline-flex">
-        <HugeiconsIcon icon={Search01Icon} className="h-12 w-12 text-muted-foreground/50" />
-      </div>
-      <p>{message}</p>
-    </div>
+    <EmptyState
+      icon={<HugeiconsIcon icon={Search01Icon} />}
+      title="Nothing searched yet"
+      message={message}
+    />
   )
 
   const SearchingSkeleton = () => (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {Array.from({ length: 5 }).map((_, i) => (
         <Card key={i}>
-          <CardContent className="flex items-center gap-3 p-2.5">
-            <Skeleton className="h-10 w-10 rounded" />
-            <div className="flex-1 space-y-1.5">
+          <CardContent className="flex items-center gap-3 p-3">
+            <Skeleton className="h-10 w-10 rounded-lg" />
+            <div className="flex-1 space-y-2">
               <Skeleton className="h-3.5 w-1/3" />
               <Skeleton className="h-3 w-1/2" />
             </div>
@@ -2939,7 +2992,7 @@ export default function SearchPage({
 
   const TableSearchingSkeleton = () => (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
@@ -2977,15 +3030,11 @@ export default function SearchPage({
   )
 
   const NoResults = () => (
-    <Card>
-      <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-        <div className="rounded-full bg-muted p-6 mb-4">
-          <HugeiconsIcon icon={Search01Icon} className="h-12 w-12 text-muted-foreground" />
-        </div>
-        <h3 className="text-lg font-medium mb-2">No results found</h3>
-        <p className="text-muted-foreground">Try a different search term.</p>
-      </CardContent>
-    </Card>
+    <EmptyState
+      icon={<HugeiconsIcon icon={Search01Icon} />}
+      title="No results found"
+      message="Nothing matched that query. Try fewer or different words, or switch the media type above."
+    />
   )
 
   const getSearchPlaceholder = () => {
@@ -3034,15 +3083,9 @@ export default function SearchPage({
                     onValueChange={(v) => setMusicSearchType(v as MusicSearchType)}
                   >
                     <TabsList className="h-8">
-                      <TabsTrigger value="artist" className="text-xs px-2 h-6">
-                        Artist
-                      </TabsTrigger>
-                      <TabsTrigger value="album" className="text-xs px-2 h-6">
-                        Album
-                      </TabsTrigger>
-                      <TabsTrigger value="track" className="text-xs px-2 h-6">
-                        Track
-                      </TabsTrigger>
+                      <TabsTrigger value="artist">Artist</TabsTrigger>
+                      <TabsTrigger value="album">Album</TabsTrigger>
+                      <TabsTrigger value="track">Track</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
@@ -3057,12 +3100,8 @@ export default function SearchPage({
                     onValueChange={(v) => setBooksSearchType(v as 'author' | 'book')}
                   >
                     <TabsList className="h-8">
-                      <TabsTrigger value="author" className="text-xs px-2 h-6">
-                        Author
-                      </TabsTrigger>
-                      <TabsTrigger value="book" className="text-xs px-2 h-6">
-                        Book
-                      </TabsTrigger>
+                      <TabsTrigger value="author">Author</TabsTrigger>
+                      <TabsTrigger value="book">Book</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
@@ -3071,13 +3110,13 @@ export default function SearchPage({
 
             {/* Search input */}
             <Card className="mt-4">
-              <CardContent className="pt-6">
+              <CardContent>
                 <div className="flex flex-col gap-4">
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <HugeiconsIcon
                         icon={Search01Icon}
-                        className="size-4 text-muted-foreground absolute top-1/2 -translate-y-1/2 left-2"
+                        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
                       />
                       <Input
                         placeholder={getSearchPlaceholder()}
@@ -3088,7 +3127,11 @@ export default function SearchPage({
                         autoFocus
                       />
                     </div>
-                    <Button onClick={search} disabled={searching || searchQuery.length < 2}>
+                    <Button
+                      onClick={search}
+                      disabled={searching || searchQuery.length < 2}
+                      aria-label="Search"
+                    >
                       {searching ? (
                         <Spinner />
                       ) : (
@@ -3151,7 +3194,8 @@ export default function SearchPage({
                                   key={mt}
                                   variant={active ? 'default' : 'outline'}
                                   size="sm"
-                                  className="gap-1.5 h-7 text-xs"
+                                  aria-pressed={active}
+                                  className="gap-1.5"
                                   onClick={() => {
                                     setSelectedMediaTypes((prev) => {
                                       const next = new Set(prev)
@@ -3161,12 +3205,9 @@ export default function SearchPage({
                                     })
                                   }}
                                 >
-                                  <HugeiconsIcon
-                                    icon={MEDIA_TYPE_ICONS[mt]}
-                                    className="h-3.5 w-3.5"
-                                  />
+                                  <HugeiconsIcon icon={MEDIA_TYPE_ICONS[mt]} className="h-4 w-4" />
                                   {MEDIA_TYPE_LABELS[mt]}
-                                  <span className="text-[10px] opacity-70">
+                                  <span className="readout text-xs opacity-70">
                                     {availableMediaTypes.get(mt)}
                                   </span>
                                 </Button>
@@ -3175,11 +3216,11 @@ export default function SearchPage({
                           {selectedMediaTypes.size > 0 && (
                             <Button
                               variant="ghost"
-                              size="sm"
-                              className="h-7 text-xs px-2"
+                              size="icon-sm"
+                              aria-label="Clear type filter"
                               onClick={() => setSelectedMediaTypes(new Set())}
                             >
-                              <HugeiconsIcon icon={Cancel01Icon} className="h-3.5 w-3.5" />
+                              <HugeiconsIcon icon={Cancel01Icon} className="h-4 w-4" />
                             </Button>
                           )}
                         </div>
@@ -3243,7 +3284,8 @@ export default function SearchPage({
               <Card>
                 <CardContent className="py-3 flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
-                    {selectedResults.size} release{selectedResults.size > 1 ? 's' : ''} selected
+                    <span className="readout">{selectedResults.size}</span> release
+                    {selectedResults.size > 1 ? 's' : ''} selected
                   </span>
                   <div className="flex gap-2">
                     <Button
@@ -3295,19 +3337,19 @@ export default function SearchPage({
               <DialogDescription>Send this release to your download client?</DialogDescription>
             </DialogHeader>
             {selectedIndexerResult && (
-              <div className="py-4 space-y-3">
+              <div className="space-y-3 py-4">
                 <div>
-                  <div className="text-sm font-medium text-muted-foreground">Title</div>
-                  <div className="font-medium">{selectedIndexerResult.title}</div>
+                  <div className="text-xs font-medium text-muted-foreground">Title</div>
+                  <div className="readout text-sm break-all">{selectedIndexerResult.title}</div>
                 </div>
                 <div className="flex gap-6">
                   <div>
-                    <div className="text-sm font-medium text-muted-foreground">Size</div>
-                    <div>{formatBytes(selectedIndexerResult.size)}</div>
+                    <div className="text-xs font-medium text-muted-foreground">Size</div>
+                    <div className="readout text-sm">{formatBytes(selectedIndexerResult.size)}</div>
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-muted-foreground">Indexer</div>
-                    <div>{selectedIndexerResult.indexer}</div>
+                    <div className="text-xs font-medium text-muted-foreground">Indexer</div>
+                    <div className="readout text-sm">{selectedIndexerResult.indexer}</div>
                   </div>
                 </div>
               </div>

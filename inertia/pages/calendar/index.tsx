@@ -9,7 +9,6 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
-  Calendar03Icon,
   Film01Icon,
   Tv01Icon,
   MusicNote01Icon,
@@ -27,20 +26,6 @@ interface CalendarEvent {
   startDate: string
   mediaType: 'episode' | 'movie' | 'album' | 'book'
   hasFile: boolean
-}
-
-const MEDIA_COLORS: Record<string, string> = {
-  episode: 'bg-blue-500',
-  movie: 'bg-red-500',
-  album: 'bg-green-500',
-  book: 'bg-purple-500',
-}
-
-const MEDIA_BORDER_COLORS: Record<string, string> = {
-  episode: 'border-blue-500',
-  movie: 'border-red-500',
-  album: 'border-green-500',
-  book: 'border-purple-500',
 }
 
 const MEDIA_LABELS: Record<string, string> = {
@@ -149,10 +134,14 @@ export default function Calendar() {
         const data = await response.json()
         setEvents(data)
       } else {
-        toast.error('Failed to load calendar events')
+        toast.error(`Calendar refused the request (HTTP ${response.status})`, {
+          description: 'Move to another month or reload the page to try again.',
+        })
       }
     } catch {
-      toast.error('Failed to connect to server')
+      toast.error('Could not reach Hamster while loading the calendar', {
+        description: 'The server may be restarting. Reload the page once it is back.',
+      })
     } finally {
       setLoading(false)
     }
@@ -236,19 +225,26 @@ export default function Calendar() {
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center gap-4 text-sm flex-wrap">
+        {/* Legend — media type is carried by its icon; colour is reserved for state. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
           {Object.entries(MEDIA_LABELS).map(([type, label]) => (
-            <div key={type} className="flex items-center gap-1.5">
-              <div className={`h-3 w-3 rounded-full ${MEDIA_COLORS[type]}`} />
-              <span className="text-muted-foreground">{label}</span>
+            <div key={type} className="flex items-center gap-1.5 text-muted-foreground">
+              <HugeiconsIcon icon={MEDIA_ICONS[type]} className="h-3.5 w-3.5" />
+              <span>{label}</span>
             </div>
           ))}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <HugeiconsIcon
+              icon={CheckmarkCircle01Icon}
+              className="h-3.5 w-3.5 text-status-complete-ink"
+            />
+            <span>On disk</span>
+          </div>
         </div>
 
         {/* Calendar Grid */}
         {loading ? (
-          <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
+          <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-border bg-border">
             {WEEKDAYS.map((day) => (
               <div
                 key={day}
@@ -258,14 +254,14 @@ export default function Calendar() {
               </div>
             ))}
             {Array.from({ length: 35 }).map((_, i) => (
-              <div key={i} className="bg-card p-2 min-h-[60px] sm:min-h-[100px]">
+              <div key={i} className="bg-card p-1.5 min-h-[72px] sm:min-h-[112px]">
                 <Skeleton className="h-4 w-6 mb-2" />
                 <Skeleton className="h-3 w-full" />
               </div>
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
+          <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-border bg-border">
             {/* Weekday headers */}
             {WEEKDAYS.map((day) => (
               <div
@@ -288,13 +284,14 @@ export default function Calendar() {
                   key={index}
                   type="button"
                   onClick={() => setSelectedDay(isSelected ? null : dateKey)}
-                  className={`bg-card p-1.5 min-h-[60px] sm:min-h-[100px] text-left transition-colors hover:bg-accent/50 ${
+                  aria-pressed={isSelected}
+                  className={`relative bg-card p-1.5 min-h-[72px] sm:min-h-[112px] text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset ${
                     !isCurrentMonth ? 'opacity-40' : ''
                   } ${isSelected ? 'ring-2 ring-primary ring-inset' : ''}`}
                 >
                   <div
-                    className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
-                      today ? 'bg-primary text-primary-foreground' : ''
+                    className={`readout text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
+                      today ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
                     }`}
                   >
                     {date.getDate()}
@@ -303,17 +300,29 @@ export default function Calendar() {
                     {dayEvents.slice(0, 3).map((event) => (
                       <div
                         key={event.uid}
-                        className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate border-l-2 ${MEDIA_BORDER_COLORS[event.mediaType]} ${
-                          event.hasFile ? 'bg-muted/50 line-through opacity-60' : 'bg-muted'
+                        className={`flex items-center gap-1 rounded-sm bg-muted px-1 py-0.5 text-xs leading-4 ${
+                          event.hasFile ? 'text-muted-foreground' : 'text-foreground'
                         }`}
-                        title={event.title}
+                        title={
+                          event.hasFile
+                            ? `${event.title} — on disk`
+                            : `${event.title} — not on disk`
+                        }
                       >
-                        {event.title}
+                        <HugeiconsIcon
+                          icon={
+                            event.hasFile ? CheckmarkCircle01Icon : MEDIA_ICONS[event.mediaType]
+                          }
+                          className={`h-3 w-3 shrink-0 ${
+                            event.hasFile ? 'text-status-complete-ink' : 'text-muted-foreground'
+                          }`}
+                        />
+                        <span className="truncate">{event.title}</span>
                       </div>
                     ))}
                     {dayEvents.length > 3 && (
-                      <div className="text-[10px] text-muted-foreground px-1">
-                        +{dayEvents.length - 3} more
+                      <div className="px-1 text-xs text-muted-foreground">
+                        <span className="readout">+{dayEvents.length - 3}</span> more
                       </div>
                     )}
                   </div>
@@ -325,8 +334,8 @@ export default function Calendar() {
 
         {/* Selected Day Detail */}
         {selectedDay && (
-          <div className="rounded-lg border bg-card p-4">
-            <h3 className="font-semibold mb-3">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="mb-3 text-base font-semibold">
               {new Date(selectedDay + 'T00:00:00').toLocaleDateString('default', {
                 weekday: 'long',
                 year: 'numeric',
@@ -335,40 +344,41 @@ export default function Calendar() {
               })}
             </h3>
             {selectedEvents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No releases on this day.</p>
+              <p className="text-sm text-muted-foreground">
+                Nothing releases on this day. Pick another date, or turn on “Show unmonitored” to
+                include titles you are not tracking.
+              </p>
             ) : (
-              <div className="space-y-2">
+              <div className="divide-y divide-border">
                 {selectedEvents.map((event) => {
                   const url = getDetailUrl(event)
                   const icon = MEDIA_ICONS[event.mediaType]
                   const content = (
                     <div
-                      className={`flex items-center gap-3 p-2 rounded-md border ${
-                        url ? 'hover:bg-accent/50 transition-colors' : ''
+                      className={`flex items-center gap-3 px-2 py-2.5 ${
+                        url ? 'rounded-md transition-colors hover:bg-accent' : ''
                       }`}
                     >
-                      <div
-                        className={`flex items-center justify-center h-8 w-8 rounded ${MEDIA_COLORS[event.mediaType]} text-white`}
-                      >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
                         <HugeiconsIcon icon={icon} className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{event.title}</div>
+                        <div className="truncate text-sm font-medium">{event.title}</div>
                         {event.description && (
-                          <div className="text-xs text-muted-foreground truncate">
+                          <div className="truncate text-xs text-muted-foreground">
                             {event.description}
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex shrink-0 items-center gap-2">
                         <Badge variant="outline" className="text-xs">
                           {MEDIA_LABELS[event.mediaType]}
                         </Badge>
                         {event.hasFile && (
-                          <HugeiconsIcon
-                            icon={CheckmarkCircle01Icon}
-                            className="h-4 w-4 text-green-500"
-                          />
+                          <Badge className="gap-1 border-transparent bg-status-complete text-white">
+                            <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                            On disk
+                          </Badge>
                         )}
                       </div>
                     </div>

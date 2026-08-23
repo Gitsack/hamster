@@ -19,6 +19,7 @@ import { rssSyncTask } from '#services/tasks/rss_sync_task'
 import { refreshMetadataTask } from '#services/tasks/refresh_metadata_task'
 import { backupService } from '#services/backup/backup_service'
 import { blacklistService } from '#services/blacklist/blacklist_service'
+import { historyService } from '#services/history/history_service'
 import { taskScheduler } from '#services/tasks/task_scheduler'
 import AppSetting from '#models/app_setting'
 import { tmdbService } from '#services/metadata/tmdb_service'
@@ -79,6 +80,7 @@ taskScheduler.register('cleanup', {
   stop() {},
   async run() {
     await blacklistService.cleanupExpired()
+    await historyService.prune()
   },
   get running() {
     return false

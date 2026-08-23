@@ -32,37 +32,30 @@ function DownloadItem({ download }: { download: ActiveDownloadInfo }) {
   const downloaded =
     download.size && download.remaining !== null ? download.size - download.remaining : null
 
+  // Status ramp: transit magenta while the file is being moved into the
+  // library, transfer cyan while it is still coming down the wire.
+  const tone = isImporting ? 'text-status-transit-ink' : 'text-status-transfer-ink'
+  const bar = isImporting
+    ? '[&_[data-slot=progress-indicator]]:bg-status-transit [&_[data-slot=progress-indicator]]:animate-pulse'
+    : '[&_[data-slot=progress-indicator]]:bg-status-transfer'
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <HugeiconsIcon
-            icon={Download01Icon}
-            className={cn(
-              'h-4 w-4 flex-shrink-0',
-              isImporting ? 'text-purple-500' : 'text-blue-500'
-            )}
-          />
+          <HugeiconsIcon icon={Download01Icon} className={cn('h-4 w-4 flex-shrink-0', tone)} />
           <span className="text-sm font-medium truncate">{download.title}</span>
         </div>
-        <span
-          className={cn(
-            'text-sm font-medium flex-shrink-0',
-            isImporting ? 'text-purple-500' : 'text-blue-500'
-          )}
-        >
+        <span className={cn('readout text-xs font-medium flex-shrink-0', tone)}>
           {isImporting ? 'Importing' : `${Math.round(download.progress)}%`}
         </span>
       </div>
-      <Progress
-        value={isImporting ? 100 : download.progress}
-        className={cn('h-1.5', isImporting && '[&_[data-slot=progress-indicator]]:animate-pulse')}
-      />
+      <Progress value={isImporting ? 100 : download.progress} className={cn('h-1.5', bar)} />
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
         {downloaded !== null && download.size && (
           <div className="flex items-center gap-1">
             <HugeiconsIcon icon={HardDriveIcon} className="h-3 w-3" />
-            <span>
+            <span className="readout">
               {formatFileSize(downloaded)} / {formatFileSize(download.size)}
             </span>
           </div>
@@ -70,10 +63,12 @@ function DownloadItem({ download }: { download: ActiveDownloadInfo }) {
         {!isImporting && download.eta !== null && download.eta > 0 && (
           <div className="flex items-center gap-1">
             <HugeiconsIcon icon={Time01Icon} className="h-3 w-3" />
-            <span>{formatEta(download.eta)}</span>
+            <span className="readout">{formatEta(download.eta)}</span>
           </div>
         )}
-        {download.downloadClient && <span className="ml-auto">{download.downloadClient}</span>}
+        {download.downloadClient && (
+          <span className="readout ml-auto truncate">{download.downloadClient}</span>
+        )}
       </div>
     </div>
   )
@@ -83,8 +78,8 @@ export function DownloadProgressCard({ downloads, className }: DownloadProgressC
   if (downloads.length === 0) return null
 
   return (
-    <Card className={cn('border-blue-500/20', className)}>
-      <CardContent className="pt-4 pb-4 space-y-4">
+    <Card className={cn('py-4', className)}>
+      <CardContent className="space-y-4">
         {downloads.map((download, index) => (
           <DownloadItem key={`${download.title}-${index}`} download={download} />
         ))}

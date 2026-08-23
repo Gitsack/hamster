@@ -16,11 +16,14 @@ import { bookImportService } from '#services/media/book_import_service'
 import { fileNamingService } from '#services/media/file_naming_service'
 import { matchTitleToLibrary } from '#services/media/library_matcher'
 import { blacklistService } from '#services/blacklist/blacklist_service'
+import { historyService } from '#services/history/history_service'
 import QualityProfile from '#models/quality_profile'
 import { scoreRelease } from '#services/quality/quality_scorer'
 import type { MediaType } from '#services/quality/quality_parser'
 import { eventEmitter } from '#services/events/event_emitter'
 import { DateTime } from 'luxon'
+import { mapPath } from '#utils/host_mapping'
+import { deriveMediaType } from '#utils/media_type'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 
@@ -60,7 +63,25 @@ export interface QueueItem {
   startedAt: string | null
 }
 
+// How many times the same NZB guid may fail within 30 days before we stop
+// re-grabbing it automatically. The blacklist normally catches this first; this
+// is the backstop for failures the blacklist declines to act on.
+const MAX_GUID_FAILURES = 3
+
+/**
+ * Release titles become the NZB filename we hand the download client. Strip the
+ * characters that are illegal in a filename or would let a title escape the
+ * multipart form field.
+ */
+function sanitizeNzbFilename(title: string): string {
+  const cleaned = title.replace(/[/\\?%*:|"<>]/g, '_').trim()
+  return (cleaned || 'download').slice(0, 200).replace(/\.+$/, '')
+}
+
 export class DownloadManager {
+  // How long to wait for an indexer to hand us the NZB before giving up.
+  private readonly NZB_FETCH_TIMEOUT = 30000
+
   // Track downloads currently being imported to prevent parallel imports
   private importsInFlight = new Set<string>()
 
@@ -490,22 +511,44 @@ export class DownloadManager {
           'A download for this item completed recently. Use manual search to re-grab if needed.'
         )
       }
+    }
 
-      // Dedup by NZB GUID across all history: same release should never be re-grabbed
-      // automatically regardless of media id. Stops indexer feeds from cycling the same
-      // posts when the prior import didn't flip the wanted flag (e.g. trackCount=0).
-      if (request.guid) {
-        const sameGuid = await Download.query()
-          .whereRaw("nzb_info->>'guid' = ?", [request.guid])
-          .whereIn('status', ['queued', 'downloading', 'paused', 'importing', 'completed'])
-          .first()
-        if (sameGuid) {
-          logger.info(
-            { title: request.title, guid: request.guid, existingId: sameGuid.id },
-            'DownloadManager: Skipping — NZB guid already seen'
-          )
-          throw new Error('This release has already been downloaded.')
-        }
+    // Dedup by NZB GUID across all history: same release should never be re-grabbed
+    // automatically regardless of media id. Stops indexer feeds from cycling the same
+    // posts when the prior import didn't flip the wanted flag (e.g. trackCount=0).
+    //
+    // Deliberately outside the hasMediaId block above: grabs with no media id are
+    // exactly the ones the per-item guards cannot catch, and they cycled just as hard.
+    if (request.guid && !request.replaceExisting) {
+      const sameGuid = await Download.query()
+        .whereRaw("nzb_info->>'guid' = ?", [request.guid])
+        .whereIn('status', ['queued', 'downloading', 'paused', 'importing', 'completed'])
+        .first()
+      if (sameGuid) {
+        logger.info(
+          { title: request.title, guid: request.guid, existingId: sameGuid.id },
+          'DownloadManager: Skipping — NZB guid already seen'
+        )
+        throw new Error('This release has already been downloaded.')
+      }
+
+      // 'failed' is intentionally absent from the status list above: a release that
+      // failed once may be worth one more try. What is never worth doing is trying
+      // the same broken release forever, which is what an unbounded retry produced
+      // (a single guid accumulated 850+ failed rows). Cap it instead.
+      const recentFailures = await Download.query()
+        .whereRaw("nzb_info->>'guid' = ?", [request.guid])
+        .where('status', 'failed')
+        .where('createdAt', '>=', DateTime.now().minus({ days: 30 }).toSQL())
+        .count('* as total')
+
+      const failureCount = Number(recentFailures[0]?.$extras?.total ?? 0)
+      if (failureCount >= MAX_GUID_FAILURES) {
+        logger.info(
+          { title: request.title, guid: request.guid, failureCount },
+          'DownloadManager: Skipping — release has failed repeatedly'
+        )
+        throw new Error('This release has failed repeatedly; skipping.')
       }
     }
 
@@ -585,6 +628,7 @@ export class DownloadManager {
       status: 'queued',
       progress: 0,
       sizeBytes: request.size || null,
+      mediaType: deriveMediaType(request),
       albumId: request.albumId || null,
       movieId: request.movieId || null,
       tvShowId: request.tvShowId || null,
@@ -609,6 +653,10 @@ export class DownloadManager {
       download.externalId = externalId
       download.status = 'downloading'
       await download.save()
+
+      await historyService.recordForDownload(download, 'grabbed', {
+        data: { downloadClient: client.name, externalId },
+      })
 
       // Emit grab event
       const mediaType = request.movieId
@@ -639,12 +687,68 @@ export class DownloadManager {
 
       return download
     } catch (error) {
-      download.status = 'failed'
-      download.errorMessage =
+      // Now that we fetch the NZB ourselves, this catch sees real indexer
+      // problems (404, 403, grab limit, non-NZB body). Route them through the
+      // shared failure path so a dead release is blacklisted and an alternative
+      // is tried, instead of being re-selected on the next cycle.
+      await this.failDownload(
+        download,
         error instanceof Error ? error.message : 'Failed to send to download client'
-      await download.save()
+      ).catch((failError) =>
+        logger.error({ err: failError }, 'DownloadManager: Failed to record grab failure')
+      )
       throw error
     }
+  }
+
+  /**
+   * Fetch the NZB from the indexer ourselves rather than handing the client a URL.
+   *
+   * Delegating the fetch (SABnzbd's mode=addurl) makes the *download client* responsible
+   * for reaching the indexer. That fails whenever the client sits in a different network
+   * namespace than us — the common VPN-sidecar setup — and all we get back is an opaque
+   * "URL Fetching failed" in the client's own history, attributed to nothing.
+   *
+   * Fetching here also lets us tell an indexer problem (dead API key, grab limit reached,
+   * HTML error page) apart from a real usenet failure, and works identically whether
+   * Hamster runs on the host via `npm run dev` or inside the compose network — indexer
+   * URLs are public hostnames, so no SERVICE_HOST_MAP translation applies.
+   */
+  private async fetchNzb(request: DownloadRequest): Promise<Buffer> {
+    let response: Response
+    try {
+      response = await fetch(request.downloadUrl, {
+        redirect: 'follow',
+        signal: AbortSignal.timeout(this.NZB_FETCH_TIMEOUT),
+      })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `Could not reach indexer ${request.indexerName || 'unknown'} to fetch the NZB: ${reason}`
+      )
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `Indexer ${request.indexerName || 'unknown'} returned HTTP ${response.status} for the NZB`
+      )
+    }
+
+    const body = Buffer.from(await response.arrayBuffer())
+
+    // Indexers signal grab limits and auth failures with a 200 and an HTML or
+    // newznab <error> body. Without this check we would hand the client a file
+    // that is not an NZB and get a misleading download failure much later.
+    const head = body.subarray(0, 512).toString('utf8')
+    if (!/<\?xml|<nzb/i.test(head)) {
+      throw new Error(
+        `Indexer ${request.indexerName || 'unknown'} did not return an NZB ` +
+          `(content-type ${response.headers.get('content-type') || 'unknown'}): ` +
+          head.replace(/\s+/g, ' ').trim().slice(0, 200)
+      )
+    }
+
+    return body
   }
 
   /**
@@ -661,10 +765,13 @@ export class DownloadManager {
           category: client.settings.category,
         }
 
-        const result = await sabnzbdService.addFromUrl(config, request.downloadUrl, {
-          name: request.title,
-          category: client.settings.category,
-        })
+        const nzb = await this.fetchNzb(request)
+        const result = await sabnzbdService.addFromFile(
+          config,
+          nzb,
+          `${sanitizeNzbFilename(request.title)}.nzb`,
+          { category: client.settings.category }
+        )
 
         return result.nzo_ids[0]
       }
@@ -679,10 +786,13 @@ export class DownloadManager {
           category: client.settings.category,
         }
 
-        const nzbId = await nzbgetService.addFromUrl(config, request.downloadUrl, {
-          nzbName: request.title,
-          category: client.settings.category,
-        })
+        const nzb = await this.fetchNzb(request)
+        const nzbId = await nzbgetService.addFromFile(
+          config,
+          nzb,
+          `${sanitizeNzbFilename(request.title)}.nzb`,
+          { category: client.settings.category }
+        )
 
         return String(nzbId)
       }
@@ -852,6 +962,13 @@ export class DownloadManager {
               'DownloadManager: Found untracked SABnzbd queue item, creating record'
             )
             const match = await matchTitleToLibrary(slot.filename)
+            const links = {
+              movieId: match?.type === 'movie' ? match.id : null,
+              tvShowId: match?.type === 'episode' ? match.tvShowId : null,
+              episodeId: match?.type === 'episode' ? match.id : null,
+              albumId: match?.type === 'album' ? match.id : null,
+              bookId: match?.type === 'book' ? match.id : null,
+            }
             download = await Download.create({
               downloadClientId: client.id,
               externalId: slot.nzo_id,
@@ -861,11 +978,8 @@ export class DownloadManager {
               sizeBytes: Math.floor(Number.parseFloat(slot.mb) * 1024 * 1024),
               remainingBytes: Math.floor(Number.parseFloat(slot.mbleft) * 1024 * 1024),
               etaSeconds: this.parseTimeLeft(slot.timeleft),
-              movieId: match?.type === 'movie' ? match.id : null,
-              tvShowId: match?.type === 'episode' ? match.tvShowId : null,
-              episodeId: match?.type === 'episode' ? match.id : null,
-              albumId: match?.type === 'album' ? match.id : null,
-              bookId: match?.type === 'book' ? match.id : null,
+              mediaType: deriveMediaType(links),
+              ...links,
             })
             downloadsByExternalId.set(slot.nzo_id, download)
           }
@@ -1078,65 +1192,7 @@ export class DownloadManager {
                   )
                 }
               } else if (slot.status === 'Failed') {
-                const errorMessage = slot.fail_message || 'Download failed'
-                download.status = 'failed'
-                download.errorMessage = errorMessage
-                await download.save()
-
-                // Blacklist the release if it's a genuine download failure (not a config issue)
-                if (!blacklistService.shouldBlacklist(errorMessage)) {
-                  logger.warn(
-                    { title: download.title, error: errorMessage },
-                    'DownloadManager: Download failed due to configuration issue (not blacklisting)'
-                  )
-                } else {
-                  const guid = download.nzbInfo?.guid || download.externalId || ''
-                  const indexer = download.nzbInfo?.indexer || 'unknown'
-
-                  logger.info(
-                    { title: download.title, guid, indexer },
-                    'DownloadManager: Blacklisting failed release'
-                  )
-
-                  // Check if we've exceeded the retry limit before adding the new blacklist entry
-                  const hasExceeded = await blacklistService.hasExceededRetries({
-                    movieId: download.movieId,
-                    episodeId: download.episodeId,
-                    albumId: download.albumId,
-                    bookId: download.bookId,
-                  })
-
-                  await blacklistService.blacklist({
-                    guid,
-                    indexer,
-                    title: download.title,
-                    movieId: download.movieId,
-                    episodeId: download.episodeId,
-                    albumId: download.albumId,
-                    bookId: download.bookId,
-                    reason: errorMessage,
-                    failureType: blacklistService.determineFailureType(errorMessage),
-                  })
-
-                  if (!hasExceeded) {
-                    // Trigger search for alternative release
-                    logger.info(
-                      { title: download.title },
-                      'DownloadManager: Searching for alternative release'
-                    )
-                    this.triggerAlternativeSearch(download).catch((error) => {
-                      logger.error(
-                        { title: download.title, err: error },
-                        'DownloadManager: Failed to find alternative'
-                      )
-                    })
-                  } else {
-                    logger.info(
-                      { title: download.title },
-                      'DownloadManager: Max retries exceeded, not searching for alternatives'
-                    )
-                  }
-                }
+                await this.failDownload(download, slot.fail_message || 'Download failed')
               } else {
                 // Post-processing statuses (Extracting, Verifying, Repairing, Moving, Running)
                 logger.debug(
@@ -1173,8 +1229,16 @@ export class DownloadManager {
               orphan.movieId || orphan.episodeId || orphan.albumId || orphan.bookId
             let foundOnDisk = false
 
+            // Whether we managed to read any of the candidate directories at all.
+            // "Looked and found nothing" and "could not look" must not be treated
+            // the same — see the delete guard below.
+            let scannedAny = false
+
             if (hasMediaAssociation && client.settings?.localPath) {
-              const basePath = client.settings.localPath
+              // The client reports paths in its own filesystem namespace; mapPath
+              // translates them to ours. Without this the readdir below always
+              // threw in local-dev mode and the rescue never found anything.
+              const basePath = mapPath(client.settings.localPath)
               // Check common complete subdirectories and the base path itself
               const scanPaths = [
                 path.join(basePath, 'complete'),
@@ -1185,6 +1249,7 @@ export class DownloadManager {
               for (const scanDir of scanPaths) {
                 try {
                   const entries = await fs.readdir(scanDir)
+                  scannedAny = true
                   // Match by download title (SABnzbd uses the NZB name as folder name)
                   const normalizedTitle = orphan.title.toLowerCase().replace(/\s+/g, ' ').trim()
                   const match = entries.find((entry) => {
@@ -1220,13 +1285,26 @@ export class DownloadManager {
                     })
                     break
                   }
-                } catch {
-                  // Directory doesn't exist, continue
+                } catch (scanError) {
+                  logger.debug(
+                    { scanDir, err: scanError },
+                    'DownloadManager: Could not scan directory for orphaned download'
+                  )
                 }
               }
             }
 
-            if (!foundOnDisk) {
+            if (foundOnDisk) {
+              // Already re-queued for import above.
+            } else if (hasMediaAssociation && !scannedAny) {
+              // Every candidate directory was unreadable — an unmounted share or a
+              // misconfigured localPath, not proof the download is gone. Deleting
+              // here would discard a completed download's only record.
+              logger.warn(
+                { title: orphan.title, externalId: orphan.externalId },
+                'DownloadManager: Keeping orphaned download, could not read the completed folder'
+              )
+            } else {
               logger.info(
                 { title: orphan.title, externalId: orphan.externalId },
                 'DownloadManager: Removing orphaned download'
@@ -1812,11 +1890,12 @@ export class DownloadManager {
           )
         })
       } else {
-        // Unknown media type
+        // Unknown media type. Nothing about re-grabbing this release would help,
+        // so record the failure but do not burn a retry looking for an alternative.
         logger.error({ title: download.title }, 'DownloadManager: Unknown media type')
-        download.status = 'failed'
-        download.errorMessage = 'Unknown media type - cannot determine import service'
-        await download.save()
+        await this.failDownload(download, 'Unknown media type - cannot determine import service', {
+          searchAlternative: false,
+        })
         return
       }
 
@@ -1827,13 +1906,17 @@ export class DownloadManager {
         )
         download.status = 'completed'
         this.importAttempts.delete(download.id)
+
+        await historyService.recordForDownload(download, 'import_completed', {
+          data: { filesImported: result.filesImported, outputPath: download.outputPath },
+        })
       } else {
         logger.error(
           { title: download.title, errors: result.errors },
           'DownloadManager: Import failed'
         )
-        download.status = 'failed'
-        download.errorMessage = result.errors.join('; ') || 'Import failed'
+        const importError = result.errors.join('; ') || 'Import failed'
+        await this.failDownload(download, importError)
 
         // Emit import failed event
         const failedMediaType = download.movieId
@@ -1851,7 +1934,7 @@ export class DownloadManager {
               title: download.title,
               mediaType: failedMediaType,
             },
-            errorMessage: result.errors.join('; ') || 'Import failed',
+            errorMessage: importError,
             downloadId: download.externalId || download.id,
           })
           .catch((err) =>
@@ -1862,9 +1945,12 @@ export class DownloadManager {
       await download.save()
     } catch (error) {
       logger.error({ title: download.title, err: error }, 'DownloadManager: Import error')
-      download.status = 'failed'
-      download.errorMessage = error instanceof Error ? error.message : 'Import failed'
-      await download.save()
+      await this.failDownload(
+        download,
+        error instanceof Error ? error.message : 'Import failed'
+      ).catch((failError) =>
+        logger.error({ err: failError }, 'DownloadManager: Failed to record import failure')
+      )
 
       // Emit import failed event for unexpected errors
       const errorMediaType = download.movieId
@@ -1888,6 +1974,122 @@ export class DownloadManager {
           logger.error({ err }, 'DownloadManager: Failed to emit import failed event')
         )
     }
+  }
+
+  /**
+   * Public entry point to the shared terminal-failure path, for callers outside
+   * this class that own their own import loop (the completed-downloads scanner).
+   * Using it keeps blacklisting, alternative search and history consistent no
+   * matter which code path noticed the failure.
+   */
+  async markFailed(
+    download: Download,
+    errorMessage: string,
+    options: { searchAlternative?: boolean } = {}
+  ): Promise<void> {
+    return this.failDownload(download, errorMessage, options)
+  }
+
+  /**
+   * The single terminal-failure path for a download.
+   *
+   * Marks the download failed, blacklists the release so the same guid is not
+   * re-grabbed on the next cycle, and looks for an alternative. Every terminal
+   * failure must go through here — when import failures bypassed it, the same
+   * unusable release was re-grabbed hourly forever.
+   */
+  private async failDownload(
+    download: Download,
+    errorMessage: string,
+    options: { searchAlternative?: boolean } = {}
+  ): Promise<void> {
+    const { searchAlternative = true } = options
+
+    // Re-entry guard: refreshClientQueue and triggerImport can both land on the
+    // same download, and blacklisting twice would reset the 30-day expiry.
+    const alreadyFailed = download.status === 'failed'
+
+    download.status = 'failed'
+    download.errorMessage = errorMessage
+    await download.save()
+
+    if (alreadyFailed) return
+
+    // An import that got far enough to run and then failed is a different event
+    // from never getting the bytes at all; the distinction is what makes the log
+    // worth reading.
+    const isImportFailure = blacklistService.determineFailureType(errorMessage) === 'import_failed'
+    await historyService.recordForDownload(
+      download,
+      isImportFailure ? 'import_failed' : 'download_failed',
+      { data: { error: errorMessage } }
+    )
+
+    const guid = download.nzbInfo?.guid || download.externalId || ''
+    const indexer = download.nzbInfo?.indexer || 'unknown'
+
+    if (!blacklistService.shouldBlacklist(errorMessage)) {
+      logger.warn(
+        { title: download.title, error: errorMessage },
+        'DownloadManager: Download failed for an environmental reason (not blacklisting)'
+      )
+    } else if (!guid) {
+      logger.warn(
+        { title: download.title, error: errorMessage },
+        'DownloadManager: Cannot blacklist failed release, no guid recorded'
+      )
+    } else {
+      logger.info(
+        { title: download.title, guid, indexer },
+        'DownloadManager: Blacklisting failed release'
+      )
+      try {
+        await blacklistService.blacklist({
+          guid,
+          indexer,
+          title: download.title,
+          movieId: download.movieId,
+          episodeId: download.episodeId,
+          albumId: download.albumId,
+          bookId: download.bookId,
+          reason: errorMessage,
+          failureType: blacklistService.determineFailureType(errorMessage),
+        })
+      } catch (error) {
+        logger.error(
+          { title: download.title, guid, err: error },
+          'DownloadManager: Failed to blacklist release'
+        )
+      }
+    }
+
+    if (!searchAlternative) return
+
+    // Retry accounting is deliberately outside the blacklist gate: an
+    // environmental failure should still let us try again, and a release we
+    // could not blacklist for lack of a guid should not stop the search either.
+    const hasExceeded = await blacklistService.hasExceededRetries({
+      movieId: download.movieId,
+      episodeId: download.episodeId,
+      albumId: download.albumId,
+      bookId: download.bookId,
+    })
+
+    if (hasExceeded) {
+      logger.info(
+        { title: download.title },
+        'DownloadManager: Max retries exceeded, not searching for alternatives'
+      )
+      return
+    }
+
+    logger.info({ title: download.title }, 'DownloadManager: Searching for alternative release')
+    this.triggerAlternativeSearch(download).catch((error) => {
+      logger.error(
+        { title: download.title, err: error },
+        'DownloadManager: Failed to find alternative'
+      )
+    })
   }
 
   /**

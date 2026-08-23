@@ -6,7 +6,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Spinner } from '@/components/ui/spinner'
 import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { ArrowLeft01Icon } from '@hugeicons/core-free-icons'
+import { ArrowLeft01Icon, Search01Icon } from '@hugeicons/core-free-icons'
 import { type MediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaTeaser } from '@/components/library/media-teaser'
 import { useVisibleWatchProviders } from '@/hooks/use_visible_watch_providers'
@@ -351,10 +351,10 @@ export default function DiscoverPage() {
         }))
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add movie')
+        toast.error(error.error || `Could not add ${movie.title}. Retry, or check System > Events.`)
       }
     } catch {
-      toast.error('Failed to add movie')
+      toast.error(`Could not reach the server to add ${movie.title}. Retry.`)
     } finally {
       setAddingItem(false)
     }
@@ -406,10 +406,10 @@ export default function DiscoverPage() {
         }))
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add TV show')
+        toast.error(error.error || `Could not add ${show.title}. Retry, or check System > Events.`)
       }
     } catch {
-      toast.error('Failed to add TV show')
+      toast.error(`Could not reach the server to add ${show.title}. Retry.`)
     } finally {
       setAddingItem(false)
     }
@@ -492,11 +492,11 @@ export default function DiscoverPage() {
         }
       } else {
         updateItem(tmdbId, (i) => ({ ...i, requested: wasRequested }))
-        toast.error(data.error || 'Failed to update')
+        toast.error(data.error || `Could not change the request state of ${item.title}. Retry.`)
       }
     } catch {
       updateItem(tmdbId, (i) => ({ ...i, requested: wasRequested }))
-      toast.error('Failed to update')
+      toast.error(`Could not reach the server to update ${item.title}. Retry.`)
     } finally {
       setTogglingItems((prev) => {
         const next = new Set(prev)
@@ -563,7 +563,7 @@ export default function DiscoverPage() {
     >
       <Head title={pageTitle} />
 
-      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <div className="space-y-6 max-w-7xl mx-auto">
         {/* Grid */}
         {initialLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -573,9 +573,9 @@ export default function DiscoverPage() {
           </div>
         ) : items.length === 0 ? (
           <EmptyState
-            title="No recommendations available"
-            message="Try selecting a different genre or category."
-            className="py-16"
+            icon={<HugeiconsIcon icon={Search01Icon} />}
+            title="Nothing to show here"
+            message="This list came back empty. Pick a different genre or category, or try again in a moment."
           />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -637,7 +637,9 @@ export default function DiscoverPage() {
 
         {/* End of results */}
         {!loading && page >= totalPages && items.length > 0 && (
-          <p className="text-center text-sm text-muted-foreground py-4">No more results</p>
+          <p className="text-center text-xs text-muted-foreground py-4">
+            End of results — <span className="readout">{items.length}</span> titles loaded
+          </p>
         )}
       </div>
 

@@ -384,6 +384,57 @@ test.group('TvShowsController', (group) => {
     await ep.delete()
   })
 
+  test('setEpisodeWanted unrequesting keeps the episode so it can be requested again', async ({
+    assert,
+  }) => {
+    const ep = await EpisodeFactory.create({
+      tvShowId: show1.id,
+      seasonId: season1.id,
+      seasonNumber: 1,
+      episodeNumber: 3,
+      title: 'Episode 3',
+      requested: true,
+      hasFile: false,
+    })
+    const episodeId = ep.id
+
+    const controller = new TvShowsController()
+    const call = async (requested: boolean) => {
+      let result: Record<string, unknown> = {}
+      await controller.setEpisodeWanted({
+        params: { id: show1.id, episodeId },
+        request: { only: () => ({ requested }) },
+        response: {
+          json(data: unknown) {
+            result = data as Record<string, unknown>
+          },
+          notFound() {},
+          badRequest() {},
+        },
+      } as never)
+      return result
+    }
+
+    // Unrequesting must not delete the row — that left the episode missing from
+    // the show until a metadata refresh recreated it.
+    const unrequested = await call(false)
+    assert.equal(unrequested.requested, false)
+
+    const stillThere = await Episode.find(episodeId)
+    assert.isNotNull(stillThere)
+    assert.isFalse(stillThere!.requested)
+
+    // And it must be immediately re-requestable.
+    const rerequested = await call(true)
+    assert.equal(rerequested.requested, true)
+
+    const after = await Episode.find(episodeId)
+    assert.isNotNull(after)
+    assert.isTrue(after!.requested)
+
+    await after!.delete()
+  })
+
   test('setEpisodeWanted returns notFound for non-existent episode', async ({ assert }) => {
     const controller = new TvShowsController()
     let notFoundResult: Record<string, unknown> = {}

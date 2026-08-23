@@ -18,6 +18,7 @@ import { bookImportService } from '#services/media/book_import_service'
 import { fileNamingService } from '#services/media/file_naming_service'
 import { tmdbService, type TmdbMovie, type TmdbTvShow } from '#services/metadata/tmdb_service'
 import { openLibraryService } from '#services/metadata/openlibrary_service'
+import { musicBrainzService, type MusicBrainzAlbum } from '#services/metadata/musicbrainz_service'
 import { mediaInfoService } from '#services/media/media_info_service'
 import { probeFile, checkFfmpegAvailable } from '#utils/ffmpeg_utils'
 import { DateTime } from 'luxon'
@@ -26,8 +27,24 @@ import type { ParsedInfo } from '#models/unmatched_file'
 import { isUpgrade } from '#services/quality/quality_scorer'
 import type { QualityItem } from '#models/quality_profile'
 import { mapPath } from '#utils/host_mapping'
+import { deriveMediaType } from '#utils/media_type'
+import { hasPendingArchives } from '#utils/archive_detection'
 
 type MediaType = 'music' | 'movies' | 'tv' | 'books'
+
+/**
+ * Loose comparison key for artist names: case, punctuation and spacing differ
+ * freely between release folders and MusicBrainz ("Megan Thee Stallion ft Dua
+ * Lipa" vs "Megan Thee Stallion").
+ */
+export function normalizeForCompare(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[._-]/g, ' ')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 interface MatchResult {
   type: 'movie' | 'episode' | 'album' | 'book'
@@ -152,14 +169,36 @@ class FolderScanner {
     /^www\./i,
   ]
 
+  /**
+   * Prefixes a download client stamps onto a job folder while it is still
+   * working on it. SABnzbd writes "_UNPACK_<job name>" during extraction and
+   * "_FAILED_<job name>" afterwards, so an exact-name match against the bare
+   * "_unpack" / "_failed" entries below never fires and the scanner would
+   * process — or delete — a job mid-extraction.
+   */
+  private static readonly EXCLUDED_FOLDER_PREFIXES = ['_unpack', '_failed', '_admin']
+
   private static isExcludedFolder(name: string): boolean {
-    return FolderScanner.EXCLUDED_FOLDERS.has(name.toLowerCase())
+    const lower = name.toLowerCase()
+    if (FolderScanner.EXCLUDED_FOLDERS.has(lower)) return true
+    return FolderScanner.EXCLUDED_FOLDER_PREFIXES.some((prefix) => lower.startsWith(prefix))
   }
 
   /**
    * Delete a download folder after it has been processed or is no longer needed.
    */
   private async cleanupFolder(folderPath: string, reason: string): Promise<void> {
+    // Never destroy a folder the download client has not finished extracting.
+    // Unextracted archives look exactly like "no media files" to every check
+    // above, and this is an irreversible recursive delete — a complete, valid
+    // 11GB release was lost this way.
+    if (await hasPendingArchives(folderPath)) {
+      console.log(
+        `[FolderScanner] Keeping "${path.basename(folderPath)}" - archives not yet extracted (would have cleaned up: ${reason})`
+      )
+      return
+    }
+
     try {
       await fs.rm(folderPath, { recursive: true, force: true })
       console.log(`[FolderScanner] Cleaned up "${path.basename(folderPath)}" - ${reason}`)
@@ -766,17 +805,15 @@ class FolderScanner {
         addedAt: DateTime.now(),
       })
     } else {
-      movie = await Movie.create({
-        title: parsed.title,
-        sortTitle: this.generateSortTitle(parsed.title),
-        year: parsed.year,
-        requested: false,
-        hasFile: false,
-        needsReview: true,
-        rootFolderId: rootFolder.id,
-        addedAt: DateTime.now(),
-        genres: [],
-      })
+      // TMDB could not identify this folder. Do NOT invent a library entry from
+      // the folder name — the download folder is full of things that are not
+      // movies (music videos, samples, mislabelled junk), and a fabricated entry
+      // is permanent, unreviewable clutter. Returning null makes the caller file
+      // it as an unmatched file, which is exactly what that table is for.
+      console.log(
+        `[FolderScanner] No TMDB match for "${folderName}" - filing as unmatched instead of creating a movie`
+      )
+      return null
     }
 
     return { type: 'movie', id: movie.id, title: movie.title }
@@ -869,19 +906,12 @@ class FolderScanner {
         seriesType,
       })
     } else {
-      tvShow = await TvShow.create({
-        title: showTitle,
-        sortTitle: this.generateSortTitle(showTitle),
-        year,
-        status: 'unknown',
-        seasonCount: 0,
-        episodeCount: 0,
-        requested: false,
-        needsReview: true,
-        rootFolderId: rootFolder.id,
-        addedAt: DateTime.now(),
-        genres: [],
-      })
+      // Same rule as movies: an unidentifiable folder becomes an unmatched file,
+      // never a fabricated show.
+      console.log(
+        `[FolderScanner] No TMDB match for "${showTitle}" - filing as unmatched instead of creating a show`
+      )
+      return null
     }
 
     // Create season and episode
@@ -933,35 +963,80 @@ class FolderScanner {
       return null
     }
 
-    // Find or create artist
-    let artist = await Artist.query().whereILike('name', artistName).first()
+    // An album we already know about is match enough — no lookup needed.
+    const existingArtist = await Artist.query().whereILike('name', artistName).first()
+    if (existingArtist) {
+      const existingAlbum = await Album.query()
+        .where('artistId', existingArtist.id)
+        .whereILike('title', albumTitle)
+        .first()
+      if (existingAlbum) {
+        return {
+          type: 'album',
+          id: existingAlbum.id,
+          title: `${existingArtist.name} - ${existingAlbum.title}`,
+        }
+      }
+    }
+
+    // Otherwise the release must be identifiable on MusicBrainz before we add
+    // anything. Creating an artist and album straight from a folder name — with
+    // no lookup at all — is how music videos and mislabelled junk became
+    // permanent library entries.
+    const mbAlbum = await this.lookupAlbumMusicBrainz(albumTitle, artistName)
+    if (!mbAlbum) {
+      console.log(
+        `[FolderScanner] No MusicBrainz match for "${artistName} - ${albumTitle}" - filing as unmatched instead of creating an album`
+      )
+      return null
+    }
+
+    // Prefer an artist we already have under the resolved MBID, then by name.
+    let artist =
+      (await Artist.query().where('musicbrainzId', mbAlbum.artistId).first()) ?? existingArtist
 
     if (!artist) {
+      const mbArtist = await musicBrainzService.getArtist(mbAlbum.artistId).catch(() => null)
       artist = await Artist.create({
         rootFolderId: rootFolder.id,
-        name: artistName,
+        musicbrainzId: mbAlbum.artistId,
+        name: mbArtist?.name ?? mbAlbum.artistName,
+        sortName: mbArtist?.sortName ?? this.generateSortName(mbAlbum.artistName),
+        disambiguation: mbArtist?.disambiguation ?? null,
+        artistType: mbArtist?.type ?? null,
+        country: mbArtist?.country ?? null,
         status: 'continuing',
         monitored: false,
+        requested: false,
+        needsReview: false,
       })
+    } else if (!artist.musicbrainzId) {
+      // Backfill the id on an artist we matched only by name.
+      artist.musicbrainzId = mbAlbum.artistId
+      await artist.save()
     }
 
-    // Find or create album
-    let album = await Album.query()
-      .where('artistId', artist.id)
-      .whereILike('title', albumTitle)
+    const existingByMbid = await Album.query()
+      .where('musicbrainzReleaseGroupId', mbAlbum.id)
       .first()
-
-    if (!album) {
-      const yearMatch = folderName.match(/\b(19\d{2}|20\d{2})\b/)
-      const year = yearMatch ? Number.parseInt(yearMatch[1]) : undefined
-
-      album = await Album.create({
-        artistId: artist.id,
-        title: albumTitle,
-        releaseDate: year ? DateTime.fromObject({ year }) : null,
-        monitored: true,
-      })
+    if (existingByMbid) {
+      return {
+        type: 'album',
+        id: existingByMbid.id,
+        title: `${artist.name} - ${existingByMbid.title}`,
+      }
     }
+
+    const album = await Album.create({
+      artistId: artist.id,
+      musicbrainzReleaseGroupId: mbAlbum.id,
+      title: mbAlbum.title,
+      albumType: (mbAlbum.primaryType?.toLowerCase() as Album['albumType']) || 'album',
+      secondaryTypes: mbAlbum.secondaryTypes ?? [],
+      releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
+      monitored: false,
+      requested: false,
+    })
 
     return {
       type: 'album',
@@ -1062,28 +1137,14 @@ class FolderScanner {
       )
     }
 
-    // Fall back to creating from parsed info
-    if (!author) {
-      author = await Author.create({
-        name: authorName,
-        sortName: this.generateSortName(authorName),
-        requested: false,
-        needsReview: true,
-        rootFolderId: rootFolder.id,
-        addedAt: DateTime.now(),
-      })
-    }
-
-    if (!book) {
-      book = await Book.create({
-        authorId: author.id,
-        title: bookTitle,
-        sortTitle: this.generateSortTitle(bookTitle),
-        requested: false,
-        hasFile: false,
-        addedAt: DateTime.now(),
-        genres: [],
-      })
+    // Same rule as movies and shows: if OpenLibrary could not identify this,
+    // file it as unmatched rather than inventing an author and book from a
+    // folder name.
+    if (!author || !book) {
+      console.log(
+        `[FolderScanner] No OpenLibrary match for "${bookTitle}" - filing as unmatched instead of creating a book`
+      )
+      return null
     }
 
     return {
@@ -1195,6 +1256,34 @@ class FolderScanner {
         results = await tmdbService.searchMovies(title)
       }
       return results[0] || null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Resolve an "artist - album" pair against MusicBrainz.
+   *
+   * Only accepts a result whose artist actually corresponds to the folder's
+   * artist. MusicBrainz happily returns loose title matches, and without this
+   * check a music video credited to a featured artist resolves to an unrelated
+   * album by someone else.
+   */
+  private async lookupAlbumMusicBrainz(
+    albumTitle: string,
+    artistName: string
+  ): Promise<MusicBrainzAlbum | null> {
+    try {
+      const results = await musicBrainzService.searchAlbums(albumTitle, artistName, 10)
+      if (results.length === 0) return null
+
+      const wanted = normalizeForCompare(artistName)
+      const match = results.find((candidate) => {
+        const found = normalizeForCompare(candidate.artistName)
+        return found === wanted || found.includes(wanted) || wanted.includes(found)
+      })
+
+      return match ?? null
     } catch {
       return null
     }
@@ -1552,6 +1641,13 @@ class FolderScanner {
     client: DownloadClient
   ): Promise<{ success: boolean; error?: string }> {
     // Create a download record
+    const links = {
+      movieId: match.type === 'movie' ? match.id : null,
+      tvShowId: match.type === 'episode' ? match.tvShowId : null,
+      episodeId: match.type === 'episode' ? match.id : null,
+      albumId: match.type === 'album' ? match.id : null,
+      bookId: match.type === 'book' ? match.id : null,
+    }
     const download = await Download.create({
       downloadClientId: client.id,
       title: path.basename(folderPath),
@@ -1560,11 +1656,8 @@ class FolderScanner {
       outputPath: folderPath,
       completedAt: DateTime.now(),
       startedAt: DateTime.now(),
-      movieId: match.type === 'movie' ? match.id : null,
-      tvShowId: match.type === 'episode' ? match.tvShowId : null,
-      episodeId: match.type === 'episode' ? match.id : null,
-      albumId: match.type === 'album' ? match.id : null,
-      bookId: match.type === 'book' ? match.id : null,
+      mediaType: deriveMediaType(links),
+      ...links,
     })
 
     try {

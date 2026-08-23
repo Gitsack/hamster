@@ -11,6 +11,7 @@ import Episode from '#models/episode'
 import EpisodeFile from '#models/episode_file'
 import RootFolder from '#models/root_folder'
 import { DateTime } from 'luxon'
+import { describeMissingMedia } from '#utils/archive_detection'
 
 export interface EpisodeImportProgress {
   phase: 'scanning' | 'importing' | 'cleaning' | 'complete'
@@ -116,7 +117,7 @@ export class EpisodeImportService {
       const videoFiles = await this.findVideoFiles(outputPath)
 
       if (videoFiles.length === 0) {
-        result.errors.push('No video files found in download')
+        result.errors.push(await describeMissingMedia(outputPath, 'video'))
         return result
       }
 

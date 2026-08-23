@@ -38,6 +38,7 @@ import {
   FileImportIcon,
   ComputerIcon,
 } from '@hugeicons/core-free-icons'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
@@ -162,7 +163,7 @@ export default function DownloadClients() {
       }
     } catch (error) {
       console.error('Failed to fetch clients:', error)
-      toast.error('Failed to load download clients')
+      toast.error('Download clients could not be loaded — Hamster is unreachable. Reload to retry.')
     } finally {
       setLoading(false)
     }
@@ -191,11 +192,14 @@ export default function DownloadClients() {
         setParentPath(data.parentPath)
       } else {
         const error = await response.json()
-        setBrowseError(error.error || 'Failed to browse downloads')
+        setBrowseError(
+          error.error ||
+            'That folder could not be listed. Check the local path mapping points at a directory Hamster can read.'
+        )
       }
     } catch (error) {
       console.error('Failed to browse downloads:', error)
-      setBrowseError('Failed to connect to server')
+      setBrowseError('Hamster is unreachable, so the folder could not be listed. Try again.')
     } finally {
       setBrowsingLoading(false)
     }
@@ -226,11 +230,15 @@ export default function DownloadClients() {
         // Refresh the folder view
         browseDownloads(browsingClient, browsingPath)
       } else {
-        toast.error(data.error || data.errors?.[0] || 'Import failed')
+        toast.error(
+          data.error ||
+            data.errors?.[0] ||
+            'Nothing was imported. Check the files are complete and that a matching title exists in the library.'
+        )
       }
     } catch (error) {
       console.error('Failed to import:', error)
-      toast.error('Failed to import')
+      toast.error('Import could not start — Hamster is unreachable. Try again.')
     } finally {
       setImportingPath(null)
     }
@@ -255,7 +263,7 @@ export default function DownloadClients() {
       toast.success(`Downloading ${isDirectory ? `${itemName}.zip` : itemName}`)
     } catch (error) {
       console.error('Failed to download:', error)
-      toast.error('Failed to start download')
+      toast.error('The browser refused the download. Check pop-up blocking and try again.')
     } finally {
       // Small delay before clearing state so user sees feedback
       setTimeout(() => setDownloadingPath(null), 500)
@@ -346,11 +354,13 @@ export default function DownloadClients() {
         if (result.remotePath) {
           if (result.pathAccessible) {
             // Path is directly accessible, no mapping needed
-            toast.info('Download path is directly accessible - no path mapping needed')
+            toast.info('Hamster can already read the download folder — no path mapping needed.')
             setFormData((prev) => ({ ...prev, remotePath: '', localPath: '' }))
           } else {
             // Path not accessible, suggest mapping
-            toast.warning('Download path not accessible locally - please configure path mapping')
+            toast.warning(
+              'Hamster cannot read the download folder. Fill in the local path below so imports can find the files.'
+            )
             setFormData((prev) => ({
               ...prev,
               remotePath: prev.remotePath || result.remotePath,
@@ -366,12 +376,16 @@ export default function DownloadClients() {
           }))
         }
       } else {
-        toast.error(result.error || 'Connection failed')
+        toast.error(
+          result.error ||
+            'The client answered but rejected the credentials. Check the API key or username and password.'
+        )
       }
     } catch (error) {
-      const errorResult = { success: false, error: 'Connection failed' }
-      setTestResult(errorResult)
-      toast.error('Connection failed')
+      const message =
+        'Could not reach the client. Check the host, port and that it is running — behind Docker, use the container name rather than localhost.'
+      setTestResult({ success: false, error: message })
+      toast.error(message)
     } finally {
       setTesting(false)
     }
@@ -379,17 +393,17 @@ export default function DownloadClients() {
 
   const saveClient = async () => {
     if (!formData.name || !formData.host) {
-      toast.error('Please fill in all required fields')
+      toast.error('A name and a host are both required before this client can be saved.')
       return
     }
 
     // Validate credentials based on client type
     if (isUsenetClient(formData.type) && formData.type === 'sabnzbd' && !formData.apiKey) {
-      toast.error('API Key is required for SABnzbd')
+      toast.error('SABnzbd needs its API key — find it under Config → General.')
       return
     }
     if (formData.type === 'nzbget' && !formData.username) {
-      toast.error('Username is required for NZBGet')
+      toast.error('NZBGet needs the control username it was configured with.')
       return
     }
 
@@ -413,11 +427,16 @@ export default function DownloadClients() {
         fetchClients()
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to save')
+        toast.error(
+          error.error ||
+            'Download client not saved — the server rejected the settings. Check the host, port and credentials.'
+        )
       }
     } catch (error) {
       console.error('Failed to save:', error)
-      toast.error('Failed to save download client')
+      toast.error(
+        'Download client not saved — Hamster is unreachable. Check the server and try again.'
+      )
     } finally {
       setSaving(false)
     }
@@ -439,11 +458,13 @@ export default function DownloadClients() {
         setDialogOpen(false)
         fetchClients()
       } else {
-        toast.error('Failed to delete download client')
+        toast.error('Download client not deleted — the server rejected the request. Try again.')
       }
     } catch (error) {
       console.error('Failed to delete:', error)
-      toast.error('Failed to delete download client')
+      toast.error(
+        'Download client not deleted — Hamster is unreachable. Check the server and try again.'
+      )
     } finally {
       setDeleting(false)
     }
@@ -454,8 +475,8 @@ export default function DownloadClients() {
       title="Download Clients"
       actions={
         <Button onClick={openAddDialog}>
-          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-          Add Client
+          <HugeiconsIcon icon={Add01Icon} />
+          Add client
         </Button>
       }
     >
@@ -464,30 +485,53 @@ export default function DownloadClients() {
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Download Clients</CardTitle>
+            <CardTitle>Clients</CardTitle>
             <CardDescription>
-              Configure download clients to process NZB and torrent files.
+              The programs Hamster hands NZBs and torrents to, and reads finished downloads back
+              from. Each one needs a reachable host and, for imports to work, a path Hamster can
+              read.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Spinner className="size-6 text-muted-foreground" />
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-4 flex-1" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                ))}
               </div>
             ) : clients.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>No download clients configured.</p>
-                <p className="mt-2">Add a download client to start downloading.</p>
+              <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <HugeiconsIcon
+                    icon={Download01Icon}
+                    className="size-6 text-muted-foreground"
+                    strokeWidth={1.5}
+                  />
+                </div>
+                <p className="text-lg font-medium">No download clients yet</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Nothing can be grabbed until Hamster has somewhere to send releases. Add SABnzbd,
+                  NZBGet, qBittorrent or Transmission to start.
+                </p>
+                <Button variant="outline" onClick={openAddDialog}>
+                  <HugeiconsIcon icon={Add01Icon} />
+                  Add client
+                </Button>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
+                    <TableHead className="w-32">Type</TableHead>
                     <TableHead>Host</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-24"></TableHead>
+                    <TableHead className="w-28">Status</TableHead>
+                    <TableHead className="w-24 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -499,32 +543,42 @@ export default function DownloadClients() {
                           {client.type}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="readout text-muted-foreground">
                         {client.useSsl ? 'https' : 'http'}://{client.host}:{client.port}
                       </TableCell>
                       <TableCell>
                         {client.enabled ? (
-                          <Badge variant="default" className="bg-green-500">
-                            Enabled
+                          <Badge className="border-transparent bg-status-complete text-white">
+                            <HugeiconsIcon icon={CheckmarkCircle01Icon} />
+                            Active
                           </Badge>
                         ) : (
-                          <Badge variant="secondary">Disabled</Badge>
+                          <Badge variant="secondary">
+                            <HugeiconsIcon icon={Cancel01Icon} />
+                            Paused
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex justify-end gap-1">
                           {client.localPath && (
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon-sm"
                               onClick={() => browseDownloads(client)}
+                              aria-label={`Browse downloads on ${client.name}`}
                               title="Browse downloads"
                             >
-                              <HugeiconsIcon icon={Folder01Icon} className="h-4 w-4" />
+                              <HugeiconsIcon icon={Folder01Icon} className="size-4" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(client)}>
-                            <HugeiconsIcon icon={Edit01Icon} className="h-4 w-4" />
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Edit ${client.name}`}
+                            onClick={() => openEditDialog(client)}
+                          >
+                            <HugeiconsIcon icon={Edit01Icon} className="size-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -547,169 +601,207 @@ export default function DownloadClients() {
               {editingClient ? 'Edit Download Client' : 'Add Download Client'}
             </DialogTitle>
             <DialogDescription>
-              Configure your download client connection settings.
+              How to reach the client, and — if it runs in its own container — how to translate its
+              paths into ones Hamster can read.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="My SABnzbd"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="type">Type</Label>
-              <Select
-                value={formData.type}
-                onValueChange={(value) =>
-                  setFormData({
-                    ...formData,
-                    type: value as DownloadClientType,
-                    port: getDefaultPort(value as DownloadClientType),
-                  })
-                }
-              >
-                <SelectTrigger id="type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectItem value="sabnzbd">SABnzbd</SelectItem>
-                  <SelectItem value="nzbget">NZBGet</SelectItem>
-                  <SelectItem value="qbittorrent">qBittorrent</SelectItem>
-                  <SelectItem value="transmission">Transmission</SelectItem>
-                </SelectPopup>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-2 space-y-2">
-                <Label htmlFor="host">Host *</Label>
+          <div className="space-y-6 py-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name *</Label>
                 <Input
-                  id="host"
-                  value={formData.host}
-                  onChange={(e) => setFormData({ ...formData, host: e.target.value })}
-                  placeholder="localhost"
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="My SABnzbd"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="port">Port *</Label>
-                <Input
-                  id="port"
-                  type="number"
-                  value={formData.port}
-                  onChange={(e) =>
-                    setFormData({ ...formData, port: parseInt(e.target.value) || 8080 })
+                <Label htmlFor="type">Type</Label>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      type: value as DownloadClientType,
+                      port: getDefaultPort(value as DownloadClientType),
+                    })
                   }
-                />
-              </div>
-            </div>
-
-            {/* Credentials - varies by client type */}
-            {formData.type === 'sabnzbd' && (
-              <div className="space-y-2">
-                <Label htmlFor="apiKey">API Key *</Label>
-                <Input
-                  id="apiKey"
-                  type="password"
-                  value={formData.apiKey}
-                  onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                  placeholder="Your API key"
-                />
-              </div>
-            )}
-
-            {(formData.type === 'nzbget' || isTorrentClient(formData.type)) && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="username">Username {formData.type === 'nzbget' ? '*' : ''}</Label>
-                  <Input
-                    id="username"
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    placeholder={formData.type === 'qbittorrent' ? 'admin' : 'nzbget'}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="Password"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* URL Base for Transmission */}
-            {formData.type === 'transmission' && (
-              <div className="space-y-2">
-                <Label htmlFor="urlBase">URL Base</Label>
-                <Input
-                  id="urlBase"
-                  value={formData.urlBase}
-                  onChange={(e) => setFormData({ ...formData, urlBase: e.target.value })}
-                  placeholder="/transmission (optional)"
-                />
+                >
+                  <SelectTrigger id="type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="sabnzbd">SABnzbd</SelectItem>
+                    <SelectItem value="nzbget">NZBGet</SelectItem>
+                    <SelectItem value="qbittorrent">qBittorrent</SelectItem>
+                    <SelectItem value="transmission">Transmission</SelectItem>
+                  </SelectPopup>
+                </Select>
                 <p className="text-xs text-muted-foreground">
-                  Usually /transmission - only change if you modified it
+                  Switching type resets the port to that client's default.
                 </p>
               </div>
-            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Input
-                id="category"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder={
-                  isTorrentClient(formData.type) ? 'hamster (optional)' : 'music (optional)'
-                }
-              />
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="host">Host *</Label>
+                  <Input
+                    id="host"
+                    value={formData.host}
+                    onChange={(e) => setFormData({ ...formData, host: e.target.value })}
+                    placeholder="localhost"
+                    className="readout"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="port">Port *</Label>
+                  <Input
+                    id="port"
+                    type="number"
+                    value={formData.port}
+                    onChange={(e) =>
+                      setFormData({ ...formData, port: parseInt(e.target.value) || 8080 })
+                    }
+                    className="readout"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Reachable from this box. Inside Docker that is usually the container name, not
+                localhost.
+              </p>
+
+              {/* Credentials - varies by client type */}
+              {formData.type === 'sabnzbd' && (
+                <div className="space-y-2">
+                  <Label htmlFor="apiKey">API Key *</Label>
+                  <Input
+                    id="apiKey"
+                    type="password"
+                    value={formData.apiKey}
+                    onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                    placeholder="Your API key"
+                    className="readout"
+                  />
+                  <p className="text-xs text-muted-foreground">SABnzbd → Config → General.</p>
+                </div>
+              )}
+
+              {(formData.type === 'nzbget' || isTorrentClient(formData.type)) && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="username">
+                      Username {formData.type === 'nzbget' ? '*' : ''}
+                    </Label>
+                    <Input
+                      id="username"
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      placeholder={formData.type === 'qbittorrent' ? 'admin' : 'nzbget'}
+                      className="readout"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Password"
+                      className="readout"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* URL Base for Transmission */}
+              {formData.type === 'transmission' && (
+                <div className="space-y-2">
+                  <Label htmlFor="urlBase">URL Base</Label>
+                  <Input
+                    id="urlBase"
+                    value={formData.urlBase}
+                    onChange={(e) => setFormData({ ...formData, urlBase: e.target.value })}
+                    placeholder="/transmission (optional)"
+                    className="readout"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Usually /transmission. Change it only if you changed it in Transmission.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="category">Category</Label>
+                <Input
+                  id="category"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder={
+                    isTorrentClient(formData.type) ? 'hamster (optional)' : 'music (optional)'
+                  }
+                  className="readout"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional. Keeps Hamster's downloads in their own bucket inside the client.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="useSsl"
+                  checked={formData.useSsl}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, useSsl: checked as boolean })
+                  }
+                />
+                <Label htmlFor="useSsl" className="cursor-pointer font-normal">
+                  Connect over HTTPS
+                </Label>
+              </div>
             </div>
 
             {/* Remote Path Mapping */}
-            <div className="space-y-4 pt-4 border-t">
-              <div>
-                <Label className="text-base font-medium">Remote Path Mapping</Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Required if the download client runs in Docker with different paths than Hamster.
+            <div className="space-y-4 border-t border-border pt-6">
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Path mapping</h3>
+                <p className="text-xs text-muted-foreground">
+                  Only needed when the client sees the download folder at a different path than
+                  Hamster does — the usual case with separate containers. Run Test and the remote
+                  paths fill themselves in.
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="remotePath">Remote Path (Complete)</Label>
+                <Label htmlFor="remotePath">Remote path (complete)</Label>
                 <Input
                   id="remotePath"
                   value={formData.remotePath}
                   onChange={(e) => setFormData({ ...formData, remotePath: e.target.value })}
                   placeholder="/downloads/complete"
+                  className="readout"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Completed downloads path as the download client sees it (auto-detected on test)
+                  Where finished downloads land, as the client sees it.
                 </p>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="localPath">Local Path (Complete)</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="localPath">Local path (complete)</Label>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => setShowFolderBrowser(!showFolderBrowser)}
-                    className="h-7 text-xs"
                   >
-                    {showFolderBrowser ? 'Hide Browser' : 'Browse...'}
+                    {showFolderBrowser ? 'Hide browser' : 'Browse…'}
                   </Button>
                 </div>
                 {showFolderBrowser ? (
-                  <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="rounded-md border border-border bg-muted/40 p-3">
                     <FolderBrowser
                       value={formData.localPath}
                       onChange={(path) => setFormData({ ...formData, localPath: path })}
@@ -723,41 +815,42 @@ export default function DownloadClients() {
                       value={formData.localPath}
                       onChange={(e) => setFormData({ ...formData, localPath: e.target.value })}
                       placeholder="/mnt/downloads/complete"
+                      className="readout"
                     />
                     <p className="text-xs text-muted-foreground">
-                      Completed downloads path as Hamster sees it
+                      The same folder, as Hamster sees it. Imports fail without this.
                     </p>
                   </>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="remoteTempPath">Remote Path (Temporary)</Label>
+                <Label htmlFor="remoteTempPath">Remote path (in progress)</Label>
                 <Input
                   id="remoteTempPath"
                   value={formData.remoteTempPath}
                   onChange={(e) => setFormData({ ...formData, remoteTempPath: e.target.value })}
                   placeholder="/downloads/incomplete"
+                  className="readout"
                 />
                 <p className="text-xs text-muted-foreground">
-                  In-progress downloads path as the download client sees it (auto-detected on test)
+                  Where partial downloads live, as the client sees it.
                 </p>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="localTempPath">Local Path (Temporary)</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="localTempPath">Local path (in progress)</Label>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={() => setShowTempFolderBrowser(!showTempFolderBrowser)}
-                    className="h-7 text-xs"
                   >
-                    {showTempFolderBrowser ? 'Hide Browser' : 'Browse...'}
+                    {showTempFolderBrowser ? 'Hide browser' : 'Browse…'}
                   </Button>
                 </div>
                 {showTempFolderBrowser ? (
-                  <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="rounded-md border border-border bg-muted/40 p-3">
                     <FolderBrowser
                       value={formData.localTempPath}
                       onChange={(path) => setFormData({ ...formData, localTempPath: path })}
@@ -771,30 +864,18 @@ export default function DownloadClients() {
                       value={formData.localTempPath}
                       onChange={(e) => setFormData({ ...formData, localTempPath: e.target.value })}
                       placeholder="/tmp/downloads"
+                      className="readout"
                     />
                     <p className="text-xs text-muted-foreground">
-                      In-progress downloads path as Hamster sees it. Use a local disk for better
-                      performance instead of NAS.
+                      Point this at local disk rather than a NAS mount — partial writes are the
+                      slowest part of a grab.
                     </p>
                   </>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="useSsl"
-                checked={formData.useSsl}
-                onCheckedChange={(checked) =>
-                  setFormData({ ...formData, useSsl: checked as boolean })
-                }
-              />
-              <Label htmlFor="useSsl" className="font-normal cursor-pointer">
-                Use SSL
-              </Label>
-            </div>
-
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 border-t border-border pt-6">
               <Checkbox
                 id="enabled"
                 checked={formData.enabled}
@@ -802,46 +883,62 @@ export default function DownloadClients() {
                   setFormData({ ...formData, enabled: checked as boolean })
                 }
               />
-              <Label htmlFor="enabled" className="font-normal cursor-pointer">
-                Enabled
+              <Label htmlFor="enabled" className="cursor-pointer font-normal">
+                Send grabs to this client
               </Label>
             </div>
 
             {/* Test result */}
             {testResult && (
               <div
-                className={`flex flex-col gap-2 p-3 rounded-md ${
+                role="status"
+                className={`flex flex-col gap-2 rounded-md border p-3 text-sm ${
                   testResult.success
-                    ? 'bg-green-500/10 text-green-600'
-                    : 'bg-destructive/10 text-destructive'
+                    ? 'border-status-complete/40 bg-status-complete/10'
+                    : 'border-destructive/40 bg-destructive/10'
                 }`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-start gap-2">
                   <HugeiconsIcon
                     icon={testResult.success ? CheckmarkCircle01Icon : Cancel01Icon}
-                    className="h-5 w-5"
+                    className={`mt-0.5 size-4 shrink-0 ${
+                      testResult.success ? 'text-status-complete-ink' : 'text-destructive'
+                    }`}
                   />
-                  <span>
-                    {testResult.success
-                      ? `Connected successfully (v${testResult.version})`
-                      : testResult.error || 'Connection failed'}
+                  <span className="text-foreground">
+                    {testResult.success ? (
+                      <>
+                        Connected — <span className="readout">v{testResult.version}</span>
+                      </>
+                    ) : (
+                      testResult.error ||
+                      'The client did not answer. Check the host, port and that it is running.'
+                    )}
                   </span>
                 </div>
                 {testResult.success && testResult.remotePath && (
-                  <div className="text-sm space-y-1">
-                    <div>
-                      <span className="text-muted-foreground">Complete folder: </span>
-                      <code className="bg-muted px-1 rounded">{testResult.remotePath}</code>
+                  <div className="space-y-1 pl-6">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-foreground/70">Complete folder</span>
+                      <code className="readout rounded-sm bg-muted px-1 text-xs">
+                        {testResult.remotePath}
+                      </code>
                       {testResult.pathAccessible ? (
-                        <span className="text-green-600 ml-2">(accessible)</span>
+                        <Badge className="border-transparent bg-status-complete text-white">
+                          Readable
+                        </Badge>
                       ) : (
-                        <span className="text-orange-500 ml-2">(needs path mapping)</span>
+                        <Badge className="border-transparent bg-status-queued text-white">
+                          Needs path mapping
+                        </Badge>
                       )}
                     </div>
                     {testResult.remoteTempPath && (
-                      <div>
-                        <span className="text-muted-foreground">Temporary folder: </span>
-                        <code className="bg-muted px-1 rounded">{testResult.remoteTempPath}</code>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-foreground/70">In-progress folder</span>
+                        <code className="readout rounded-sm bg-muted px-1 text-xs">
+                          {testResult.remoteTempPath}
+                        </code>
                       </div>
                     )}
                   </div>
@@ -850,27 +947,23 @@ export default function DownloadClients() {
             )}
           </div>
 
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
             {editingClient && (
               <Button
                 variant="destructive"
                 onClick={() => setDeleteDialogOpen(true)}
                 className="sm:mr-auto"
               >
-                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                <HugeiconsIcon icon={Delete01Icon} />
                 Delete
               </Button>
             )}
             <Button variant="outline" onClick={testConnection} disabled={testing || !formData.host}>
-              {testing ? (
-                <Spinner className="mr-2" />
-              ) : (
-                <HugeiconsIcon icon={FlashIcon} className="h-4 w-4 mr-2" />
-              )}
+              {testing ? <Spinner /> : <HugeiconsIcon icon={FlashIcon} />}
               Test
             </Button>
             <Button onClick={saveClient} disabled={saving}>
-              {saving ? <Spinner className="mr-2" /> : null}
+              {saving ? <Spinner /> : null}
               {editingClient ? 'Save' : 'Add'}
             </Button>
           </DialogFooter>
@@ -883,8 +976,8 @@ export default function DownloadClients() {
           <DialogHeader>
             <DialogTitle>Delete {editingClient?.name}?</DialogTitle>
             <DialogDescription>
-              This will remove the download client configuration. Active downloads will not be
-              affected.
+              Hamster stops sending grabs here and stops watching this client's folders. Downloads
+              already running in the client itself keep going. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -892,7 +985,7 @@ export default function DownloadClients() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={deleteClient} disabled={deleting}>
-              {deleting ? <Spinner className="mr-2" /> : null}
+              {deleting ? <Spinner /> : null}
               Delete
             </Button>
           </DialogFooter>
@@ -907,36 +1000,47 @@ export default function DownloadClients() {
               {canGoUp && (
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon-sm"
+                  aria-label="Go up one folder"
                   onClick={() => navigateToFolder(parentPath)}
-                  className="h-8 w-8 p-0"
                 >
-                  <HugeiconsIcon icon={ArrowLeft01Icon} className="h-4 w-4" />
+                  <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
                 </Button>
               )}
-              Downloads - {browsingClient?.name}
+              Downloads — {browsingClient?.name}
             </DialogTitle>
-            <DialogDescription className="font-mono text-xs truncate">
+            <DialogDescription className="readout truncate text-xs">
               {browsingPath}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-auto min-h-[300px]">
+          <div className="min-h-[300px] flex-1 overflow-auto">
             {browsingLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Spinner className="size-6 text-muted-foreground" />
               </div>
             ) : browseError ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <p className="text-destructive mb-2">{browseError}</p>
-                <p className="text-sm text-muted-foreground">
-                  Make sure the local path is configured and accessible.
+              <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+                <p className="max-w-md text-sm text-destructive">{browseError}</p>
+                <p className="max-w-md text-sm text-muted-foreground">
+                  Set the local path on this client so Hamster and the client agree on where the
+                  files are.
                 </p>
               </div>
             ) : downloadItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-                <HugeiconsIcon icon={Folder01Icon} className="h-12 w-12 mb-4 opacity-50" />
-                <p>No files in downloads folder</p>
+              <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <HugeiconsIcon
+                    icon={Folder01Icon}
+                    className="size-6 text-muted-foreground"
+                    strokeWidth={1.5}
+                  />
+                </div>
+                <p className="text-lg font-medium">Folder is empty</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Nothing is waiting here. Finished downloads appear once the client moves them out
+                  of its in-progress folder.
+                </p>
               </div>
             ) : (
               <Table>
@@ -944,9 +1048,13 @@ export default function DownloadClients() {
                   <TableRow>
                     <TableHead className="w-10"></TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead className="w-24 text-right">Size</TableHead>
-                    <TableHead className="w-40 text-right">Modified</TableHead>
-                    <TableHead className="w-24">Actions</TableHead>
+                    <TableHead data-numeric className="w-24">
+                      Size
+                    </TableHead>
+                    <TableHead data-numeric className="w-40">
+                      Modified
+                    </TableHead>
+                    <TableHead className="w-24 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -955,53 +1063,55 @@ export default function DownloadClients() {
                       <TableCell>
                         <HugeiconsIcon
                           icon={item.isDirectory ? Folder01Icon : File01Icon}
-                          className={`h-4 w-4 ${item.isDirectory ? 'text-blue-500' : 'text-muted-foreground'}`}
+                          className="size-4 text-muted-foreground"
                         />
                       </TableCell>
                       <TableCell>
                         {item.isDirectory ? (
                           <button
                             onClick={() => navigateToFolder(item.path)}
-                            className="font-medium text-left hover:text-primary hover:underline transition-colors"
+                            className="readout rounded-sm text-left outline-none transition-colors hover:text-primary hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
                           >
                             {item.name}
                           </button>
                         ) : (
-                          <span className="font-medium">{item.name}</span>
+                          <span className="readout">{item.name}</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
+                      <TableCell data-numeric className="text-muted-foreground">
                         {formatFileSize(item.size)}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground text-sm">
+                      <TableCell data-numeric className="text-muted-foreground">
                         {formatDate(item.modifiedAt)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon-sm"
                             onClick={() => downloadToPC(item.path, item.name, item.isDirectory)}
                             disabled={downloadingPath === item.path}
-                            title="Download to PC"
+                            aria-label={`Download ${item.name} to this computer`}
+                            title="Download to this computer"
                           >
                             {downloadingPath === item.path ? (
                               <Spinner />
                             ) : (
-                              <HugeiconsIcon icon={ComputerIcon} className="h-4 w-4" />
+                              <HugeiconsIcon icon={ComputerIcon} className="size-4" />
                             )}
                           </Button>
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon-sm"
                             onClick={() => importPath(item.path)}
                             disabled={importingPath === item.path}
+                            aria-label={`Import ${item.name} into the library`}
                             title="Import to library"
                           >
                             {importingPath === item.path ? (
                               <Spinner />
                             ) : (
-                              <HugeiconsIcon icon={Download01Icon} className="h-4 w-4" />
+                              <HugeiconsIcon icon={FileImportIcon} className="size-4" />
                             )}
                           </Button>
                         </div>

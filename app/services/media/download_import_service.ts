@@ -10,6 +10,7 @@ import Track from '#models/track'
 import TrackFile from '#models/track_file'
 import RootFolder from '#models/root_folder'
 import { DateTime } from 'luxon'
+import { describeMissingMedia } from '#utils/archive_detection'
 
 export interface ImportProgress {
   phase: 'scanning' | 'importing' | 'cleaning' | 'complete'
@@ -123,7 +124,7 @@ export class DownloadImportService {
       const audioFiles = await this.findAudioFiles(outputPath)
 
       if (audioFiles.length === 0) {
-        result.errors.push('No audio files found in download')
+        result.errors.push(await describeMissingMedia(outputPath, 'audio'))
         return result
       }
 

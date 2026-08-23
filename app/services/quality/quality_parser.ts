@@ -87,7 +87,13 @@ const BOOK_QUALITY_MAP: { format: string; id: number; name: string }[] = [
 /**
  * Parse a video release title (movie or TV) for quality attributes
  */
-export function parseVideoQuality(title: string): ParsedVideoQuality {
+export function parseVideoQuality(rawTitle: string): ParsedVideoQuality {
+  // Release names separate tokens with dots, spaces, hyphens OR underscores.
+  // Underscore is a word character, so \b never matches around it and every
+  // \b-anchored pattern below silently fails on underscore-separated titles
+  // (a real "..._1080p_HDTS_DD2_..." parsed as an unknown source and scored as
+  // acceptable). Normalise to dots once so all patterns see a boundary.
+  const title = rawTitle.replace(/_/g, '.')
   const lower = title.toLowerCase()
 
   // Parse resolution
@@ -106,7 +112,17 @@ export function parseVideoQuality(title: string): ParsedVideoQuality {
   let source: string | null = null
   const isRemux = /\bremux\b/i.test(title)
 
-  if (/\bblu[\s._-]?ray\b|\bbd[\s._-]?rip\b|\bbdrip\b|\bbrrip\b/i.test(title) || isRemux) {
+  // Junk sources are checked first: the marker is decisive regardless of what
+  // else the title claims, and a 1080p HDTS is still a camera rip. HDTS/HDTC in
+  // particular slipped through every branch below and parsed as an unknown
+  // source, which scored as acceptable.
+  if (
+    /\bcam\b|\bcamrip\b|\bhd[\s._-]?cam\b|\bts\b|\bhd[\s._-]?ts\b|\btelesync\b|\bhd[\s._-]?tc\b|\btelecine\b|\bdvdscr\b|\bscreener\b/i.test(
+      title
+    )
+  ) {
+    source = 'CAM'
+  } else if (/\bblu[\s._-]?ray\b|\bbd[\s._-]?rip\b|\bbdrip\b|\bbrrip\b/i.test(title) || isRemux) {
     source = 'BluRay'
   } else if (/\bweb[\s._-]?dl\b/i.test(title)) {
     source = 'WEB'
@@ -118,8 +134,6 @@ export function parseVideoQuality(title: string): ParsedVideoQuality {
     source = 'HDTV'
   } else if (/\bdvd\b|\bdvdrip\b/i.test(title)) {
     source = 'DVD'
-  } else if (/\bcam\b|\bts\b|\btelesync\b|\bhd[\s._-]?cam\b/i.test(title)) {
-    source = 'CAM'
   }
 
   // Parse codec
@@ -162,7 +176,13 @@ export function parseVideoQuality(title: string): ParsedVideoQuality {
 /**
  * Parse a music release title for quality attributes
  */
-export function parseMusicQuality(title: string): ParsedMusicQuality {
+export function parseMusicQuality(rawTitle: string): ParsedMusicQuality {
+  // Release names separate tokens with dots, spaces, hyphens OR underscores.
+  // Underscore is a word character, so \b never matches around it and every
+  // \b-anchored pattern below silently fails on underscore-separated titles
+  // (a real "..._1080p_HDTS_DD2_..." parsed as an unknown source and scored as
+  // acceptable). Normalise to dots once so all patterns see a boundary.
+  const title = rawTitle.replace(/_/g, '.')
   const lower = title.toLowerCase()
 
   let format: string | null = null
@@ -216,7 +236,13 @@ export function parseMusicQuality(title: string): ParsedMusicQuality {
 /**
  * Parse a book release title for quality/format
  */
-export function parseBookQuality(title: string): ParsedBookQuality {
+export function parseBookQuality(rawTitle: string): ParsedBookQuality {
+  // Release names separate tokens with dots, spaces, hyphens OR underscores.
+  // Underscore is a word character, so \b never matches around it and every
+  // \b-anchored pattern below silently fails on underscore-separated titles
+  // (a real "..._1080p_HDTS_DD2_..." parsed as an unknown source and scored as
+  // acceptable). Normalise to dots once so all patterns see a boundary.
+  const title = rawTitle.replace(/_/g, '.')
   let format: string | null = null
 
   if (/\bepub\b/i.test(title)) {

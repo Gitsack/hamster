@@ -1,9 +1,8 @@
-import { Head, Link, router, usePage } from '@inertiajs/react'
+import { Head, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Table,
   TableBody,
@@ -13,6 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,16 +22,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { ConfirmDialog } from '@/components/confirm-dialog'
-import { useConfirmDialog } from '@/hooks/use_confirm_dialog'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   MoreVerticalIcon,
@@ -380,6 +370,8 @@ export default function MovieDetail() {
     }
   }
 
+  // One byte formatter for the whole page: two release tables and the file row all
+  // have to line up under the Readout Rule.
   const formatSize = (bytes: number) => {
     if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`
     if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} MB`
@@ -406,19 +398,13 @@ export default function MovieDetail() {
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-  }
-
   if (loading) {
     return (
       <AppLayout title="Loading...">
         <Head title="Loading..." />
         <div className="space-y-6">
-          <div className="flex gap-6">
-            <Skeleton className="h-72 w-48 rounded-lg" />
+          <div className="flex gap-4 md:gap-6">
+            <Skeleton className="w-28 sm:w-40 md:w-48 aspect-[2/3] rounded-lg shrink-0" />
             <div className="flex-1 space-y-4">
               <Skeleton className="h-8 w-1/3" />
               <Skeleton className="h-4 w-1/4" />
@@ -435,9 +421,11 @@ export default function MovieDetail() {
     return (
       <AppLayout title="Not Found">
         <Head title="Not Found" />
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Movie not found</p>
-        </div>
+        <EmptyState
+          icon={<HugeiconsIcon icon={Film01Icon} />}
+          title="Movie not found"
+          message="This movie is no longer in your library — it may have been removed. Head back to the movie library to pick another."
+        />
       </AppLayout>
     )
   }
@@ -451,10 +439,10 @@ export default function MovieDetail() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={toggleMonitored}>
+                <Button variant="outline" onClick={toggleMonitored} aria-pressed={movie.monitored}>
                   <HugeiconsIcon
                     icon={movie.monitored ? Notification01Icon : NotificationOff01Icon}
-                    className="h-4 w-4 md:mr-2"
+                    className="h-4 w-4"
                   />
                   <span className="hidden md:inline">
                     {movie.monitored ? 'Monitored' : 'Monitor'}
@@ -470,9 +458,9 @@ export default function MovieDetail() {
                 <TooltipTrigger asChild>
                   <Button onClick={downloadMovie} disabled={downloading}>
                     {downloading ? (
-                      <Spinner className="md:mr-2" />
+                      <Spinner />
                     ) : (
-                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 md:mr-2" />
+                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
                     )}
                     <span className="hidden md:inline">
                       {downloading ? 'Downloading...' : 'Download'}
@@ -488,9 +476,9 @@ export default function MovieDetail() {
               <TooltipTrigger asChild>
                 <Button variant="outline" onClick={searchReleases} disabled={searching}>
                   {searching ? (
-                    <Spinner className="md:mr-2" />
+                    <Spinner />
                   ) : (
-                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 md:mr-2" />
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
                   )}
                   <span className="hidden md:inline">
                     {searching ? 'Searching...' : 'Browse releases'}
@@ -511,7 +499,7 @@ export default function MovieDetail() {
                 <DropdownMenuItem onClick={enrichMovie} disabled={enriching}>
                   <HugeiconsIcon
                     icon={Search01Icon}
-                    className={`h-4 w-4 mr-2 ${enriching ? 'animate-spin' : ''}`}
+                    className={`h-4 w-4 ${enriching ? 'animate-spin' : ''}`}
                   />
                   {enriching ? 'Enriching...' : 'Enrich from TMDB'}
                 </DropdownMenuItem>
@@ -521,7 +509,7 @@ export default function MovieDetail() {
                 className="text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
                 Remove from Library
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -549,12 +537,14 @@ export default function MovieDetail() {
           overview={movie.overview}
         >
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-2xl font-bold">{movie.title}</h1>
-              {movie.year && <span className="text-muted-foreground">({movie.year})</span>}
+            <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-[-0.01em]">{movie.title}</h1>
+              {movie.year && (
+                <span className="readout text-sm text-muted-foreground">({movie.year})</span>
+              )}
             </div>
             {movie.originalTitle && movie.originalTitle !== movie.title && (
-              <p className="text-muted-foreground">{movie.originalTitle}</p>
+              <p className="text-sm text-muted-foreground">{movie.originalTitle}</p>
             )}
           </div>
 
@@ -579,19 +569,19 @@ export default function MovieDetail() {
             {movie.releaseDate && (
               <div className="flex items-center gap-1 text-muted-foreground">
                 <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
-                {movie.releaseDate}
+                <span className="readout">{movie.releaseDate}</span>
               </div>
             )}
             {movie.runtime && (
               <div className="flex items-center gap-1 text-muted-foreground">
                 <HugeiconsIcon icon={Time01Icon} className="h-4 w-4" />
-                {formatRuntime(movie.runtime)}
+                <span className="readout">{formatRuntime(movie.runtime)}</span>
               </div>
             )}
             {movie.rating && (
               <div className="flex items-center gap-1 text-muted-foreground">
                 <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
-                {movie.rating.toFixed(1)}
+                <span className="readout">{movie.rating.toFixed(1)}</span>
               </div>
             )}
           </div>
@@ -615,17 +605,21 @@ export default function MovieDetail() {
               selectedClientId={selectedClientId}
               onClientChange={setSelectedClientId}
             />
-            {movie.rootFolder && <Badge variant="secondary">{movie.rootFolder.path}</Badge>}
+            {movie.rootFolder && (
+              <Badge variant="secondary" className="readout">
+                {movie.rootFolder.path}
+              </Badge>
+            )}
           </div>
 
           {/* External links */}
-          <div className="flex gap-2 text-sm">
+          <div className="flex gap-4 text-xs">
             {movie.tmdbId && (
               <a
                 href={`https://www.themoviedb.org/movie/${movie.tmdbId}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-primary"
+                className="rounded-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
               >
                 TMDB
               </a>
@@ -635,7 +629,7 @@ export default function MovieDetail() {
                 href={`https://www.imdb.com/title/${movie.imdbId}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-primary"
+                className="rounded-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
               >
                 IMDB
               </a>
@@ -648,26 +642,28 @@ export default function MovieDetail() {
         {/* File info */}
         {movie.movieFile && (
           <Card>
-            <CardContent className="pt-6">
-              <h2 className="font-semibold mb-4">File</h2>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted rounded-lg">
+            <CardContent className="space-y-3">
+              <h2 className="text-base font-semibold">File</h2>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-md border border-border p-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <HugeiconsIcon
                     icon={Film01Icon}
-                    className="h-8 w-8 text-muted-foreground flex-shrink-0"
+                    className="h-8 w-8 text-muted-foreground shrink-0"
                   />
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{movie.movieFile.path.split('/').pop()}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {movie.movieFile.quality && `${movie.movieFile.quality} • `}
-                      {formatFileSize(movie.movieFile.size)}
+                    <p className="readout text-sm font-medium truncate">
+                      {movie.movieFile.path.split('/').pop()}
                     </p>
-                    <p className="text-xs text-muted-foreground/70 truncate">
+                    <p className="readout text-xs text-muted-foreground">
+                      {movie.movieFile.quality && `${movie.movieFile.quality} • `}
+                      {formatSize(movie.movieFile.size)}
+                    </p>
+                    <p className="readout text-xs text-muted-foreground truncate">
                       {movie.movieFile.path}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                   <Button
                     variant="default"
                     size="sm"
@@ -677,12 +673,12 @@ export default function MovieDetail() {
                     }}
                     aria-label="Play"
                   >
-                    <HugeiconsIcon icon={PlayIcon} className="h-4 w-4 sm:mr-2" />
+                    <HugeiconsIcon icon={PlayIcon} className="h-4 w-4" />
                     <span className="hidden sm:inline">Play</span>
                   </Button>
                   <Button variant="outline" size="sm" asChild aria-label="Download">
                     <a href={movie.movieFile.downloadUrl} download>
-                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4 sm:mr-2" />
+                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
                       <span className="hidden sm:inline">Download</span>
                     </a>
                   </Button>
@@ -693,7 +689,7 @@ export default function MovieDetail() {
                     onClick={() => setDeleteFileDialogOpen(true)}
                     aria-label="Delete"
                   >
-                    <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 sm:mr-2" />
+                    <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
                     <span className="hidden sm:inline">Delete</span>
                   </Button>
                 </div>
@@ -717,56 +713,58 @@ export default function MovieDetail() {
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Release</TableHead>
-                      <TableHead className="w-32">Indexer</TableHead>
-                      <TableHead className="w-24">Quality</TableHead>
-                      <TableHead className="w-24 text-right">Size</TableHead>
-                      <TableHead className="w-24 text-right">Grabs</TableHead>
-                      <TableHead className="w-24">
-                        <span className="sr-only">Actions</span>
-                      </TableHead>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Release</TableHead>
+                    <TableHead className="w-32">Indexer</TableHead>
+                    <TableHead className="w-24">Quality</TableHead>
+                    <TableHead className="w-24" data-numeric>
+                      Size
+                    </TableHead>
+                    <TableHead className="w-20" data-numeric>
+                      Grabs
+                    </TableHead>
+                    <TableHead className="w-16">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {searchResults.map((result) => (
+                    <TableRow key={result.id}>
+                      <TableCell className="readout max-w-md truncate">{result.title}</TableCell>
+                      <TableCell className="readout text-muted-foreground">
+                        {result.indexer}
+                      </TableCell>
+                      <TableCell>
+                        {result.quality && <Badge variant="outline">{result.quality}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground" data-numeric>
+                        {formatSize(result.size)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground" data-numeric>
+                        {result.grabs ?? result.seeders ?? '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="icon-sm"
+                          variant="outline"
+                          onClick={() => grabRelease(result)}
+                          disabled={grabbing === result.id}
+                          aria-label={`Download ${result.title}`}
+                        >
+                          {grabbing === result.id ? (
+                            <Spinner />
+                          ) : (
+                            <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {searchResults.map((result) => (
-                      <TableRow key={result.id}>
-                        <TableCell className="font-medium max-w-md truncate">
-                          {result.title}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
-                        <TableCell>
-                          {result.quality && <Badge variant="outline">{result.quality}</Badge>}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {formatSize(result.size)}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {result.grabs ?? result.seeders ?? '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => grabRelease(result)}
-                            disabled={grabbing === result.id}
-                            aria-label={`Download ${result.title}`}
-                          >
-                            {grabbing === result.id ? (
-                              <Spinner />
-                            ) : (
-                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         )}
@@ -808,7 +806,11 @@ export default function MovieDetail() {
               <span className="ml-3 text-muted-foreground">Searching indexers...</span>
             </div>
           ) : searchResults.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">No releases found</div>
+            <EmptyState
+              icon={<HugeiconsIcon icon={Search01Icon} />}
+              title="No releases found"
+              message="Your indexers returned nothing for this title. Check that the indexers are enabled and healthy in Settings, or widen the quality profile."
+            />
           ) : (
             <div className="overflow-auto flex-1">
               <Table>
@@ -817,33 +819,40 @@ export default function MovieDetail() {
                     <TableHead>Release</TableHead>
                     <TableHead className="w-32">Indexer</TableHead>
                     <TableHead className="w-24">Quality</TableHead>
-                    <TableHead className="w-24 text-right">Size</TableHead>
-                    <TableHead className="w-24 text-right">Grabs</TableHead>
-                    <TableHead className="w-16"></TableHead>
+                    <TableHead className="w-24" data-numeric>
+                      Size
+                    </TableHead>
+                    <TableHead className="w-20" data-numeric>
+                      Grabs
+                    </TableHead>
+                    <TableHead className="w-16">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {searchResults.map((result) => (
                     <TableRow key={result.id}>
-                      <TableCell className="font-medium max-w-md truncate">
-                        {result.title}
+                      <TableCell className="readout max-w-md truncate">{result.title}</TableCell>
+                      <TableCell className="readout text-muted-foreground">
+                        {result.indexer}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{result.indexer}</TableCell>
                       <TableCell>
                         {result.quality && <Badge variant="outline">{result.quality}</Badge>}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {formatFileSize(result.size)}
+                      <TableCell className="text-muted-foreground" data-numeric>
+                        {formatSize(result.size)}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {result.grabs ?? result.seeders ?? '-'}
+                      <TableCell className="text-muted-foreground" data-numeric>
+                        {result.grabs ?? result.seeders ?? '—'}
                       </TableCell>
                       <TableCell>
                         <Button
-                          size="sm"
+                          size="icon-sm"
                           variant="outline"
                           onClick={() => grabRelease(result)}
                           disabled={grabbing === result.id}
+                          aria-label={`Download ${result.title}`}
                         >
                           {grabbing === result.id ? (
                             <Spinner />

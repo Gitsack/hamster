@@ -21,6 +21,9 @@ import UnmatchedFile from '#models/unmatched_file'
 import type { ParsedInfo } from '#models/unmatched_file'
 import RootFolder from '#models/root_folder'
 import type { ProgressCallback } from '#services/tasks/folder_scanner'
+import { deriveMediaType } from '#utils/media_type'
+import { downloadManager } from '#services/download_clients/download_manager'
+import { historyService } from '#services/history/history_service'
 
 /**
  * Service that scans download client completed folders for orphaned downloads
@@ -294,6 +297,13 @@ class CompletedDownloadsScanner {
     }
 
     // Create a download record
+    const links = {
+      movieId: match.type === 'movie' ? match.id : null,
+      tvShowId: match.type === 'episode' ? match.tvShowId : null,
+      episodeId: match.type === 'episode' ? match.id : null,
+      albumId: match.type === 'album' ? match.id : null,
+      bookId: match.type === 'book' ? match.id : null,
+    }
     const download = await Download.create({
       downloadClientId: client.id,
       externalId: slot.nzo_id,
@@ -304,11 +314,8 @@ class CompletedDownloadsScanner {
       outputPath: outputPath,
       completedAt: DateTime.now(),
       startedAt: DateTime.fromSeconds(slot.completed - slot.download_time),
-      movieId: match.type === 'movie' ? match.id : null,
-      tvShowId: match.type === 'episode' ? match.tvShowId : null,
-      episodeId: match.type === 'episode' ? match.id : null,
-      albumId: match.type === 'album' ? match.id : null,
-      bookId: match.type === 'book' ? match.id : null,
+      mediaType: deriveMediaType(links),
+      ...links,
     })
 
     return await this.importDownload(download, client)
@@ -370,9 +377,12 @@ class CompletedDownloadsScanner {
         console.log(
           `[CompletedScanner] Path not accessible for ${download.title}: ${pathCheck.error}`
         )
-        download.status = 'failed'
-        download.errorMessage = pathCheck.error || 'Path not accessible'
-        await download.save()
+        // An unreachable path is environmental, so this must not count as a bad
+        // release: markFailed's blacklist opt-out list covers it, and retrying
+        // the same download later is the right behaviour.
+        await downloadManager.markFailed(download, pathCheck.error || 'Path not accessible', {
+          searchAlternative: false,
+        })
         return { imported: false, error: pathCheck.error }
       }
 
@@ -387,34 +397,32 @@ class CompletedDownloadsScanner {
       } else if (download.bookId) {
         result = await bookImportService.importDownload(download)
       } else {
-        download.status = 'failed'
-        download.errorMessage = 'Unknown media type'
-        await download.save()
+        await downloadManager.markFailed(download, 'Unknown media type', {
+          searchAlternative: false,
+        })
         return { imported: false, error: 'Unknown media type' }
       }
 
       if (result.success) {
         download.status = 'completed'
         await download.save()
+        await historyService.recordForDownload(download, 'import_completed', {
+          data: { filesImported: result.filesImported, outputPath: download.outputPath },
+        })
         console.log(
           `[CompletedScanner] Imported: ${download.title} (${result.filesImported} files)`
         )
         return { imported: true }
       } else {
-        download.status = 'failed'
-        download.errorMessage = result.errors.join('; ')
-        await download.save()
-        console.log(
-          `[CompletedScanner] Import failed: ${download.title} - ${result.errors.join('; ')}`
-        )
-        return { imported: false, error: result.errors.join('; ') }
+        const errorMsg = result.errors.join('; ')
+        await downloadManager.markFailed(download, errorMsg)
+        console.log(`[CompletedScanner] Import failed: ${download.title} - ${errorMsg}`)
+        return { imported: false, error: errorMsg }
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Import failed'
       console.error(`[CompletedScanner] Import error for ${download.title}:`, error)
-      download.status = 'failed'
-      download.errorMessage = errorMsg
-      await download.save()
+      await downloadManager.markFailed(download, errorMsg)
       return { imported: false, error: errorMsg }
     }
   }

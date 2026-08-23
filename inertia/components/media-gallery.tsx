@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, type ReactNode, type MouseEvent } from 'react'
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { ArrowLeft01Icon, ArrowRight01Icon, PlayIcon } from '@hugeicons/core-free-icons'
 
 interface MediaGalleryProps {
   trailerUrl?: string | null
@@ -153,7 +154,8 @@ export function MediaGallery({
                     }
                     setPlayingTrailer(true)
                   }}
-                  className="w-full h-full relative group cursor-pointer"
+                  className="w-full h-full relative group cursor-pointer outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:ring-inset"
+                  aria-label={`Play ${title} trailer`}
                 >
                   <img
                     src={`https://img.youtube.com/vi/${youtubeKey}/maxresdefault.jpg`}
@@ -166,15 +168,11 @@ export function MediaGallery({
                       }
                     }}
                   />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
-                    <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        className="w-8 h-8 text-black ml-1"
-                      >
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/35 transition-colors duration-150">
+                    {/* Sits on artwork: fixed on-image chrome plus the poster hairline,
+                        not a themed surface and not a resting shadow. */}
+                    <div className="w-14 h-14 rounded-full bg-black/55 text-white flex items-center justify-center shadow-[inset_0_0_0_1px_rgb(255_255_255/0.4)] group-hover:bg-black/70 transition-colors duration-150">
+                      <HugeiconsIcon icon={PlayIcon} className="w-6 h-6" />
                     </div>
                   </div>
                 </button>
@@ -210,17 +208,17 @@ export function MediaGallery({
           <>
             <button
               onClick={() => goToSlide('prev')}
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/gallery:opacity-100 transition-opacity cursor-pointer"
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/55 hover:bg-black/70 text-white flex items-center justify-center opacity-0 group-hover/gallery:opacity-100 focus-visible:opacity-100 transition-opacity duration-150 cursor-pointer outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
               aria-label="Previous slide"
             >
-              <ChevronLeftIcon className="w-5 h-5" />
+              <HugeiconsIcon icon={ArrowLeft01Icon} className="w-5 h-5" />
             </button>
             <button
               onClick={() => goToSlide('next')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/gallery:opacity-100 transition-opacity cursor-pointer"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/55 hover:bg-black/70 text-white flex items-center justify-center opacity-0 group-hover/gallery:opacity-100 focus-visible:opacity-100 transition-opacity duration-150 cursor-pointer outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
               aria-label="Next slide"
             >
-              <ChevronRightIcon className="w-5 h-5" />
+              <HugeiconsIcon icon={ArrowRight01Icon} className="w-5 h-5" />
             </button>
           </>
         )}
@@ -233,10 +231,11 @@ export function MediaGallery({
             <button
               key={i}
               onClick={() => scrollToSlide(i)}
-              className={`w-2 h-2 rounded-full transition-colors ${
-                i === activeIndex ? 'bg-foreground' : 'bg-foreground/25'
+              className={`w-2 h-2 rounded-full transition-colors duration-150 outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] ${
+                i === activeIndex ? 'bg-foreground' : 'bg-foreground/25 hover:bg-foreground/50'
               }`}
               aria-label={`Go to slide ${i + 1}`}
+              aria-current={i === activeIndex}
             />
           ))}
         </div>

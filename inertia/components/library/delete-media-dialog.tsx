@@ -65,8 +65,8 @@ export function DeleteMediaDialog({
           <DialogHeader>
             <DialogTitle>Delete {mediaType} file?</DialogTitle>
             <DialogDescription>
-              This will permanently delete the file for &ldquo;{title}&rdquo; from disk. The{' '}
-              {mediaType} will remain in your library but will need to be downloaded again.
+              This permanently deletes the file for &ldquo;{title}&rdquo; from disk. The {mediaType}{' '}
+              stays in your library and stays monitored, so the next search can grab it again.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -76,7 +76,7 @@ export function DeleteMediaDialog({
             <Button variant="destructive" onClick={handleConfirm} disabled={loading}>
               {loading ? (
                 <>
-                  <Spinner className="mr-2" />
+                  <Spinner />
                   Deleting...
                 </>
               ) : (
@@ -99,8 +99,8 @@ export function DeleteMediaDialog({
           </DialogTitle>
           <DialogDescription>
             {hasFile
-              ? `This will remove the ${mediaType} from your library.`
-              : `This will remove the ${mediaType} from your library.`}
+              ? `Removes “${title}” from your library and stops monitoring it. Files on disk are kept unless you tick the box below.`
+              : `Removes “${title}” from your library and stops monitoring it. Nothing is on disk yet, so nothing is deleted. You can add it again from Search at any time.`}
           </DialogDescription>
         </DialogHeader>
         {hasFile && (
@@ -119,7 +119,7 @@ export function DeleteMediaDialog({
           <Button variant="destructive" onClick={handleConfirm} disabled={loading}>
             {loading ? (
               <>
-                <Spinner className="mr-2" />
+                <Spinner />
                 Deleting...
               </>
             ) : deleteFiles ? (

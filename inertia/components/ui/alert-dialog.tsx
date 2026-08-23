@@ -118,7 +118,7 @@ function AlertDialogContent({
         aria-modal="true"
         data-slot="alert-dialog-content"
         className={cn(
-          'bg-background relative z-10 grid w-full max-w-lg gap-4 rounded-lg border p-6 shadow-lg outline-none max-h-[85vh] overflow-y-auto mx-4',
+          'bg-popover text-popover-foreground border-border relative z-10 grid w-full max-w-lg gap-4 rounded-xl border p-6 shadow-lg outline-none max-h-[85vh] overflow-y-auto mx-4',
           className
         )}
         {...props}

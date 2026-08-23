@@ -31,7 +31,9 @@ import {
   FlashIcon,
   CheckmarkCircle01Icon,
   Cancel01Icon,
+  WebhookIcon,
 } from '@hugeicons/core-free-icons'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
@@ -289,7 +291,7 @@ export default function Webhooks() {
       }
     } catch (error) {
       console.error('Failed to fetch webhooks:', error)
-      toast.error('Failed to load webhooks')
+      toast.error('Webhooks could not be loaded — Hamster is unreachable. Reload to retry.')
     } finally {
       setLoading(false)
     }
@@ -339,7 +341,7 @@ export default function Webhooks() {
 
   const testWebhook = async () => {
     if (!editingWebhook) {
-      toast.error('Save the webhook first, then test')
+      toast.error('Save the webhook first — testing sends a real request to the stored URL.')
       return
     }
 
@@ -357,11 +359,20 @@ export default function Webhooks() {
       if (result.success) {
         toast.success(`Webhook responded with ${result.statusCode}`)
       } else {
-        toast.error(result.error || 'Test failed')
+        toast.error(
+          result.error ||
+            'The endpoint rejected the test. Check the URL, method and any token in the query string.'
+        )
       }
     } catch (error) {
-      setTestResult({ success: false, error: 'Connection failed' })
-      toast.error('Connection failed')
+      setTestResult({
+        success: false,
+        error:
+          'Hamster could not reach the endpoint. Check the host is up and reachable from here.',
+      })
+      toast.error(
+        'Hamster could not reach the endpoint. Check the host is up and reachable from here.'
+      )
     } finally {
       setTesting(false)
     }
@@ -377,7 +388,7 @@ export default function Webhooks() {
         .map((f) => f.label)
 
       if (missingFields.length > 0) {
-        toast.error(`Please fill in: ${missingFields.join(', ')}`)
+        toast.error(`Still required before saving: ${missingFields.join(', ')}.`)
         return
       }
 
@@ -385,7 +396,7 @@ export default function Webhooks() {
     }
 
     if (!formData.name || !finalUrl) {
-      toast.error('Please fill in all required fields')
+      toast.error('A name and a URL are both required before a webhook can be saved.')
       return
     }
 
@@ -393,7 +404,7 @@ export default function Webhooks() {
     try {
       new URL(finalUrl)
     } catch {
-      toast.error('Please enter a valid URL')
+      toast.error('That URL is not valid. Include the scheme, for example http://localhost:8096.')
       return
     }
 
@@ -415,11 +426,13 @@ export default function Webhooks() {
         fetchWebhooks()
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to save')
+        toast.error(
+          error.error || 'Webhook not saved — the server rejected it. Check the URL and method.'
+        )
       }
     } catch (error) {
       console.error('Failed to save:', error)
-      toast.error('Failed to save webhook')
+      toast.error('Webhook not saved — Hamster is unreachable. Check the server and try again.')
     } finally {
       setSaving(false)
     }
@@ -441,11 +454,11 @@ export default function Webhooks() {
         setDialogOpen(false)
         fetchWebhooks()
       } else {
-        toast.error('Failed to delete webhook')
+        toast.error('Webhook not deleted — the server rejected the request. Try again.')
       }
     } catch (error) {
       console.error('Failed to delete:', error)
-      toast.error('Failed to delete webhook')
+      toast.error('Webhook not deleted — Hamster is unreachable. Check the server and try again.')
     } finally {
       setDeleting(false)
     }
@@ -470,8 +483,8 @@ export default function Webhooks() {
       title="Webhooks"
       actions={
         <Button onClick={openAddDialog}>
-          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
-          Add Webhook
+          <HugeiconsIcon icon={Add01Icon} />
+          Add webhook
         </Button>
       }
     >
@@ -480,21 +493,41 @@ export default function Webhooks() {
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Webhooks</CardTitle>
+            <CardTitle>Endpoints</CardTitle>
             <CardDescription>
-              Configure webhooks to integrate with external services like Plex, Jellyfin, or custom
-              automation. Webhooks will receive JSON payloads when events occur.
+              URLs Hamster calls when something happens in the library — a grab, an import, a health
+              change. Each one gets a JSON body describing the event.
             </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Spinner className="size-6 text-muted-foreground" />
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 flex-1" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                ))}
               </div>
             ) : webhooks.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>No webhooks configured.</p>
-                <p className="mt-2">Add a webhook to integrate with external services.</p>
+              <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <HugeiconsIcon
+                    icon={WebhookIcon}
+                    className="size-6 text-muted-foreground"
+                    strokeWidth={1.5}
+                  />
+                </div>
+                <p className="text-lg font-medium">No webhooks yet</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Nothing outside Hamster is being told when media lands. Add one to make Plex,
+                  Jellyfin or Emby rescan the moment an import finishes.
+                </p>
+                <Button variant="outline" onClick={openAddDialog}>
+                  <HugeiconsIcon icon={Add01Icon} />
+                  Add webhook
+                </Button>
               </div>
             ) : (
               <Table>
@@ -502,33 +535,44 @@ export default function Webhooks() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>URL</TableHead>
-                    <TableHead>Events</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-24"></TableHead>
+                    <TableHead className="w-28">Events</TableHead>
+                    <TableHead className="w-28">Status</TableHead>
+                    <TableHead className="w-16 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {webhooks.map((webhook) => (
                     <TableRow key={webhook.id}>
                       <TableCell className="font-medium">{webhook.name}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
+                      <TableCell className="readout max-w-[16rem] truncate text-muted-foreground">
                         {webhook.url}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{countEnabledEvents(webhook)} events</Badge>
+                        <Badge variant="outline">
+                          <span className="readout">{countEnabledEvents(webhook)}</span> events
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         {webhook.enabled ? (
-                          <Badge variant="default" className="bg-green-500">
-                            Enabled
+                          <Badge className="border-transparent bg-status-complete text-white">
+                            <HugeiconsIcon icon={CheckmarkCircle01Icon} />
+                            Active
                           </Badge>
                         ) : (
-                          <Badge variant="secondary">Disabled</Badge>
+                          <Badge variant="secondary">
+                            <HugeiconsIcon icon={Cancel01Icon} />
+                            Paused
+                          </Badge>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(webhook)}>
-                          <HugeiconsIcon icon={Edit01Icon} className="h-4 w-4" />
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Edit ${webhook.name}`}
+                          onClick={() => openEditDialog(webhook)}
+                        >
+                          <HugeiconsIcon icon={Edit01Icon} className="size-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -542,11 +586,14 @@ export default function Webhooks() {
         {/* Usage Info */}
         <Card>
           <CardHeader>
-            <CardTitle>Webhook Payload</CardTitle>
-            <CardDescription>Example payload sent to webhooks on events</CardDescription>
+            <CardTitle>Payload shape</CardTitle>
+            <CardDescription>
+              What every endpoint receives. The body is the same for all event types; only{' '}
+              <code className="readout">eventType</code> and the media block change.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">
+            <pre className="readout overflow-x-auto rounded-md border border-border bg-muted p-4 text-xs">
               {JSON.stringify(
                 {
                   eventType: 'import.completed',
@@ -577,78 +624,94 @@ export default function Webhooks() {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingWebhook ? 'Edit Webhook' : 'Add Webhook'}</DialogTitle>
-            <DialogDescription>Configure your webhook endpoint settings.</DialogDescription>
+            <DialogDescription>
+              Where to send the call, and which library events should trigger it.
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Plex Refresh"
-              />
-            </div>
-
-            {/* Template fields for new webhooks, URL field for editing */}
-            {selectedTemplate && !editingWebhook ? (
-              <>
-                {selectedTemplate.fields.map((field) => (
-                  <div key={field.name} className="space-y-2">
-                    <Label htmlFor={field.name}>
-                      {field.label}
-                      {field.required && ' *'}
-                    </Label>
-                    <Input
-                      id={field.name}
-                      type={field.type === 'password' ? 'password' : 'text'}
-                      value={templateFields[field.name] || ''}
-                      onChange={(e) =>
-                        setTemplateFields({ ...templateFields, [field.name]: e.target.value })
-                      }
-                      placeholder={field.placeholder}
-                    />
-                    {field.help && <p className="text-sm text-muted-foreground">{field.help}</p>}
-                  </div>
-                ))}
-              </>
-            ) : (
+          <div className="space-y-6 py-4">
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="url">URL *</Label>
+                <Label htmlFor="name">Name *</Label>
                 <Input
-                  id="url"
-                  type="url"
-                  value={formData.url}
-                  onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                  placeholder="https://example.com/webhook"
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Plex Refresh"
                 />
               </div>
-            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="method">HTTP Method</Label>
-              <Select
-                value={formData.method}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, method: value as typeof formData.method })
-                }
-              >
-                <SelectTrigger id="method">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectPopup>
-                  <SelectItem value="GET">GET</SelectItem>
-                  <SelectItem value="POST">POST</SelectItem>
-                  <SelectItem value="PUT">PUT</SelectItem>
-                  <SelectItem value="PATCH">PATCH</SelectItem>
-                </SelectPopup>
-              </Select>
+              {/* Template fields for new webhooks, URL field for editing */}
+              {selectedTemplate && !editingWebhook ? (
+                <>
+                  {selectedTemplate.fields.map((field) => (
+                    <div key={field.name} className="space-y-2">
+                      <Label htmlFor={field.name}>
+                        {field.label}
+                        {field.required && ' *'}
+                      </Label>
+                      <Input
+                        id={field.name}
+                        type={field.type === 'password' ? 'password' : 'text'}
+                        value={templateFields[field.name] || ''}
+                        onChange={(e) =>
+                          setTemplateFields({ ...templateFields, [field.name]: e.target.value })
+                        }
+                        placeholder={field.placeholder}
+                        className="readout"
+                      />
+                      {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="url">URL *</Label>
+                  <Input
+                    id="url"
+                    type="url"
+                    value={formData.url}
+                    onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                    placeholder="https://example.com/webhook"
+                    className="readout"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Must be reachable from this box, not from your browser.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="method">HTTP Method</Label>
+                <Select
+                  value={formData.method}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, method: value as typeof formData.method })
+                  }
+                >
+                  <SelectTrigger id="method">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="GET">GET</SelectItem>
+                    <SelectItem value="POST">POST</SelectItem>
+                    <SelectItem value="PUT">PUT</SelectItem>
+                    <SelectItem value="PATCH">PATCH</SelectItem>
+                  </SelectPopup>
+                </Select>
+              </div>
             </div>
 
             {/* Events */}
-            <div className="space-y-4 pt-2 border-t">
-              <Label className="text-base font-medium">Trigger on Events</Label>
+            <fieldset className="space-y-3 border-t border-border pt-6">
+              <legend className="sr-only">Trigger on events</legend>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Trigger on events</h3>
+                <p className="text-xs text-muted-foreground">
+                  Every ticked event fires one request. Leave them all off and the webhook stays
+                  silent.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -753,64 +816,69 @@ export default function Webhooks() {
                   </Label>
                 </div>
               </div>
-            </div>
+            </fieldset>
 
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex items-center gap-2 border-t border-border pt-6">
               <Checkbox
                 id="enabled"
                 checked={formData.enabled}
                 onCheckedChange={(checked) => setFormData({ ...formData, enabled: !!checked })}
               />
               <Label htmlFor="enabled" className="font-normal cursor-pointer">
-                Enabled
+                Send to this endpoint
               </Label>
             </div>
 
             {/* Test result */}
             {testResult && (
               <div
-                className={`flex items-center gap-2 p-3 rounded-md ${
+                role="status"
+                className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
                   testResult.success
-                    ? 'bg-green-500/10 text-green-600'
-                    : 'bg-destructive/10 text-destructive'
+                    ? 'border-status-complete/40 bg-status-complete/10'
+                    : 'border-destructive/40 bg-destructive/10'
                 }`}
               >
                 <HugeiconsIcon
                   icon={testResult.success ? CheckmarkCircle01Icon : Cancel01Icon}
-                  className="h-5 w-5"
+                  className={`mt-0.5 size-4 shrink-0 ${
+                    testResult.success ? 'text-status-complete-ink' : 'text-destructive'
+                  }`}
                 />
-                <span>
-                  {testResult.success
-                    ? `Success! Server responded with ${testResult.statusCode}`
-                    : testResult.error || 'Test failed'}
+                <span className="text-foreground">
+                  {testResult.success ? (
+                    <>
+                      Endpoint answered <span className="readout">{testResult.statusCode}</span>.
+                      Events will be delivered.
+                    </>
+                  ) : (
+                    testResult.error ||
+                    'The endpoint did not answer. Check the URL and that the host is reachable from this box.'
+                  )}
                 </span>
               </div>
             )}
           </div>
 
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
             {editingWebhook && (
               <Button
                 variant="destructive"
                 onClick={() => setDeleteDialogOpen(true)}
                 className="sm:mr-auto"
               >
-                <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4 mr-2" />
+                <HugeiconsIcon icon={Delete01Icon} />
                 Delete
               </Button>
             )}
             {editingWebhook && (
               <Button variant="outline" onClick={testWebhook} disabled={testing}>
-                {testing ? (
-                  <Spinner className="mr-2" />
-                ) : (
-                  <HugeiconsIcon icon={FlashIcon} className="h-4 w-4 mr-2" />
-                )}
+                {testing ? <Spinner /> : <HugeiconsIcon icon={FlashIcon} />}
                 Test
               </Button>
             )}
             <Button onClick={saveWebhook} disabled={saving}>
-              {saving && <Spinner className="mr-2" />}
+              {saving && <Spinner />}
               {editingWebhook ? 'Save' : 'Add'}
             </Button>
           </DialogFooter>
@@ -823,7 +891,8 @@ export default function Webhooks() {
           <DialogHeader>
             <DialogTitle>Delete {editingWebhook?.name}?</DialogTitle>
             <DialogDescription>
-              This will remove the webhook. External services will no longer receive events.
+              The endpoint stops receiving events immediately — a media server wired up this way
+              will no longer rescan on import. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -831,7 +900,7 @@ export default function Webhooks() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={deleteWebhook} disabled={deleting}>
-              {deleting && <Spinner className="mr-2" />}
+              {deleting && <Spinner />}
               Delete
             </Button>
           </DialogFooter>
@@ -844,20 +913,21 @@ export default function Webhooks() {
           <DialogHeader>
             <DialogTitle>Add Webhook</DialogTitle>
             <DialogDescription>
-              Choose a preset for common media servers or create a custom webhook.
+              A preset fills in the URL shape and the sensible event set for that server. Custom
+              leaves everything to you.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-3 py-4">
+          <div className="grid grid-cols-2 gap-2 py-4">
             {webhookTemplates.map((template) => (
               <button
                 key={template.id}
                 type="button"
                 onClick={() => selectTemplate(template)}
-                className="flex flex-col items-start gap-2 p-4 rounded-lg border border-border hover:border-primary hover:bg-accent transition-colors text-left"
+                className="flex flex-col items-start gap-1 rounded-md border border-border p-3 text-left outline-none transition-colors duration-150 hover:border-primary hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
-                <span className="font-medium">{template.name}</span>
-                <p className="text-sm text-muted-foreground">{template.description}</p>
+                <span className="text-sm font-medium">{template.name}</span>
+                <span className="text-xs text-muted-foreground">{template.description}</span>
               </button>
             ))}
           </div>

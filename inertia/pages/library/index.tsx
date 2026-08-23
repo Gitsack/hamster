@@ -41,6 +41,7 @@ import {
   Download01Icon,
   Clock01Icon,
   FolderSearchIcon,
+  Tick02Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
@@ -439,11 +440,13 @@ export default function Library() {
         setDeleteDialogOpen(false)
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to remove item')
+        toast.error(
+          error.error || `Could not remove ${itemToDelete.name} — it is still in your library.`
+        )
       }
     } catch (error) {
       console.error('Failed to delete:', error)
-      toast.error('Failed to remove item')
+      toast.error(`Could not reach the server. ${itemToDelete.name} was not removed — try again.`)
     } finally {
       setDeleting(false)
     }
@@ -474,7 +477,7 @@ export default function Library() {
       // First get root folders for this media type
       const rootFoldersRes = await fetch('/api/v1/rootfolders')
       if (!rootFoldersRes.ok) {
-        toast.error('Failed to fetch root folders')
+        toast.error('Could not load root folders — nothing was scanned. Try again in a moment.')
         return
       }
 
@@ -484,7 +487,9 @@ export default function Library() {
       )
 
       if (foldersToScan.length === 0) {
-        toast.error(`No root folders configured for ${MEDIA_TYPE_CONFIG[activeTab].label}`)
+        toast.error(
+          `No root folder is configured for ${MEDIA_TYPE_CONFIG[activeTab].label}. Add one in Settings → Media Management, then scan again.`
+        )
         return
       }
 
@@ -526,16 +531,18 @@ export default function Library() {
           'Scan errors:',
           results.filter((r) => r.status === 'error')
         )
-        toast.warning(`Scan completed with ${failedCount} error(s)`)
+        toast.warning(
+          `Scan finished, but ${failedCount} folder${failedCount === 1 ? '' : 's'} could not be read. Check the paths are mounted, then scan again.`
+        )
       } else {
-        toast.success('Library scan complete!')
+        toast.success('Library scan complete')
       }
 
       // Refresh the library data
       await fetchData()
     } catch (error) {
       console.error('Scan failed:', error)
-      toast.error('Library scan failed')
+      toast.error('Library scan failed. Check the root folder paths are readable, then scan again.')
     } finally {
       setScanning(false)
     }
@@ -574,15 +581,17 @@ export default function Library() {
           // Refresh the data
           fetchData()
         } else {
-          toast.warning(data.message || 'No matching entry found')
+          toast.warning(
+            data.message || `No metadata match for ${name}. Try renaming it to the release title.`
+          )
         }
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to enrich')
+        toast.error(error.error || `Could not fetch metadata for ${name}. Try again.`)
       }
     } catch (error) {
       console.error('Failed to enrich:', error)
-      toast.error('Failed to enrich')
+      toast.error(`Could not reach the metadata provider — ${name} is unchanged.`)
     } finally {
       setEnrichingItems((prev) => {
         const next = new Set(prev)
@@ -693,11 +702,15 @@ export default function Library() {
         setItemWithFile({ type: mediaType, id, name: name || 'this item', hasFile: true })
         setFileConfirmDialogOpen(true)
       } else {
-        toast.error(data.error || 'Failed to update request status')
+        toast.error(
+          data.error || `Could not update the request for ${name || 'this item'} — nothing changed.`
+        )
       }
     } catch (error) {
       console.error('Failed to toggle request:', error)
-      toast.error('Failed to update request status')
+      toast.error(
+        `Could not reach the server — the request for ${name || 'this item'} is unchanged.`
+      )
     } finally {
       setTogglingItems((prev) => {
         const next = new Set(prev)
@@ -726,7 +739,7 @@ export default function Library() {
 
     const endpoint = getEndpoint()
     if (!endpoint) {
-      toast.error('Cannot delete this item type')
+      toast.error('Deleting files is not supported for this media type.')
       setDeletingWithFile(false)
       return
     }
@@ -750,11 +763,14 @@ export default function Library() {
         setItemWithFile(null)
       } else {
         const data = await response.json()
-        toast.error(data.error || 'Failed to delete')
+        toast.error(
+          data.error ||
+            `Could not delete ${itemWithFile.name}. The files are still on disk — try again.`
+        )
       }
     } catch (error) {
       console.error('Failed to delete:', error)
-      toast.error('Failed to delete')
+      toast.error(`Could not reach the server. ${itemWithFile.name} was not deleted — try again.`)
     } finally {
       setDeletingWithFile(false)
     }
@@ -889,19 +905,19 @@ export default function Library() {
   const renderEmptyState = () => {
     const config = MEDIA_TYPE_CONFIG[activeTab]
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="rounded-full bg-muted p-6 mb-4">
-          <HugeiconsIcon icon={config.icon} className="h-12 w-12 text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div className="rounded-full bg-muted p-4 mb-4">
+          <HugeiconsIcon icon={config.icon} className="h-6 w-6 text-muted-foreground" />
         </div>
         <h3 className="text-lg font-medium mb-2">
           {hasActiveFilters
-            ? 'No items found'
+            ? `No ${config.countLabel} match this filter`
             : `Your ${config.label.toLowerCase()} library is empty`}
         </h3>
-        <p className="text-muted-foreground mb-4">
+        <p className="text-sm text-muted-foreground mb-4 max-w-sm">
           {hasActiveFilters
-            ? 'Try adjusting your search or filters'
-            : `Get started by adding your first ${config.itemLabel}`}
+            ? 'Nothing in the library matches the current search and status filter. Clear them to see everything again.'
+            : `Nothing has been added yet. Search for a ${config.itemLabel} to put it in the library.`}
         </p>
         {hasActiveFilters ? (
           <Button
@@ -916,7 +932,7 @@ export default function Library() {
         ) : (
           <Button asChild>
             <Link href={config.addUrl}>
-              <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+              <HugeiconsIcon icon={Add01Icon} className="h-4 w-4" />
               Add {config.itemLabel.charAt(0).toUpperCase() + config.itemLabel.slice(1)}
             </Link>
           </Button>
@@ -972,15 +988,15 @@ export default function Library() {
     return (
       <Card
         key={imageKey}
-        className="py-0 overflow-hidden hover:ring-2 hover:ring-primary transition-all cursor-pointer group relative"
+        className="py-0 gap-0 overflow-hidden cursor-pointer group relative transition-colors duration-150 ease-out hover:border-primary has-[a:focus-visible]:border-primary has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-[3px]"
       >
-        <Link href={item.detailUrl}>
+        <Link href={item.detailUrl} className="block outline-none">
           <div className="aspect-[2/3] bg-muted relative">
             {showImage ? (
               <img
                 src={item.imageUrl!}
                 alt={item.name}
-                className={`w-full h-full object-cover transition-all duration-300 ${
+                className={`w-full h-full object-cover transition-all duration-200 ease-out ${
                   isNotRequested
                     ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100'
                     : ''
@@ -990,34 +1006,37 @@ export default function Library() {
               />
             ) : (
               <div
-                className={`w-full h-full flex items-center justify-center transition-all duration-300 ${
+                className={`w-full h-full flex items-center justify-center transition-all duration-200 ease-out ${
                   isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
                 }`}
               >
-                <HugeiconsIcon icon={config.icon} className="h-16 w-16 text-muted-foreground/50" />
+                <HugeiconsIcon icon={config.icon} className="h-10 w-10 text-muted-foreground/40" />
               </div>
             )}
           </div>
           <CardContent
-            className={`p-3 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}
+            className={`p-3 transition-opacity duration-200 ease-out ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}
           >
-            <h3 className="font-medium truncate group-hover:text-primary transition-colors">
+            <h3 className="text-sm font-medium truncate group-hover:text-primary transition-colors duration-150 ease-out">
               {item.name}
             </h3>
             {item.subtitle && (
-              <p className="text-sm text-muted-foreground truncate">{item.subtitle}</p>
+              <p className="readout text-xs text-muted-foreground truncate">{item.subtitle}</p>
             )}
             {item.downloadedEpisodeCount !== undefined && (
-              <p className="text-xs text-green-500 truncate flex items-center gap-1">
-                <HugeiconsIcon icon={Download01Icon} className="h-3 w-3" />
-                {item.downloadedEpisodeCount} episode{item.downloadedEpisodeCount !== 1 ? 's' : ''}
+              <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                <HugeiconsIcon
+                  icon={Download01Icon}
+                  className="h-3 w-3 shrink-0 text-status-complete-ink"
+                />
+                <span className="readout">{item.downloadedEpisodeCount}</span> on disk
               </p>
             )}
           </CardContent>
         </Link>
         {/* Status indicator - outside Link to prevent navigation on click */}
         {status !== 'none' && (
-          <div className="absolute top-2 left-2 z-10">
+          <div className="absolute top-2 right-2 z-10">
             <MediaStatusBadge
               status={status}
               progress={progress}
@@ -1037,22 +1056,23 @@ export default function Library() {
           </div>
         )}
         {/* More menu */}
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150 ease-out z-10">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="secondary"
-                size="icon"
-                className="h-7 w-7 bg-background/80 backdrop-blur-sm"
+                size="icon-sm"
+                aria-label={`More actions for ${item.name}`}
+                className="bg-background/90 ring-1 ring-black/40 ring-inset"
                 onClick={(e) => e.preventDefault()}
               >
                 <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="start">
               <DropdownMenuItem asChild>
                 <Link href={item.detailUrl}>
-                  <HugeiconsIcon icon={EyeIcon} className="h-4 w-4 mr-2" />
+                  <HugeiconsIcon icon={EyeIcon} className="h-4 w-4" />
                   View Details
                 </Link>
               </DropdownMenuItem>
@@ -1065,10 +1085,10 @@ export default function Library() {
                   >
                     <HugeiconsIcon
                       icon={Search01Icon}
-                      className={`h-4 w-4 mr-2 ${enrichingItems.has(`${item.mediaType}-${item.id}`) ? 'animate-spin' : ''}`}
+                      className={`h-4 w-4 ${enrichingItems.has(`${item.mediaType}-${item.id}`) ? 'animate-spin' : ''}`}
                     />
                     {enrichingItems.has(`${item.mediaType}-${item.id}`)
-                      ? 'Enriching...'
+                      ? 'Enriching…'
                       : item.mediaType === 'music'
                         ? 'Enrich from MusicBrainz'
                         : 'Enrich from TMDB'}
@@ -1123,16 +1143,19 @@ export default function Library() {
     return (
       <Card
         key={imageKey}
-        className="hover:ring-2 hover:ring-primary transition-all cursor-pointer group"
+        className="py-0 gap-0 cursor-pointer group transition-colors duration-150 ease-out hover:bg-accent has-[a:focus-visible]:border-primary has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-[3px]"
       >
-        <CardContent className="flex items-center gap-4 p-4">
-          <Link href={item.detailUrl} className="flex items-center gap-4 flex-1 min-w-0">
-            <div className="h-16 w-12 rounded bg-muted flex-shrink-0 overflow-hidden relative">
+        <CardContent className="flex items-center gap-3 p-3">
+          <Link
+            href={item.detailUrl}
+            className="flex items-center gap-3 flex-1 min-w-0 outline-none"
+          >
+            <div className="h-16 w-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden relative">
               {showImage ? (
                 <img
                   src={item.imageUrl!}
                   alt={item.name}
-                  className={`w-full h-full object-cover transition-all duration-300 ${
+                  className={`w-full h-full object-cover transition-all duration-200 ease-out ${
                     isNotRequested
                       ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100'
                       : ''
@@ -1142,25 +1165,29 @@ export default function Library() {
                 />
               ) : (
                 <div
-                  className={`w-full h-full flex items-center justify-center transition-all duration-300 ${
+                  className={`w-full h-full flex items-center justify-center transition-all duration-200 ease-out ${
                     isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
                   }`}
                 >
-                  <HugeiconsIcon icon={config.icon} className="h-6 w-6 text-muted-foreground/50" />
+                  <HugeiconsIcon icon={config.icon} className="h-5 w-5 text-muted-foreground/40" />
                 </div>
               )}
             </div>
             <div
-              className={`flex-1 min-w-0 transition-opacity duration-300 ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}
+              className={`flex-1 min-w-0 transition-opacity duration-200 ease-out ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}
             >
-              <h3 className="font-medium truncate">{item.name}</h3>
+              <h3 className="text-sm font-medium truncate">{item.name}</h3>
               {item.subtitle && (
-                <p className="text-sm text-muted-foreground truncate">{item.subtitle}</p>
+                <p className="readout text-xs text-muted-foreground truncate">{item.subtitle}</p>
               )}
               {item.downloadedEpisodeCount !== undefined && (
-                <p className="text-xs text-green-500 truncate">
-                  {item.downloadedEpisodeCount} episode
-                  {item.downloadedEpisodeCount !== 1 ? 's' : ''} downloaded
+                <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                  <HugeiconsIcon
+                    icon={Download01Icon}
+                    className="h-3 w-3 shrink-0 text-status-complete-ink"
+                  />
+                  <span className="readout">{item.downloadedEpisodeCount}</span> episode
+                  {item.downloadedEpisodeCount !== 1 ? 's' : ''} on disk
                 </p>
               )}
             </div>
@@ -1198,7 +1225,7 @@ export default function Library() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
                   <Link href={item.detailUrl}>
-                    <HugeiconsIcon icon={EyeIcon} className="h-4 w-4 mr-2" />
+                    <HugeiconsIcon icon={EyeIcon} className="h-4 w-4" />
                     View Details
                   </Link>
                 </DropdownMenuItem>
@@ -1211,10 +1238,10 @@ export default function Library() {
                     >
                       <HugeiconsIcon
                         icon={Search01Icon}
-                        className={`h-4 w-4 mr-2 ${enrichingItems.has(`${item.mediaType}-${item.id}`) ? 'animate-spin' : ''}`}
+                        className={`h-4 w-4 ${enrichingItems.has(`${item.mediaType}-${item.id}`) ? 'animate-spin' : ''}`}
                       />
                       {enrichingItems.has(`${item.mediaType}-${item.id}`)
-                        ? 'Enriching...'
+                        ? 'Enriching…'
                         : item.mediaType === 'music'
                           ? 'Enrich from MusicBrainz'
                           : 'Enrich from TMDB'}
@@ -1404,13 +1431,19 @@ export default function Library() {
   const renderMissingContent = () => {
     if (missingItems.length === 0) {
       return (
-        <div className="text-center py-12">
-          <HugeiconsIcon
-            icon={CheckmarkCircle02Icon}
-            className="h-12 w-12 mx-auto text-green-500 mb-4"
-          />
-          <h3 className="text-lg font-medium mb-2">All caught up!</h3>
-          <p className="text-muted-foreground">No missing items to download</p>
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="rounded-full bg-muted p-4 mb-4">
+            <HugeiconsIcon
+              icon={CheckmarkCircle02Icon}
+              className="h-6 w-6 text-status-complete-ink"
+              aria-hidden="true"
+            />
+          </div>
+          <h3 className="text-lg font-medium mb-2">Nothing is missing</h3>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            Every requested album, movie, episode and book is already on disk. New requests will
+            appear here while they wait for a release.
+          </p>
         </div>
       )
     }
@@ -1469,15 +1502,17 @@ export default function Library() {
             setMissingItems((prev) => prev.filter((i) => i.id !== item.id))
             return true
           } else {
-            toast.info(`No results found for ${item.title}`)
+            toast.info(
+              `No release matched ${item.title}. It stays monitored and will be retried automatically.`
+            )
             return false
           }
         } else {
-          toast.error(`Search failed for ${item.title}`)
+          toast.error(`Search failed for ${item.title}. Check your indexers, then search again.`)
           return false
         }
       } catch (error) {
-        toast.error(`Search failed for ${item.title}`)
+        toast.error(`Could not reach the server — ${item.title} was not searched.`)
         return false
       } finally {
         setSearchingItems((prev) => {
@@ -1502,24 +1537,34 @@ export default function Library() {
         toast.success(`Started ${grabbed} download${grabbed > 1 ? 's' : ''}`)
       }
       if (failed > 0 && grabbed === 0) {
-        toast.info('No results found for any items')
+        toast.info('No releases matched any missing item. They stay monitored and will be retried.')
       }
     }
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {missingCounts.albums > 0 && (
-              <span className="mr-4">{missingCounts.albums} albums</span>
+              <span>
+                <span className="readout">{missingCounts.albums}</span> albums
+              </span>
             )}
             {missingCounts.movies > 0 && (
-              <span className="mr-4">{missingCounts.movies} movies</span>
+              <span>
+                <span className="readout">{missingCounts.movies}</span> movies
+              </span>
             )}
             {missingCounts.episodes > 0 && (
-              <span className="mr-4">{missingCounts.episodes} episodes</span>
+              <span>
+                <span className="readout">{missingCounts.episodes}</span> episodes
+              </span>
             )}
-            {missingCounts.books > 0 && <span className="mr-4">{missingCounts.books} books</span>}
+            {missingCounts.books > 0 && (
+              <span>
+                <span className="readout">{missingCounts.books}</span> books
+              </span>
+            )}
           </div>
           <Button
             variant="outline"
@@ -1528,9 +1573,9 @@ export default function Library() {
             disabled={searchAllInProgress || missingItems.length === 0}
           >
             {searchAllInProgress ? (
-              <Spinner className="h-4 w-4 mr-1" />
+              <Spinner className="h-4 w-4" />
             ) : (
-              <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-1" />
+              <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
             )}
             Search All
           </Button>
@@ -1541,24 +1586,24 @@ export default function Library() {
             return (
               <div
                 key={item.id}
-                className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:bg-accent transition-colors duration-150 ease-out"
               >
-                <div className="h-12 w-12 rounded overflow-hidden bg-muted flex-shrink-0">
+                <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                   {item.imageUrl ? (
                     <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center">
                       <HugeiconsIcon
                         icon={getTypeIcon(item.type)}
-                        className="h-6 w-6 text-muted-foreground"
+                        className="h-5 w-5 text-muted-foreground/40"
                       />
                     </div>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{item.title}</div>
-                  <div className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">
+                  <div className="text-sm font-medium truncate">{item.title}</div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-2 min-w-0">
+                    <Badge variant="outline" className="shrink-0">
                       {getTypeLabel(item.type)}
                     </Badge>
                     {item.subtitle && <span className="truncate">{item.subtitle}</span>}
@@ -1567,15 +1612,16 @@ export default function Library() {
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="shrink-0"
                   onClick={() => handleSearch(item)}
                   disabled={isSearching}
                 >
                   {isSearching ? (
-                    <Spinner className="h-4 w-4 mr-1" />
+                    <Spinner className="h-4 w-4" />
                   ) : (
-                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4 mr-1" />
+                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
                   )}
-                  {isSearching ? 'Searching...' : 'Search'}
+                  {isSearching ? 'Searching…' : 'Search'}
                 </Button>
               </div>
             )
@@ -1603,8 +1649,8 @@ export default function Library() {
   const renderSkeleton = () => (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
       {Array.from({ length: 12 }).map((_, i) => (
-        <Card key={i} className="overflow-hidden">
-          <Skeleton className="aspect-[2/3]" />
+        <Card key={i} className="py-0 gap-0 overflow-hidden">
+          <Skeleton className="aspect-[2/3] rounded-none" />
           <CardContent className="p-3">
             <Skeleton className="h-4 w-3/4 mb-2" />
             <Skeleton className="h-3 w-1/2" />
@@ -1650,7 +1696,7 @@ export default function Library() {
       actions={
         <Button asChild>
           <Link href={config.addUrl}>
-            <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+            <HugeiconsIcon icon={Add01Icon} className="h-4 w-4" />
             Add
           </Link>
         </Button>
@@ -1678,8 +1724,8 @@ export default function Library() {
             <div className="flex items-center gap-2 flex-wrap">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <HugeiconsIcon icon={SortingIcon} className="h-4 w-4 sm:mr-2" />
+                  <Button variant="outline">
+                    <HugeiconsIcon icon={SortingIcon} className="h-4 w-4" />
                     <span className="hidden sm:inline">Sort</span>
                   </Button>
                 </DropdownMenuTrigger>
@@ -1688,17 +1734,30 @@ export default function Library() {
                     <DropdownMenuItem
                       key={option.value}
                       onClick={() => setSortBy(option.value as SortBy)}
+                      className="justify-between gap-4"
                     >
-                      {option.label} {sortBy === option.value && '✓'}
+                      <span>{option.label}</span>
+                      {sortBy === option.value && (
+                        <>
+                          <span className="sr-only">Current sort</span>
+                          <HugeiconsIcon
+                            icon={Tick02Icon}
+                            className="h-4 w-4 text-primary"
+                            aria-hidden="true"
+                          />
+                        </>
+                      )}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <div className="flex items-center border rounded-md">
+              <div className="flex items-center rounded-md border border-border">
                 <Button
                   variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                  size="sm"
+                  size="icon"
+                  aria-pressed={viewMode === 'grid'}
+                  aria-label="Grid view"
                   onClick={() => setViewMode('grid')}
                   className="rounded-r-none"
                 >
@@ -1706,7 +1765,9 @@ export default function Library() {
                 </Button>
                 <Button
                   variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                  size="sm"
+                  size="icon"
+                  aria-pressed={viewMode === 'list'}
+                  aria-label="List view"
                   onClick={() => setViewMode('list')}
                   className="rounded-l-none"
                 >
@@ -1716,14 +1777,14 @@ export default function Library() {
 
               {/* Scan Library button - hidden on missing tab */}
               {activeTab !== 'missing' && (
-                <Button variant="outline" size="sm" onClick={handleScanLibrary} disabled={scanning}>
+                <Button variant="outline" onClick={handleScanLibrary} disabled={scanning}>
                   {scanning ? (
-                    <Spinner className="h-4 w-4 sm:mr-2" />
+                    <Spinner className="h-4 w-4" />
                   ) : (
-                    <HugeiconsIcon icon={FolderSearchIcon} className="h-4 w-4 sm:mr-2" />
+                    <HugeiconsIcon icon={FolderSearchIcon} className="h-4 w-4" />
                   )}
                   <span className="hidden sm:inline">
-                    {scanning ? 'Scanning...' : 'Scan Library'}
+                    {scanning ? 'Scanning…' : 'Scan Library'}
                   </span>
                 </Button>
               )}
@@ -1731,26 +1792,28 @@ export default function Library() {
           </div>
 
           {/* Search and status filter bar */}
-          <div className="flex flex-col sm:flex-row gap-3 mt-4">
+          <div className="flex flex-col sm:flex-row gap-2 mt-4">
             <div className="relative w-full sm:w-80">
               <HugeiconsIcon
                 icon={Search01Icon}
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+                aria-hidden="true"
               />
               <Input
-                placeholder={`Filter ${config.label.toLowerCase()}...`}
+                aria-label={`Filter ${config.label.toLowerCase()}`}
+                placeholder={`Filter ${config.label.toLowerCase()}…`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
               />
             </div>
             {activeTab !== 'missing' && activeTab !== 'music' && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2 flex-wrap">
                 {(['all', 'downloaded', 'requested', 'missing'] as StatusFilter[]).map((filter) => (
                   <Button
                     key={filter}
                     variant={statusFilter === filter ? 'default' : 'outline'}
-                    size="sm"
+                    aria-pressed={statusFilter === filter}
                     onClick={() => setStatusFilter(filter)}
                     className="capitalize"
                   >
@@ -1771,8 +1834,9 @@ export default function Library() {
 
         {/* Stats bar */}
         {!loading && totalCount > 0 && (
-          <div className="text-sm text-muted-foreground text-center">
-            Showing {currentItems.length} of {totalCount} {config.countLabel}
+          <div className="text-xs text-muted-foreground text-center">
+            Showing <span className="readout">{currentItems.length}</span> of{' '}
+            <span className="readout">{totalCount}</span> {config.countLabel}
           </div>
         )}
       </div>
@@ -1814,7 +1878,7 @@ export default function Library() {
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
               {deleting ? (
                 <>
-                  <Spinner className="mr-2" />
+                  <Spinner className="h-4 w-4" />
                   Removing...
                 </>
               ) : (
@@ -1859,7 +1923,7 @@ export default function Library() {
             >
               {deletingWithFile ? (
                 <>
-                  <Spinner className="mr-2" />
+                  <Spinner className="h-4 w-4" />
                   Deleting...
                 </>
               ) : (

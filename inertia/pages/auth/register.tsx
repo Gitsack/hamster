@@ -32,12 +32,12 @@ export default function Register({ errors = {} }: RegisterProps) {
     <>
       <Head title="Create Account" />
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4">
+            <div className="mx-auto mb-2">
               <HamsterLogo size="lg" showText={false} />
             </div>
-            <CardTitle className="text-2xl">Create an account</CardTitle>
+            <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
             <CardDescription>Get started with Hamster</CardDescription>
           </CardHeader>
           <CardContent>
@@ -52,8 +52,14 @@ export default function Register({ errors = {} }: RegisterProps) {
                   onChange={(e) => setData('fullName', e.target.value)}
                   autoComplete="name"
                   autoFocus
+                  aria-invalid={!!errors?.fullName}
+                  aria-describedby={errors?.fullName ? 'fullName-error' : undefined}
                 />
-                {errors?.fullName && <p className="text-sm text-destructive">{errors.fullName}</p>}
+                {errors?.fullName && (
+                  <p id="fullName-error" className="text-xs text-destructive">
+                    {errors.fullName}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -65,8 +71,14 @@ export default function Register({ errors = {} }: RegisterProps) {
                   onChange={(e) => setData('email', e.target.value)}
                   required
                   autoComplete="email"
+                  aria-invalid={!!errors?.email}
+                  aria-describedby={errors?.email ? 'email-error' : undefined}
                 />
-                {errors?.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                {errors?.email && (
+                  <p id="email-error" className="text-xs text-destructive">
+                    {errors.email}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
@@ -78,8 +90,14 @@ export default function Register({ errors = {} }: RegisterProps) {
                   onChange={(e) => setData('password', e.target.value)}
                   required
                   autoComplete="new-password"
+                  aria-invalid={!!errors?.password}
+                  aria-describedby={errors?.password ? 'password-error' : undefined}
                 />
-                {errors?.password && <p className="text-sm text-destructive">{errors.password}</p>}
+                {errors?.password && (
+                  <p id="password-error" className="text-xs text-destructive">
+                    {errors.password}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="passwordConfirmation">Confirm Password</Label>
@@ -91,18 +109,27 @@ export default function Register({ errors = {} }: RegisterProps) {
                   onChange={(e) => setData('passwordConfirmation', e.target.value)}
                   required
                   autoComplete="new-password"
+                  aria-invalid={!!errors?.passwordConfirmation}
+                  aria-describedby={
+                    errors?.passwordConfirmation ? 'passwordConfirmation-error' : undefined
+                  }
                 />
                 {errors?.passwordConfirmation && (
-                  <p className="text-sm text-destructive">{errors.passwordConfirmation}</p>
+                  <p id="passwordConfirmation-error" className="text-xs text-destructive">
+                    {errors.passwordConfirmation}
+                  </p>
                 )}
               </div>
               <Button type="submit" className="w-full" disabled={processing}>
                 {processing ? 'Creating account...' : 'Create account'}
               </Button>
             </form>
-            <div className="mt-6 text-center text-sm text-muted-foreground">
+            <div className="mt-6 border-t border-border pt-4 text-center text-sm text-muted-foreground">
               Already have an account?{' '}
-              <Link href="/login" className="text-primary hover:underline">
+              <Link
+                href="/login"
+                className="rounded-md text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
                 Sign in
               </Link>
             </div>

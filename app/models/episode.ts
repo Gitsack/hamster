@@ -62,6 +62,13 @@ export default class Episode extends BaseModel {
   @column()
   declare episodeFileId: string | null
 
+  /**
+   * When this episode was last searched for. Used to round-robin the wanted list
+   * so a per-run cap cannot starve episodes at the tail of it.
+   */
+  @column.dateTime()
+  declare lastSearchAt: DateTime | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

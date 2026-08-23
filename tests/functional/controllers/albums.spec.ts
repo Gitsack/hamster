@@ -249,7 +249,7 @@ test.group('AlbumsController', (group) => {
     assert.equal(notFoundResult.error, 'Album not found')
   })
 
-  test('update unrequesting album without files deletes it', async ({ assert }) => {
+  test('update unrequesting album keeps it in the library', async ({ assert }) => {
     const toUnrequest = await AlbumFactory.create({
       artistId: artist.id,
       title: 'Albums Test Unrequest',
@@ -274,10 +274,13 @@ test.group('AlbumsController', (group) => {
       },
     } as never)
 
-    assert.equal(result.deleted, true)
+    assert.equal(result.requested, false)
 
-    const deleted = await Album.find(albumId)
-    assert.isNull(deleted)
+    // The row must survive so the album can be requested again without a
+    // metadata refresh recreating it first.
+    const stillThere = await Album.find(albumId)
+    assert.isNotNull(stillThere)
+    assert.isFalse(stillThere!.requested)
   })
 
   // ---- requested ----
