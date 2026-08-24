@@ -15,24 +15,36 @@ interface ErrorBoundaryProps extends PropsWithChildren {
 interface ErrorBoundaryState {
   hasError: boolean
   error: Error | null
+  /**
+   * React's component stack for the failure. The message alone ("dispatcher is
+   * null") names a symptom, not a component — without this, diagnosing a render
+   * crash means guessing which subtree threw.
+   */
+  componentStack: string | null
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, error: null, componentStack: null }
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error }
+    return { hasError: true, error, componentStack: null }
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    this.setState({ componentStack: errorInfo.componentStack ?? null })
+
+    // Always log: the on-screen panel is deliberately terse, and a stack that
+    // only exists in a screenshot cannot be searched or pasted.
+    console.error('[ErrorBoundary]', error, errorInfo.componentStack)
+
     this.props.onError?.(error, errorInfo)
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null })
+    this.setState({ hasError: false, error: null, componentStack: null })
   }
 
   handleReload = () => {
@@ -69,6 +81,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               <p className="readout text-xs text-muted-foreground max-w-md break-words">
                 {this.state.error.message}
               </p>
+            ) : null}
+            {import.meta.env.DEV && (this.state.componentStack || this.state.error?.stack) ? (
+              <details className="mx-auto max-w-xl text-left">
+                <summary className="cursor-pointer text-xs text-muted-foreground">
+                  Show component stack
+                </summary>
+                <pre className="readout mt-2 max-h-64 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-left text-[0.6875rem] whitespace-pre-wrap">
+                  {this.state.componentStack ?? this.state.error?.stack}
+                </pre>
+              </details>
             ) : null}
           </div>
           <div className="flex flex-wrap justify-center gap-2">
