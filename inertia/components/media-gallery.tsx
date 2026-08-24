@@ -135,7 +135,7 @@ export function MediaGallery({
           {hasTrailer && (
             <div
               ref={setSlideRef(0)}
-              className="min-w-full h-full snap-start bg-muted relative flex-shrink-0"
+              className="w-full h-full shrink-0 snap-start bg-muted relative overflow-hidden"
             >
               {playingTrailer ? (
                 <iframe
@@ -187,7 +187,7 @@ export function MediaGallery({
               <div
                 key={url}
                 ref={setSlideRef(slideIndex)}
-                className="min-w-full h-full snap-start bg-muted relative flex-shrink-0"
+                className="w-full h-full shrink-0 snap-start bg-muted relative overflow-hidden"
               >
                 <img
                   src={url}
