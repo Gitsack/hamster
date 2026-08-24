@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.29.0](https://github.com/Gitsack/hamster/compare/hamster-v1.28.0...hamster-v1.29.0) (2026-08-24)
+
+
+### Features
+
+* **quality:** replace downloaded media, and judge releases on real attributes ([1840a40](https://github.com/Gitsack/hamster/commit/1840a40889015bbea786ff68114323d544d6633b))
+
+
+### Bug Fixes
+
+* **dev:** pin optimizeDeps so a changed import cannot split React in two ([1c79c45](https://github.com/Gitsack/hamster/commit/1c79c4558030a5a65c63d26d5c67a9398e99d319))
+* gallery slides sized by image, not container ([391071d](https://github.com/Gitsack/hamster/commit/391071de96bd6c473bdd52c5d737f3197925d91a))
+* **ui:** surface the component stack when a render fails ([d9daf59](https://github.com/Gitsack/hamster/commit/d9daf597c0762f1f312cbe5dbedc43bde6496bb1))
+
 ## [1.28.0](https://github.com/Gitsack/hamster/compare/hamster-v1.27.1...hamster-v1.28.0) (2026-08-23)
 
 
