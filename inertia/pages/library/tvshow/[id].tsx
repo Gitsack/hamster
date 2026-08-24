@@ -3,14 +3,6 @@ import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -44,6 +36,7 @@ import {
   Refresh01Icon,
   Notification01Icon,
   NotificationOff01Icon,
+  Alert01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
@@ -60,6 +53,8 @@ import { VideoPlayer } from '@/components/player/video_player'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
 import { DownloadClientIndicator } from '@/components/library/download-client-indicator'
 import { useDownloadClients } from '@/hooks/use_download_clients'
+import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
+import { ReplaceFileDialog } from '@/components/library/replace-file-dialog'
 
 interface QualityProfile {
   id: number
@@ -90,7 +85,15 @@ interface EpisodeFile {
   path: string
   size: number
   quality: string | null
+  /** Built from ffprobe, not from the release name. */
+  summary: string | null
   downloadUrl: string
+}
+
+interface QualityAssessment {
+  meetsProfile: boolean
+  belowCutoff: boolean
+  issues: { code: string; message: string }[]
 }
 
 interface Episode {
@@ -104,6 +107,7 @@ interface Episode {
   requested: boolean
   hasFile: boolean
   episodeFile: EpisodeFile | null
+  qualityAssessment: QualityAssessment | null
 }
 
 interface TvShow {
@@ -143,20 +147,6 @@ interface SeasonDetail {
   episodes: Episode[]
 }
 
-interface SearchResult {
-  id: string
-  title: string
-  indexer: string
-  indexerId: number
-  size: number
-  publishDate: string
-  downloadUrl: string
-  quality?: string
-  seeders?: number
-  grabs?: number
-  protocol: string
-}
-
 export default function TvShowDetail() {
   const { url } = usePage()
   const showId = url.split('/').pop()
@@ -181,20 +171,28 @@ export default function TvShowDetail() {
   const { runBulk } = useOperationTrackerContext()
   const [enriching, setEnriching] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [episodeSearchResults, setEpisodeSearchResults] = useState<Record<number, SearchResult[]>>(
-    {}
-  )
+  const [episodeSearchResults, setEpisodeSearchResults] = useState<
+    Record<number, AnnotatedRelease[]>
+  >({})
   const [searchingEpisode, setSearchingEpisode] = useState<number | null>(null)
   const [grabbingRelease, setGrabbingRelease] = useState<string | null>(null)
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
   const { clients: downloadClients } = useDownloadClients()
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchResults, setSearchResults] = useState<AnnotatedRelease[]>([])
   const [searching, setSearching] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
   const [releasePickerOpen, setReleasePickerOpen] = useState(false)
   const [releasePickerTitle, setReleasePickerTitle] = useState('')
   const [releasePickerEpisodeId, setReleasePickerEpisodeId] = useState<number | null>(null)
+  const [replaceTarget, setReplaceTarget] = useState<{
+    scope: 'episode' | 'season' | 'show'
+    id?: number
+    seasonNumber?: number
+    subject: string
+    currentSummary?: string | null
+  } | null>(null)
+  const [replacing, setReplacing] = useState(false)
   const [playingEpisode, setPlayingEpisode] = useState<{
     id: number
     fileId: number
@@ -268,6 +266,19 @@ export default function TvShowDetail() {
       return { status: 'requested', progress: 0 }
     }
     return { status: 'none', progress: 0 }
+  }
+
+  /** Re-fetch a season that is already loaded, so its rows reflect a change. */
+  const refreshSeason = async (seasonNumber: number) => {
+    try {
+      const response = await fetch(`/api/v1/tvshows/${showId}/season/${seasonNumber}`)
+      if (response.ok) {
+        const data = await response.json()
+        setSeasonDetails((prev) => ({ ...prev, [seasonNumber]: data }))
+      }
+    } catch (error) {
+      console.error('Failed to refresh season:', error)
+    }
   }
 
   const fetchSeasonDetails = async (seasonNumber: number) => {
@@ -635,7 +646,57 @@ export default function TvShowDetail() {
     }
   }
 
-  const grabRelease = async (result: SearchResult) => {
+  /**
+   * Kick off a replacement for one episode, a whole season, or the whole show.
+   *
+   * All three go through the same endpoint shape so the outcome reads the same
+   * way: how many were re-grabbed, and for the ones that were not, why.
+   */
+  const runReplace = async ({ blacklistCurrent }: { blacklistCurrent: boolean }) => {
+    if (!replaceTarget) return
+
+    const url =
+      replaceTarget.scope === 'episode'
+        ? `/api/v1/tvshows/${showId}/episodes/${replaceTarget.id}/redownload`
+        : replaceTarget.scope === 'season'
+          ? `/api/v1/tvshows/${showId}/season/${replaceTarget.seasonNumber}/redownload`
+          : `/api/v1/tvshows/${showId}/redownload`
+
+    setReplacing(true)
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blacklistCurrent }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        toast.error(data.error || 'No replacement release found')
+        return
+      }
+
+      if (replaceTarget.scope === 'episode') {
+        toast.success('Replacement grabbed')
+      } else if (data.grabbed > 0) {
+        toast.success(`Replacing ${data.grabbed} of ${data.searched} episodes`)
+      } else {
+        toast.warning(data.errors?.[0] ?? `No better releases found for ${data.searched} episodes`)
+      }
+
+      setReplaceTarget(null)
+      if (replaceTarget.seasonNumber !== undefined) {
+        refreshSeason(replaceTarget.seasonNumber)
+      }
+    } catch (error) {
+      console.error('Failed to replace:', error)
+      toast.error('Failed to start replacement')
+    } finally {
+      setReplacing(false)
+    }
+  }
+
+  const grabRelease = async (result: AnnotatedRelease) => {
     setGrabbing(result.id)
     try {
       const response = await fetch('/api/v1/queue/grab', {
@@ -831,6 +892,17 @@ export default function TvShowDetail() {
                   {refreshing ? 'Refreshing...' : 'Refresh metadata'}
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem
+                onClick={() =>
+                  setReplaceTarget({
+                    scope: 'show',
+                    subject: `every downloaded episode of ${show.title}`,
+                  })
+                }
+              >
+                <HugeiconsIcon icon={Refresh01Icon} className="h-4 w-4" />
+                Replace all files
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
@@ -1038,6 +1110,24 @@ export default function TvShowDetail() {
                           )}
                         </div>
                       </div>
+                      {season.downloadedCount > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Replace files in season ${season.seasonNumber}`}
+                          title={`Re-download all ${season.downloadedCount} downloaded episodes in this season`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setReplaceTarget({
+                              scope: 'season',
+                              seasonNumber: season.seasonNumber,
+                              subject: `${season.title || `Season ${season.seasonNumber}`} — ${season.downloadedCount} episodes`,
+                            })
+                          }}
+                        >
+                          <HugeiconsIcon icon={Refresh01Icon} className="h-4 w-4" />
+                        </Button>
+                      )}
                       <MediaStatusBadge
                         status={season.requested ? 'requested' : 'none'}
                         isToggling={togglingSeasons.has(season.seasonNumber)}
@@ -1100,9 +1190,33 @@ export default function TvShowDetail() {
                                       {episode.runtime && ` • ${episode.runtime}m`}
                                     </p>
                                     {episode.episodeFile && (
-                                      <p className="readout text-xs text-muted-foreground truncate">
-                                        {episode.episodeFile.path}
-                                      </p>
+                                      <>
+                                        <p className="readout text-xs text-muted-foreground">
+                                          {[
+                                            episode.episodeFile.quality,
+                                            formatFileSize(episode.episodeFile.size),
+                                            episode.episodeFile.summary,
+                                          ]
+                                            .filter(Boolean)
+                                            .join(' • ')}
+                                        </p>
+                                        {episode.qualityAssessment &&
+                                          !episode.qualityAssessment.meetsProfile && (
+                                            <p
+                                              className="flex items-center gap-1 text-xs text-status-failed-ink"
+                                              title={episode.qualityAssessment.issues
+                                                .map((issue) => issue.message)
+                                                .join('\n')}
+                                            >
+                                              <HugeiconsIcon
+                                                icon={Alert01Icon}
+                                                className="h-3.5 w-3.5 shrink-0"
+                                              />
+                                              {episode.qualityAssessment.issues[0]?.message ??
+                                                'Below the quality profile'}
+                                            </p>
+                                          )}
+                                      </>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-1 sm:gap-2 shrink-0">
@@ -1153,6 +1267,31 @@ export default function TvShowDetail() {
                                                 </Button>
                                               </>
                                             )}
+                                            <Button
+                                              variant="outline"
+                                              size="icon-sm"
+                                              aria-label={`Replace file for episode ${episode.episodeNumber}`}
+                                              title="Replace with a better release"
+                                              onClick={() =>
+                                                setReplaceTarget({
+                                                  scope: 'episode',
+                                                  id: episode.id,
+                                                  seasonNumber: season.seasonNumber,
+                                                  subject: `S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} — ${episode.title}`,
+                                                  currentSummary: [
+                                                    episode.episodeFile?.quality,
+                                                    episode.episodeFile?.summary,
+                                                  ]
+                                                    .filter(Boolean)
+                                                    .join(' · '),
+                                                })
+                                              }
+                                            >
+                                              <HugeiconsIcon
+                                                icon={Refresh01Icon}
+                                                className="h-4 w-4"
+                                              />
+                                            </Button>
                                             <Button
                                               variant="outline"
                                               size="icon-sm"
@@ -1277,6 +1416,15 @@ export default function TvShowDetail() {
         onConfirm={deleteEpisodeFile}
       />
 
+      <ReplaceFileDialog
+        open={replaceTarget !== null}
+        onOpenChange={(open) => !open && setReplaceTarget(null)}
+        subject={replaceTarget?.subject ?? ''}
+        currentSummary={replaceTarget?.currentSummary}
+        loading={replacing}
+        onConfirm={runReplace}
+      />
+
       {/* Release picker dialog */}
       <Dialog open={releasePickerOpen} onOpenChange={setReleasePickerOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
@@ -1284,73 +1432,12 @@ export default function TvShowDetail() {
             <DialogTitle>Manual Search</DialogTitle>
             <DialogDescription>{releasePickerTitle}</DialogDescription>
           </DialogHeader>
-          {searching ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner className="h-8 w-8" />
-              <span className="ml-3 text-muted-foreground">Searching indexers...</span>
-            </div>
-          ) : searchResults.length === 0 ? (
-            <EmptyState
-              icon={<HugeiconsIcon icon={Search01Icon} />}
-              title="No releases found"
-              message="Your indexers returned nothing for this title. Check that the indexers are enabled and healthy in Settings, or widen the quality profile."
-            />
-          ) : (
-            <div className="overflow-auto flex-1">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Release</TableHead>
-                    <TableHead className="w-32">Indexer</TableHead>
-                    <TableHead className="w-24">Quality</TableHead>
-                    <TableHead className="w-24" data-numeric>
-                      Size
-                    </TableHead>
-                    <TableHead className="w-20" data-numeric>
-                      Grabs
-                    </TableHead>
-                    <TableHead className="w-16">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {searchResults.map((result) => (
-                    <TableRow key={result.id}>
-                      <TableCell className="readout max-w-md truncate">{result.title}</TableCell>
-                      <TableCell className="readout text-muted-foreground">
-                        {result.indexer}
-                      </TableCell>
-                      <TableCell>
-                        {result.quality && <Badge variant="outline">{result.quality}</Badge>}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground" data-numeric>
-                        {formatFileSize(result.size)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground" data-numeric>
-                        {result.grabs ?? result.seeders ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="icon-sm"
-                          variant="outline"
-                          onClick={() => grabRelease(result)}
-                          disabled={grabbing === result.id}
-                          aria-label={`Download ${result.title}`}
-                        >
-                          {grabbing === result.id ? (
-                            <Spinner />
-                          ) : (
-                            <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <ReleaseList
+            releases={searchResults}
+            loading={searching}
+            grabbingId={grabbing}
+            onGrab={grabRelease}
+          />
         </DialogContent>
       </Dialog>
 

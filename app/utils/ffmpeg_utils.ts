@@ -10,6 +10,13 @@ export interface MediaAnalysis {
   audioChannels: number | null
   audioBitrate: number | null
   audioSampleRate: number | null
+  /**
+   * ffprobe folds Atmos into TrueHD/E-AC3 and DTS:X / DTS-HD MA into "dts";
+   * the stream profile is the only place the distinction survives, and it is
+   * the difference between a reference track and a lossy one.
+   */
+  audioProfile: string | null
+  audioChannelLayout: string | null
   container: string
 }
 
@@ -110,6 +117,8 @@ export async function probeFile(filePath: string): Promise<MediaAnalysis> {
           audioSampleRate: audioStream?.sample_rate
             ? Number.parseInt(audioStream.sample_rate)
             : null,
+          audioProfile: audioStream?.profile || null,
+          audioChannelLayout: audioStream?.channel_layout || null,
         }
 
         resolve(analysis)

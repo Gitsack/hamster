@@ -14,6 +14,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectPopup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  QualityRequirementsFields,
+  DEFAULT_REQUIREMENTS,
+  type QualityRequirements,
+} from '@/components/settings/quality-requirements-fields'
+import { ReleaseTester } from '@/components/settings/release-tester'
+import { CustomFormatsCard } from '@/components/settings/custom-formats-card'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
@@ -235,6 +242,7 @@ interface QualityProfile {
   minSizeMb: number | null
   maxSizeMb: number | null
   items: QualityItem[]
+  requirements: QualityRequirements | null
 }
 
 // Quality options per media type
@@ -343,6 +351,9 @@ export default function MediaManagement() {
   const [qualityUpgradeAllowed, setQualityUpgradeAllowed] = useState(true)
   const [qualityMinSize, setQualityMinSize] = useState('')
   const [qualityMaxSize, setQualityMaxSize] = useState('')
+  const [qualityCutoff, setQualityCutoff] = useState<number | null>(null)
+  const [qualityRequirements, setQualityRequirements] =
+    useState<QualityRequirements>(DEFAULT_REQUIREMENTS)
   const [savingQuality, setSavingQuality] = useState(false)
 
   // Streaming provider selection panel state
@@ -865,6 +876,8 @@ export default function MediaManagement() {
       setQualityUpgradeAllowed(profile.upgradeAllowed)
       setQualityMinSize(profile.minSizeMb != null ? String(profile.minSizeMb) : '')
       setQualityMaxSize(profile.maxSizeMb != null ? String(profile.maxSizeMb) : '')
+      setQualityCutoff(profile.cutoff)
+      setQualityRequirements({ ...DEFAULT_REQUIREMENTS, ...(profile.requirements ?? {}) })
     } else {
       setEditingQuality(null)
       setQualityName('')
@@ -873,6 +886,8 @@ export default function MediaManagement() {
       setQualityUpgradeAllowed(true)
       setQualityMinSize('')
       setQualityMaxSize('')
+      setQualityCutoff(null)
+      setQualityRequirements(DEFAULT_REQUIREMENTS)
     }
     setQualityDialogOpen(true)
   }
@@ -899,7 +914,12 @@ export default function MediaManagement() {
           upgradeAllowed: qualityUpgradeAllowed,
           minSizeMb: qualityMinSize ? Number(qualityMinSize) : undefined,
           maxSizeMb: qualityMaxSize ? Number(qualityMaxSize) : undefined,
-          cutoff: qualityItems.find((i) => i.allowed)?.id || 1,
+          // The cutoff is the quality Hamster stops upgrading at. It used to be
+          // silently pinned to the first allowed item, so a profile that allowed
+          // 2160p through 720p never stopped upgrading — and nobody could see
+          // why. Now it is a choice, defaulting to the same thing.
+          cutoff: qualityCutoff ?? qualityItems.find((i) => i.allowed)?.id ?? 1,
+          requirements: qualityRequirements,
         }),
       })
 
@@ -1590,6 +1610,8 @@ export default function MediaManagement() {
             )}
           </CardContent>
         </Card>
+
+        <CustomFormatsCard qualityProfiles={qualityProfiles} />
       </div>
 
       {/* Folder Dialog */}
@@ -1750,7 +1772,7 @@ export default function MediaManagement() {
 
       {/* Quality Profile Dialog */}
       <Dialog open={qualityDialogOpen} onOpenChange={setQualityDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingQuality ? 'Edit' : 'Add'} Quality Profile</DialogTitle>
             <DialogDescription>
@@ -1800,6 +1822,37 @@ export default function MediaManagement() {
             </fieldset>
             <div className="space-y-3 border-t border-border pt-6">
               <div className="space-y-1">
+                <h3 className="text-sm font-semibold">Upgrade cutoff</h3>
+                <p className="text-xs text-muted-foreground">
+                  Once a file reaches this quality Hamster stops looking for a better one. Anything
+                  below it counts as an upgrade candidate.
+                </p>
+              </div>
+              <Select
+                value={String(qualityCutoff ?? qualityItems.find((i) => i.allowed)?.id ?? '')}
+                onValueChange={(next) => setQualityCutoff(Number(next))}
+              >
+                <SelectTrigger className="w-full" aria-label="Upgrade cutoff">
+                  <SelectValue placeholder="Select a quality">
+                    {(value: string) =>
+                      qualityItems.find((i) => String(i.id) === value)?.name ?? 'Select a quality'
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {qualityItems
+                    .filter((item) => item.allowed)
+                    .map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                </SelectPopup>
+              </Select>
+            </div>
+
+            <div className="space-y-3 border-t border-border pt-6">
+              <div className="space-y-1">
                 <h3 className="text-sm font-semibold">Size band</h3>
                 <p className="text-xs text-muted-foreground">
                   Optional guard against mislabelled releases. Leave blank for no limit.
@@ -1842,6 +1895,16 @@ export default function MediaManagement() {
                 Replace a file already on disk when a better release appears
               </Label>
             </div>
+
+            <QualityRequirementsFields
+              value={qualityRequirements}
+              onChange={setQualityRequirements}
+              showVideoRules={qualityMediaType === 'movies' || qualityMediaType === 'tv'}
+            />
+
+            {editingQuality && (
+              <ReleaseTester profileId={editingQuality.id} mediaType={qualityMediaType} />
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setQualityDialogOpen(false)}>

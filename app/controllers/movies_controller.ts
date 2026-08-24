@@ -1,6 +1,12 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Movie from '#models/movie'
 import MovieFile from '#models/movie_file'
+import QualityProfile from '#models/quality_profile'
+import {
+  assessFile,
+  describeMediaInfo,
+  ensureMediaInfo,
+} from '#services/quality/file_quality_service'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
@@ -321,6 +327,10 @@ export default class MoviesController {
       return response.notFound({ error: 'Movie not found' })
     }
 
+    if (movie.movieFile) {
+      await ensureMediaInfo(movie.movieFile, movie.rootFolder?.path)
+    }
+
     let trailerUrl: string | null = null
     let backdropImages: string[] = []
     if (movie.tmdbId) {
@@ -359,8 +369,21 @@ export default class MoviesController {
             path: movie.movieFile.relativePath,
             size: movie.movieFile.sizeBytes,
             quality: movie.movieFile.quality,
+            mediaInfo: movie.movieFile.mediaInfo,
+            summary: describeMediaInfo(movie.movieFile.mediaInfo),
             downloadUrl: `/api/v1/files/movies/${movie.movieFile.id}/download`,
           }
+        : null,
+      // What the file on disk actually is, measured against the profile. This
+      // is the difference between "you have this movie" and "you have a copy of
+      // this movie that your own profile would have refused".
+      qualityAssessment: movie.movieFile
+        ? assessFile(
+            movie.movieFile.mediaInfo,
+            movie.movieFile.quality,
+            movie.qualityProfile ?? null,
+            'movies'
+          )
         : null,
       addedAt: movie.addedAt?.toISO(),
     })
@@ -541,7 +564,15 @@ export default class MoviesController {
         limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
       })
 
-      return response.json(results)
+      // Annotated rather than raw: the picker has to be able to show that a
+      // 1080p-looking release is a TELESYNC before someone grabs it.
+      const { annotateReleases, sortAnnotated } =
+        await import('#services/quality/release_annotator')
+      const profile = movie.qualityProfileId
+        ? await QualityProfile.find(movie.qualityProfileId)
+        : null
+
+      return response.json(sortAnnotated(await annotateReleases(results, 'movies', profile)))
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search releases',
@@ -604,17 +635,17 @@ export default class MoviesController {
       }
 
       // Select best release using quality profile and size limits
-      const bestResult = await requestedSearchTask.selectBestReleaseForMovie(movie, results)
+      const selection = await requestedSearchTask.selectBestReleaseForMovie(movie, results)
+      const bestResult = selection.release
 
       if (!bestResult) {
-        const { default: QualityProfile } = await import('#models/quality_profile')
         const profile = movie.qualityProfileId
           ? await QualityProfile.find(movie.qualityProfileId)
           : null
         const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
 
         return response.notFound({
-          error: 'No releases matching quality profile and size limits',
+          error: selection.reason ?? 'No releases matching quality profile and size limits',
           details: {
             totalResults: results.length,
             indexersSearched: [...new Set(results.map((r) => r.indexer))],
@@ -678,6 +709,57 @@ export default class MoviesController {
     } catch (error) {
       return response.internalServerError({
         error: error instanceof Error ? error.message : 'Search failed',
+      })
+    }
+  }
+
+  /**
+   * Re-download a movie that already has a file, replacing it on import.
+   *
+   * The file on disk is left untouched until the replacement has actually been
+   * imported — a failed search must never leave the library emptier than it
+   * started, which is exactly what "delete and re-add" did.
+   */
+  async redownload({ params, request, response }: HttpContext) {
+    const movie = await Movie.find(params.id)
+    if (!movie) {
+      return response.notFound({ error: 'Movie not found' })
+    }
+
+    const blacklistCurrent = request.input('blacklistCurrent', true) !== false
+
+    const { default: Download } = await import('#models/download')
+    const activeDownload = await Download.query()
+      .where('movieId', movie.id)
+      .whereIn('status', ['queued', 'downloading', 'paused', 'importing'])
+      .first()
+
+    if (activeDownload) {
+      return response.conflict({
+        error: 'Movie already has an active download',
+        downloadId: activeDownload.id,
+        status: activeDownload.status,
+      })
+    }
+
+    try {
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
+      const result = await requestedSearchTask.searchSingleMovie(movie.id, {
+        replace: true,
+        blacklistCurrent,
+      })
+
+      if (!result.grabbed) {
+        return response.badRequest({
+          error: result.error ?? 'No replacement release found',
+          found: result.found,
+        })
+      }
+
+      return response.json({ found: result.found, grabbed: true })
+    } catch (error) {
+      return response.internalServerError({
+        error: error instanceof Error ? error.message : 'Re-download failed',
       })
     }
   }

@@ -5,11 +5,14 @@ import Book from '#models/book'
 import Episode from '#models/episode'
 import Download from '#models/download'
 import QualityProfile from '#models/quality_profile'
-import type { QualityItem } from '#models/quality_profile'
 import { indexerManager, type UnifiedSearchResult } from '#services/indexers/indexer_manager'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { blacklistService } from '#services/blacklist/blacklist_service'
-import { scoreAndRankReleases } from '#services/quality/quality_scorer'
+import {
+  buildProfileContext,
+  evaluateReleases,
+  permissiveContext,
+} from '#services/quality/quality_scorer'
 import type { MediaType } from '#services/quality/quality_parser'
 import { DateTime } from 'luxon'
 
@@ -196,59 +199,123 @@ function filterMovieResultsByTitle(
   )
 }
 
-/**
- * Select the best release from search results using quality profile scoring.
- * Falls back to size-based sorting when no quality profile is available.
- */
-function selectBestRelease(
-  results: UnifiedSearchResult[],
-  mediaType: MediaType,
-  profileItems: QualityItem[] | null,
-  cutoff: number | null,
-  sizeOptions?: { minSizeBytes?: number; maxSizeBytes?: number }
-): UnifiedSearchResult | null {
-  if (results.length === 0) return null
-
-  // If we have a quality profile, it decides — including deciding to grab nothing.
-  if (profileItems && profileItems.length > 0 && cutoff !== null) {
-    const scored = scoreAndRankReleases(results, mediaType, profileItems, cutoff, sizeOptions)
-    if (scored.length > 0) {
-      return scored[0].release
-    }
-
-    // Every candidate was rejected. Falling through to a size-sorted pick here
-    // made the profile advisory: it grabbed the largest release on offer, which
-    // is how CAM/TELESYNC rips kept being selected against a profile that
-    // explicitly disallowed them. Waiting for a release that passes is correct.
-    return null
-  }
-
-  // No usable profile: sort by size descending, but still respect size limits.
-  let fallback = [...results]
-  if (sizeOptions?.minSizeBytes) {
-    fallback = fallback.filter((r) => r.size >= sizeOptions.minSizeBytes!)
-  }
-  if (sizeOptions?.maxSizeBytes) {
-    fallback = fallback.filter((r) => r.size <= sizeOptions.maxSizeBytes!)
-  }
-  fallback.sort((a, b) => b.size - a.size)
-  return fallback[0] ?? null
+export interface RedownloadOptions {
+  /**
+   * Grab even though a file is already on disk, and let the new file overwrite
+   * it. Without this every guard in the pipeline correctly refuses: the item
+   * has a file, so it is not wanted.
+   */
+  replace?: boolean
+  /**
+   * Blacklist the release the current file came from, so the search cannot hand
+   * back the same bad copy it just rejected. This is the difference between
+   * "try again" and "try something else".
+   */
+  blacklistCurrent?: boolean
 }
 
 /**
- * Build size filter options from a quality profile's min/max size (in MB).
+ * Blacklist the release behind the file currently on disk.
+ *
+ * The link back to a release only exists if we downloaded it ourselves — files
+ * that arrived by a library scan have no download row, and there is nothing to
+ * blacklist. That is not an error; the search simply has one fewer constraint.
  */
-function buildSizeOptions(
+async function blacklistCurrentRelease(
+  key: { movieId?: string; episodeId?: string },
+  mediaTitle: string
+): Promise<void> {
+  const query = Download.query().where('status', 'completed').orderBy('completedAt', 'desc')
+  if (key.movieId) query.where('movieId', key.movieId)
+  if (key.episodeId) query.where('episodeId', key.episodeId)
+
+  const lastDownload = await query.first()
+  const guid = lastDownload?.nzbInfo?.guid
+  if (!lastDownload || !guid) {
+    logger.debug({ mediaTitle }, 'Redownload: no prior download to blacklist')
+    return
+  }
+
+  await blacklistService
+    .blacklist({
+      guid,
+      indexer: lastDownload.nzbInfo?.indexer ?? 'unknown',
+      title: lastDownload.title,
+      movieId: key.movieId ?? null,
+      episodeId: key.episodeId ?? null,
+      reason: 'Replaced by user — quality rejected',
+      failureType: 'quality_rejected',
+    })
+    .catch((err: unknown) =>
+      logger.warn({ err }, 'Redownload: failed to blacklist current release')
+    )
+}
+
+export interface ReleaseSelection {
+  release: UnifiedSearchResult | null
+  /** Why nothing was picked, phrased for the user. Null when one was. */
+  reason: string | null
+  /** How many candidates were refused, and the top reasons, for logs. */
+  rejected: number
+}
+
+/**
+ * Select the best release from search results using the full profile: quality
+ * bucket, audio/HDR/codec requirements and custom-format scores.
+ *
+ * When nothing qualifies this returns why, because "no results" and "twelve
+ * results, all of them cinema rips" are very different problems and only one of
+ * them is worth acting on.
+ */
+async function selectRelease(
+  results: UnifiedSearchResult[],
+  mediaType: MediaType,
   profile: QualityProfile | null
-): { minSizeBytes?: number; maxSizeBytes?: number } | undefined {
-  if (!profile) return undefined
-  const opts: { minSizeBytes?: number; maxSizeBytes?: number } = {}
-  if (profile.minSizeMb !== null && profile.minSizeMb !== undefined)
-    opts.minSizeBytes = profile.minSizeMb * 1024 * 1024
-  if (profile.maxSizeMb !== null && profile.maxSizeMb !== undefined)
-    opts.maxSizeBytes = profile.maxSizeMb * 1024 * 1024
-  if (Object.keys(opts).length === 0) return undefined
-  return opts
+): Promise<ReleaseSelection> {
+  if (results.length === 0) {
+    return { release: null, reason: 'No releases found', rejected: 0 }
+  }
+
+  const context = profile ? await buildProfileContext(profile) : permissiveContext()
+
+  const { accepted, rejected } = evaluateReleases(results, mediaType, context)
+
+  if (accepted.length > 0) {
+    return { release: accepted[0].release, reason: null, rejected: rejected.length }
+  }
+
+  return {
+    release: null,
+    reason: summarizeRejections(rejected, profile?.name ?? null),
+    rejected: rejected.length,
+  }
+}
+
+/**
+ * Roll the per-release rejection reasons up into one sentence, most common
+ * first, so the message says what to change rather than listing every title.
+ */
+function summarizeRejections(
+  rejected: { evaluation: { rejections: string[] } }[],
+  profileName: string | null
+): string {
+  const counts = new Map<string, number>()
+  for (const item of rejected) {
+    for (const reason of item.evaluation.rejections) {
+      counts.set(reason, (counts.get(reason) ?? 0) + 1)
+    }
+  }
+
+  const top = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([reason, count]) => `${reason} (${count})`)
+
+  const profileLabel = profileName ? ` "${profileName}"` : ''
+  if (top.length === 0) {
+    return `${rejected.length} releases found but none matched the quality profile${profileLabel}`
+  }
+  return `${rejected.length} releases found, none accepted by profile${profileLabel} — ${top.join('; ')}`
 }
 
 /**
@@ -433,13 +500,8 @@ class RequestedSearchTask {
 
         // Load quality profile from the artist
         const profile = await loadQualityProfile(album.artist?.qualityProfileId ?? null)
-        const bestResult = selectBestRelease(
-          availableResults,
-          'music',
-          profile?.items ?? null,
-          profile?.cutoff ?? null,
-          buildSizeOptions(profile)
-        )
+        const selection = await selectRelease(availableResults, 'music', profile)
+        const bestResult = selection.release
 
         if (!bestResult) {
           logger.debug(
@@ -559,13 +621,8 @@ class RequestedSearchTask {
 
         // Load quality profile and rank by quality
         const profile = await loadQualityProfile(movie.qualityProfileId)
-        const bestResult = selectBestRelease(
-          availableResults,
-          'movies',
-          profile?.items ?? null,
-          profile?.cutoff ?? null,
-          buildSizeOptions(profile)
-        )
+        const selection = await selectRelease(availableResults, 'movies', profile)
+        const bestResult = selection.release
 
         if (!bestResult) {
           logger.debug(
@@ -677,13 +734,8 @@ class RequestedSearchTask {
 
         // Load quality profile from the author and rank by quality
         const profile = await loadQualityProfile(book.author?.qualityProfileId ?? null)
-        const bestResult = selectBestRelease(
-          availableResults,
-          'books',
-          profile?.items ?? null,
-          profile?.cutoff ?? null,
-          buildSizeOptions(profile)
-        )
+        const selection = await selectRelease(availableResults, 'books', profile)
+        const bestResult = selection.release
 
         if (!bestResult) {
           logger.debug(
@@ -878,13 +930,8 @@ class RequestedSearchTask {
 
         // Load quality profile from the TV show and rank by quality
         const profile = await loadQualityProfile(tvShow.qualityProfileId)
-        const bestResult = selectBestRelease(
-          availableResults,
-          'tv',
-          profile?.items ?? null,
-          profile?.cutoff ?? null,
-          buildSizeOptions(profile)
-        )
+        const selection = await selectRelease(availableResults, 'tv', profile)
+        const bestResult = selection.release
 
         if (!bestResult) {
           logger.debug(
@@ -1009,20 +1056,20 @@ class RequestedSearchTask {
 
       // Load quality profile from the artist and rank by quality
       const profile = await loadQualityProfile(album.artist?.qualityProfileId ?? null)
-      const bestResult = selectBestRelease(
-        availableResults,
-        'music',
-        profile?.items ?? null,
-        profile?.cutoff ?? null,
-        buildSizeOptions(profile)
-      )
+      const selection = await selectRelease(availableResults, 'music', profile)
+      const bestResult = selection.release
 
       if (!bestResult) {
         const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
         return {
           found: true,
           grabbed: false,
-          error: `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})${profile?.minSizeMb || profile?.maxSizeMb ? ` or size limits (${profile?.minSizeMb ?? 0}–${profile?.maxSizeMb ?? '∞'} MB)` : ''}`,
+          // selection.reason names the attributes that actually did the
+          // rejecting (audio, upscale, CAM); the allowed-quality list alone
+          // sent people hunting for a profile problem that was not there.
+          error:
+            selection.reason ??
+            `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})`,
         }
       }
 
@@ -1047,10 +1094,16 @@ class RequestedSearchTask {
   }
 
   /**
-   * Search and grab a single movie immediately
+   * Search and grab a single movie immediately.
+   *
+   * `replace` is the re-download path: the movie already has a file the user is
+   * unhappy with, so the has-file guard is lifted and whatever is grabbed is
+   * allowed to overwrite it. Everything else — profile, requirements, blacklist
+   * — still applies, because "get me a better copy" is not "get me any copy".
    */
   async searchSingleMovie(
-    movieId: string
+    movieId: string,
+    options: RedownloadOptions = {}
   ): Promise<{ found: boolean; grabbed: boolean; error?: string }> {
     try {
       const movie = await Movie.find(movieId)
@@ -1060,8 +1113,12 @@ class RequestedSearchTask {
       }
 
       // Check if movie already has a file
-      if (movie.hasFile) {
+      if (movie.hasFile && !options.replace) {
         return { found: false, grabbed: false, error: 'Movie already has a file' }
+      }
+
+      if (options.replace && options.blacklistCurrent) {
+        await blacklistCurrentRelease({ movieId: movie.id }, movie.title)
       }
 
       // Check for active downloads
@@ -1097,20 +1154,20 @@ class RequestedSearchTask {
 
       // Load quality profile and rank by quality
       const profile = await loadQualityProfile(movie.qualityProfileId)
-      const bestResult = selectBestRelease(
-        availableResults,
-        'movies',
-        profile?.items ?? null,
-        profile?.cutoff ?? null,
-        buildSizeOptions(profile)
-      )
+      const selection = await selectRelease(availableResults, 'movies', profile)
+      const bestResult = selection.release
 
       if (!bestResult) {
         const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
         return {
           found: true,
           grabbed: false,
-          error: `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})${profile?.minSizeMb || profile?.maxSizeMb ? ` or size limits (${profile?.minSizeMb ?? 0}–${profile?.maxSizeMb ?? '∞'} MB)` : ''}`,
+          // selection.reason names the attributes that actually did the
+          // rejecting (audio, upscale, CAM); the allowed-quality list alone
+          // sent people hunting for a profile problem that was not there.
+          error:
+            selection.reason ??
+            `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})`,
         }
       }
 
@@ -1122,6 +1179,7 @@ class RequestedSearchTask {
         indexerId: bestResult.indexerId,
         indexerName: bestResult.indexer,
         guid: bestResult.id,
+        replaceExisting: options.replace === true,
       })
 
       return { found: true, grabbed: true }
@@ -1135,10 +1193,12 @@ class RequestedSearchTask {
   }
 
   /**
-   * Search and grab a single episode immediately
+   * Search and grab a single episode immediately. See searchSingleMovie for the
+   * meaning of `replace`.
    */
   async searchSingleEpisode(
-    episodeId: string
+    episodeId: string,
+    options: RedownloadOptions = {}
   ): Promise<{ found: boolean; grabbed: boolean; error?: string }> {
     try {
       const episode = await Episode.query().where('id', episodeId).preload('tvShow').first()
@@ -1148,8 +1208,12 @@ class RequestedSearchTask {
       }
 
       // Check if episode already has a file
-      if (episode.hasFile) {
+      if (episode.hasFile && !options.replace) {
         return { found: false, grabbed: false, error: 'Episode already has a file' }
+      }
+
+      if (options.replace && options.blacklistCurrent) {
+        await blacklistCurrentRelease({ episodeId: episode.id }, episode.title ?? 'Episode')
       }
 
       // Check for active downloads
@@ -1234,20 +1298,20 @@ class RequestedSearchTask {
 
       // Load quality profile from the TV show and rank by quality
       const profile = await loadQualityProfile(tvShow.qualityProfileId)
-      const bestResult = selectBestRelease(
-        availableResults,
-        'tv',
-        profile?.items ?? null,
-        profile?.cutoff ?? null,
-        buildSizeOptions(profile)
-      )
+      const selection = await selectRelease(availableResults, 'tv', profile)
+      const bestResult = selection.release
 
       if (!bestResult) {
         const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
         return {
           found: true,
           grabbed: false,
-          error: `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})${profile?.minSizeMb || profile?.maxSizeMb ? ` or size limits (${profile?.minSizeMb ?? 0}–${profile?.maxSizeMb ?? '∞'} MB)` : ''}`,
+          // selection.reason names the attributes that actually did the
+          // rejecting (audio, upscale, CAM); the allowed-quality list alone
+          // sent people hunting for a profile problem that was not there.
+          error:
+            selection.reason ??
+            `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})`,
         }
       }
 
@@ -1260,6 +1324,7 @@ class RequestedSearchTask {
         indexerId: bestResult.indexerId,
         indexerName: bestResult.indexer,
         guid: bestResult.id,
+        replaceExisting: options.replace === true,
       })
 
       return { found: true, grabbed: true }
@@ -1315,20 +1380,20 @@ class RequestedSearchTask {
 
       // Load quality profile from the author and rank by quality
       const profile = await loadQualityProfile(book.author?.qualityProfileId ?? null)
-      const bestResult = selectBestRelease(
-        availableResults,
-        'books',
-        profile?.items ?? null,
-        profile?.cutoff ?? null,
-        buildSizeOptions(profile)
-      )
+      const selection = await selectRelease(availableResults, 'books', profile)
+      const bestResult = selection.release
 
       if (!bestResult) {
         const allowedQualities = profile?.items.filter((i) => i.allowed).map((i) => i.name) ?? []
         return {
           found: true,
           grabbed: false,
-          error: `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})${profile?.minSizeMb || profile?.maxSizeMb ? ` or size limits (${profile?.minSizeMb ?? 0}–${profile?.maxSizeMb ?? '∞'} MB)` : ''}`,
+          // selection.reason names the attributes that actually did the
+          // rejecting (audio, upscale, CAM); the allowed-quality list alone
+          // sent people hunting for a profile problem that was not there.
+          error:
+            selection.reason ??
+            `${availableResults.length} results found but none match quality profile "${profile?.name ?? 'None'}" (allowed: ${allowedQualities.join(', ') || 'any'})`,
         }
       }
 
@@ -1350,6 +1415,54 @@ class RequestedSearchTask {
         error: error instanceof Error ? error.message : 'Unknown error',
       }
     }
+  }
+
+  /**
+   * Re-download every episode of a show, or of one season, that already has a
+   * file — the bulk form of "this copy is not good enough".
+   *
+   * Episodes with no file are skipped rather than grabbed: this is a replace
+   * operation, and a missing episode belongs to the ordinary wanted search that
+   * already runs on its own schedule.
+   */
+  async redownloadEpisodes(
+    tvShowId: string,
+    options: RedownloadOptions & { seasonNumber?: number } = {}
+  ): Promise<{ searched: number; grabbed: number; errors: string[] }> {
+    const result = { searched: 0, grabbed: 0, errors: [] as string[] }
+
+    const query = Episode.query().where('tvShowId', tvShowId).where('hasFile', true)
+    if (options.seasonNumber !== undefined) {
+      query.where('seasonNumber', options.seasonNumber)
+    }
+    const episodes = await query.orderBy('seasonNumber', 'asc').orderBy('episodeNumber', 'asc')
+
+    // An episode already being downloaded is left alone — replacing a replace
+    // in flight just races two grabs for the same file.
+    const activeDownloads = await Download.query()
+      .where('tvShowId', tvShowId)
+      .whereIn('status', ['queued', 'downloading', 'paused', 'importing'])
+    const busy = new Set(activeDownloads.map((d) => d.episodeId))
+
+    for (const episode of episodes) {
+      if (busy.has(episode.id)) continue
+
+      result.searched++
+      const outcome = await this.searchSingleEpisode(episode.id, {
+        replace: true,
+        blacklistCurrent: options.blacklistCurrent,
+      })
+
+      if (outcome.grabbed) {
+        result.grabbed++
+      } else if (outcome.error) {
+        result.errors.push(
+          `S${String(episode.seasonNumber).padStart(2, '0')}E${String(episode.episodeNumber).padStart(2, '0')}: ${outcome.error}`
+        )
+      }
+    }
+
+    return result
   }
 
   /**
@@ -1435,13 +1548,8 @@ class RequestedSearchTask {
 
           // Load quality profile from the TV show and rank by quality
           const profile = await loadQualityProfile(tvShow.qualityProfileId)
-          const bestResult = selectBestRelease(
-            matchingResults,
-            'tv',
-            profile?.items ?? null,
-            profile?.cutoff ?? null,
-            buildSizeOptions(profile)
-          )
+          const selection = await selectRelease(matchingResults, 'tv', profile)
+          const bestResult = selection.release
 
           if (!bestResult) continue
 
@@ -1496,15 +1604,9 @@ class RequestedSearchTask {
   async selectBestReleaseForMovie(
     movie: Movie,
     results: UnifiedSearchResult[]
-  ): Promise<UnifiedSearchResult | null> {
+  ): Promise<ReleaseSelection> {
     const profile = await loadQualityProfile(movie.qualityProfileId)
-    return selectBestRelease(
-      results,
-      'movies',
-      profile?.items ?? null,
-      profile?.cutoff ?? null,
-      buildSizeOptions(profile)
-    )
+    return selectRelease(results, 'movies', profile)
   }
 
   /**
@@ -1514,15 +1616,9 @@ class RequestedSearchTask {
   async selectBestReleaseForBook(
     book: Book,
     results: UnifiedSearchResult[]
-  ): Promise<UnifiedSearchResult | null> {
+  ): Promise<ReleaseSelection> {
     const profile = await loadQualityProfile(book.author?.qualityProfileId ?? null)
-    return selectBestRelease(
-      results,
-      'books',
-      profile?.items ?? null,
-      profile?.cutoff ?? null,
-      buildSizeOptions(profile)
-    )
+    return selectRelease(results, 'books', profile)
   }
 
   /**

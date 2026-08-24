@@ -3,14 +3,6 @@ import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -41,20 +33,7 @@ import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
-
-interface SearchResult {
-  id: string
-  title: string
-  indexer: string
-  indexerId: number
-  size: number
-  publishDate: string
-  downloadUrl: string
-  quality?: string
-  seeders?: number
-  grabs?: number
-  protocol: string
-}
+import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
 
 interface Author {
   id: number
@@ -103,7 +82,7 @@ export default function BookDetail() {
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [enriching, setEnriching] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchResults, setSearchResults] = useState<AnnotatedRelease[]>([])
   const [searching, setSearching] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
 
@@ -270,7 +249,7 @@ export default function BookDetail() {
     }
   }
 
-  const grabRelease = async (result: SearchResult) => {
+  const grabRelease = async (result: AnnotatedRelease) => {
     setGrabbing(result.id)
     try {
       const response = await fetch('/api/v1/queue/grab', {
@@ -552,58 +531,12 @@ export default function BookDetail() {
               </Button>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Release</TableHead>
-                    <TableHead className="w-32">Indexer</TableHead>
-                    <TableHead className="w-24">Quality</TableHead>
-                    <TableHead className="w-24" data-numeric>
-                      Size
-                    </TableHead>
-                    <TableHead className="w-20" data-numeric>
-                      Grabs
-                    </TableHead>
-                    <TableHead className="w-16">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {searchResults.map((result) => (
-                    <TableRow key={result.id}>
-                      <TableCell className="readout max-w-md truncate">{result.title}</TableCell>
-                      <TableCell className="readout text-muted-foreground">
-                        {result.indexer}
-                      </TableCell>
-                      <TableCell>
-                        {result.quality && <Badge variant="outline">{result.quality}</Badge>}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground" data-numeric>
-                        {formatSize(result.size)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground" data-numeric>
-                        {result.grabs ?? result.seeders ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="icon-sm"
-                          variant="outline"
-                          onClick={() => grabRelease(result)}
-                          disabled={grabbing === result.id}
-                          aria-label={`Download ${result.title}`}
-                        >
-                          {grabbing === result.id ? (
-                            <Spinner />
-                          ) : (
-                            <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <ReleaseList
+                releases={searchResults}
+                loading={searching}
+                grabbingId={grabbing}
+                onGrab={grabRelease}
+              />
             </CardContent>
           </Card>
         )}

@@ -487,29 +487,35 @@ export class DownloadManager {
       // Check for recently completed downloads (within 7 days) to prevent duplicate downloads
       // of the same media item. A media item that completed recently should not be re-grabbed
       // automatically — if it's truly missing, manual search is the right escape hatch.
-      const recentlyCompletedQuery = Download.query()
-        .where('status', 'completed')
-        .where('completedAt', '>=', DateTime.now().minus({ days: 7 }).toSQL())
+      //
+      // A replace request IS that escape hatch: the user looked at what the last
+      // download produced and asked for a different copy. Blocking it here is
+      // what forced people to delete the item and re-add it.
+      if (!request.replaceExisting) {
+        const recentlyCompletedQuery = Download.query()
+          .where('status', 'completed')
+          .where('completedAt', '>=', DateTime.now().minus({ days: 7 }).toSQL())
 
-      if (request.episodeId) {
-        recentlyCompletedQuery.where('episodeId', request.episodeId)
-      } else if (request.movieId) {
-        recentlyCompletedQuery.where('movieId', request.movieId)
-      } else if (request.albumId) {
-        recentlyCompletedQuery.where('albumId', request.albumId)
-      } else if (request.bookId) {
-        recentlyCompletedQuery.where('bookId', request.bookId)
-      }
+        if (request.episodeId) {
+          recentlyCompletedQuery.where('episodeId', request.episodeId)
+        } else if (request.movieId) {
+          recentlyCompletedQuery.where('movieId', request.movieId)
+        } else if (request.albumId) {
+          recentlyCompletedQuery.where('albumId', request.albumId)
+        } else if (request.bookId) {
+          recentlyCompletedQuery.where('bookId', request.bookId)
+        }
 
-      const recentlyCompleted = await recentlyCompletedQuery.first()
-      if (recentlyCompleted) {
-        logger.info(
-          { title: request.title, completedId: recentlyCompleted.id },
-          'DownloadManager: Skipping recently completed download'
-        )
-        throw new Error(
-          'A download for this item completed recently. Use manual search to re-grab if needed.'
-        )
+        const recentlyCompleted = await recentlyCompletedQuery.first()
+        if (recentlyCompleted) {
+          logger.info(
+            { title: request.title, completedId: recentlyCompleted.id },
+            'DownloadManager: Skipping recently completed download'
+          )
+          throw new Error(
+            'A download for this item completed recently. Use manual search to re-grab if needed.'
+          )
+        }
       }
     }
 

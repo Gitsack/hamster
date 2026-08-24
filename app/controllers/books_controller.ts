@@ -429,7 +429,14 @@ export default class BooksController {
         limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
       })
 
-      return response.json(results)
+      const { annotateReleases, sortAnnotated } =
+        await import('#services/quality/release_annotator')
+      const { default: QualityProfile } = await import('#models/quality_profile')
+      const profile = book.author?.qualityProfileId
+        ? await QualityProfile.find(book.author.qualityProfileId)
+        : null
+
+      return response.json(sortAnnotated(await annotateReleases(results, 'books', profile)))
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search releases',
@@ -476,10 +483,13 @@ export default class BooksController {
       }
 
       // Select best release using quality profile and size limits
-      const bestResult = await requestedSearchTask.selectBestReleaseForBook(book, results)
+      const selection = await requestedSearchTask.selectBestReleaseForBook(book, results)
+      const bestResult = selection.release
 
       if (!bestResult) {
-        return response.notFound({ error: 'No releases matching quality profile and size limits' })
+        return response.notFound({
+          error: selection.reason ?? 'No releases matching quality profile and size limits',
+        })
       }
 
       const download = await downloadManager.grab({

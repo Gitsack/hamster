@@ -464,7 +464,17 @@ export default class AlbumsController {
       limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
     })
 
-    return response.json(results)
+    const { annotateReleases, sortAnnotated } = await import('#services/quality/release_annotator')
+    const { default: QualityProfile } = await import('#models/quality_profile')
+    const profile = album.artist?.qualityProfileId
+      ? await QualityProfile.find(album.artist.qualityProfileId)
+      : null
+
+    // A plain array, matching every other /releases endpoint. This used to
+    // return the raw {results, skippedIndexers} envelope, which the page read
+    // as `searchResults.length` — always undefined, so manual album search
+    // rendered nothing no matter what the indexers found.
+    return response.json(sortAnnotated(await annotateReleases(results.results, 'music', profile)))
   }
 
   /**

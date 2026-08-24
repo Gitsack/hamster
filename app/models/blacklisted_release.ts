@@ -12,6 +12,10 @@ export type FailureType =
   | 'verification_failed'
   | 'import_failed'
   | 'missing_files'
+  // The release downloaded and imported fine; the user judged the result too
+  // poor to keep and asked for a replacement. Blacklisting stops the next
+  // search from handing back the copy they just rejected.
+  | 'quality_rejected'
 
 export default class BlacklistedRelease extends BaseModel {
   static table = 'blacklisted_releases'

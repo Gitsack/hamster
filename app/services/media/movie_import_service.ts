@@ -5,6 +5,8 @@ import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
 import { probeFile, checkFfmpegAvailable } from '#utils/ffmpeg_utils'
+import { analysisToMediaInfo } from '#services/quality/file_quality_service'
+import type { VideoMediaInfo } from '#models/movie_file'
 import Download from '#models/download'
 import Movie from '#models/movie'
 import MovieFile from '#models/movie_file'
@@ -253,10 +255,15 @@ export class MovieImportService {
     }
 
     // --- Integrity check 2: ffprobe validation ---
+    // The probe result is kept: it is the only trustworthy record of what the
+    // file actually contains, and it is what lets the library flag "good video,
+    // stereo AAC audio" instead of trusting the release name.
+    let probedInfo: VideoMediaInfo | null = null
     const { ffprobe } = await checkFfmpegAvailable()
     if (ffprobe) {
       try {
         const analysis = await probeFile(sourcePath)
+        probedInfo = analysisToMediaInfo(analysis)
         if (!analysis.videoCodec) {
           return {
             success: false,
@@ -336,6 +343,7 @@ export class MovieImportService {
           relativePath,
           sizeBytes: stats.size,
           quality: quality || null,
+          mediaInfo: probedInfo,
           dateAdded: DateTime.now(),
         })
         await movieFile.save()
@@ -346,6 +354,7 @@ export class MovieImportService {
             relativePath,
             sizeBytes: stats.size,
             quality: quality || null,
+            mediaInfo: probedInfo,
             dateAdded: DateTime.now(),
           },
           { client: trx }

@@ -139,6 +139,44 @@ export class CustomFormatMatcher {
   }
 
   /**
+   * Load the custom formats assigned to a profile, with their per-profile score.
+   * Callers that score many releases against one profile should load once and
+   * pass the result to scoreReleaseWithFormats instead of hitting the DB per
+   * release.
+   */
+  async loadFormatsForProfile(
+    qualityProfileId: string
+  ): Promise<{ format: CustomFormat; score: number }[]> {
+    const assignments = await db
+      .from('quality_profile_custom_formats')
+      .join(
+        'custom_formats',
+        'custom_formats.id',
+        'quality_profile_custom_formats.custom_format_id'
+      )
+      .where('quality_profile_custom_formats.quality_profile_id', qualityProfileId)
+      .select(
+        'custom_formats.id',
+        'custom_formats.name',
+        'custom_formats.specifications',
+        'quality_profile_custom_formats.score'
+      )
+
+    return assignments.map((row) => ({
+      format: {
+        id: row.id,
+        name: row.name,
+        specifications:
+          typeof row.specifications === 'string'
+            ? JSON.parse(row.specifications)
+            : row.specifications,
+        includeWhenRenaming: false,
+      } as CustomFormat,
+      score: Number(row.score) || 0,
+    }))
+  }
+
+  /**
    * Score a release against all custom formats for a quality profile
    */
   async scoreRelease(

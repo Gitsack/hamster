@@ -2,6 +2,7 @@ import { DateTime } from 'luxon'
 import { BaseModel, column, hasMany } from '@adonisjs/lucid/orm'
 import type { HasMany } from '@adonisjs/lucid/types/relations'
 import Artist from './artist.js'
+import type { QualityRequirements } from '#services/quality/quality_requirements'
 
 export interface QualityItem {
   id: number
@@ -30,6 +31,21 @@ export default class QualityProfile extends BaseModel {
 
   @column()
   declare upgradeAllowed: boolean
+
+  @column({
+    prepare: (value: Partial<QualityRequirements> | null) =>
+      value === null ? null : JSON.stringify(value),
+    consume: (value: string | Partial<QualityRequirements> | null) => {
+      if (!value) return null
+      if (typeof value !== 'string') return value
+      try {
+        return JSON.parse(value)
+      } catch {
+        return null
+      }
+    },
+  })
+  declare requirements: Partial<QualityRequirements> | null
 
   @column()
   declare minSizeMb: number | null

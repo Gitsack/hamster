@@ -3,6 +3,12 @@ import TvShow from '#models/tv_show'
 import Season from '#models/season'
 import Episode from '#models/episode'
 import EpisodeFile from '#models/episode_file'
+import QualityProfile from '#models/quality_profile'
+import {
+  assessFile,
+  describeMediaInfo,
+  ensureMediaInfo,
+} from '#services/quality/file_quality_service'
 import Download from '#models/download'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
@@ -529,6 +535,23 @@ export default class TvShowsController {
       return response.notFound({ error: 'Season not found' })
     }
 
+    // One profile lookup for the whole season, not one per episode.
+    const show = await TvShow.query()
+      .where('id', params.id)
+      .preload('qualityProfile')
+      .preload('rootFolder')
+      .first()
+    const profile = show?.qualityProfile ?? null
+
+    // Backfill probes for episodes imported before media info was recorded.
+    // Sequential on purpose: a season is at most a couple of dozen files, and
+    // firing that many ffprobes at once on a spinning disk helps nobody.
+    for (const episode of season.episodes) {
+      if (episode.episodeFile) {
+        await ensureMediaInfo(episode.episodeFile, show?.rootFolder?.path)
+      }
+    }
+
     return response.json({
       id: season.id,
       seasonNumber: season.seasonNumber,
@@ -553,8 +576,13 @@ export default class TvShowsController {
               path: e.episodeFile.relativePath,
               size: e.episodeFile.sizeBytes,
               quality: e.episodeFile.quality,
+              mediaInfo: e.episodeFile.mediaInfo,
+              summary: describeMediaInfo(e.episodeFile.mediaInfo),
               downloadUrl: `/api/v1/files/episodes/${e.episodeFile.id}/download`,
             }
+          : null,
+        qualityAssessment: e.episodeFile
+          ? assessFile(e.episodeFile.mediaInfo, e.episodeFile.quality, profile, 'tv')
           : null,
       })),
     })
@@ -869,7 +897,13 @@ export default class TvShowsController {
         limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
       })
 
-      return response.json(results)
+      const { annotateReleases, sortAnnotated } =
+        await import('#services/quality/release_annotator')
+      const profile = show.qualityProfileId
+        ? await QualityProfile.find(show.qualityProfileId)
+        : null
+
+      return response.json(sortAnnotated(await annotateReleases(results, 'tv', profile)))
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search releases',
@@ -913,7 +947,13 @@ export default class TvShowsController {
         limit: Math.min(Number(request.input('limit', 100)) || 100, 100),
       })
 
-      return response.json(results)
+      const { annotateReleases, sortAnnotated } =
+        await import('#services/quality/release_annotator')
+      const profile = tvShow.qualityProfileId
+        ? await QualityProfile.find(tvShow.qualityProfileId)
+        : null
+
+      return response.json(sortAnnotated(await annotateReleases(results, 'tv', profile)))
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search releases',
@@ -943,6 +983,108 @@ export default class TvShowsController {
     } catch (error) {
       return response.internalServerError({
         error: error instanceof Error ? error.message : 'Search failed',
+      })
+    }
+  }
+
+  /**
+   * Re-download a single episode that already has a file.
+   */
+  async redownloadEpisode({ params, request, response }: HttpContext) {
+    const episode = await Episode.find(params.episodeId)
+    if (!episode || episode.tvShowId !== params.id) {
+      return response.notFound({ error: 'Episode not found' })
+    }
+
+    const blacklistCurrent = request.input('blacklistCurrent', true) !== false
+
+    const activeDownload = await Download.query()
+      .where('episodeId', episode.id)
+      .whereIn('status', ['queued', 'downloading', 'paused', 'importing'])
+      .first()
+
+    if (activeDownload) {
+      return response.conflict({
+        error: 'Episode already has an active download',
+        downloadId: activeDownload.id,
+      })
+    }
+
+    try {
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
+      const result = await requestedSearchTask.searchSingleEpisode(episode.id, {
+        replace: true,
+        blacklistCurrent,
+      })
+
+      if (!result.grabbed) {
+        return response.badRequest({
+          error: result.error ?? 'No replacement release found',
+          found: result.found,
+        })
+      }
+
+      return response.json({ found: result.found, grabbed: true })
+    } catch (error) {
+      return response.internalServerError({
+        error: error instanceof Error ? error.message : 'Re-download failed',
+      })
+    }
+  }
+
+  /**
+   * Re-download every episode of a season that already has a file.
+   */
+  async redownloadSeason({ params, request, response }: HttpContext) {
+    return this.runBulkRedownload(
+      params.id,
+      { seasonNumber: Number(params.seasonNumber) },
+      request,
+      response
+    )
+  }
+
+  /**
+   * Re-download every episode of the show that already has a file.
+   */
+  async redownloadShow({ params, request, response }: HttpContext) {
+    return this.runBulkRedownload(params.id, {}, request, response)
+  }
+
+  private async runBulkRedownload(
+    showId: string,
+    scope: { seasonNumber?: number },
+    request: HttpContext['request'],
+    response: HttpContext['response']
+  ) {
+    const show = await TvShow.find(showId)
+    if (!show) {
+      return response.notFound({ error: 'TV show not found' })
+    }
+
+    if (scope.seasonNumber !== undefined && Number.isNaN(scope.seasonNumber)) {
+      return response.badRequest({ error: 'Invalid season number' })
+    }
+
+    const blacklistCurrent = request.input('blacklistCurrent', true) !== false
+
+    try {
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
+      const result = await requestedSearchTask.redownloadEpisodes(show.id, {
+        ...scope,
+        blacklistCurrent,
+      })
+
+      return response.json({
+        searched: result.searched,
+        grabbed: result.grabbed,
+        // Every failure is reported, not just the first: on a 20-episode season
+        // "3 grabbed" without the other 17 reasons is not an answer.
+        errors: result.errors,
+      })
+    } catch (error) {
+      return response.internalServerError({
+        error: error instanceof Error ? error.message : 'Re-download failed',
       })
     }
   }

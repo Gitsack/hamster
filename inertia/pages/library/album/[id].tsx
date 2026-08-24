@@ -2,7 +2,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Progress } from '@/components/ui/progress'
@@ -46,6 +46,7 @@ import { DownloadProgressCard } from '@/components/library/download-progress-car
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { useShowMore } from '@/hooks/use_show_more'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
+import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
 import { DownloadClientIndicator } from '@/components/library/download-client-indicator'
 import { useDownloadClients } from '@/hooks/use_download_clients'
 import { MediaStatusBadge } from '@/components/library/media-status-badge'
@@ -90,20 +91,6 @@ interface Album {
   trackFiles: TrackFile[]
 }
 
-interface SearchResult {
-  id: string
-  title: string
-  indexer: string
-  indexerId: number
-  size: number
-  publishDate: string
-  downloadUrl: string
-  quality?: string
-  seeders?: number
-  grabs?: number
-  protocol: string
-}
-
 export default function AlbumDetail() {
   const { url } = usePage()
   const albumId = url.split('/').pop()
@@ -111,7 +98,7 @@ export default function AlbumDetail() {
 
   const [album, setAlbum] = useState<Album | null>(null)
   const [loading, setLoading] = useState(true)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchResults, setSearchResults] = useState<AnnotatedRelease[]>([])
   const [searching, setSearching] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
@@ -261,7 +248,7 @@ export default function AlbumDetail() {
     }
   }
 
-  const grabRelease = async (result: SearchResult) => {
+  const grabRelease = async (result: AnnotatedRelease) => {
     setGrabbing(result.id)
     try {
       const response = await fetch('/api/v1/queue/grab', {
@@ -788,59 +775,15 @@ export default function AlbumDetail() {
 
           {searchResults.length > 0 && (
             <TabsContent value="search">
-              <Card className="py-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Release</TableHead>
-                      <TableHead className="w-32">Indexer</TableHead>
-                      <TableHead className="w-24">Quality</TableHead>
-                      <TableHead className="w-24" data-numeric>
-                        Size
-                      </TableHead>
-                      <TableHead className="w-20" data-numeric>
-                        Grabs
-                      </TableHead>
-                      <TableHead className="w-16">
-                        <span className="sr-only">Actions</span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {searchResults.map((result) => (
-                      <TableRow key={result.id}>
-                        <TableCell className="readout max-w-md truncate">{result.title}</TableCell>
-                        <TableCell className="readout text-muted-foreground">
-                          {result.indexer}
-                        </TableCell>
-                        <TableCell>
-                          {result.quality && <Badge variant="outline">{result.quality}</Badge>}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground" data-numeric>
-                          {formatSize(result.size)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground" data-numeric>
-                          {result.grabs ?? result.seeders ?? '—'}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="icon-sm"
-                            variant="outline"
-                            onClick={() => grabRelease(result)}
-                            disabled={grabbing === result.id}
-                            aria-label={`Download ${result.title}`}
-                          >
-                            {grabbing === result.id ? (
-                              <Spinner />
-                            ) : (
-                              <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <Card>
+                <CardContent>
+                  <ReleaseList
+                    releases={searchResults}
+                    loading={searching}
+                    grabbingId={grabbing}
+                    onGrab={grabRelease}
+                  />
+                </CardContent>
               </Card>
             </TabsContent>
           )}

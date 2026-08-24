@@ -3,14 +3,6 @@ import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
@@ -36,6 +28,8 @@ import {
   Notification01Icon,
   NotificationOff01Icon,
   Cancel01Icon,
+  Refresh01Icon,
+  Alert01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
@@ -51,6 +45,8 @@ import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
 import { DownloadClientIndicator } from '@/components/library/download-client-indicator'
 import { useDownloadClients } from '@/hooks/use_download_clients'
 import { VideoPlayer } from '@/components/player/video_player'
+import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
+import { ReplaceFileDialog } from '@/components/library/replace-file-dialog'
 
 interface QualityProfile {
   id: number
@@ -69,21 +65,15 @@ interface MovieFile {
   path: string
   size: number
   quality: string | null
+  /** "1080p · h264 · EAC3 5.1", built from ffprobe rather than the file name. */
+  summary: string | null
   downloadUrl: string
 }
 
-interface SearchResult {
-  id: string
-  title: string
-  indexer: string
-  indexerId: number
-  size: number
-  publishDate: string
-  downloadUrl: string
-  quality?: string
-  seeders?: number
-  grabs?: number
-  protocol: string
+interface QualityAssessment {
+  meetsProfile: boolean
+  belowCutoff: boolean
+  issues: { code: string; message: string }[]
 }
 
 interface Movie {
@@ -109,21 +99,8 @@ interface Movie {
   qualityProfile: QualityProfile | null
   rootFolder: RootFolder | null
   movieFile: MovieFile | null
+  qualityAssessment: QualityAssessment | null
   addedAt: string | null
-}
-
-interface SearchResult {
-  id: string
-  title: string
-  indexer: string
-  indexerId: number
-  size: number
-  publishDate: string
-  downloadUrl: string
-  quality?: string
-  seeders?: number
-  grabs?: number
-  protocol: string
 }
 
 export default function MovieDetail() {
@@ -137,11 +114,13 @@ export default function MovieDetail() {
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [enriching, setEnriching] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchResults, setSearchResults] = useState<AnnotatedRelease[]>([])
   const [searching, setSearching] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
   const [releasePickerOpen, setReleasePickerOpen] = useState(false)
+  const [replaceDialogOpen, setReplaceDialogOpen] = useState(false)
+  const [replacing, setReplacing] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
   const audioPlayer = useAudioPlayer()
   const { getForMovie } = useActiveDownloads()
@@ -309,7 +288,7 @@ export default function MovieDetail() {
     }
   }
 
-  const grabRelease = async (result: SearchResult) => {
+  const grabRelease = async (result: AnnotatedRelease) => {
     setGrabbing(result.id)
     try {
       const response = await fetch('/api/v1/queue/grab', {
@@ -339,6 +318,33 @@ export default function MovieDetail() {
       toast.error('Failed to grab release')
     } finally {
       setGrabbing(null)
+    }
+  }
+
+  const replaceFile = async ({ blacklistCurrent }: { blacklistCurrent: boolean }) => {
+    setReplacing(true)
+    try {
+      const response = await fetch(`/api/v1/movies/${movieId}/redownload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blacklistCurrent }),
+      })
+      const data = await response.json()
+
+      if (response.ok) {
+        toast.success('Replacement grabbed — the file is replaced once the download imports')
+        setReplaceDialogOpen(false)
+      } else {
+        // The API answers with the actual reason (audio too weak, all results
+        // were cinema rips, …); passing it straight through is the only way the
+        // person can tell "nothing exists" from "your profile refused it".
+        toast.error(data.error || 'No replacement release found')
+      }
+    } catch (error) {
+      console.error('Failed to replace file:', error)
+      toast.error('Failed to start replacement')
+    } finally {
+      setReplacing(false)
     }
   }
 
@@ -657,6 +663,7 @@ export default function MovieDetail() {
                     <p className="readout text-xs text-muted-foreground">
                       {movie.movieFile.quality && `${movie.movieFile.quality} • `}
                       {formatSize(movie.movieFile.size)}
+                      {movie.movieFile.summary && ` • ${movie.movieFile.summary}`}
                     </p>
                     <p className="readout text-xs text-muted-foreground truncate">
                       {movie.movieFile.path}
@@ -685,6 +692,15 @@ export default function MovieDetail() {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => setReplaceDialogOpen(true)}
+                    aria-label="Replace with a better release"
+                  >
+                    <HugeiconsIcon icon={Refresh01Icon} className="h-4 w-4" />
+                    <span className="hidden sm:inline">Replace</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="text-destructive hover:text-destructive"
                     onClick={() => setDeleteFileDialogOpen(true)}
                     aria-label="Delete"
@@ -694,6 +710,27 @@ export default function MovieDetail() {
                   </Button>
                 </div>
               </div>
+
+              {movie.qualityAssessment && !movie.qualityAssessment.meetsProfile && (
+                <div className="space-y-2 rounded-md border border-status-failed-ink/40 p-3">
+                  <p className="flex items-center gap-2 text-sm font-medium text-status-failed-ink">
+                    <HugeiconsIcon icon={Alert01Icon} className="h-4 w-4" />
+                    This file is below your quality profile
+                  </p>
+                  <ul className="space-y-1 text-xs text-muted-foreground">
+                    {movie.qualityAssessment.belowCutoff && (
+                      <li>Quality is below the profile's cutoff.</li>
+                    )}
+                    {movie.qualityAssessment.issues.map((issue) => (
+                      <li key={issue.code + issue.message}>{issue.message}</li>
+                    ))}
+                  </ul>
+                  <Button size="sm" variant="outline" onClick={() => setReplaceDialogOpen(true)}>
+                    <HugeiconsIcon icon={Refresh01Icon} className="h-4 w-4" />
+                    Find a better release
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -713,58 +750,7 @@ export default function MovieDetail() {
               </Button>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Release</TableHead>
-                    <TableHead className="w-32">Indexer</TableHead>
-                    <TableHead className="w-24">Quality</TableHead>
-                    <TableHead className="w-24" data-numeric>
-                      Size
-                    </TableHead>
-                    <TableHead className="w-20" data-numeric>
-                      Grabs
-                    </TableHead>
-                    <TableHead className="w-16">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {searchResults.map((result) => (
-                    <TableRow key={result.id}>
-                      <TableCell className="readout max-w-md truncate">{result.title}</TableCell>
-                      <TableCell className="readout text-muted-foreground">
-                        {result.indexer}
-                      </TableCell>
-                      <TableCell>
-                        {result.quality && <Badge variant="outline">{result.quality}</Badge>}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground" data-numeric>
-                        {formatSize(result.size)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground" data-numeric>
-                        {result.grabs ?? result.seeders ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="icon-sm"
-                          variant="outline"
-                          onClick={() => grabRelease(result)}
-                          disabled={grabbing === result.id}
-                          aria-label={`Download ${result.title}`}
-                        >
-                          {grabbing === result.id ? (
-                            <Spinner />
-                          ) : (
-                            <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <ReleaseList releases={searchResults} grabbingId={grabbing} onGrab={grabRelease} />
             </CardContent>
           </Card>
         )}
@@ -794,79 +780,31 @@ export default function MovieDetail() {
         onConfirm={deleteFile}
       />
 
+      <ReplaceFileDialog
+        open={replaceDialogOpen}
+        onOpenChange={setReplaceDialogOpen}
+        subject={movie.title}
+        currentSummary={
+          movie.movieFile
+            ? [movie.movieFile.quality, movie.movieFile.summary].filter(Boolean).join(' · ')
+            : null
+        }
+        loading={replacing}
+        onConfirm={replaceFile}
+      />
+
       {/* Release picker dialog */}
       <Dialog open={releasePickerOpen} onOpenChange={setReleasePickerOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>Manual Search — {movie.title}</DialogTitle>
           </DialogHeader>
-          {searching ? (
-            <div className="flex items-center justify-center py-12">
-              <Spinner className="h-8 w-8" />
-              <span className="ml-3 text-muted-foreground">Searching indexers...</span>
-            </div>
-          ) : searchResults.length === 0 ? (
-            <EmptyState
-              icon={<HugeiconsIcon icon={Search01Icon} />}
-              title="No releases found"
-              message="Your indexers returned nothing for this title. Check that the indexers are enabled and healthy in Settings, or widen the quality profile."
-            />
-          ) : (
-            <div className="overflow-auto flex-1">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Release</TableHead>
-                    <TableHead className="w-32">Indexer</TableHead>
-                    <TableHead className="w-24">Quality</TableHead>
-                    <TableHead className="w-24" data-numeric>
-                      Size
-                    </TableHead>
-                    <TableHead className="w-20" data-numeric>
-                      Grabs
-                    </TableHead>
-                    <TableHead className="w-16">
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {searchResults.map((result) => (
-                    <TableRow key={result.id}>
-                      <TableCell className="readout max-w-md truncate">{result.title}</TableCell>
-                      <TableCell className="readout text-muted-foreground">
-                        {result.indexer}
-                      </TableCell>
-                      <TableCell>
-                        {result.quality && <Badge variant="outline">{result.quality}</Badge>}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground" data-numeric>
-                        {formatSize(result.size)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground" data-numeric>
-                        {result.grabs ?? result.seeders ?? '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="icon-sm"
-                          variant="outline"
-                          onClick={() => grabRelease(result)}
-                          disabled={grabbing === result.id}
-                          aria-label={`Download ${result.title}`}
-                        >
-                          {grabbing === result.id ? (
-                            <Spinner />
-                          ) : (
-                            <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <ReleaseList
+            releases={searchResults}
+            loading={searching}
+            grabbingId={grabbing}
+            onGrab={grabRelease}
+          />
         </DialogContent>
       </Dialog>
 

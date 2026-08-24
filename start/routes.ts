@@ -252,6 +252,7 @@ router
     router.get('/movies/:id/releases', [MoviesController, 'searchReleases'])
     router.post('/movies/:id/download', [MoviesController, 'download'])
     router.post('/movies/:id/search', [MoviesController, 'searchNow'])
+    router.post('/movies/:id/redownload', [MoviesController, 'redownload'])
     router.post('/movies/:id/enrich', [MoviesController, 'enrich'])
     router.get('/movies/:id/similar', [MoviesController, 'similar']).as('movies.similar.byId')
 
@@ -280,6 +281,15 @@ router
     ])
     router.post('/tvshows/:id/search', [TvShowsController, 'searchNow'])
     router.post('/tvshows/:id/episodes/:episodeId/search', [TvShowsController, 'searchEpisodeNow'])
+    router.post('/tvshows/:id/redownload', [TvShowsController, 'redownloadShow'])
+    router.post('/tvshows/:id/season/:seasonNumber/redownload', [
+      TvShowsController,
+      'redownloadSeason',
+    ])
+    router.post('/tvshows/:id/episodes/:episodeId/redownload', [
+      TvShowsController,
+      'redownloadEpisode',
+    ])
     router.post('/tvshows/:id/enrich', [TvShowsController, 'enrich'])
     router.post('/tvshows/:id/refresh', [TvShowsController, 'refresh'])
     router.get('/tvshows/:id/similar', [TvShowsController, 'similar']).as('tvshows.similar.byId')
@@ -455,6 +465,7 @@ router
         // Quality profiles (write operations)
         router.post('/qualityprofiles', [QualityProfilesController, 'store'])
         router.put('/qualityprofiles/:id', [QualityProfilesController, 'update'])
+        router.post('/qualityprofiles/:id/test', [QualityProfilesController, 'test'])
         router.delete('/qualityprofiles/:id', [QualityProfilesController, 'destroy'])
 
         // Indexers (write operations)

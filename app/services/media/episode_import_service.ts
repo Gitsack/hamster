@@ -5,6 +5,8 @@ import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
 import { probeFile, checkFfmpegAvailable } from '#utils/ffmpeg_utils'
+import { analysisToMediaInfo } from '#services/quality/file_quality_service'
+import type { VideoMediaInfo } from '#models/movie_file'
 import Download from '#models/download'
 import TvShow from '#models/tv_show'
 import Episode from '#models/episode'
@@ -259,10 +261,14 @@ export class EpisodeImportService {
     }
 
     // --- Integrity check 2: ffprobe validation ---
+    // Kept for the same reason as in the movie importer: the probe is the only
+    // record of what the file really contains.
+    let probedInfo: VideoMediaInfo | null = null
     const { ffprobe } = await checkFfmpegAvailable()
     if (ffprobe) {
       try {
         const analysis = await probeFile(sourcePath)
+        probedInfo = analysisToMediaInfo(analysis)
         if (!analysis.videoCodec) {
           return {
             success: false,
@@ -374,6 +380,7 @@ export class EpisodeImportService {
           relativePath,
           sizeBytes: stats.size,
           quality: quality || null,
+          mediaInfo: probedInfo,
           dateAdded: DateTime.now(),
         })
         await episodeFile.save()
@@ -385,6 +392,7 @@ export class EpisodeImportService {
             relativePath,
             sizeBytes: stats.size,
             quality: quality || null,
+            mediaInfo: probedInfo,
             dateAdded: DateTime.now(),
           },
           { client: trx }
