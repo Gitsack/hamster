@@ -3,6 +3,7 @@ import path from 'node:path'
 import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
+import { fileTransferService } from './file_transfer_service.js'
 import { mediaInfoService } from './media_info_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
 import RootFolder from '#models/root_folder'
@@ -112,9 +113,9 @@ export class FileOrganizerService {
 
       // Copy or move file
       if (options.deleteSource) {
-        await fs.rename(sourcePath, absolutePath)
+        await fileTransferService.move(sourcePath, absolutePath)
       } else {
-        await fs.copyFile(sourcePath, absolutePath)
+        await fileTransferService.copy(sourcePath, absolutePath)
       }
 
       // Get file stats

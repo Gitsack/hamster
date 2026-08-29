@@ -3,6 +3,7 @@ import path from 'node:path'
 import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
+import { fileTransferService } from './file_transfer_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
 import { probeFile, checkFfmpegAvailable } from '#utils/ffmpeg_utils'
 import { analysisToMediaInfo } from '#services/quality/file_quality_service'
@@ -357,13 +358,7 @@ export class EpisodeImportService {
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
 
     // Move file to destination
-    try {
-      await fs.rename(sourcePath, absolutePath)
-    } catch (error) {
-      // If rename fails (cross-device), try copy + delete
-      await fs.copyFile(sourcePath, absolutePath)
-      await fs.unlink(sourcePath)
-    }
+    await fileTransferService.move(sourcePath, absolutePath)
 
     // Get file stats
     const stats = await fs.stat(absolutePath)

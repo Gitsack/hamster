@@ -5,9 +5,9 @@
   "type": "module",
   "license": "GPL-3.0",
   "scripts": {
-    "start": "node bin/server.js",
+    "start": "UV_THREADPOOL_SIZE=32 node bin/server.js",
     "build": "node ace build",
-    "dev": "node ace serve --hmr",
+    "dev": "UV_THREADPOOL_SIZE=32 node ace serve --hmr",
     "test": "node ace test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

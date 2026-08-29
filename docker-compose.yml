@@ -38,6 +38,8 @@ services:
 
       # Application
       NODE_ENV: production
+      # fs.copyFile holds one libuv thread per import; keep headroom for HTTP and DNS
+      UV_THREADPOOL_SIZE: ${UV_THREADPOOL_SIZE:-32}
       HOST: 0.0.0.0
       PORT: 3333
       TZ: ${TZ:-UTC}
