@@ -1143,14 +1143,14 @@ export default function Library() {
     return (
       <Card
         key={imageKey}
-        className="py-0 gap-0 cursor-pointer group transition-colors duration-150 ease-out hover:bg-accent has-[a:focus-visible]:border-primary has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-[3px]"
+        className="py-0 gap-0 group transition-colors duration-150 ease-out hover:bg-accent has-[a:focus-visible]:border-primary has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-[3px]"
       >
-        <CardContent className="flex items-center gap-3 p-3">
+        <CardContent className="flex items-center gap-2.5 p-3 sm:gap-3">
           <Link
             href={item.detailUrl}
-            className="flex items-center gap-3 flex-1 min-w-0 outline-none"
+            className="flex items-center gap-2.5 flex-1 min-w-0 outline-none sm:gap-3"
           >
-            <div className="h-16 w-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden relative">
+            <div className="h-14 w-10 sm:h-16 sm:w-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden relative">
               {showImage ? (
                 <img
                   src={item.imageUrl!}
@@ -1192,7 +1192,7 @@ export default function Library() {
               )}
             </div>
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {status !== 'none' && (
               <MediaStatusBadge
                 status={status}
@@ -1212,7 +1212,7 @@ export default function Library() {
               />
             )}
             {item.badges?.map((badge, i) => (
-              <Badge key={i} variant="outline">
+              <Badge key={i} variant="outline" className="hidden sm:inline-flex">
                 {badge}
               </Badge>
             ))}
@@ -1613,6 +1613,7 @@ export default function Library() {
                   variant="ghost"
                   size="sm"
                   className="shrink-0"
+                  aria-label={isSearching ? 'Searching' : `Search releases for ${item.title}`}
                   onClick={() => handleSearch(item)}
                   disabled={isSearching}
                 >
@@ -1621,7 +1622,7 @@ export default function Library() {
                   ) : (
                     <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
                   )}
-                  {isSearching ? 'Searching…' : 'Search'}
+                  <span className="hidden sm:inline">{isSearching ? 'Searching…' : 'Search'}</span>
                 </Button>
               </div>
             )
@@ -1708,7 +1709,7 @@ export default function Library() {
         {/* Media type tabs - only show enabled types */}
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MediaType)}>
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <TabsList>
+            <TabsList className="h-auto flex-wrap">
               {enabledMediaTypes.map((type) => {
                 const typeConfig = MEDIA_TYPE_CONFIG[type]
                 return (
