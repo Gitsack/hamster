@@ -124,7 +124,7 @@ export function MediaGallery({
       <div className={`relative overflow-hidden rounded-lg ${sizeClass} group/gallery`}>
         <div
           ref={scrollRef}
-          className="flex h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory cursor-grab select-none"
+          className="absolute inset-0 flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory cursor-grab select-none"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
@@ -135,7 +135,7 @@ export function MediaGallery({
           {hasTrailer && (
             <div
               ref={setSlideRef(0)}
-              className="w-full h-full shrink-0 snap-start bg-muted relative overflow-hidden"
+              className="relative w-full min-w-0 basis-full shrink-0 self-stretch snap-start bg-muted overflow-hidden"
             >
               {playingTrailer ? (
                 <iframe
@@ -143,7 +143,7 @@ export function MediaGallery({
                   title="Trailer"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
-                  className="w-full h-full"
+                  className="absolute inset-0 h-full w-full border-0"
                 />
               ) : (
                 <button
@@ -154,13 +154,13 @@ export function MediaGallery({
                     }
                     setPlayingTrailer(true)
                   }}
-                  className="w-full h-full relative group cursor-pointer outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:ring-inset"
+                  className="absolute inset-0 group cursor-pointer outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:ring-inset"
                   aria-label={`Play ${title} trailer`}
                 >
                   <img
                     src={`https://img.youtube.com/vi/${youtubeKey}/maxresdefault.jpg`}
                     alt={`${title} trailer`}
-                    className="w-full h-full object-cover pointer-events-none"
+                    className="absolute inset-0 h-full w-full object-cover pointer-events-none"
                     onError={(e) => {
                       const img = e.target as HTMLImageElement
                       if (img.src.includes('maxresdefault')) {
@@ -187,12 +187,12 @@ export function MediaGallery({
               <div
                 key={url}
                 ref={setSlideRef(slideIndex)}
-                className="w-full h-full shrink-0 snap-start bg-muted relative overflow-hidden"
+                className="relative w-full min-w-0 basis-full shrink-0 self-stretch snap-start bg-muted overflow-hidden"
               >
                 <img
                   src={url}
                   alt={`${title} backdrop ${i + 1}`}
-                  className="w-full h-full object-cover pointer-events-none"
+                  className="absolute inset-0 h-full w-full object-cover pointer-events-none"
                   loading="lazy"
                 />
               </div>
