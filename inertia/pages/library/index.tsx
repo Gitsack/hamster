@@ -1165,7 +1165,7 @@ export default function Library() {
             href={item.detailUrl}
             tabIndex={-1}
             aria-hidden="true"
-            className={`${config.artworkAspect} min-h-40 shrink-0 self-stretch bg-muted overflow-hidden relative`}
+            className={`${config.artworkAspect} min-h-24 shrink-0 self-stretch bg-muted overflow-hidden relative`}
           >
             {showImage ? (
               <img
