@@ -52,6 +52,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { MediaHero } from '@/components/media-hero'
+import { MediaSpecs } from '@/components/library/media-specs'
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 
@@ -589,21 +590,14 @@ export default function ArtistDetail() {
             />
           </div>
 
-          {/* Tags */}
-          <div className="flex flex-wrap gap-2">
-            {artist.qualityProfile && <Badge variant="outline">{artist.qualityProfile.name}</Badge>}
-            {artist.metadataProfile && (
-              <Badge variant="outline">{artist.metadataProfile.name}</Badge>
-            )}
-            {artist.rootFolder && (
-              <Badge variant="secondary" className="readout">
-                {artist.rootFolder.path}
-              </Badge>
-            )}
-            <Badge variant="outline">
-              <span className="readout">{artist.albums.length}</span> albums
-            </Badge>
-          </div>
+          <MediaSpecs
+            specs={[
+              { label: 'Profile', value: artist.qualityProfile?.name },
+              { label: 'Metadata', value: artist.metadataProfile?.name },
+              { label: 'Folder', value: artist.rootFolder?.path, mono: true },
+              { label: 'Albums', value: artist.albums.length || undefined, mono: true },
+            ]}
+          />
         </MediaHero>
 
         {/* Albums / Discography */}

@@ -27,6 +27,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { MediaHero } from '@/components/media-hero'
+import { MediaSpecs } from '@/components/library/media-specs'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
@@ -501,17 +502,12 @@ export default function BookDetail() {
             </div>
           )}
 
-          {/* Quality and folder info */}
-          {(book.qualityProfile || book.rootFolder) && (
-            <div className="flex flex-wrap gap-2 text-sm">
-              {book.qualityProfile && <Badge variant="secondary">{book.qualityProfile.name}</Badge>}
-              {book.rootFolder && (
-                <Badge variant="secondary" className="readout">
-                  {book.rootFolder.path}
-                </Badge>
-              )}
-            </div>
-          )}
+          <MediaSpecs
+            specs={[
+              { label: 'Profile', value: book.qualityProfile?.name },
+              { label: 'Folder', value: book.rootFolder?.path, mono: true },
+            ]}
+          />
         </MediaHero>
 
         {activeDownload && <DownloadProgressCard downloads={[activeDownload]} />}

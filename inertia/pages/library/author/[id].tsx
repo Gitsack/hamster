@@ -1,7 +1,6 @@
 import { Head, Link, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -30,6 +29,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { MediaHero } from '@/components/media-hero'
+import { MediaSpecs } from '@/components/library/media-specs'
 import { useState, useEffect, useMemo } from 'react'
 import { useShowMore } from '@/hooks/use_show_more'
 import { toast } from 'sonner'
@@ -573,15 +573,12 @@ export default function AuthorDetail() {
             )}
           </div>
 
-          {/* Tags */}
-          <div className="flex flex-wrap gap-2">
-            {author.qualityProfile && <Badge variant="outline">{author.qualityProfile.name}</Badge>}
-            {author.rootFolder && (
-              <Badge variant="secondary" className="readout">
-                {author.rootFolder.path}
-              </Badge>
-            )}
-          </div>
+          <MediaSpecs
+            specs={[
+              { label: 'Profile', value: author.qualityProfile?.name },
+              { label: 'Folder', value: author.rootFolder?.path, mono: true },
+            ]}
+          />
         </MediaHero>
 
         {/* Books / Bibliography */}

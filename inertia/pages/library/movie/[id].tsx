@@ -12,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -38,6 +37,7 @@ import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
+import { MediaSpecs, MediaSpecLink } from '@/components/library/media-specs'
 import { CastLane, type CastMember } from '@/components/library/cast-lane'
 import { StreamingOffers, type StreamingOffer } from '@/components/library/streaming-offers'
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
@@ -446,58 +446,45 @@ export default function MovieDetail() {
       headerPrefix={<Breadcrumbs items={[{ label: 'Movies', href: '/library?tab=movies' }]} />}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" onClick={toggleMonitored} aria-pressed={movie.monitored}>
-                  <HugeiconsIcon
-                    icon={movie.monitored ? Notification01Icon : NotificationOff01Icon}
-                    className="h-4 w-4"
-                  />
-                  <span className="hidden md:inline">
-                    {movie.monitored ? 'Monitored' : 'Monitor'}
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{movie.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button
+            variant="outline"
+            onClick={toggleMonitored}
+            aria-pressed={movie.monitored}
+            aria-label={movie.monitored ? 'Monitored' : 'Monitor'}
+          >
+            <HugeiconsIcon
+              icon={movie.monitored ? Notification01Icon : NotificationOff01Icon}
+              className="h-4 w-4"
+            />
+            <span className="hidden md:inline">{movie.monitored ? 'Monitored' : 'Monitor'}</span>
+          </Button>
           {!movie.hasFile && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={downloadMovie} disabled={downloading}>
-                    {downloading ? (
-                      <Spinner />
-                    ) : (
-                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                    )}
-                    <span className="hidden md:inline">
-                      {downloading ? 'Downloading...' : 'Download'}
-                    </span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{downloading ? 'Downloading...' : 'Download'}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Button
+              onClick={downloadMovie}
+              disabled={downloading}
+              aria-label={downloading ? 'Downloading' : 'Download'}
+            >
+              {downloading ? (
+                <Spinner />
+              ) : (
+                <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+              )}
+              <span className="hidden md:inline">
+                {downloading ? 'Downloading...' : 'Download'}
+              </span>
+            </Button>
           )}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" onClick={searchReleases} disabled={searching}>
-                  {searching ? (
-                    <Spinner />
-                  ) : (
-                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
-                  )}
-                  <span className="hidden md:inline">
-                    {searching ? 'Searching...' : 'Browse releases'}
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button
+            variant="outline"
+            onClick={searchReleases}
+            disabled={searching}
+            aria-label={searching ? 'Searching' : 'Browse releases'}
+          >
+            {searching ? <Spinner /> : <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />}
+            <span className="hidden md:inline">
+              {searching ? 'Searching...' : 'Browse releases'}
+            </span>
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" aria-label="More actions">
@@ -546,20 +533,19 @@ export default function MovieDetail() {
           }
           overview={movie.overview}
         >
-          <div>
-            <div className="flex items-baseline gap-2 mb-1 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-[-0.01em]">{movie.title}</h1>
-              {movie.year && (
-                <span className="readout text-sm text-muted-foreground">({movie.year})</span>
+          {/* Identity, and the one fact only Hamster knows: is this here yet. */}
+          <div className="space-y-2">
+            <div>
+              <div className="flex flex-wrap items-baseline gap-2">
+                <h1 className="text-2xl font-bold tracking-[-0.01em]">{movie.title}</h1>
+                {movie.year && (
+                  <span className="readout text-muted-foreground text-sm">({movie.year})</span>
+                )}
+              </div>
+              {movie.originalTitle && movie.originalTitle !== movie.title && (
+                <p className="text-muted-foreground text-sm">{movie.originalTitle}</p>
               )}
             </div>
-            {movie.originalTitle && movie.originalTitle !== movie.title && (
-              <p className="text-sm text-muted-foreground">{movie.originalTitle}</p>
-            )}
-          </div>
-
-          {/* Status */}
-          <div className="flex items-center gap-2 flex-wrap">
             {(() => {
               const { status, progress } = getMovieStatus()
               return (
@@ -571,80 +557,71 @@ export default function MovieDetail() {
                 />
               )
             })()}
-            {movie.status && <Badge variant="outline">{movie.status}</Badge>}
           </div>
 
-          {/* Meta info */}
-          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            {movie.releaseDate && (
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
-                <span className="readout">{movie.releaseDate}</span>
-              </div>
-            )}
-            {movie.runtime && (
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <HugeiconsIcon icon={Time01Icon} className="h-4 w-4" />
-                <span className="readout">{formatRuntime(movie.runtime)}</span>
-              </div>
-            )}
-            {movie.rating && (
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
-                <span className="readout">{movie.rating.toFixed(1)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Genres */}
-          {movie.genres && movie.genres.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {movie.genres.slice(0, 5).map((genre, i) => (
-                <Badge key={i} variant="outline">
-                  {genre}
-                </Badge>
-              ))}
+          {/* What the film is. The production status reads as a fact here rather than
+              competing with the library status badge above as a second kind of chip. */}
+          <div className="space-y-3">
+            <div className="text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+              {movie.releaseDate && (
+                <div className="flex items-center gap-1.5">
+                  <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
+                  <span className="readout">{movie.releaseDate}</span>
+                </div>
+              )}
+              {movie.runtime && (
+                <div className="flex items-center gap-1.5">
+                  <HugeiconsIcon icon={Time01Icon} className="h-4 w-4" />
+                  <span className="readout">{formatRuntime(movie.runtime)}</span>
+                </div>
+              )}
+              {movie.rating && (
+                <div className="flex items-center gap-1.5">
+                  <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
+                  <span className="readout">{movie.rating.toFixed(1)}</span>
+                </div>
+              )}
+              {movie.status && <span>{movie.status}</span>}
             </div>
-          )}
 
-          {/* Quality, download client, and folder info */}
-          <div className="flex flex-wrap gap-2 text-sm">
-            {movie.qualityProfile && <Badge variant="secondary">{movie.qualityProfile.name}</Badge>}
-            <DownloadClientIndicator
-              clients={downloadClients}
-              selectedClientId={selectedClientId}
-              onClientChange={setSelectedClientId}
-            />
-            {movie.rootFolder && (
-              <Badge variant="secondary" className="readout">
-                {movie.rootFolder.path}
-              </Badge>
+            {movie.genres && movie.genres.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {movie.genres.slice(0, 5).map((genre, i) => (
+                  <Badge key={i} variant="outline">
+                    {genre}
+                  </Badge>
+                ))}
+              </div>
             )}
           </div>
 
-          {/* External links */}
-          <div className="flex gap-4 text-xs">
-            {movie.tmdbId && (
-              <a
-                href={`https://www.themoviedb.org/movie/${movie.tmdbId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-              >
-                TMDB
-              </a>
-            )}
-            {movie.imdbId && (
-              <a
-                href={`https://www.imdb.com/title/${movie.imdbId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-              >
-                IMDB
-              </a>
-            )}
-          </div>
+          <MediaSpecs
+            specs={[
+              { label: 'Profile', value: movie.qualityProfile?.name },
+              { label: 'Folder', value: movie.rootFolder?.path, mono: true },
+            ]}
+            control={
+              <DownloadClientIndicator
+                clients={downloadClients}
+                selectedClientId={selectedClientId}
+                onClientChange={setSelectedClientId}
+              />
+            }
+            links={
+              <>
+                {movie.tmdbId && (
+                  <MediaSpecLink href={`https://www.themoviedb.org/movie/${movie.tmdbId}`}>
+                    TMDB
+                  </MediaSpecLink>
+                )}
+                {movie.imdbId && (
+                  <MediaSpecLink href={`https://www.imdb.com/title/${movie.imdbId}`}>
+                    IMDb
+                  </MediaSpecLink>
+                )}
+              </>
+            }
+          />
         </MediaHero>
 
         {activeDownload && <DownloadProgressCard downloads={[activeDownload]} />}

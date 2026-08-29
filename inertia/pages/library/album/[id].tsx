@@ -48,6 +48,7 @@ import { useShowMore } from '@/hooks/use_show_more'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
 import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
 import { DownloadClientIndicator } from '@/components/library/download-client-indicator'
+import { MediaSpecs } from '@/components/library/media-specs'
 import { useDownloadClients } from '@/hooks/use_download_clients'
 import { MediaStatusBadge } from '@/components/library/media-status-badge'
 
@@ -560,24 +561,21 @@ export default function AlbumDetail() {
             ))}
           </div>
 
-          {/* Quality, download client, and folder info */}
-          {(album.qualityProfile || album.rootFolder || downloadClients.length > 0) && (
-            <div className="flex flex-wrap gap-2 text-sm">
-              {album.qualityProfile && (
-                <Badge variant="secondary">{album.qualityProfile.name}</Badge>
-              )}
-              <DownloadClientIndicator
-                clients={downloadClients}
-                selectedClientId={selectedClientId}
-                onClientChange={setSelectedClientId}
-              />
-              {album.rootFolder && (
-                <Badge variant="secondary" className="readout">
-                  {album.rootFolder.path}
-                </Badge>
-              )}
-            </div>
-          )}
+          <MediaSpecs
+            specs={[
+              { label: 'Profile', value: album.qualityProfile?.name },
+              { label: 'Folder', value: album.rootFolder?.path, mono: true },
+            ]}
+            control={
+              downloadClients.length > 0 ? (
+                <DownloadClientIndicator
+                  clients={downloadClients}
+                  selectedClientId={selectedClientId}
+                  onClientChange={setSelectedClientId}
+                />
+              ) : undefined
+            }
+          />
         </MediaHero>
 
         {albumDownloads.length > 0 && <DownloadProgressCard downloads={albumDownloads} />}

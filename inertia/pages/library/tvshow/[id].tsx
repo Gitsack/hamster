@@ -19,7 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   MoreVerticalIcon,
@@ -43,7 +42,12 @@ import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import { useOperationTrackerContext } from '@/hooks/use_operation_tracker'
-import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
+import {
+  MediaStatusBadge,
+  getMediaItemStatus,
+  type MediaItemStatus,
+} from '@/components/library/media-status-badge'
+import { MediaSpecs, MediaSpecLink } from '@/components/library/media-specs'
 import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
 import { CastLane, type CastMember } from '@/components/library/cast-lane'
@@ -838,39 +842,29 @@ export default function TvShowDetail() {
       headerPrefix={<Breadcrumbs items={[{ label: 'TV Shows', href: '/library?tab=tv' }]} />}
       actions={
         <div className="flex items-center gap-2 flex-wrap">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" onClick={toggleMonitored} aria-pressed={show.monitored}>
-                  <HugeiconsIcon
-                    icon={show.monitored ? Notification01Icon : NotificationOff01Icon}
-                    className="h-4 w-4"
-                  />
-                  <span className="hidden md:inline">
-                    {show.monitored ? 'Monitored' : 'Monitor'}
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{show.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" onClick={searchReleases} disabled={searching}>
-                  {searching ? (
-                    <Spinner />
-                  ) : (
-                    <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
-                  )}
-                  <span className="hidden md:inline">
-                    {searching ? 'Searching...' : 'Browse releases'}
-                  </span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{searching ? 'Searching...' : 'Browse releases'}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Button
+            variant="outline"
+            onClick={toggleMonitored}
+            aria-pressed={show.monitored}
+            aria-label={show.monitored ? 'Monitored' : 'Monitor'}
+          >
+            <HugeiconsIcon
+              icon={show.monitored ? Notification01Icon : NotificationOff01Icon}
+              className="h-4 w-4"
+            />
+            <span className="hidden md:inline">{show.monitored ? 'Monitored' : 'Monitor'}</span>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={searchReleases}
+            disabled={searching}
+            aria-label={searching ? 'Searching' : 'Browse releases'}
+          >
+            {searching ? <Spinner /> : <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />}
+            <span className="hidden md:inline">
+              {searching ? 'Searching...' : 'Browse releases'}
+            </span>
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" aria-label="More actions">
@@ -939,83 +933,81 @@ export default function TvShowDetail() {
           }
           overview={show.overview}
         >
-          <div>
-            <div className="flex items-baseline gap-2 mb-1 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-[-0.01em]">{show.title}</h1>
-              {show.year && (
-                <span className="readout text-sm text-muted-foreground">({show.year})</span>
+          {/* Identity, and the one fact only Hamster knows: is this monitored. The hero
+              carried no library status at all before — only two neutral chips. */}
+          <div className="space-y-2">
+            <div>
+              <div className="flex flex-wrap items-baseline gap-2">
+                <h1 className="text-2xl font-bold tracking-[-0.01em]">{show.title}</h1>
+                {show.year && (
+                  <span className="readout text-muted-foreground text-sm">({show.year})</span>
+                )}
+              </div>
+              {show.originalTitle && show.originalTitle !== show.title && (
+                <p className="text-muted-foreground text-sm">{show.originalTitle}</p>
               )}
             </div>
-            {show.originalTitle && show.originalTitle !== show.title && (
-              <p className="text-sm text-muted-foreground">{show.originalTitle}</p>
-            )}
-          </div>
-
-          {/* Status */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {show.status && <Badge variant="outline">{show.status}</Badge>}
-            {show.network && <Badge variant="outline">{show.network}</Badge>}
-          </div>
-
-          {/* Meta info */}
-          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            {show.firstAired && (
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
-                <span className="readout">{show.firstAired}</span>
-              </div>
-            )}
-            {show.rating && (
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
-                <span className="readout">{show.rating.toFixed(1)}</span>
-              </div>
-            )}
-            <div className="text-muted-foreground">
-              <span className="readout">{show.seasonCount}</span> seasons ·{' '}
-              <span className="readout">{show.episodeCount}</span> episodes
-            </div>
-          </div>
-
-          {/* Genres */}
-          {show.genres && show.genres.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {show.genres.slice(0, 5).map((genre, i) => (
-                <Badge key={i} variant="outline">
-                  {genre}
-                </Badge>
-              ))}
-            </div>
-          )}
-
-          {/* Quality, download client, and folder info */}
-          <div className="flex flex-wrap gap-2 text-sm">
-            {show.qualityProfile && <Badge variant="secondary">{show.qualityProfile.name}</Badge>}
-            <DownloadClientIndicator
-              clients={downloadClients}
-              selectedClientId={selectedClientId}
-              onClientChange={setSelectedClientId}
+            <MediaStatusBadge
+              status={getMediaItemStatus({ requested: show.requested }).status}
+              onToggleRequest={toggleWanted}
             />
-            {show.rootFolder && (
-              <Badge variant="secondary" className="readout">
-                {show.rootFolder.path}
-              </Badge>
+          </div>
+
+          {/* What the show is. Production status and network read as facts here rather
+              than as chips competing with the library status above. */}
+          <div className="space-y-3">
+            <div className="text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+              {show.firstAired && (
+                <div className="flex items-center gap-1.5">
+                  <HugeiconsIcon icon={Calendar01Icon} className="h-4 w-4" />
+                  <span className="readout">{show.firstAired}</span>
+                </div>
+              )}
+              {show.rating && (
+                <div className="flex items-center gap-1.5">
+                  <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
+                  <span className="readout">{show.rating.toFixed(1)}</span>
+                </div>
+              )}
+              <span>
+                <span className="readout">{show.seasonCount}</span> seasons ·{' '}
+                <span className="readout">{show.episodeCount}</span> episodes
+              </span>
+              {show.status && <span>{show.status}</span>}
+              {show.network && <span>{show.network}</span>}
+            </div>
+
+            {show.genres && show.genres.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {show.genres.slice(0, 5).map((genre, i) => (
+                  <Badge key={i} variant="outline">
+                    {genre}
+                  </Badge>
+                ))}
+              </div>
             )}
           </div>
 
-          {/* External links */}
-          {show.tmdbId && (
-            <div className="flex gap-4 text-xs">
-              <a
-                href={`https://www.themoviedb.org/tv/${show.tmdbId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-sm text-muted-foreground underline-offset-4 hover:text-primary hover:underline outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-              >
-                TMDB
-              </a>
-            </div>
-          )}
+          <MediaSpecs
+            specs={[
+              { label: 'Profile', value: show.qualityProfile?.name },
+              { label: 'Folder', value: show.rootFolder?.path, mono: true },
+            ]}
+            control={
+              <DownloadClientIndicator
+                clients={downloadClients}
+                selectedClientId={selectedClientId}
+                onClientChange={setSelectedClientId}
+              />
+            }
+            links={
+              show.tmdbId ? (
+                <MediaSpecLink href={`https://www.themoviedb.org/tv/${show.tmdbId}`}>
+                  TMDB
+                </MediaSpecLink>
+              ) : undefined
+            }
+          />
         </MediaHero>
 
         {activeDownloads.size > 0 && (
