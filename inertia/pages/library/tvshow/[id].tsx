@@ -1021,7 +1021,7 @@ export default function TvShowDetail() {
         {/* Seasons */}
         <Card>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-base font-semibold">Seasons</h2>
               {show.seasons.some((s) => !s.requested) && (
                 <Button
@@ -1052,64 +1052,11 @@ export default function TvShowDetail() {
               />
             ) : (
               <div className="space-y-2">
-                {show.seasons.map((season) => (
-                  <div key={season.id} className="border border-border rounded-lg overflow-hidden">
-                    <button
-                      onClick={() => toggleSeason(season.seasonNumber)}
-                      aria-expanded={expandedSeason === season.seasonNumber}
-                      className="flex items-center gap-4 w-full p-4 hover:bg-accent transition-colors duration-150 text-left outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:ring-inset"
-                    >
-                      {season.posterUrl ? (
-                        <img
-                          src={season.posterUrl}
-                          alt={season.title}
-                          className="h-16 w-12 shrink-0 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div className="h-16 w-12 shrink-0 rounded-lg bg-muted flex items-center justify-center">
-                          <HugeiconsIcon
-                            icon={Tv01Icon}
-                            className="h-6 w-6 text-muted-foreground"
-                          />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{season.title}</p>
-                        {/* Tally: the dot carries the status colour, the word carries the
-                            label, so no state is signalled by colour alone. */}
-                        <div className="flex items-center gap-x-3 gap-y-1 text-xs text-muted-foreground flex-wrap">
-                          <span>
-                            <span className="readout">{season.episodeCount}</span> episodes
-                          </span>
-                          {season.downloadedCount > 0 && (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span
-                                className="size-1.5 rounded-full bg-status-complete"
-                                aria-hidden="true"
-                              />
-                              <span className="readout">{season.downloadedCount}</span> downloaded
-                            </span>
-                          )}
-                          {season.downloadingCount > 0 && (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span
-                                className="size-1.5 rounded-full bg-status-transfer"
-                                aria-hidden="true"
-                              />
-                              <span className="readout">{season.downloadingCount}</span> downloading
-                            </span>
-                          )}
-                          {season.requestedCount > 0 && (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span
-                                className="size-1.5 rounded-full bg-status-queued"
-                                aria-hidden="true"
-                              />
-                              <span className="readout">{season.requestedCount}</span> requested
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                {show.seasons.map((season) => {
+                  // The season controls render twice: stacked under the tally on phones so the
+                  // title keeps the full row width, inline on the row from sm up.
+                  const seasonActions = (
+                    <>
                       {season.downloadedCount > 0 && (
                         <Button
                           variant="ghost"
@@ -1132,7 +1079,9 @@ export default function TvShowDetail() {
                         status={season.requested ? 'requested' : 'none'}
                         isToggling={togglingSeasons.has(season.seasonNumber)}
                         onToggleRequest={() => {
-                          const syntheticEvent = { stopPropagation: () => {} } as React.MouseEvent
+                          const syntheticEvent = {
+                            stopPropagation: () => {},
+                          } as React.MouseEvent
                           toggleSeasonRequested(
                             season.seasonNumber,
                             season.requested,
@@ -1140,251 +1089,336 @@ export default function TvShowDetail() {
                           )
                         }}
                       />
-                      <HugeiconsIcon
-                        icon={
-                          expandedSeason === season.seasonNumber ? ArrowUp01Icon : ArrowDown01Icon
-                        }
-                        className="h-4 w-4 shrink-0 text-muted-foreground"
-                      />
-                    </button>
-                    {expandedSeason === season.seasonNumber && (
-                      <div className="border-t border-border px-4">
-                        {loadingSeasons.has(season.seasonNumber) ? (
-                          <div className="space-y-2 py-4">
-                            {Array.from({ length: 3 }).map((_, i) => (
-                              <Skeleton key={i} className="h-12 w-full" />
-                            ))}
-                          </div>
-                        ) : seasonDetails[season.seasonNumber] ? (
-                          seasonDetails[season.seasonNumber].episodes.length === 0 ? (
-                            <EmptyState
-                              title="No episodes found"
-                              message="TMDB has not published an episode list for this season yet. Run Refresh metadata once it does."
-                              className="py-8"
+                    </>
+                  )
+
+                  return (
+                    <div
+                      key={season.id}
+                      className="border border-border rounded-lg overflow-hidden"
+                    >
+                      <div className="relative">
+                        {/* The toggle is a full-row hit target sitting behind the content, so the
+                          season actions stay real buttons instead of nesting inside it. */}
+                        <button
+                          onClick={() => toggleSeason(season.seasonNumber)}
+                          aria-expanded={expandedSeason === season.seasonNumber}
+                          aria-label={`${season.title || `Season ${season.seasonNumber}`} — ${season.episodeCount} episodes`}
+                          className="absolute inset-0 w-full cursor-pointer hover:bg-accent transition-colors duration-150 outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:ring-inset"
+                        />
+                        <div className="pointer-events-none relative flex items-start gap-3 p-3 sm:items-center sm:gap-4 sm:p-4">
+                          {season.posterUrl ? (
+                            <img
+                              src={season.posterUrl}
+                              alt=""
+                              className="h-14 w-10 sm:h-16 sm:w-12 shrink-0 rounded-lg object-cover"
                             />
                           ) : (
-                            <div className="divide-y divide-border">
-                              {getVisibleEpisodes(season.seasonNumber).map((episode) => (
-                                <div
-                                  key={episode.id}
-                                  role="group"
-                                  aria-label={`Episode ${episode.episodeNumber}: ${episode.title}`}
-                                  className="flex items-center gap-3 sm:gap-4 py-3 transition-colors duration-150 hover:bg-accent"
-                                >
-                                  <div className="readout w-6 sm:w-8 shrink-0 text-right text-xs text-muted-foreground">
-                                    {episode.episodeNumber}
-                                  </div>
-                                  {episode.stillUrl ? (
-                                    <img
-                                      src={episode.stillUrl}
-                                      alt={episode.title}
-                                      className="h-12 w-20 shrink-0 rounded-lg object-cover hidden sm:block"
-                                    />
-                                  ) : (
-                                    <div className="h-12 w-20 shrink-0 rounded-lg bg-muted hidden sm:block" />
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium truncate">{episode.title}</p>
-                                    <p className="readout text-xs text-muted-foreground">
-                                      {episode.airDate || 'TBA'}
-                                      {episode.runtime && ` • ${episode.runtime}m`}
-                                    </p>
-                                    {episode.episodeFile && (
-                                      <>
-                                        <p className="readout text-xs text-muted-foreground">
-                                          {[
-                                            episode.episodeFile.quality,
-                                            formatFileSize(episode.episodeFile.size),
-                                            episode.episodeFile.summary,
-                                          ]
-                                            .filter(Boolean)
-                                            .join(' • ')}
-                                        </p>
-                                        {episode.qualityAssessment &&
-                                          !episode.qualityAssessment.meetsProfile && (
-                                            <p
-                                              className="flex items-center gap-1 text-xs text-status-failed-ink"
-                                              title={episode.qualityAssessment.issues
-                                                .map((issue) => issue.message)
-                                                .join('\n')}
-                                            >
-                                              <HugeiconsIcon
-                                                icon={Alert01Icon}
-                                                className="h-3.5 w-3.5 shrink-0"
-                                              />
-                                              {episode.qualityAssessment.issues[0]?.message ??
-                                                'Below the quality profile'}
-                                            </p>
-                                          )}
-                                      </>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                                    {(() => {
-                                      const { status, progress } = getEpisodeStatus(episode)
-
-                                      // Downloaded: Show status badge + file action buttons
-                                      if (status === 'downloaded') {
-                                        return (
-                                          <>
-                                            <MediaStatusBadge status="downloaded" size="sm" />
-                                            {episode.episodeFile && (
-                                              <>
-                                                <Button
-                                                  variant="default"
-                                                  size="icon-sm"
-                                                  aria-label={`Play episode ${episode.episodeNumber}`}
-                                                  onClick={() => {
-                                                    audioPlayer.pause()
-                                                    setPlayingEpisode({
-                                                      id: episode.id,
-                                                      fileId: episode.episodeFile!.id,
-                                                      title: `S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} - ${episode.title}`,
-                                                    })
-                                                    setVideoPlayerOpen(true)
-                                                  }}
-                                                >
-                                                  <HugeiconsIcon
-                                                    icon={PlayIcon}
-                                                    className="h-4 w-4"
-                                                  />
-                                                </Button>
-                                                <Button
-                                                  variant="outline"
-                                                  size="icon-sm"
-                                                  asChild
-                                                  aria-label={`Download episode ${episode.episodeNumber}`}
-                                                >
-                                                  <a
-                                                    href={episode.episodeFile.downloadUrl}
-                                                    download
-                                                  >
-                                                    <HugeiconsIcon
-                                                      icon={FileDownloadIcon}
-                                                      className="h-4 w-4"
-                                                    />
-                                                  </a>
-                                                </Button>
-                                              </>
-                                            )}
-                                            <Button
-                                              variant="outline"
-                                              size="icon-sm"
-                                              aria-label={`Replace file for episode ${episode.episodeNumber}`}
-                                              title="Replace with a better release"
-                                              onClick={() =>
-                                                setReplaceTarget({
-                                                  scope: 'episode',
-                                                  id: episode.id,
-                                                  seasonNumber: season.seasonNumber,
-                                                  subject: `S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} — ${episode.title}`,
-                                                  currentSummary: [
-                                                    episode.episodeFile?.quality,
-                                                    episode.episodeFile?.summary,
-                                                  ]
-                                                    .filter(Boolean)
-                                                    .join(' · '),
-                                                })
-                                              }
-                                            >
-                                              <HugeiconsIcon
-                                                icon={Refresh01Icon}
-                                                className="h-4 w-4"
-                                              />
-                                            </Button>
-                                            <Button
-                                              variant="outline"
-                                              size="icon-sm"
-                                              className="text-destructive hover:text-destructive"
-                                              aria-label={`Delete file for episode ${episode.episodeNumber}`}
-                                              onClick={() => {
-                                                const epId = episode.id
-                                                const epSeasonNumber = season.seasonNumber
-                                                setSelectedEpisodeForDelete({
-                                                  id: epId,
-                                                  title: episode.title,
-                                                  seasonNumber: epSeasonNumber,
-                                                })
-                                                setDeleteFileDialogOpen(true)
-                                              }}
-                                            >
-                                              <HugeiconsIcon
-                                                icon={Delete01Icon}
-                                                className="h-4 w-4"
-                                              />
-                                            </Button>
-                                          </>
-                                        )
-                                      }
-
-                                      // All other statuses: Use unified MediaStatusBadge + manual search
-                                      return (
-                                        <>
-                                          {(status === 'requested' || status === 'none') && (
-                                            <Button
-                                              variant="outline"
-                                              size="icon-sm"
-                                              aria-label={`Search releases for episode ${episode.episodeNumber}`}
-                                              onClick={() =>
-                                                searchEpisodeReleases(
-                                                  episode.id,
-                                                  `${show.title} - S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} - ${episode.title}`
-                                                )
-                                              }
-                                            >
-                                              <HugeiconsIcon
-                                                icon={Search01Icon}
-                                                className="h-4 w-4"
-                                              />
-                                            </Button>
-                                          )}
-                                          <MediaStatusBadge
-                                            status={status}
-                                            progress={progress}
-                                            isToggling={togglingEpisodes.has(episode.id)}
-                                            onToggleRequest={() =>
-                                              toggleEpisodeRequested(
-                                                episode.id,
-                                                episode.requested,
-                                                season.seasonNumber
-                                              )
-                                            }
-                                          />
-                                        </>
-                                      )
-                                    })()}
-                                  </div>
-                                </div>
-                              ))}
-                              {hasMoreEpisodes(season.seasonNumber) && (
-                                <div className="flex justify-center py-3">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      showMoreEpisodes(season.seasonNumber)
-                                    }}
-                                  >
-                                    Show more (
-                                    <span className="readout">
-                                      {getVisibleEpisodes(season.seasonNumber).length}
-                                    </span>{' '}
-                                    of{' '}
-                                    <span className="readout">
-                                      {seasonDetails[season.seasonNumber].episodes.length}
-                                    </span>
-                                    )
-                                  </Button>
-                                </div>
+                            <div className="h-14 w-10 sm:h-16 sm:w-12 shrink-0 rounded-lg bg-muted flex items-center justify-center">
+                              <HugeiconsIcon
+                                icon={Tv01Icon}
+                                className="h-6 w-6 text-muted-foreground"
+                              />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{season.title}</p>
+                            {/* Tally: the dot carries the status colour, the word carries the
+                            label, so no state is signalled by colour alone. */}
+                            <div className="flex items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground flex-wrap">
+                              <span>
+                                <span className="readout">{season.episodeCount}</span> episodes
+                              </span>
+                              {season.downloadedCount > 0 && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span
+                                    className="size-1.5 rounded-full bg-status-complete"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="readout">{season.downloadedCount}</span>{' '}
+                                  downloaded
+                                </span>
+                              )}
+                              {season.downloadingCount > 0 && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span
+                                    className="size-1.5 rounded-full bg-status-transfer"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="readout">{season.downloadingCount}</span>{' '}
+                                  downloading
+                                </span>
+                              )}
+                              {season.requestedCount > 0 && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span
+                                    className="size-1.5 rounded-full bg-status-queued"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="readout">{season.requestedCount}</span> requested
+                                </span>
                               )}
                             </div>
-                          )
-                        ) : null}
+                            <div className="pointer-events-auto mt-2 flex items-center gap-1 sm:hidden">
+                              {seasonActions}
+                            </div>
+                          </div>
+                          <div className="pointer-events-auto hidden shrink-0 items-center gap-2 sm:flex">
+                            {seasonActions}
+                          </div>
+                          <HugeiconsIcon
+                            icon={
+                              expandedSeason === season.seasonNumber
+                                ? ArrowUp01Icon
+                                : ArrowDown01Icon
+                            }
+                            className="h-4 w-4 shrink-0 text-muted-foreground"
+                          />
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {expandedSeason === season.seasonNumber && (
+                        <div className="border-t border-border px-3 sm:px-4">
+                          {loadingSeasons.has(season.seasonNumber) ? (
+                            <div className="space-y-2 py-4">
+                              {Array.from({ length: 3 }).map((_, i) => (
+                                <Skeleton key={i} className="h-12 w-full" />
+                              ))}
+                            </div>
+                          ) : seasonDetails[season.seasonNumber] ? (
+                            seasonDetails[season.seasonNumber].episodes.length === 0 ? (
+                              <EmptyState
+                                title="No episodes found"
+                                message="TMDB has not published an episode list for this season yet. Run Refresh metadata once it does."
+                                className="py-8"
+                              />
+                            ) : (
+                              <div className="divide-y divide-border">
+                                {getVisibleEpisodes(season.seasonNumber).map((episode) => (
+                                  <div
+                                    key={episode.id}
+                                    role="group"
+                                    aria-label={`Episode ${episode.episodeNumber}: ${episode.title}`}
+                                    className="flex flex-col gap-2 py-3 transition-colors duration-150 hover:bg-accent sm:flex-row sm:items-center sm:gap-4"
+                                  >
+                                    <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+                                      <div className="readout w-6 sm:w-8 shrink-0 text-right text-xs text-muted-foreground">
+                                        {episode.episodeNumber}
+                                      </div>
+                                      {episode.stillUrl ? (
+                                        <img
+                                          src={episode.stillUrl}
+                                          alt={episode.title}
+                                          className="h-12 w-20 shrink-0 rounded-lg object-cover hidden sm:block"
+                                        />
+                                      ) : (
+                                        <div className="h-12 w-20 shrink-0 rounded-lg bg-muted hidden sm:block" />
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">
+                                          {episode.title}
+                                        </p>
+                                        <p className="readout text-xs text-muted-foreground">
+                                          {episode.airDate || 'TBA'}
+                                          {episode.runtime && ` • ${episode.runtime}m`}
+                                        </p>
+                                        {episode.episodeFile && (
+                                          <>
+                                            <p className="readout text-xs text-muted-foreground">
+                                              {[
+                                                episode.episodeFile.quality,
+                                                formatFileSize(episode.episodeFile.size),
+                                                episode.episodeFile.summary,
+                                              ]
+                                                .filter(Boolean)
+                                                .join(' • ')}
+                                            </p>
+                                            {episode.qualityAssessment &&
+                                              !episode.qualityAssessment.meetsProfile && (
+                                                <p
+                                                  className="flex items-center gap-1 text-xs text-status-failed-ink"
+                                                  title={episode.qualityAssessment.issues
+                                                    .map((issue) => issue.message)
+                                                    .join('\n')}
+                                                >
+                                                  <HugeiconsIcon
+                                                    icon={Alert01Icon}
+                                                    className="h-3.5 w-3.5 shrink-0"
+                                                  />
+                                                  {episode.qualityAssessment.issues[0]?.message ??
+                                                    'Below the quality profile'}
+                                                </p>
+                                              )}
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex shrink-0 items-center justify-end gap-1 pl-9 sm:gap-2 sm:pl-0">
+                                      {(() => {
+                                        const { status, progress } = getEpisodeStatus(episode)
+
+                                        // Downloaded: Show status badge + file action buttons
+                                        if (status === 'downloaded') {
+                                          return (
+                                            <>
+                                              <MediaStatusBadge status="downloaded" size="sm" />
+                                              {episode.episodeFile && (
+                                                <>
+                                                  <Button
+                                                    variant="default"
+                                                    size="icon-sm"
+                                                    aria-label={`Play episode ${episode.episodeNumber}`}
+                                                    onClick={() => {
+                                                      audioPlayer.pause()
+                                                      setPlayingEpisode({
+                                                        id: episode.id,
+                                                        fileId: episode.episodeFile!.id,
+                                                        title: `S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} - ${episode.title}`,
+                                                      })
+                                                      setVideoPlayerOpen(true)
+                                                    }}
+                                                  >
+                                                    <HugeiconsIcon
+                                                      icon={PlayIcon}
+                                                      className="h-4 w-4"
+                                                    />
+                                                  </Button>
+                                                  <Button
+                                                    variant="outline"
+                                                    size="icon-sm"
+                                                    asChild
+                                                    aria-label={`Download episode ${episode.episodeNumber}`}
+                                                  >
+                                                    <a
+                                                      href={episode.episodeFile.downloadUrl}
+                                                      download
+                                                    >
+                                                      <HugeiconsIcon
+                                                        icon={FileDownloadIcon}
+                                                        className="h-4 w-4"
+                                                      />
+                                                    </a>
+                                                  </Button>
+                                                </>
+                                              )}
+                                              <Button
+                                                variant="outline"
+                                                size="icon-sm"
+                                                aria-label={`Replace file for episode ${episode.episodeNumber}`}
+                                                title="Replace with a better release"
+                                                onClick={() =>
+                                                  setReplaceTarget({
+                                                    scope: 'episode',
+                                                    id: episode.id,
+                                                    seasonNumber: season.seasonNumber,
+                                                    subject: `S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} — ${episode.title}`,
+                                                    currentSummary: [
+                                                      episode.episodeFile?.quality,
+                                                      episode.episodeFile?.summary,
+                                                    ]
+                                                      .filter(Boolean)
+                                                      .join(' · '),
+                                                  })
+                                                }
+                                              >
+                                                <HugeiconsIcon
+                                                  icon={Refresh01Icon}
+                                                  className="h-4 w-4"
+                                                />
+                                              </Button>
+                                              <Button
+                                                variant="outline"
+                                                size="icon-sm"
+                                                className="text-destructive hover:text-destructive"
+                                                aria-label={`Delete file for episode ${episode.episodeNumber}`}
+                                                onClick={() => {
+                                                  const epId = episode.id
+                                                  const epSeasonNumber = season.seasonNumber
+                                                  setSelectedEpisodeForDelete({
+                                                    id: epId,
+                                                    title: episode.title,
+                                                    seasonNumber: epSeasonNumber,
+                                                  })
+                                                  setDeleteFileDialogOpen(true)
+                                                }}
+                                              >
+                                                <HugeiconsIcon
+                                                  icon={Delete01Icon}
+                                                  className="h-4 w-4"
+                                                />
+                                              </Button>
+                                            </>
+                                          )
+                                        }
+
+                                        // All other statuses: Use unified MediaStatusBadge + manual search
+                                        return (
+                                          <>
+                                            {(status === 'requested' || status === 'none') && (
+                                              <Button
+                                                variant="outline"
+                                                size="icon-sm"
+                                                aria-label={`Search releases for episode ${episode.episodeNumber}`}
+                                                onClick={() =>
+                                                  searchEpisodeReleases(
+                                                    episode.id,
+                                                    `${show.title} - S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} - ${episode.title}`
+                                                  )
+                                                }
+                                              >
+                                                <HugeiconsIcon
+                                                  icon={Search01Icon}
+                                                  className="h-4 w-4"
+                                                />
+                                              </Button>
+                                            )}
+                                            <MediaStatusBadge
+                                              status={status}
+                                              progress={progress}
+                                              isToggling={togglingEpisodes.has(episode.id)}
+                                              onToggleRequest={() =>
+                                                toggleEpisodeRequested(
+                                                  episode.id,
+                                                  episode.requested,
+                                                  season.seasonNumber
+                                                )
+                                              }
+                                            />
+                                          </>
+                                        )
+                                      })()}
+                                    </div>
+                                  </div>
+                                ))}
+                                {hasMoreEpisodes(season.seasonNumber) && (
+                                  <div className="flex justify-center py-3">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        showMoreEpisodes(season.seasonNumber)
+                                      }}
+                                    >
+                                      Show more (
+                                      <span className="readout">
+                                        {getVisibleEpisodes(season.seasonNumber).length}
+                                      </span>{' '}
+                                      of{' '}
+                                      <span className="readout">
+                                        {seasonDetails[season.seasonNumber].episodes.length}
+                                      </span>
+                                      )
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </CardContent>
