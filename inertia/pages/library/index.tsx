@@ -1154,13 +1154,13 @@ export default function Library() {
             href={item.detailUrl}
             tabIndex={-1}
             aria-hidden="true"
-            className="w-20 min-h-[8.889rem] shrink-0 self-stretch bg-muted overflow-hidden relative"
+            className="aspect-[9/16] min-h-40 shrink-0 self-stretch bg-muted overflow-hidden relative"
           >
             {showImage ? (
               <img
                 src={item.imageUrl!}
                 alt=""
-                className={`w-full h-full object-cover transition-all duration-200 ease-out ${
+                className={`absolute inset-0 h-full w-full object-cover transition-all duration-200 ease-out ${
                   isNotRequested
                     ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100'
                     : ''
@@ -1170,7 +1170,7 @@ export default function Library() {
               />
             ) : (
               <div
-                className={`w-full h-full flex items-center justify-center transition-all duration-200 ease-out ${
+                className={`absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out ${
                   isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
                 }`}
               >
@@ -1204,7 +1204,7 @@ export default function Library() {
                 <MediaStatusBadge
                   status={status}
                   progress={progress}
-                  size="sm"
+                  size="tiny"
                   isToggling={isToggling}
                   onToggleRequest={() =>
                     handleToggleRequest(
