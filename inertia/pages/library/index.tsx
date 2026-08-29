@@ -1143,16 +1143,18 @@ export default function Library() {
     return (
       <Card
         key={imageKey}
-        className="py-0 gap-0 group transition-colors duration-150 ease-out hover:bg-accent has-[a:focus-visible]:border-primary has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-[3px]"
+        className="py-0 gap-0 group overflow-hidden transition-colors duration-150 ease-out hover:bg-accent has-[a:focus-visible]:border-primary has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-[3px]"
       >
-        <CardContent className="flex items-center gap-3 p-3">
+        {/* No padding around the artwork — it runs to the card edge and stretches to the
+            row's full height. The padding belongs to the text column. */}
+        <CardContent className="flex items-stretch p-0">
           {/* The artwork is a sibling of the wrapping column, so on a phone it sits beside
               both the title and the action row rather than only the first of them. */}
           <Link
             href={item.detailUrl}
             tabIndex={-1}
             aria-hidden="true"
-            className="h-16 w-12 rounded-lg bg-muted flex-shrink-0 overflow-hidden relative"
+            className="w-12 min-h-16 self-stretch bg-muted flex-shrink-0 overflow-hidden relative"
           >
             {showImage ? (
               <img
@@ -1177,7 +1179,7 @@ export default function Library() {
             )}
           </Link>
 
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5 sm:flex-nowrap sm:gap-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5 p-3 sm:flex-nowrap sm:gap-3">
             <Link
               href={item.detailUrl}
               className={`basis-full min-w-0 outline-none transition-opacity duration-200 ease-out sm:flex-1 sm:basis-auto ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}
