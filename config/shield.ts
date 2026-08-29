@@ -18,6 +18,10 @@ const shieldConfig = defineConfig({
         'blob:',
         'https://image.tmdb.org',
         'https://coverartarchive.org',
+        // Cover Art Archive 307-redirects to the Internet Archive, and CSP is
+        // enforced on every redirect hop, so both hosts have to be allowed.
+        'https://archive.org',
+        'https://*.archive.org',
         'https://covers.openlibrary.org',
         'https://upload.wikimedia.org',
         'https://images.justwatch.com',
