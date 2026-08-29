@@ -49,6 +49,7 @@ import { useDownloadClients } from '@/hooks/use_download_clients'
 import { VideoPlayer } from '@/components/player/video_player'
 import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
 import { ReplaceFileDialog } from '@/components/library/replace-file-dialog'
+import { MediaFileCard } from '@/components/library/media-file-card'
 
 interface QualityProfile {
   id: number
@@ -69,6 +70,9 @@ interface MovieFile {
   quality: string | null
   /** "1080p · h264 · EAC3 5.1", built from ffprobe rather than the file name. */
   summary: string | null
+  /** The same probe, split for the spec band: "1080p h264" and "EAC3 5.1". */
+  video: string | null
+  audio: string | null
   downloadUrl: string
 }
 
@@ -628,92 +632,77 @@ export default function MovieDetail() {
 
         {/* File info */}
         {movie.movieFile && (
-          <Card>
-            <CardContent className="space-y-3">
-              <h2 className="text-base font-semibold">File</h2>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-md border border-border p-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <HugeiconsIcon
-                    icon={Film01Icon}
-                    className="h-8 w-8 text-muted-foreground shrink-0"
-                  />
-                  <div className="min-w-0">
-                    <p className="readout text-sm font-medium truncate">
-                      {movie.movieFile.path.split('/').pop()}
-                    </p>
-                    <p className="readout text-xs text-muted-foreground">
-                      {movie.movieFile.quality && `${movie.movieFile.quality} • `}
-                      {formatSize(movie.movieFile.size)}
-                      {movie.movieFile.summary && ` • ${movie.movieFile.summary}`}
-                    </p>
-                    <p className="readout text-xs text-muted-foreground truncate">
-                      {movie.movieFile.path}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => {
-                      audioPlayer.pause()
-                      setVideoPlayerOpen(true)
-                    }}
-                    aria-label="Play"
-                  >
-                    <HugeiconsIcon icon={PlayIcon} className="h-4 w-4" />
-                    <span className="hidden sm:inline">Play</span>
-                  </Button>
-                  <Button variant="outline" size="sm" asChild aria-label="Download">
-                    <a href={movie.movieFile.downloadUrl} download>
-                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                      <span className="hidden sm:inline">Download</span>
-                    </a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setReplaceDialogOpen(true)}
-                    aria-label="Replace with a better release"
-                  >
-                    <HugeiconsIcon icon={Refresh01Icon} className="h-4 w-4" />
-                    <span className="hidden sm:inline">Replace</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => setDeleteFileDialogOpen(true)}
-                    aria-label="Delete"
-                  >
-                    <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
-                    <span className="hidden sm:inline">Delete</span>
-                  </Button>
-                </div>
+          <MediaFileCard
+            path={movie.movieFile.path}
+            specs={[
+              { label: 'Quality', value: movie.movieFile.quality },
+              { label: 'Size', value: formatSize(movie.movieFile.size), mono: true },
+              { label: 'Video', value: movie.movieFile.video, mono: true },
+              { label: 'Audio', value: movie.movieFile.audio, mono: true },
+            ]}
+            actions={
+              <>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => {
+                    audioPlayer.pause()
+                    setVideoPlayerOpen(true)
+                  }}
+                  aria-label="Play"
+                >
+                  <HugeiconsIcon icon={PlayIcon} className="h-4 w-4" />
+                  <span className="hidden sm:inline">Play</span>
+                </Button>
+                <Button variant="outline" size="sm" asChild aria-label="Download">
+                  <a href={movie.movieFile.downloadUrl} download>
+                    <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                    <span className="hidden sm:inline">Download</span>
+                  </a>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReplaceDialogOpen(true)}
+                  aria-label="Replace with a better release"
+                >
+                  <HugeiconsIcon icon={Refresh01Icon} className="h-4 w-4" />
+                  <span className="hidden sm:inline">Replace</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setDeleteFileDialogOpen(true)}
+                  aria-label="Delete"
+                >
+                  <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
+                  <span className="hidden sm:inline">Delete</span>
+                </Button>
+              </>
+            }
+          >
+            {movie.qualityAssessment && !movie.qualityAssessment.meetsProfile && (
+              <div className="border-border space-y-2 border-t pt-3">
+                <p className="text-status-failed-ink flex items-center gap-2 text-sm font-medium">
+                  <HugeiconsIcon icon={Alert01Icon} className="h-4 w-4 shrink-0" />
+                  Below your quality profile
+                </p>
+                <ul className="text-muted-foreground space-y-1 text-xs">
+                  {movie.qualityAssessment.belowCutoff && (
+                    <li>Quality is below the profile's cutoff.</li>
+                  )}
+                  {movie.qualityAssessment.issues.map((issue) => (
+                    <li key={issue.code + issue.message}>{issue.message}</li>
+                  ))}
+                </ul>
+                <Button size="sm" variant="outline" onClick={() => setReplaceDialogOpen(true)}>
+                  <HugeiconsIcon icon={Refresh01Icon} className="h-4 w-4" />
+                  Find a better release
+                </Button>
               </div>
-
-              {movie.qualityAssessment && !movie.qualityAssessment.meetsProfile && (
-                <div className="space-y-2 rounded-md border border-status-failed-ink/40 p-3">
-                  <p className="flex items-center gap-2 text-sm font-medium text-status-failed-ink">
-                    <HugeiconsIcon icon={Alert01Icon} className="h-4 w-4" />
-                    This file is below your quality profile
-                  </p>
-                  <ul className="space-y-1 text-xs text-muted-foreground">
-                    {movie.qualityAssessment.belowCutoff && (
-                      <li>Quality is below the profile's cutoff.</li>
-                    )}
-                    {movie.qualityAssessment.issues.map((issue) => (
-                      <li key={issue.code + issue.message}>{issue.message}</li>
-                    ))}
-                  </ul>
-                  <Button size="sm" variant="outline" onClick={() => setReplaceDialogOpen(true)}>
-                    <HugeiconsIcon icon={Refresh01Icon} className="h-4 w-4" />
-                    Find a better release
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            )}
+          </MediaFileCard>
         )}
 
         {/* Search results */}

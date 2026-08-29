@@ -48,6 +48,7 @@ import {
   type MediaItemStatus,
 } from '@/components/library/media-status-badge'
 import { MediaSpecs, MediaSpecLink } from '@/components/library/media-specs'
+import { FileFacts, fileFacts } from '@/components/library/media-file-card'
 import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
 import { CastLane, type CastMember } from '@/components/library/cast-lane'
@@ -1219,15 +1220,13 @@ export default function TvShowDetail() {
                                         </p>
                                         {episode.episodeFile && (
                                           <>
-                                            <p className="readout text-xs text-muted-foreground">
-                                              {[
+                                            <FileFacts
+                                              facts={fileFacts([
                                                 episode.episodeFile.quality,
                                                 formatFileSize(episode.episodeFile.size),
                                                 episode.episodeFile.summary,
-                                              ]
-                                                .filter(Boolean)
-                                                .join(' • ')}
-                                            </p>
+                                              ])}
+                                            />
                                             {episode.qualityAssessment &&
                                               !episode.qualityAssessment.meetsProfile && (
                                                 <p

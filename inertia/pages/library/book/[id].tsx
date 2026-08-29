@@ -35,6 +35,7 @@ import { DownloadProgressCard } from '@/components/library/download-progress-car
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
 import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
+import { MediaFileCard } from '@/components/library/media-file-card'
 
 interface Author {
   id: number
@@ -539,49 +540,33 @@ export default function BookDetail() {
 
         {/* File info */}
         {book.bookFile && (
-          <Card>
-            <CardContent className="space-y-3">
-              <h2 className="text-base font-semibold">File</h2>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-md border border-border p-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <HugeiconsIcon
-                    icon={Book01Icon}
-                    className="h-8 w-8 text-muted-foreground shrink-0"
-                  />
-                  <div className="min-w-0">
-                    <p className="readout text-sm font-medium truncate">
-                      {book.bookFile.path.split('/').pop()}
-                    </p>
-                    <p className="readout text-xs text-muted-foreground">
-                      {book.bookFile.format && `${book.bookFile.format.toUpperCase()} • `}
-                      {formatSize(book.bookFile.size)}
-                    </p>
-                    <p className="readout text-xs text-muted-foreground truncate">
-                      {book.bookFile.path}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button variant="outline" size="sm" asChild aria-label="Download">
-                    <a href={book.bookFile.downloadUrl} download>
-                      <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
-                      <span className="hidden sm:inline">Download</span>
-                    </a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => setDeleteFileDialogOpen(true)}
-                    aria-label="Delete"
-                  >
-                    <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
-                    <span className="hidden sm:inline">Delete</span>
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <MediaFileCard
+            path={book.bookFile.path}
+            specs={[
+              { label: 'Format', value: book.bookFile.format?.toUpperCase() },
+              { label: 'Size', value: formatSize(book.bookFile.size), mono: true },
+            ]}
+            actions={
+              <>
+                <Button variant="outline" size="sm" asChild aria-label="Download">
+                  <a href={book.bookFile.downloadUrl} download>
+                    <HugeiconsIcon icon={FileDownloadIcon} className="h-4 w-4" />
+                    <span className="hidden sm:inline">Download</span>
+                  </a>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setDeleteFileDialogOpen(true)}
+                  aria-label="Delete"
+                >
+                  <HugeiconsIcon icon={Delete01Icon} className="h-4 w-4" />
+                  <span className="hidden sm:inline">Delete</span>
+                </Button>
+              </>
+            }
+          />
         )}
       </div>
 

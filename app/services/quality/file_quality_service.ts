@@ -178,25 +178,48 @@ export function assessFile(
 }
 
 /**
+ * A file's actual audio and video, split the way a detail page wants to label it:
+ * "1080p h264" under Video, "TrueHD 5.1" under Audio. The joined summary below is
+ * the same facts run together, for rows too dense to carry labels.
+ */
+export interface MediaInfoParts {
+  video: string | null
+  audio: string | null
+}
+
+export function describeMediaInfoParts(info: VideoMediaInfo | null): MediaInfoParts {
+  if (!info) return { video: null, audio: null }
+  const { resolution, codec, audio } = mediaInfoFacts(info)
+  return { video: join([resolution, codec], ' '), audio }
+}
+
+/**
  * Short human summary of a file's actual audio/video, for list rows and the
  * replace dialog: "1080p · x265 · TrueHD 5.1".
  */
 export function describeMediaInfo(info: VideoMediaInfo | null): string | null {
   if (!info) return null
-  const parts: string[] = []
-  if (info.height) parts.push(`${info.height}p`)
-  else if (info.resolution) parts.push(info.resolution)
-  if (info.codec) parts.push(info.codec)
+  const { resolution, codec, audio } = mediaInfoFacts(info)
+  return join([resolution, codec, audio], ' · ')
+}
 
-  const audioCodec = normalizeProbedAudioCodec(info.audioCodec, info.audioProfile)
-  if (audioCodec || info.audioChannels) {
-    const channels = info.audioChannels
-    const channelLabel =
-      channels === 6 ? '5.1' : channels === 8 ? '7.1' : channels === 2 ? '2.0' : null
-    parts.push([audioCodec ?? info.audioCodec, channelLabel].filter(Boolean).join(' '))
+function mediaInfoFacts(info: VideoMediaInfo) {
+  const audioCodec =
+    normalizeProbedAudioCodec(info.audioCodec, info.audioProfile) ?? info.audioCodec
+  const channels = info.audioChannels
+  const channelLabel =
+    channels === 6 ? '5.1' : channels === 8 ? '7.1' : channels === 2 ? '2.0' : null
+
+  return {
+    resolution: info.height ? `${info.height}p` : (info.resolution ?? null),
+    codec: info.codec ?? null,
+    audio: join([audioCodec, channelLabel], ' '),
   }
+}
 
-  return parts.length > 0 ? parts.join(' · ') : null
+function join(parts: (string | null | undefined)[], separator: string): string | null {
+  const kept = parts.filter(Boolean)
+  return kept.length > 0 ? kept.join(separator) : null
 }
 
 /**

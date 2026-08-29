@@ -5,6 +5,7 @@ import QualityProfile from '#models/quality_profile'
 import {
   assessFile,
   describeMediaInfo,
+  describeMediaInfoParts,
   ensureMediaInfo,
 } from '#services/quality/file_quality_service'
 import vine from '@vinejs/vine'
@@ -392,6 +393,7 @@ export default class MoviesController {
             quality: movie.movieFile.quality,
             mediaInfo: movie.movieFile.mediaInfo,
             summary: describeMediaInfo(movie.movieFile.mediaInfo),
+            ...describeMediaInfoParts(movie.movieFile.mediaInfo),
             downloadUrl: `/api/v1/files/movies/${movie.movieFile.id}/download`,
           }
         : null,
