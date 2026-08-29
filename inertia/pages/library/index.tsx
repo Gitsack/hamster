@@ -1154,31 +1154,29 @@ export default function Library() {
             href={item.detailUrl}
             tabIndex={-1}
             aria-hidden="true"
-            className="w-12 shrink-0 self-stretch bg-muted overflow-hidden relative"
+            className="w-15 min-h-[5.625rem] shrink-0 self-stretch bg-muted overflow-hidden relative"
           >
-            <div className="w-12 aspect-[2/3] overflow-hidden">
-              {showImage ? (
-                <img
-                  src={item.imageUrl!}
-                  alt=""
-                  className={`w-full h-full object-cover transition-all duration-200 ease-out ${
-                    isNotRequested
-                      ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100'
-                      : ''
-                  }`}
-                  loading="lazy"
-                  onError={() => handleImageError(imageKey)}
-                />
-              ) : (
-                <div
-                  className={`w-full h-full flex items-center justify-center transition-all duration-200 ease-out ${
-                    isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
-                  }`}
-                >
-                  <HugeiconsIcon icon={config.icon} className="h-5 w-5 text-muted-foreground/40" />
-                </div>
-              )}
-            </div>
+            {showImage ? (
+              <img
+                src={item.imageUrl!}
+                alt=""
+                className={`w-full h-full object-cover transition-all duration-200 ease-out ${
+                  isNotRequested
+                    ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100'
+                    : ''
+                }`}
+                loading="lazy"
+                onError={() => handleImageError(imageKey)}
+              />
+            ) : (
+              <div
+                className={`w-full h-full flex items-center justify-center transition-all duration-200 ease-out ${
+                  isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
+                }`}
+              >
+                <HugeiconsIcon icon={config.icon} className="h-6 w-6 text-muted-foreground/40" />
+              </div>
+            )}
           </Link>
 
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5 p-3 sm:flex-nowrap sm:gap-3">
