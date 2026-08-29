@@ -574,8 +574,6 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                   </p>
                 )}
 
-                <CastLane cast={movieDetails.cast} />
-
                 {/* Artwork sits below the facts, the way the full detail page does it. */}
                 {(movieDetails.trailerUrl ||
                   movieDetails.backdropImages?.length ||
@@ -595,6 +593,8 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                     />
                   </div>
                 )}
+
+                <CastLane cast={movieDetails.cast} />
               </SheetBody>
 
               <SheetFooter>
@@ -732,8 +732,6 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                   </p>
                 )}
 
-                <CastLane cast={tvShowDetails.cast} />
-
                 {(tvShowDetails.trailerUrl ||
                   tvShowDetails.backdropImages?.length ||
                   tvShowDetails.backdropUrl) && (
@@ -752,6 +750,8 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                     />
                   </div>
                 )}
+
+                <CastLane cast={tvShowDetails.cast} />
               </SheetBody>
 
               <SheetFooter>
