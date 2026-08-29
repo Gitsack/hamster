@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.30.0](https://github.com/Gitsack/hamster/compare/hamster-v1.29.0...hamster-v1.30.0) (2026-08-29)
+
+
+### Features
+
+* **ui:** rebuild the media detail sheet around the add decision ([b8c1763](https://github.com/Gitsack/hamster/commit/b8c176322f7a5a5f2b89fe87bc5d0a884e8233df))
+
+
+### Bug Fixes
+
+* **ui:** bring the list row height back down ([00ed6a7](https://github.com/Gitsack/hamster/commit/00ed6a7b8621a740cd23c4d51f575b83268038b6))
+* **ui:** derive list artwork width from its height ([9c1dcad](https://github.com/Gitsack/hamster/commit/9c1dcade6c256ad665433cb9a5b86303baf9f5e8))
+* **ui:** give cast a single column in narrow containers ([c2315a5](https://github.com/Gitsack/hamster/commit/c2315a5d00100d0d72631566107d7a3ea321ed07))
+* **ui:** give list artwork its real ratio per media type ([ecfb544](https://github.com/Gitsack/hamster/commit/ecfb5447d1342940269e77dad54dc038ea5f5818))
+* **ui:** hold the list poster at 2:3 ([75170eb](https://github.com/Gitsack/hamster/commit/75170ebe2629034f746078430c53734fcadd5114))
+* **ui:** keep gallery slides at container width on iOS ([70f466b](https://github.com/Gitsack/hamster/commit/70f466be5f873ddcdf05645e59ba707f5e5ec34e))
+* **ui:** let list artwork sit beside both stacked rows ([ac0e88f](https://github.com/Gitsack/hamster/commit/ac0e88fa98ad38788c626f70d7c57e66500398bd))
+* **ui:** let the list artwork cover its column ([b34e786](https://github.com/Gitsack/hamster/commit/b34e786ceb6abfba700bb81dc3a551aba350027b))
+* **ui:** make the library list view usable on a phone ([3eca64d](https://github.com/Gitsack/hamster/commit/3eca64dbf538cd6ce63d9c4efdc5bdf0b2770ace))
+* **ui:** make the TV show seasons list work on phones ([50c96b2](https://github.com/Gitsack/hamster/commit/50c96b263bd29e220e9bd6694b5c8c89e013e2d1))
+* **ui:** put Media above Cast in the detail sheet ([4dd52f3](https://github.com/Gitsack/hamster/commit/4dd52f31e6dfa0bb34dcb3c0d723a31708e1dd65))
+* **ui:** run list artwork to the card edge ([296e6b2](https://github.com/Gitsack/hamster/commit/296e6b28bfa158fcc57f28aa7e9ccd1504d611cf))
+* **ui:** stack the library list row on phones ([5af41d0](https://github.com/Gitsack/hamster/commit/5af41d0ab0cb022ef3c6c2e3519665aef967c061))
+* **ui:** stop the list poster swallowing the row ([6b6450e](https://github.com/Gitsack/hamster/commit/6b6450e1de01b15d02f07aba8cdd8cca96193d9b))
+* **ui:** take the list artwork column to 9:16 ([9124da0](https://github.com/Gitsack/hamster/commit/9124da0c1587b59544620a62cfbafb04882a73ac))
+* **ui:** widen the list artwork to 72x128 ([49539f9](https://github.com/Gitsack/hamster/commit/49539f93c5644715644aa40e8e379e4f54970ff2))
+* **ui:** widen the list artwork to 80x142 ([541847a](https://github.com/Gitsack/hamster/commit/541847a5bed9bd9a404efd90d67ce216d09ba5df))
+
 ## [1.29.0](https://github.com/Gitsack/hamster/compare/hamster-v1.28.0...hamster-v1.29.0) (2026-08-24)
 
 
