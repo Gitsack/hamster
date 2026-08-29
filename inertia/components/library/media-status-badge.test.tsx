@@ -1,4 +1,6 @@
-import { getMediaItemStatus } from './media-status-badge'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { getMediaItemStatus, MediaStatusBadge } from './media-status-badge'
 
 describe('getMediaItemStatus', () => {
   describe('downloaded status', () => {
@@ -107,5 +109,55 @@ describe('getMediaItemStatus', () => {
       const result = getMediaItemStatus({ requested: true }, { progress: 100, status: 'importing' })
       expect(result.status).toBe('importing')
     })
+  })
+})
+
+describe('MediaStatusBadge — the reversal contract', () => {
+  const coarse = (matches: boolean) =>
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({
+        matches,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })
+    )
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('fires immediately on a fine pointer', async () => {
+    coarse(false)
+    const onToggleRequest = vi.fn()
+    render(<MediaStatusBadge status="requested" onToggleRequest={onToggleRequest} />)
+
+    await userEvent.click(screen.getByRole('button'))
+    expect(onToggleRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('arms on the first tap and commits on the second when there is no hover', async () => {
+    coarse(true)
+    const onToggleRequest = vi.fn()
+    render(<MediaStatusBadge status="downloaded" onToggleRequest={onToggleRequest} />)
+
+    const badge = screen.getByRole('button')
+    await userEvent.click(badge)
+    expect(onToggleRequest).not.toHaveBeenCalled()
+    expect(badge).toHaveAttribute('data-armed', 'true')
+    expect(badge).toHaveAccessibleName(/^Confirm — /)
+
+    await userEvent.click(badge)
+    expect(onToggleRequest).toHaveBeenCalledTimes(1)
+    expect(badge).toHaveAttribute('data-armed', 'false')
+  })
+
+  it('renders a plain statement of state when there is nothing to reverse', () => {
+    coarse(false)
+    render(<MediaStatusBadge status="downloaded" />)
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByText('Downloaded')).toBeInTheDocument()
+    expect(screen.queryByText('Remove')).not.toBeInTheDocument()
   })
 })

@@ -46,6 +46,8 @@ import { useOperationTrackerContext } from '@/hooks/use_operation_tracker'
 import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
+import { CastLane, type CastMember } from '@/components/library/cast-lane'
+import { StreamingOffers, type StreamingOffer } from '@/components/library/streaming-offers'
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
 import { useActiveDownloads, type ActiveDownloadInfo } from '@/hooks/use_active_downloads'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
@@ -126,6 +128,8 @@ interface TvShow {
   genres: string[]
   trailerUrl: string | null
   backdropImages: string[]
+  cast?: CastMember[]
+  streamingOffers?: StreamingOffer[]
   requested: boolean
   monitored: boolean
   seasonCount: number
@@ -1423,6 +1427,10 @@ export default function TvShowDetail() {
             )}
           </CardContent>
         </Card>
+
+        {/* Browsing content: it belongs where browsing is the mode, not in the add-or-not sheet. */}
+        <StreamingOffers offers={show.streamingOffers} />
+        <CastLane cast={show.cast} />
 
         {show.tmdbId && <SimilarLane mediaType="tv" mediaId={show.id} tmdbId={show.tmdbId} />}
       </div>

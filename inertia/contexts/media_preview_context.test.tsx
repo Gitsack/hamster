@@ -25,7 +25,13 @@ vi.mock('@/components/ui/sheet', () => ({
     <div data-testid="sheet-content">{children}</div>
   ),
   SheetHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SheetBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  SheetFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SheetTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+}))
+
+vi.mock('@/hooks/use_active_downloads', () => ({
+  useActiveDownloads: () => ({ getForMovie: () => null, getForTvShow: () => new Map() }),
 }))
 
 vi.mock('@/components/ui/skeleton', () => ({
@@ -62,16 +68,21 @@ vi.mock('@/components/ui/badge', () => ({
 
 vi.mock('@/components/library/media-status-badge', () => ({
   MediaStatusBadge: () => <div data-testid="media-status-badge" />,
+  getMediaItemStatus: (item: { hasFile?: boolean; requested?: boolean }) => ({
+    status: item.hasFile ? 'downloaded' : item.requested ? 'requested' : 'none',
+    progress: 0,
+  }),
+}))
+
+vi.mock('@/components/library/cast-lane', () => ({
+  CastLane: ({ cast }: { cast?: { id: number }[] }) =>
+    cast?.length ? <div data-testid="cast-lane" /> : null,
 }))
 
 vi.mock('@/components/media-gallery', () => ({
   MediaGallery: ({ children }: { children?: React.ReactNode }) => (
     <div data-testid="media-gallery">{children}</div>
   ),
-}))
-
-vi.mock('@/components/library/similar-lane', () => ({
-  SimilarLane: () => <div data-testid="similar-lane" />,
 }))
 
 vi.mock('@/components/add-media-dialog', () => ({
@@ -94,11 +105,30 @@ vi.mock('@hugeicons/core-free-icons', () => ({
   Calendar03Icon: 'Calendar03Icon',
   InformationCircleIcon: 'InformationCircleIcon',
   Tv01Icon: 'Tv01Icon',
+  Refresh01Icon: 'Refresh01Icon',
+  LinkSquare02Icon: 'LinkSquare02Icon',
 }))
 
 beforeEach(() => {
   vi.stubGlobal('fetch', mockFetch)
   mockFetch.mockReset()
+  // Fallback for the root-folder and quality-profile lookups the sheet makes after the
+  // preview request settles; queued once-values still take precedence.
+  mockFetch.mockImplementation((url: string) => {
+    if (typeof url === 'string' && url.includes('/rootfolders')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => [{ id: 'rf1', path: '/media/movies', mediaType: 'movies' }],
+      })
+    }
+    if (typeof url === 'string' && url.includes('/qualityprofiles')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => [{ id: 'qp1', name: 'HD-1080p', mediaType: 'movies' }],
+      })
+    }
+    return Promise.resolve({ ok: true, json: async () => ({}) })
+  })
 })
 
 afterEach(() => {
@@ -226,9 +256,7 @@ describe('openMoviePreview', () => {
     })
   })
 
-  it('shows toast error and closes sheet on fetch failure', async () => {
-    const { toast } = await import('sonner')
-
+  it('keeps the sheet open with a retry when the fetch fails', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'))
 
     function TestComponent() {
@@ -247,18 +275,16 @@ describe('openMoviePreview', () => {
     await user.click(screen.getByText('Open'))
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(
-        'Could not reach TMDB for movie details. Check the connection, then retry.'
-      )
+      expect(screen.getByText('Could not reach TMDB for movie details.')).toBeInTheDocument()
     })
 
-    // Sheet should be closed after error
-    expect(screen.queryByTestId('sheet')).not.toBeInTheDocument()
+    // The diagnostic surface stays up and names what was attempted.
+    expect(screen.getByTestId('sheet')).toBeInTheDocument()
+    expect(screen.getByText('Retry')).toBeInTheDocument()
+    expect(screen.getByText('/api/v1/movies/preview?tmdbId=123')).toBeInTheDocument()
   })
 
-  it('shows toast error on non-ok response', async () => {
-    const { toast } = await import('sonner')
-
+  it('reports the status code on a non-ok response', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 500,
@@ -280,9 +306,9 @@ describe('openMoviePreview', () => {
     await user.click(screen.getByText('Open'))
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(
-        'TMDB did not return details for this movie. Try again in a moment.'
-      )
+      expect(
+        screen.getByText('TMDB did not return details for this movie (HTTP 500).')
+      ).toBeInTheDocument()
     })
   })
 
@@ -433,9 +459,7 @@ describe('openTvShowPreview', () => {
     expect(mockFetch).toHaveBeenCalledWith('/api/v1/tvshows/preview?tmdbId=456')
   })
 
-  it('shows toast error on tv show fetch failure', async () => {
-    const { toast } = await import('sonner')
-
+  it('keeps the sheet open with a retry when the tv fetch fails', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'))
 
     function TestComponent() {
@@ -454,15 +478,11 @@ describe('openTvShowPreview', () => {
     await user.click(screen.getByText('Open'))
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(
-        'Could not reach TMDB for show details. Check the connection, then retry.'
-      )
+      expect(screen.getByText('Could not reach TMDB for show details.')).toBeInTheDocument()
     })
   })
 
-  it('shows toast error on non-ok tv show response', async () => {
-    const { toast } = await import('sonner')
-
+  it('reports the status code on a non-ok tv show response', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 404,
@@ -484,9 +504,9 @@ describe('openTvShowPreview', () => {
     await user.click(screen.getByText('Open'))
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith(
-        'TMDB did not return details for this show. Try again in a moment.'
-      )
+      expect(
+        screen.getByText('TMDB did not return details for this show (HTTP 404).')
+      ).toBeInTheDocument()
     })
   })
 
@@ -599,7 +619,7 @@ describe('openTvShowPreview', () => {
     })
   })
 
-  it('shows "Add to Library" button when tv show is not in library', async () => {
+  it('shows the season-picker action when the tv show is not in library', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -625,7 +645,7 @@ describe('openTvShowPreview', () => {
     await user.click(screen.getByText('Open'))
 
     await waitFor(() => {
-      expect(screen.getByText('Add to Library')).toBeInTheDocument()
+      expect(screen.getByText('Choose seasons')).toBeInTheDocument()
     })
   })
 })

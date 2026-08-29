@@ -120,13 +120,13 @@ function DialogContent({
   }, [])
 
   React.useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
+    if (!open) return
+    // Restore what was there rather than clearing: a dialog opened from inside a sheet
+    // must not unlock the page the sheet behind it is still covering.
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     return () => {
-      document.body.style.overflow = ''
+      document.body.style.overflow = previous
     }
   }, [open])
 

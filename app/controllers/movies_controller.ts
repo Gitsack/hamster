@@ -333,12 +333,31 @@ export default class MoviesController {
 
     let trailerUrl: string | null = null
     let backdropImages: string[] = []
+    let cast: { id: number; name: string; character: string; profileUrl: string | null }[] = []
+    let streamingOffers: any[] = []
     if (movie.tmdbId) {
       const tmdbIdNum = Number.parseInt(movie.tmdbId)
-      ;[trailerUrl, backdropImages] = await Promise.all([
+      const [trailer, images, credits] = await Promise.all([
         tmdbService.getMovieTrailerUrl(tmdbIdNum).catch(() => null),
         tmdbService.getMovieImages(tmdbIdNum).catch(() => [] as string[]),
+        tmdbService.getMovieCredits(tmdbIdNum, 6).catch(() => []),
       ])
+      trailerUrl = trailer
+      backdropImages = images
+      cast = credits.map((c) => ({
+        id: c.id,
+        name: c.name,
+        character: c.character,
+        profileUrl: c.profilePath,
+      }))
+
+      // Same non-blocking, setting-gated lookup the preview endpoint uses.
+      const justwatchEnabled = await AppSetting.get<boolean>('justwatchEnabled', false)
+      if (justwatchEnabled && movie.title && movie.year) {
+        streamingOffers = await justwatchService
+          .getStreamingAvailability(movie.title, movie.year, 'movie')
+          .catch(() => [])
+      }
     }
 
     return response.json({
@@ -358,6 +377,8 @@ export default class MoviesController {
       genres: movie.genres,
       trailerUrl,
       backdropImages,
+      cast,
+      streamingOffers,
       requested: movie.requested,
       monitored: movie.monitored,
       hasFile: movie.hasFile,

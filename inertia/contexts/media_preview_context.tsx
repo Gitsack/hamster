@@ -1,7 +1,14 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from 'react'
 import { router } from '@inertiajs/react'
 import { toast } from 'sonner'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetBody,
+  SheetFooter,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -15,23 +22,16 @@ import {
   Calendar03Icon,
   InformationCircleIcon,
   Tv01Icon,
+  Refresh01Icon,
+  LinkSquare02Icon,
 } from '@hugeicons/core-free-icons'
-import { MediaStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
+import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaGallery } from '@/components/media-gallery'
-import { SimilarLane } from '@/components/library/similar-lane'
 import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dialog'
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
-
-interface StreamingOffer {
-  monetizationType: string
-  providerId: number
-  providerName: string
-  providerIconUrl: string
-  presentationType: string
-  url: string
-  retailPrice?: number
-  currency?: string
-}
+import { useActiveDownloads } from '@/hooks/use_active_downloads'
+import type { StreamingOffer } from '@/components/library/streaming-offers'
+import { CastLane, type CastMember } from '@/components/library/cast-lane'
 
 interface MovieDetails {
   tmdbId: string
@@ -48,7 +48,7 @@ interface MovieDetails {
   rating?: number
   votes?: number
   genres?: string[]
-  cast?: { id: number; name: string; character: string; profileUrl?: string }[]
+  cast?: CastMember[]
   trailerUrl?: string
   backdropImages?: string[]
   streamingOffers?: StreamingOffer[]
@@ -74,7 +74,7 @@ interface TvShowDetails {
   networks?: string[]
   seasonCount?: number
   episodeCount?: number
-  cast?: { id: number; name: string; character: string; profileUrl?: string }[]
+  cast?: CastMember[]
   trailerUrl?: string
   backdropImages?: string[]
   streamingOffers?: StreamingOffer[]
@@ -106,6 +106,10 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
   const [movieDetails, setMovieDetails] = useState<MovieDetails | null>(null)
   const [tvShowDetails, setTvShowDetails] = useState<TvShowDetails | null>(null)
   const [togglingDetails, setTogglingDetails] = useState(false)
+  const [previewError, setPreviewError] = useState<{ message: string; endpoint: string } | null>(
+    null
+  )
+  const lastRequest = useRef<{ type: 'movie' | 'tv'; tmdbId: string } | null>(null)
 
   // Add flow state
   const [rootFolders, setRootFolders] = useState<{ id: string; path: string; mediaType: string }[]>(
@@ -138,54 +142,81 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
   }, [configLoaded])
 
   // Open movie preview
-  const openMoviePreview = useCallback(async (tmdbId: string) => {
-    setDetailsType('movie')
-    setSheetOpen(true)
-    setDetailsLoading(true)
-    setMovieDetails(null)
-    setTvShowDetails(null)
+  const openMoviePreview = useCallback(
+    async (tmdbId: string) => {
+      setDetailsType('movie')
+      setSheetOpen(true)
+      setDetailsLoading(true)
+      setMovieDetails(null)
+      setTvShowDetails(null)
+      setPreviewError(null)
+      lastRequest.current = { type: 'movie', tmdbId }
 
-    try {
-      const response = await fetch(`/api/v1/movies/preview?tmdbId=${tmdbId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setMovieDetails(data)
-      } else {
-        toast.error('TMDB did not return details for this movie. Try again in a moment.')
-        setSheetOpen(false)
+      const endpoint = `/api/v1/movies/preview?tmdbId=${tmdbId}`
+      try {
+        const response = await fetch(endpoint)
+        if (response.ok) {
+          const data = await response.json()
+          setMovieDetails(data)
+        } else {
+          setPreviewError({
+            message: `TMDB did not return details for this movie (HTTP ${response.status}).`,
+            endpoint,
+          })
+        }
+      } catch {
+        setPreviewError({ message: 'Could not reach TMDB for movie details.', endpoint })
+      } finally {
+        setDetailsLoading(false)
+        // Loaded once the sheet has content, so the footer can state the destination
+        // before anything is committed.
+        void ensureConfig()
       }
-    } catch {
-      toast.error('Could not reach TMDB for movie details. Check the connection, then retry.')
-      setSheetOpen(false)
-    } finally {
-      setDetailsLoading(false)
-    }
-  }, [])
+    },
+    [ensureConfig]
+  )
 
   // Open TV show preview
-  const openTvShowPreview = useCallback(async (tmdbId: string) => {
-    setDetailsType('tv')
-    setSheetOpen(true)
-    setDetailsLoading(true)
-    setMovieDetails(null)
-    setTvShowDetails(null)
+  const openTvShowPreview = useCallback(
+    async (tmdbId: string) => {
+      setDetailsType('tv')
+      setSheetOpen(true)
+      setDetailsLoading(true)
+      setMovieDetails(null)
+      setTvShowDetails(null)
+      setPreviewError(null)
+      lastRequest.current = { type: 'tv', tmdbId }
 
-    try {
-      const response = await fetch(`/api/v1/tvshows/preview?tmdbId=${tmdbId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setTvShowDetails(data)
-      } else {
-        toast.error('TMDB did not return details for this show. Try again in a moment.')
-        setSheetOpen(false)
+      const endpoint = `/api/v1/tvshows/preview?tmdbId=${tmdbId}`
+      try {
+        const response = await fetch(endpoint)
+        if (response.ok) {
+          const data = await response.json()
+          setTvShowDetails(data)
+        } else {
+          setPreviewError({
+            message: `TMDB did not return details for this show (HTTP ${response.status}).`,
+            endpoint,
+          })
+        }
+      } catch {
+        setPreviewError({ message: 'Could not reach TMDB for show details.', endpoint })
+      } finally {
+        setDetailsLoading(false)
+        // Loaded once the sheet has content, so the footer can state the destination
+        // before anything is committed.
+        void ensureConfig()
       }
-    } catch {
-      toast.error('Could not reach TMDB for show details. Check the connection, then retry.')
-      setSheetOpen(false)
-    } finally {
-      setDetailsLoading(false)
-    }
-  }, [])
+    },
+    [ensureConfig]
+  )
+
+  const retryPreview = useCallback(() => {
+    const last = lastRequest.current
+    if (!last) return
+    if (last.type === 'movie') openMoviePreview(last.tmdbId)
+    else openTvShowPreview(last.tmdbId)
+  }, [openMoviePreview, openTvShowPreview])
 
   // Toggle movie requested
   const toggleMovieDetailsRequested = async () => {
@@ -396,300 +427,363 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
 
   const profiles = detailsType === 'movie' ? movieProfiles : tvProfiles
 
+  // The badge reports what is actually true, including a grab in flight.
+  const { getForMovie } = useActiveDownloads()
+  const movieDownload = movieDetails?.libraryId ? getForMovie(String(movieDetails.libraryId)) : null
+  const movieStatus = getMediaItemStatus(movieDetails ?? {}, movieDownload)
+  const tvStatus = getMediaItemStatus(tvShowDetails ?? {})
+
   return (
     <MediaPreviewContext.Provider value={{ openMoviePreview, openTvShowPreview }}>
       {children}
 
       {/* Preview Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="sm:max-w-lg">
           {detailsLoading ? (
-            <div className="space-y-4 p-6">
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="aspect-video w-full rounded-lg" />
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-2/3" />
+            <div className="space-y-4 p-6" aria-busy="true">
+              <Skeleton className="h-7 w-3/4" />
+              <div className="flex gap-4">
+                <Skeleton className="aspect-[2/3] w-24 shrink-0 rounded-lg" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-6 w-24 rounded-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
               </div>
+              <Skeleton className="aspect-video w-full rounded-lg" />
             </div>
+          ) : previewError ? (
+            <>
+              <SheetHeader className="pr-12 pb-4">
+                <SheetTitle>Details unavailable</SheetTitle>
+              </SheetHeader>
+              <SheetBody className="px-6 pb-6">
+                {/* The provider being unreachable is a first-class Hamster failure, so the
+                    surface stays up and says what was attempted rather than vanishing. */}
+                <div className="border-border rounded-lg border p-4">
+                  <p className="text-sm font-medium">{previewError.message}</p>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    Attempted <span className="readout">{previewError.endpoint}</span>. Check that
+                    TMDB is reachable from the container, then retry.
+                  </p>
+                </div>
+              </SheetBody>
+              <SheetFooter>
+                <Button onClick={retryPreview}>
+                  <HugeiconsIcon icon={Refresh01Icon} className="mr-2 h-4 w-4" />
+                  Retry
+                </Button>
+              </SheetFooter>
+            </>
           ) : detailsType === 'movie' && movieDetails ? (
             <>
-              <SheetHeader className="pb-4">
-                <SheetTitle className="pr-8">{movieDetails.title}</SheetTitle>
+              <SheetHeader className="pr-12 pb-4">
+                <SheetTitle>
+                  {movieDetails.title}
+                  {movieDetails.year && (
+                    <span className="readout text-muted-foreground ml-2 font-normal">
+                      {movieDetails.year}
+                    </span>
+                  )}
+                </SheetTitle>
+                {movieDetails.originalTitle &&
+                  movieDetails.originalTitle !== movieDetails.title && (
+                    <p className="text-muted-foreground text-sm">{movieDetails.originalTitle}</p>
+                  )}
               </SheetHeader>
-              <div className="space-y-4 px-6 pb-6 overflow-y-auto">
-                {/* Gallery: Trailer + Backdrop Images */}
-                <MediaGallery
-                  trailerUrl={movieDetails.trailerUrl}
-                  images={
-                    movieDetails.backdropImages?.length
-                      ? movieDetails.backdropImages
-                      : movieDetails.backdropUrl
-                        ? [movieDetails.backdropUrl]
-                        : undefined
-                  }
-                  title={movieDetails.title}
-                >
-                  {movieDetails.inLibrary && (
-                    <div className="absolute top-3 right-3">
+
+              <SheetBody className="space-y-4 px-6 pb-6">
+                {/* Identity first: the operator tapped a poster, so they get the poster back,
+                    with the one fact only Hamster knows — is this already here. */}
+                <div className="flex gap-4">
+                  <div className="bg-muted aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-lg">
+                    {movieDetails.posterUrl ? (
+                      <img
+                        src={movieDetails.posterUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <HugeiconsIcon
+                          icon={InformationCircleIcon}
+                          className="text-muted-foreground h-6 w-6"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1 space-y-3">
+                    {movieDetails.inLibrary && (
                       <MediaStatusBadge
-                        status={
-                          movieDetails.hasFile
-                            ? 'downloaded'
-                            : movieDetails.requested
-                              ? 'requested'
-                              : 'downloaded'
-                        }
-                        size="sm"
+                        status={movieStatus.status}
+                        progress={movieStatus.progress}
                         isToggling={togglingDetails}
                         onToggleRequest={
-                          !movieDetails.hasFile && movieDetails.requested
-                            ? toggleMovieDetailsRequested
-                            : undefined
+                          movieDetails.hasFile ? undefined : toggleMovieDetailsRequested
                         }
                       />
-                    </div>
-                  )}
-                </MediaGallery>
+                    )}
 
-                {/* Meta info */}
-                <div className="flex flex-wrap items-center gap-3 text-sm">
-                  {movieDetails.year && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <HugeiconsIcon icon={Calendar03Icon} className="h-4 w-4" />
-                      <span className="readout">{movieDetails.year}</span>
-                    </div>
-                  )}
-                  {movieDetails.runtime && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <HugeiconsIcon icon={Time01Icon} className="h-4 w-4" />
-                      <span className="readout">{movieDetails.runtime} min</span>
-                    </div>
-                  )}
-                  {movieDetails.rating && (
-                    <div className="flex items-center gap-1.5">
-                      <HugeiconsIcon
-                        icon={StarIcon}
-                        className="h-4 w-4 fill-current text-muted-foreground"
-                      />
-                      <span className="readout font-medium">{movieDetails.rating.toFixed(1)}</span>
-                      {movieDetails.votes && (
-                        <span className="readout text-muted-foreground">
-                          ({movieDetails.votes.toLocaleString()})
-                        </span>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      {movieDetails.runtime && (
+                        <div className="text-muted-foreground flex items-center gap-1.5">
+                          <HugeiconsIcon icon={Time01Icon} className="h-4 w-4" />
+                          <span className="readout">{movieDetails.runtime} min</span>
+                        </div>
+                      )}
+                      {movieDetails.rating && (
+                        <div className="flex items-center gap-1.5">
+                          <HugeiconsIcon
+                            icon={StarIcon}
+                            className="text-muted-foreground h-4 w-4 fill-current"
+                          />
+                          <span className="readout font-medium">
+                            {movieDetails.rating.toFixed(1)}
+                          </span>
+                          {movieDetails.votes && (
+                            <span className="readout text-muted-foreground">
+                              ({movieDetails.votes.toLocaleString()})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {movieDetails.status && (
+                        <span className="text-muted-foreground">{movieDetails.status}</span>
                       )}
                     </div>
-                  )}
+
+                    {movieDetails.genres && movieDetails.genres.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {movieDetails.genres.slice(0, 5).map((genre) => (
+                          <Badge key={genre} variant="outline">
+                            {genre}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+
+                    <ExternalLinks tmdbId={movieDetails.tmdbId} imdbId={movieDetails.imdbId} />
+                  </div>
                 </div>
 
-                {/* Genres */}
-                {movieDetails.genres && movieDetails.genres.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {movieDetails.genres.map((genre) => (
-                      <Badge key={genre} variant="secondary">
-                        {genre}
-                      </Badge>
-                    ))}
-                  </div>
+                {movieDetails.overview && (
+                  <p className="text-muted-foreground max-w-[70ch] text-sm leading-relaxed">
+                    {movieDetails.overview}
+                  </p>
                 )}
 
-                {/* Where to Watch */}
-                <StreamingOffers offers={movieDetails.streamingOffers} />
-
-                {/* Cast */}
                 <CastLane cast={movieDetails.cast} />
 
-                {/* Overview */}
-                {movieDetails.overview && (
-                  <div>
-                    <h4 className="text-base font-semibold mb-2">Overview</h4>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {movieDetails.overview}
-                    </p>
-                  </div>
-                )}
-
-                {/* Status */}
-                {movieDetails.status && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <HugeiconsIcon
-                      icon={InformationCircleIcon}
-                      className="h-4 w-4 text-muted-foreground"
+                {/* Artwork sits below the facts, the way the full detail page does it. */}
+                {(movieDetails.trailerUrl ||
+                  movieDetails.backdropImages?.length ||
+                  movieDetails.backdropUrl) && (
+                  <div className="space-y-3">
+                    <h3 className="text-base font-semibold">Media</h3>
+                    <MediaGallery
+                      trailerUrl={movieDetails.trailerUrl}
+                      images={
+                        movieDetails.backdropImages?.length
+                          ? movieDetails.backdropImages
+                          : movieDetails.backdropUrl
+                            ? [movieDetails.backdropUrl]
+                            : undefined
+                      }
+                      title={movieDetails.title}
                     />
-                    <span className="text-muted-foreground">Status:</span>
-                    <span>{movieDetails.status}</span>
                   </div>
                 )}
+              </SheetBody>
 
-                {/* Similar Movies */}
-                <SimilarLane mediaType="movies" tmdbId={movieDetails.tmdbId} />
-
-                {/* Actions */}
-                <div className="flex gap-2 pt-4">
-                  {movieDetails.inLibrary ? (
-                    <Button
-                      className="flex-1"
-                      onClick={() => {
-                        setSheetOpen(false)
-                        router.visit(`/movie/${movieDetails.libraryId}`)
-                      }}
-                    >
-                      <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-2" />
-                      View in Library
-                    </Button>
-                  ) : (
-                    <Button className="flex-1" disabled={adding} onClick={handleAddToLibrary}>
+              <SheetFooter>
+                {movieDetails.inLibrary ? (
+                  <Button
+                    onClick={() => {
+                      setSheetOpen(false)
+                      router.visit(`/movie/${movieDetails.libraryId}`)
+                    }}
+                  >
+                    <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
+                    View in Library
+                  </Button>
+                ) : (
+                  <>
+                    <AddDestination
+                      profiles={movieProfiles}
+                      rootFolders={rootFolders}
+                      mediaType="movies"
+                      configLoaded={configLoaded}
+                    />
+                    <Button disabled={adding} onClick={handleAddToLibrary}>
                       {adding ? (
-                        <Spinner className="h-4 w-4 mr-2" />
+                        <Spinner className="mr-2 h-4 w-4" />
                       ) : (
-                        <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                        <HugeiconsIcon icon={Add01Icon} className="mr-2 h-4 w-4" />
                       )}
                       Add to Library
                     </Button>
-                  )}
-                </div>
-              </div>
+                  </>
+                )}
+              </SheetFooter>
             </>
           ) : detailsType === 'tv' && tvShowDetails ? (
             <>
-              <SheetHeader className="pb-4">
-                <SheetTitle className="pr-8">{tvShowDetails.title}</SheetTitle>
-              </SheetHeader>
-              <div className="space-y-4 px-6 pb-6 overflow-y-auto">
-                {/* Gallery: Trailer + Backdrop Images */}
-                <MediaGallery
-                  trailerUrl={tvShowDetails.trailerUrl}
-                  images={
-                    tvShowDetails.backdropImages?.length
-                      ? tvShowDetails.backdropImages
-                      : tvShowDetails.backdropUrl
-                        ? [tvShowDetails.backdropUrl]
-                        : undefined
-                  }
-                  title={tvShowDetails.title}
-                >
-                  {tvShowDetails.inLibrary && (
-                    <div className="absolute top-3 right-3">
-                      <MediaStatusBadge
-                        status={tvShowDetails.requested ? 'requested' : 'downloaded'}
-                        size="sm"
-                        isToggling={togglingDetails}
-                        onToggleRequest={
-                          tvShowDetails.requested ? toggleTvShowDetailsRequested : undefined
-                        }
-                      />
-                    </div>
-                  )}
-                </MediaGallery>
-
-                {/* Meta info */}
-                <div className="flex flex-wrap items-center gap-3 text-sm">
+              <SheetHeader className="pr-12 pb-4">
+                <SheetTitle>
+                  {tvShowDetails.title}
                   {tvShowDetails.year && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <HugeiconsIcon icon={Calendar03Icon} className="h-4 w-4" />
-                      <span className="readout">{tvShowDetails.year}</span>
-                    </div>
+                    <span className="readout text-muted-foreground ml-2 font-normal">
+                      {tvShowDetails.year}
+                    </span>
                   )}
-                  {tvShowDetails.seasonCount && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <HugeiconsIcon icon={Tv01Icon} className="h-4 w-4" />
-                      <span className="readout">
-                        {tvShowDetails.seasonCount} Season
-                        {tvShowDetails.seasonCount !== 1 ? 's' : ''}
-                      </span>
-                    </div>
+                </SheetTitle>
+                {tvShowDetails.originalTitle &&
+                  tvShowDetails.originalTitle !== tvShowDetails.title && (
+                    <p className="text-muted-foreground text-sm">{tvShowDetails.originalTitle}</p>
                   )}
-                  {tvShowDetails.rating && (
-                    <div className="flex items-center gap-1.5">
-                      <HugeiconsIcon
-                        icon={StarIcon}
-                        className="h-4 w-4 fill-current text-muted-foreground"
+              </SheetHeader>
+
+              <SheetBody className="space-y-4 px-6 pb-6">
+                <div className="flex gap-4">
+                  <div className="bg-muted aspect-[2/3] w-24 shrink-0 overflow-hidden rounded-lg">
+                    {tvShowDetails.posterUrl ? (
+                      <img
+                        src={tvShowDetails.posterUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
                       />
-                      <span className="readout font-medium">{tvShowDetails.rating.toFixed(1)}</span>
-                      {tvShowDetails.votes && (
-                        <span className="readout text-muted-foreground">
-                          ({tvShowDetails.votes.toLocaleString()})
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <HugeiconsIcon icon={Tv01Icon} className="text-muted-foreground h-6 w-6" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1 space-y-3">
+                    {tvShowDetails.inLibrary && (
+                      <MediaStatusBadge
+                        status={tvStatus.status}
+                        progress={tvStatus.progress}
+                        isToggling={togglingDetails}
+                        onToggleRequest={toggleTvShowDetailsRequested}
+                      />
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      {tvShowDetails.seasonCount && (
+                        <div className="text-muted-foreground flex items-center gap-1.5">
+                          <HugeiconsIcon icon={Tv01Icon} className="h-4 w-4" />
+                          <span className="readout">
+                            {tvShowDetails.seasonCount} Season
+                            {tvShowDetails.seasonCount !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      )}
+                      {tvShowDetails.episodeCount && (
+                        <span className="text-muted-foreground">
+                          <span className="readout">{tvShowDetails.episodeCount}</span> episodes
                         </span>
                       )}
+                      {tvShowDetails.rating && (
+                        <div className="flex items-center gap-1.5">
+                          <HugeiconsIcon
+                            icon={StarIcon}
+                            className="text-muted-foreground h-4 w-4 fill-current"
+                          />
+                          <span className="readout font-medium">
+                            {tvShowDetails.rating.toFixed(1)}
+                          </span>
+                          {tvShowDetails.votes && (
+                            <span className="readout text-muted-foreground">
+                              ({tvShowDetails.votes.toLocaleString()})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {tvShowDetails.networks && tvShowDetails.networks.length > 0 && (
+                        <span className="text-muted-foreground">
+                          Network: {tvShowDetails.networks.join(', ')}
+                        </span>
+                      )}
+                      {tvShowDetails.status && (
+                        <span className="text-muted-foreground">{tvShowDetails.status}</span>
+                      )}
                     </div>
-                  )}
+
+                    {tvShowDetails.genres && tvShowDetails.genres.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {tvShowDetails.genres.slice(0, 5).map((genre) => (
+                          <Badge key={genre} variant="outline">
+                            {genre}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+
+                    <ExternalLinks tmdbId={tvShowDetails.tmdbId} mediaType="tv" />
+                  </div>
                 </div>
 
-                {/* Genres */}
-                {tvShowDetails.genres && tvShowDetails.genres.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {tvShowDetails.genres.map((genre) => (
-                      <Badge key={genre} variant="secondary">
-                        {genre}
-                      </Badge>
-                    ))}
-                  </div>
+                {tvShowDetails.overview && (
+                  <p className="text-muted-foreground max-w-[70ch] text-sm leading-relaxed">
+                    {tvShowDetails.overview}
+                  </p>
                 )}
 
-                {/* Networks */}
-                {tvShowDetails.networks && tvShowDetails.networks.length > 0 && (
-                  <div className="text-sm text-muted-foreground">
-                    Network: {tvShowDetails.networks.join(', ')}
-                  </div>
-                )}
-
-                {/* Where to Watch */}
-                <StreamingOffers offers={tvShowDetails.streamingOffers} />
-
-                {/* Cast */}
                 <CastLane cast={tvShowDetails.cast} />
 
-                {/* Overview */}
-                {tvShowDetails.overview && (
-                  <div>
-                    <h4 className="text-base font-semibold mb-2">Overview</h4>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {tvShowDetails.overview}
-                    </p>
-                  </div>
-                )}
-
-                {/* Status */}
-                {tvShowDetails.status && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <HugeiconsIcon
-                      icon={InformationCircleIcon}
-                      className="h-4 w-4 text-muted-foreground"
+                {(tvShowDetails.trailerUrl ||
+                  tvShowDetails.backdropImages?.length ||
+                  tvShowDetails.backdropUrl) && (
+                  <div className="space-y-3">
+                    <h3 className="text-base font-semibold">Media</h3>
+                    <MediaGallery
+                      trailerUrl={tvShowDetails.trailerUrl}
+                      images={
+                        tvShowDetails.backdropImages?.length
+                          ? tvShowDetails.backdropImages
+                          : tvShowDetails.backdropUrl
+                            ? [tvShowDetails.backdropUrl]
+                            : undefined
+                      }
+                      title={tvShowDetails.title}
                     />
-                    <span className="text-muted-foreground">Status:</span>
-                    <span>{tvShowDetails.status}</span>
                   </div>
                 )}
+              </SheetBody>
 
-                {/* Similar Shows */}
-                <SimilarLane mediaType="tv" tmdbId={tvShowDetails.tmdbId} />
-
-                {/* Actions */}
-                <div className="flex gap-2 pt-4">
-                  {tvShowDetails.inLibrary ? (
-                    <Button
-                      className="flex-1"
-                      onClick={() => {
-                        setSheetOpen(false)
-                        router.visit(`/tvshow/${tvShowDetails.libraryId}`)
-                      }}
-                    >
-                      <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-2" />
-                      View in Library
-                    </Button>
-                  ) : (
-                    <Button className="flex-1" disabled={adding} onClick={handleAddToLibrary}>
+              <SheetFooter>
+                {tvShowDetails.inLibrary ? (
+                  <Button
+                    onClick={() => {
+                      setSheetOpen(false)
+                      router.visit(`/tvshow/${tvShowDetails.libraryId}`)
+                    }}
+                  >
+                    <HugeiconsIcon icon={ViewIcon} className="mr-2 h-4 w-4" />
+                    View in Library
+                  </Button>
+                ) : (
+                  <>
+                    <AddDestination
+                      profiles={tvProfiles}
+                      rootFolders={rootFolders}
+                      mediaType="tv"
+                      configLoaded={configLoaded}
+                    />
+                    <Button disabled={adding} onClick={handleAddToLibrary}>
                       {adding ? (
-                        <Spinner className="h-4 w-4 mr-2" />
+                        <Spinner className="mr-2 h-4 w-4" />
                       ) : (
-                        <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-2" />
+                        <HugeiconsIcon icon={Add01Icon} className="mr-2 h-4 w-4" />
                       )}
-                      Add to Library
+                      Choose seasons
                     </Button>
-                  )}
-                </div>
-              </div>
+                  </>
+                )}
+              </SheetFooter>
             </>
           ) : null}
         </SheetContent>
@@ -711,7 +805,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
         mediaType={detailsType === 'movie' ? 'movie' : 'tvshow'}
-        title={`Add ${detailsType === 'movie' ? movieDetails?.title : tvShowDetails?.title}`}
+        title={(detailsType === 'movie' ? movieDetails?.title : tvShowDetails?.title) ?? ''}
         description={`Add ${detailsType === 'movie' ? movieDetails?.title : tvShowDetails?.title} to your library`}
         qualityProfiles={profiles}
         adding={adding}
@@ -721,122 +815,83 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// Extracted sub-components for the sheet content
+// Sheet-local helpers
 
-function StreamingOffers({ offers }: { offers?: StreamingOffer[] }) {
-  if (!offers || offers.length === 0) return null
-
-  const flatrateOffers = offers.filter((o) => o.monetizationType === 'flatrate')
-  const rentBuyOffers = offers.filter(
-    (o) => o.monetizationType === 'rent' || o.monetizationType === 'buy'
-  )
+function ExternalLinks({
+  tmdbId,
+  imdbId,
+  mediaType = 'movie',
+}: {
+  tmdbId: string
+  imdbId?: string
+  mediaType?: 'movie' | 'tv'
+}) {
+  const link =
+    'text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs transition-colors outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] rounded-sm'
 
   return (
-    <div>
-      <h4 className="text-base font-semibold mb-3">Where to Watch</h4>
-      {flatrateOffers.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {flatrateOffers.map((offer) => (
-            <a
-              key={`${offer.providerId}-${offer.presentationType}`}
-              href={offer.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-md border border-border px-3 py-2 hover:bg-accent transition-colors focus-visible:outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              {offer.providerIconUrl && (
-                <img
-                  src={offer.providerIconUrl}
-                  alt={offer.providerName}
-                  className="w-6 h-6 rounded-sm ring-1 ring-border"
-                />
-              )}
-              <span className="text-sm font-medium">{offer.providerName}</span>
-              {offer.presentationType && (
-                <Badge variant="outline" className="px-1.5 py-0">
-                  {offer.presentationType.toUpperCase()}
-                </Badge>
-              )}
-            </a>
-          ))}
-        </div>
-      )}
-      {rentBuyOffers.length > 0 && (
-        <div className="mt-3">
-          <p className="text-xs text-muted-foreground mb-2">Also available to rent or buy:</p>
-          <div className="flex flex-wrap gap-2">
-            {rentBuyOffers.map((offer) => (
-              <a
-                key={`${offer.providerId}-${offer.monetizationType}-${offer.presentationType}`}
-                href={offer.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 hover:bg-accent transition-colors text-xs focus-visible:outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              >
-                {offer.providerIconUrl && (
-                  <img
-                    src={offer.providerIconUrl}
-                    alt={offer.providerName}
-                    className="w-4 h-4 rounded-sm ring-1 ring-border"
-                  />
-                )}
-                <span>{offer.providerName}</span>
-                <span className="text-muted-foreground">
-                  {offer.monetizationType === 'rent' ? 'Rent' : 'Buy'}
-                  {offer.retailPrice ? (
-                    <span className="readout">
-                      {' '}
-                      {offer.currency || 'EUR'} {offer.retailPrice.toFixed(2)}
-                    </span>
-                  ) : (
-                    ''
-                  )}
-                </span>
-              </a>
-            ))}
-          </div>
-        </div>
+    <div className="flex flex-wrap items-center gap-3">
+      <a
+        href={`https://www.themoviedb.org/${mediaType}/${tmdbId}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={link}
+      >
+        <HugeiconsIcon icon={LinkSquare02Icon} className="h-3 w-3" />
+        TMDB
+      </a>
+      {imdbId && (
+        <a
+          href={`https://www.imdb.com/title/${imdbId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={link}
+        >
+          <HugeiconsIcon icon={LinkSquare02Icon} className="h-3 w-3" />
+          IMDb
+        </a>
       )}
     </div>
   )
 }
 
-function CastLane({
-  cast,
+/**
+ * States where an Add will actually land before it is committed. The operator running two
+ * root folders should never have to guess which one a single tap chose for them.
+ */
+function AddDestination({
+  profiles,
+  rootFolders,
+  mediaType,
+  configLoaded,
 }: {
-  cast?: { id: number; name: string; character: string; profileUrl?: string }[]
+  profiles: QualityProfile[]
+  rootFolders: { id: string; path: string; mediaType: string }[]
+  mediaType: 'movies' | 'tv'
+  configLoaded: boolean
 }) {
-  if (!cast || cast.length === 0) return null
+  if (!configLoaded) {
+    return <p className="text-muted-foreground text-xs">Checking destination…</p>
+  }
+
+  const folder = rootFolders.find((rf) => rf.mediaType === mediaType)
+  if (!folder) {
+    return (
+      <p className="text-status-failed-ink text-xs">
+        No root folder configured for {mediaType === 'movies' ? 'movies' : 'TV shows'}. Add one in
+        Settings first.
+      </p>
+    )
+  }
 
   return (
-    <div>
-      <h4 className="text-base font-semibold mb-3">Cast</h4>
-      <div
-        className="flex gap-3 overflow-x-auto pb-2 -mx-6 px-6"
-        style={{ scrollbarWidth: 'thin' }}
-      >
-        {cast.map((actor) => (
-          <div key={actor.id} className="flex-shrink-0 w-20 text-center">
-            <div className="w-20 h-20 rounded-lg overflow-hidden bg-muted mb-1.5">
-              {actor.profileUrl ? (
-                <img
-                  src={actor.profileUrl}
-                  alt={actor.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-base font-semibold">
-                  {actor.name.charAt(0)}
-                </div>
-              )}
-            </div>
-            <p className="text-xs font-medium leading-tight line-clamp-2">{actor.name}</p>
-            <p className="text-xs text-muted-foreground leading-tight line-clamp-2">
-              {actor.character}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
+    <p className="text-muted-foreground text-xs">
+      Adds to{' '}
+      <span className="readout text-foreground">
+        {profiles.length === 1 ? profiles[0].name : 'a profile you pick next'}
+      </span>{' '}
+      in <span className="readout text-foreground">{folder.path}</span>, and searches indexers
+      immediately.
+    </p>
   )
 }

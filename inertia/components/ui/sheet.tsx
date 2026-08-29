@@ -20,6 +20,9 @@ function useSheet() {
   return context
 }
 
+/** Lets SheetContent name itself from whatever SheetTitle the caller renders. */
+const SheetTitleIdContext = React.createContext<string | undefined>(undefined)
+
 interface SheetProps {
   children: React.ReactNode
   open?: boolean
@@ -106,6 +109,10 @@ function SheetContent({ className, children, side = 'right', ...props }: SheetCo
   const [mounted, setMounted] = React.useState(false)
   const [isVisible, setIsVisible] = React.useState(false)
   const [isAnimating, setIsAnimating] = React.useState(false)
+  const titleId = React.useId()
+  const panelRef = React.useRef<HTMLDivElement>(null)
+  const closeRef = React.useRef<HTMLButtonElement>(null)
+  const returnFocusRef = React.useRef<HTMLElement | null>(null)
 
   React.useEffect(() => {
     setMounted(true)
@@ -142,18 +149,51 @@ function SheetContent({ className, children, side = 'right', ...props }: SheetCo
     }
   }, [open])
 
-  // Handle escape key
+  // Move focus in on open and hand it back to whatever opened the sheet on close,
+  // so a keyboard operator is never dropped into the obscured page behind.
+  React.useEffect(() => {
+    if (!open) return
+    returnFocusRef.current = document.activeElement as HTMLElement | null
+    const frame = requestAnimationFrame(() => closeRef.current?.focus())
+    return () => {
+      cancelAnimationFrame(frame)
+      returnFocusRef.current?.focus?.()
+    }
+  }, [open])
+
+  // Escape closes, and Tab is kept inside the panel.
   React.useEffect(() => {
     if (!open) return
 
-    const handleEscape = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Only the topmost layer responds, so a dialog opened from inside the
+        // sheet closes itself without taking the sheet with it.
+        if (document.querySelector('[data-slot="dialog-content"]')) return
         onOpenChange(false)
+        return
+      }
+      if (e.key !== 'Tab') return
+
+      const panel = panelRef.current
+      if (!panel) return
+      const focusable = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
       }
     }
 
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
   }, [open, onOpenChange])
 
   if (!mounted || !isVisible) return null
@@ -190,13 +230,17 @@ function SheetContent({ className, children, side = 'right', ...props }: SheetCo
       />
       {/* Content */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
         data-slot="sheet-content"
         className={cn(
           'bg-popover text-popover-foreground border-border absolute flex flex-col shadow-lg outline-none transition-transform duration-300 ease-out',
-          side === 'right' && 'inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-md',
-          side === 'left' && 'inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-md',
+          // Never full-bleed: a 3rem strip of backdrop stays tappable, which on touch is
+          // the only dismiss affordance there is.
+          side === 'right' && 'inset-y-0 right-0 h-full w-[calc(100%-3rem)] border-l sm:max-w-md',
+          side === 'left' && 'inset-y-0 left-0 h-full w-[calc(100%-3rem)] border-r sm:max-w-md',
           side === 'top' && 'inset-x-0 top-0 h-auto border-b',
           side === 'bottom' && 'inset-x-0 bottom-0 h-auto border-t',
           isAnimating ? slideClasses[side].animate : slideClasses[side].initial,
@@ -204,15 +248,18 @@ function SheetContent({ className, children, side = 'right', ...props }: SheetCo
         )}
         {...props}
       >
-        {children}
+        {/* First child, so it is the first tab stop; pinned to the panel rather than to a
+            scrolling child, so it cannot ride off the top. */}
         <button
+          ref={closeRef}
           type="button"
           onClick={() => onOpenChange(false)}
-          className="focus-visible:ring-ring/50 focus-visible:border-ring text-muted-foreground hover:bg-accent hover:text-accent-foreground absolute top-4 right-4 z-10 flex size-8 items-center justify-center rounded-md border border-transparent transition-colors outline-none focus-visible:ring-[3px] disabled:pointer-events-none"
+          className="focus-visible:ring-ring/50 focus-visible:border-ring text-muted-foreground hover:bg-accent hover:text-accent-foreground absolute top-4 right-4 z-20 flex size-8 items-center justify-center rounded-md border border-transparent transition-colors outline-none focus-visible:ring-[3px] disabled:pointer-events-none"
         >
           <XIcon className="size-4" />
           <span className="sr-only">Close</span>
         </button>
+        <SheetTitleIdContext.Provider value={titleId}>{children}</SheetTitleIdContext.Provider>
       </div>
     </div>,
     document.body
@@ -229,20 +276,36 @@ function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
   )
 }
 
-function SheetFooter({ className, ...props }: React.ComponentProps<'div'>) {
+/** The sheet's only scrolling region. Contained, so an over-scroll never reaches the page. */
+function SheetBody({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
-      data-slot="sheet-footer"
-      className={cn('mt-auto flex flex-col gap-2 p-6 pt-0', className)}
+      data-slot="sheet-body"
+      className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', className)}
       {...props}
     />
   )
 }
 
-function SheetTitle({ className, ...props }: React.ComponentProps<'h2'>) {
+function SheetFooter({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="sheet-footer"
+      className={cn(
+        'border-border bg-popover mt-auto flex shrink-0 flex-col gap-2 border-t p-4',
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function SheetTitle({ className, id, ...props }: React.ComponentProps<'h2'>) {
+  const titleId = React.useContext(SheetTitleIdContext)
   return (
     <h2
       data-slot="sheet-title"
+      id={id ?? titleId}
       className={cn('text-foreground text-lg font-semibold', className)}
       {...props}
     />
@@ -265,6 +328,7 @@ export {
   SheetClose,
   SheetContent,
   SheetHeader,
+  SheetBody,
   SheetFooter,
   SheetTitle,
   SheetDescription,

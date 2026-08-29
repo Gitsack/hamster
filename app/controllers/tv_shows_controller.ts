@@ -450,12 +450,31 @@ export default class TvShowsController {
 
     let trailerUrl: string | null = null
     let backdropImages: string[] = []
+    let cast: { id: number; name: string; character: string; profileUrl: string | null }[] = []
+    let streamingOffers: any[] = []
     if (show.tmdbId) {
       const tmdbIdNum = Number.parseInt(show.tmdbId)
-      ;[trailerUrl, backdropImages] = await Promise.all([
+      const [trailer, images, credits] = await Promise.all([
         tmdbService.getTvShowTrailerUrl(tmdbIdNum).catch(() => null),
         tmdbService.getTvShowImages(tmdbIdNum).catch(() => [] as string[]),
+        tmdbService.getTvShowCredits(tmdbIdNum, 6).catch(() => []),
       ])
+      trailerUrl = trailer
+      backdropImages = images
+      cast = credits.map((c) => ({
+        id: c.id,
+        name: c.name,
+        character: c.character,
+        profileUrl: c.profilePath,
+      }))
+
+      // Same non-blocking, setting-gated lookup the preview endpoint uses.
+      const justwatchEnabled = await AppSetting.get<boolean>('justwatchEnabled', false)
+      if (justwatchEnabled && show.title && show.year) {
+        streamingOffers = await justwatchService
+          .getStreamingAvailability(show.title, show.year, 'show')
+          .catch(() => [])
+      }
     }
 
     // Get active downloads for this show
@@ -481,6 +500,8 @@ export default class TvShowsController {
       genres: show.genres,
       trailerUrl,
       backdropImages,
+      cast,
+      streamingOffers,
       requested: show.requested,
       monitored: show.monitored,
       seasonCount: show.seasonCount,

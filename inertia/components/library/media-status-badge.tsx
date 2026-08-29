@@ -1,3 +1,4 @@
+import { useEffect, useState, type ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -13,6 +14,7 @@ import {
   Delete02Icon,
 } from '@hugeicons/core-free-icons'
 import { cn } from '@/lib/utils'
+import { useCoarsePointer } from '@/hooks/use_coarse_pointer'
 
 export type MediaItemStatus = 'none' | 'requested' | 'downloading' | 'importing' | 'downloaded'
 
@@ -63,6 +65,144 @@ function badgeIconClasses(size: 'default' | 'sm' | 'tiny') {
   return size === 'default' ? 'h-3.5 w-3.5' : 'h-3 w-3'
 }
 
+/** How long an armed badge waits for the confirming tap before standing down. */
+const ARM_TIMEOUT = 3000
+
+interface ReversibleBadgeProps {
+  /** Status ramp fill for the resting state. */
+  fill: string
+  variant?: 'default' | 'secondary'
+  icon: typeof CheckmarkCircle01Icon
+  iconClassName?: string
+  label: ReactNode
+  labelClassName?: string
+  consequenceIcon: typeof CheckmarkCircle01Icon
+  consequenceLabel: ReactNode
+  ariaLabel: string
+  tooltip: ReactNode
+  onConfirm?: () => void
+  sizeClasses: string
+  iconSize: string
+  showText: boolean
+  className?: string
+}
+
+/**
+ * The reversible states share one contract: the badge IS the control, and the reversal
+ * occupies the same pixels as the state it reverses.
+ *
+ * On a fine pointer that swap is hover. A phone has no hover, so the first tap *arms* the
+ * badge — it takes on the same Alarm Red consequence face the hover produces — and a
+ * second tap within three seconds commits. Same pixels, same colour, same words; only the
+ * trigger differs. Moving focus away, or three seconds of nothing, stands it back down.
+ *
+ * Without an `onConfirm` there is nothing to reverse, so the badge renders as a plain
+ * statement of state rather than a control that swaps to a threat and then does nothing.
+ */
+function ReversibleBadge({
+  fill,
+  variant = 'default',
+  icon,
+  iconClassName,
+  label,
+  labelClassName,
+  consequenceIcon,
+  consequenceLabel,
+  ariaLabel,
+  tooltip,
+  onConfirm,
+  sizeClasses,
+  iconSize,
+  showText,
+  className,
+}: ReversibleBadgeProps) {
+  const coarsePointer = useCoarsePointer()
+  const [armed, setArmed] = useState(false)
+
+  useEffect(() => {
+    if (!armed) return
+    const timer = setTimeout(() => setArmed(false), ARM_TIMEOUT)
+    return () => clearTimeout(timer)
+  }, [armed])
+
+  if (!onConfirm) {
+    return (
+      <Badge
+        variant={variant}
+        className={cn('gap-1 border-transparent text-white', fill, sizeClasses, className)}
+      >
+        <HugeiconsIcon icon={icon} className={cn(iconSize, iconClassName)} />
+        {showText && <span className={labelClassName}>{label}</span>}
+      </Badge>
+    )
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            asChild
+            variant={variant}
+            className={cn(
+              interactiveBadge,
+              fill,
+              'hover:bg-status-failed data-[armed=true]:bg-status-failed',
+              sizeClasses,
+              className
+            )}
+          >
+            <button
+              type="button"
+              data-armed={armed ? 'true' : 'false'}
+              aria-label={armed ? `Confirm — ${ariaLabel}` : ariaLabel}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (coarsePointer && !armed) {
+                  setArmed(true)
+                  return
+                }
+                setArmed(false)
+                onConfirm()
+              }}
+              onBlur={() => setArmed(false)}
+            >
+              <HugeiconsIcon
+                icon={icon}
+                className={cn(
+                  iconSize,
+                  iconClassName,
+                  'group-hover:hidden group-data-[armed=true]:hidden'
+                )}
+              />
+              <HugeiconsIcon
+                icon={consequenceIcon}
+                className={cn(iconSize, 'hidden group-hover:block group-data-[armed=true]:block')}
+              />
+              {showText && (
+                <>
+                  <span
+                    className={cn(
+                      labelClassName,
+                      'group-hover:hidden group-data-[armed=true]:hidden'
+                    )}
+                  >
+                    {label}
+                  </span>
+                  <span className="hidden group-hover:inline group-data-[armed=true]:inline">
+                    {consequenceLabel}
+                  </span>
+                </>
+              )}
+            </button>
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>{tooltip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
 export function MediaStatusBadge({
   status,
   progress = 0,
@@ -90,192 +230,83 @@ export function MediaStatusBadge({
     )
   }
 
-  // Downloaded — Complete Green, hover reveals the destructive consequence
+  // The four reversible states share one control; see ReversibleBadge.
   if (status === 'downloaded') {
     return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge
-              asChild
-              variant="default"
-              className={cn(
-                interactiveBadge,
-                'bg-status-complete hover:bg-status-failed',
-                sizeClasses,
-                className
-              )}
-            >
-              <button
-                type="button"
-                aria-label="Downloaded — remove from library"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleRequest?.()
-                }}
-              >
-                <HugeiconsIcon
-                  icon={CheckmarkCircle01Icon}
-                  className={cn(iconSize, 'group-hover:hidden')}
-                />
-                <HugeiconsIcon
-                  icon={Delete02Icon}
-                  className={cn(iconSize, 'hidden group-hover:block')}
-                />
-                {showText && (
-                  <>
-                    <span className="group-hover:hidden">Downloaded</span>
-                    <span className="hidden group-hover:inline">Remove</span>
-                  </>
-                )}
-              </button>
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>
-            Deletes the file from disk and removes it from the library
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <ReversibleBadge
+        fill="bg-status-complete"
+        icon={CheckmarkCircle01Icon}
+        label="Downloaded"
+        consequenceIcon={Delete02Icon}
+        consequenceLabel="Remove"
+        ariaLabel="Downloaded — remove from library"
+        tooltip="Deletes the file from disk and removes it from the library"
+        onConfirm={onToggleRequest}
+        sizeClasses={sizeClasses}
+        iconSize={iconSize}
+        showText={showText}
+        className={className}
+      />
     )
   }
 
-  // Downloading — Transfer Cyan with a live readout percentage, cancellable
   if (status === 'downloading') {
     return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge
-              asChild
-              variant="default"
-              className={cn(
-                interactiveBadge,
-                'bg-status-transfer hover:bg-status-failed',
-                sizeClasses,
-                className
-              )}
-            >
-              <button
-                type="button"
-                aria-label={`Downloading, ${Math.round(progress)}% — cancel this download`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleRequest?.()
-                }}
-              >
-                <HugeiconsIcon
-                  icon={Download01Icon}
-                  className={cn(iconSize, 'group-hover:hidden')}
-                />
-                <HugeiconsIcon
-                  icon={Cancel01Icon}
-                  className={cn(iconSize, 'hidden group-hover:block')}
-                />
-                {showText && (
-                  <>
-                    <span className="readout group-hover:hidden">{Math.round(progress)}%</span>
-                    <span className="hidden group-hover:inline">Cancel</span>
-                  </>
-                )}
-              </button>
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>Cancels the download and removes it from the queue</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <ReversibleBadge
+        fill="bg-status-transfer"
+        icon={Download01Icon}
+        label={`${Math.round(progress)}%`}
+        labelClassName="readout"
+        consequenceIcon={Cancel01Icon}
+        consequenceLabel="Cancel"
+        ariaLabel={`Downloading, ${Math.round(progress)}% — cancel this download`}
+        tooltip="Cancels the download and removes it from the queue"
+        onConfirm={onToggleRequest}
+        sizeClasses={sizeClasses}
+        iconSize={iconSize}
+        showText={showText}
+        className={className}
+      />
     )
   }
 
-  // Importing — Transit Magenta, the one state that animates
   if (status === 'importing') {
     return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge
-              asChild
-              variant="default"
-              className={cn(
-                interactiveBadge,
-                'bg-status-transit hover:bg-status-failed',
-                sizeClasses,
-                className
-              )}
-            >
-              <button
-                type="button"
-                aria-label="Importing — cancel this import"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleRequest?.()
-                }}
-              >
-                <HugeiconsIcon
-                  icon={PackageMovingIcon}
-                  className={cn(iconSize, 'group-hover:hidden animate-pulse')}
-                />
-                <HugeiconsIcon
-                  icon={Cancel01Icon}
-                  className={cn(iconSize, 'hidden group-hover:block')}
-                />
-                {showText && (
-                  <>
-                    <span className="group-hover:hidden">Importing</span>
-                    <span className="hidden group-hover:inline">Cancel</span>
-                  </>
-                )}
-              </button>
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>
-            Moving and renaming the finished download — cancel to stop it
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <ReversibleBadge
+        fill="bg-status-transit"
+        icon={PackageMovingIcon}
+        iconClassName="animate-pulse"
+        label="Importing"
+        consequenceIcon={Cancel01Icon}
+        consequenceLabel="Cancel"
+        ariaLabel="Importing — cancel this import"
+        tooltip="Moving and renaming the finished download — cancel to stop it"
+        onConfirm={onToggleRequest}
+        sizeClasses={sizeClasses}
+        iconSize={iconSize}
+        showText={showText}
+        className={className}
+      />
     )
   }
 
-  // Requested — Queued Amber, nothing is wrong and nothing has happened yet
   if (status === 'requested') {
     return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge
-              asChild
-              variant="secondary"
-              className={cn(
-                interactiveBadge,
-                'bg-status-queued hover:bg-status-failed',
-                sizeClasses,
-                className
-              )}
-            >
-              <button
-                type="button"
-                aria-label="Requested — stop monitoring"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleRequest?.()
-                }}
-              >
-                <HugeiconsIcon icon={Clock01Icon} className={cn(iconSize, 'group-hover:hidden')} />
-                <HugeiconsIcon
-                  icon={Cancel01Icon}
-                  className={cn(iconSize, 'hidden group-hover:block')}
-                />
-                {showText && (
-                  <>
-                    <span className="group-hover:hidden">Requested</span>
-                    <span className="hidden group-hover:inline">Unrequest</span>
-                  </>
-                )}
-              </button>
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>Stops monitoring — no release will be grabbed</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <ReversibleBadge
+        fill="bg-status-queued"
+        variant="secondary"
+        icon={Clock01Icon}
+        label="Requested"
+        consequenceIcon={Cancel01Icon}
+        consequenceLabel="Unrequest"
+        ariaLabel="Requested — stop monitoring"
+        tooltip="Stops monitoring — no release will be grabbed"
+        onConfirm={onToggleRequest}
+        sizeClasses={sizeClasses}
+        iconSize={iconSize}
+        showText={showText}
+        className={className}
+      />
     )
   }
 

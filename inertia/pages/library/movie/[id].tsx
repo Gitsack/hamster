@@ -38,6 +38,8 @@ import { toast } from 'sonner'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
+import { CastLane, type CastMember } from '@/components/library/cast-lane'
+import { StreamingOffers, type StreamingOffer } from '@/components/library/streaming-offers'
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
@@ -96,6 +98,8 @@ interface Movie {
   hasFile: boolean
   trailerUrl: string | null
   backdropImages: string[]
+  cast?: CastMember[]
+  streamingOffers?: StreamingOffer[]
   qualityProfile: QualityProfile | null
   rootFolder: RootFolder | null
   movieFile: MovieFile | null
@@ -754,6 +758,10 @@ export default function MovieDetail() {
             </CardContent>
           </Card>
         )}
+
+        {/* Browsing content: it belongs where browsing is the mode, not in the add-or-not sheet. */}
+        <StreamingOffers offers={movie.streamingOffers} />
+        <CastLane cast={movie.cast} />
 
         {movie.tmdbId && (
           <SimilarLane mediaType="movies" mediaId={movie.id} tmdbId={movie.tmdbId} />
