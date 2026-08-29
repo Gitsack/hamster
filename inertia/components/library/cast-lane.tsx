@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils'
+
 export interface CastMember {
   id: number
   name: string
@@ -16,14 +18,19 @@ const MAX_CAST = 8
  * the operator off the page. A grid has no competing gesture, wraps at every width, and
  * gets the name and role onto one line each instead of stacking two clamped blocks under
  * a square tile.
+ *
+ * Columns answer to the container, not the viewport: this renders both inside a 512px
+ * sheet and across a full detail page, and a viewport breakpoint would put three columns
+ * in the narrow one. A single column below 24rem keeps the name and the role readable
+ * instead of truncating both.
  */
 export function CastLane({ cast, className }: { cast?: CastMember[]; className?: string }) {
   if (!cast || cast.length === 0) return null
 
   return (
-    <div className={className}>
+    <div className={cn('@container', className)}>
       <h3 className="mb-3 text-base font-semibold">Cast</h3>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-4 gap-y-3 @sm:grid-cols-2 @3xl:grid-cols-3">
         {cast.slice(0, MAX_CAST).map((actor) => (
           <div key={actor.id} className="flex min-w-0 items-center gap-2.5">
             <div className="bg-muted size-10 shrink-0 overflow-hidden rounded-full">
