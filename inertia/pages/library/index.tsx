@@ -140,6 +140,12 @@ const MEDIA_TYPE_CONFIG: Record<
     addUrl: string
     itemLabel: string
     countLabel: string
+    /**
+     * Artwork shape. Films, shows and books are 2:3 posters — the ratio TMDB serves and
+     * the one DESIGN.md specifies. Artists and authors are square portraits, which is
+     * what their detail heroes already use via MediaHero's posterAspect.
+     */
+    artworkAspect: string
   }
 > = {
   movies: {
@@ -148,6 +154,7 @@ const MEDIA_TYPE_CONFIG: Record<
     addUrl: '/search?mode=movies',
     itemLabel: 'movie',
     countLabel: 'movies',
+    artworkAspect: 'aspect-[2/3]',
   },
   tv: {
     label: 'TV Shows',
@@ -155,6 +162,7 @@ const MEDIA_TYPE_CONFIG: Record<
     addUrl: '/search?mode=tv',
     itemLabel: 'show',
     countLabel: 'shows',
+    artworkAspect: 'aspect-[2/3]',
   },
   music: {
     label: 'Music',
@@ -162,6 +170,7 @@ const MEDIA_TYPE_CONFIG: Record<
     addUrl: '/search?mode=music&type=artist',
     itemLabel: 'artist',
     countLabel: 'albums',
+    artworkAspect: 'aspect-square',
   },
   books: {
     label: 'Books',
@@ -169,6 +178,7 @@ const MEDIA_TYPE_CONFIG: Record<
     addUrl: '/search?mode=books',
     itemLabel: 'author',
     countLabel: 'books',
+    artworkAspect: 'aspect-square',
   },
   missing: {
     label: 'Missing',
@@ -176,6 +186,7 @@ const MEDIA_TYPE_CONFIG: Record<
     addUrl: '/search',
     itemLabel: 'item',
     countLabel: 'items',
+    artworkAspect: 'aspect-[2/3]',
   },
 }
 
@@ -1154,7 +1165,7 @@ export default function Library() {
             href={item.detailUrl}
             tabIndex={-1}
             aria-hidden="true"
-            className="aspect-[9/16] min-h-40 shrink-0 self-stretch bg-muted overflow-hidden relative"
+            className={`${config.artworkAspect} min-h-40 shrink-0 self-stretch bg-muted overflow-hidden relative`}
           >
             {showImage ? (
               <img
