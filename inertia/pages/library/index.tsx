@@ -1154,7 +1154,7 @@ export default function Library() {
             href={item.detailUrl}
             tabIndex={-1}
             aria-hidden="true"
-            className="w-15 min-h-[6.667rem] shrink-0 self-stretch bg-muted overflow-hidden relative"
+            className="w-18 min-h-32 shrink-0 self-stretch bg-muted overflow-hidden relative"
           >
             {showImage ? (
               <img
