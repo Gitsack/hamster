@@ -3,6 +3,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AudioLanguageRules } from '@/components/settings/audio-language-rules'
 
 /**
  * Mirrors QualityRequirements on the server. Kept as a plain object so the
@@ -13,6 +14,10 @@ export interface QualityRequirements {
   minAudioTier: string | null
   blockedAudioCodecs: string[]
   preferredAudioCodecs: string[]
+  requiredAudioLanguages: string[]
+  requireAllAudioLanguages: boolean
+  preferredAudioLanguages: string[]
+  blockedAudioLanguages: string[]
   requireHdr: boolean
   blockedVideoCodecs: string[]
   blockUpscaled: boolean
@@ -28,6 +33,10 @@ export const DEFAULT_REQUIREMENTS: QualityRequirements = {
   minAudioTier: null,
   blockedAudioCodecs: [],
   preferredAudioCodecs: [],
+  requiredAudioLanguages: [],
+  requireAllAudioLanguages: false,
+  preferredAudioLanguages: [],
+  blockedAudioLanguages: [],
   requireHdr: false,
   blockedVideoCodecs: [],
   blockUpscaled: true,
@@ -320,6 +329,13 @@ export function QualityRequirementsFields({ value, onChange, showVideoRules }: P
           </fieldset>
         </>
       )}
+
+      {/*
+       * Outside the video block on purpose: a book or an audiobook in the wrong
+       * language is as useless as a film in one, and the server evaluates the
+       * rule for every media type.
+       */}
+      <AudioLanguageRules value={value} onChange={(next) => onChange({ ...value, ...next })} />
 
       <fieldset className="space-y-3 border-t border-border pt-6">
         <legend className="sr-only">Matching</legend>

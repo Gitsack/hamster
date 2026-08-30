@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn } from '@/lib/utils'
+import { describeLanguages, languageTag } from '@/lib/languages'
 
 /**
  * The parsed facts the API returns alongside every release. Mirrors
@@ -31,6 +32,10 @@ export interface ReleaseQuality {
   isJunkSource: boolean
   junkSourceLabel: string | null
   releaseGroup: string | null
+  languages?: string[]
+  subtitleLanguages?: string[]
+  isMultiAudio?: boolean
+  isDubbed?: boolean
 }
 
 export interface AnnotatedRelease {
@@ -104,6 +109,35 @@ export function releaseBadges(release: AnnotatedRelease): ReleaseBadge[] {
       label: 'audio unknown',
       tone: 'neutral',
       hint: 'The title says nothing about audio',
+    })
+  }
+
+  // Language sits next to the audio badge, because it is the same decision:
+  // whether the track you would end up listening to is one you can listen to.
+  const languages = q.languages ?? []
+  if (languages.length > 0) {
+    badges.push({
+      label: languages.map(languageTag).join('/'),
+      tone: 'neutral',
+      hint: `Audio is ${describeLanguages(languages)}`,
+    })
+  } else if (q.isMultiAudio) {
+    badges.push({
+      label: 'MULTI',
+      tone: 'neutral',
+      hint: 'Several audio tracks, and the title does not say which',
+    })
+  }
+  if (q.isDubbed) {
+    badges.push({ label: 'DUBBED', tone: 'neutral', hint: 'Dubbed, not the original recording' })
+  }
+  if (q.subtitleLanguages && q.subtitleLanguages.length > 0) {
+    // VOSTFR reads as a French release to everyone who has not been burned by
+    // it once. Say plainly that this is subtitles, not audio.
+    badges.push({
+      label: `${q.subtitleLanguages.map(languageTag).join('/')} subs`,
+      tone: 'neutral',
+      hint: `Subtitles only — the audio is not ${describeLanguages(q.subtitleLanguages)}`,
     })
   }
 

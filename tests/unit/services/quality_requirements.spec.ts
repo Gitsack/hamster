@@ -8,6 +8,7 @@ import {
 } from '../../../app/services/quality/quality_parser.js'
 import {
   DEFAULT_QUALITY_REQUIREMENTS,
+  evaluateLanguageClaims,
   evaluateReleaseAttributes,
   evaluateFileQuality,
   normalizeProbedAudioCodec,
@@ -15,6 +16,7 @@ import {
   type QualityRequirements,
 } from '../../../app/services/quality/quality_requirements.js'
 import { parseQuality } from '../../../app/services/quality/quality_parser.js'
+import { parseLanguages } from '../../../app/services/quality/language_parser.js'
 import {
   evaluateReleases,
   type ProfileContext,
@@ -160,6 +162,7 @@ test.group('quality_requirements | file checks', () => {
         audioCodec: 'AAC',
         audioChannels: 2,
         audioBitrateKbps: 128,
+        audioLanguages: [],
       },
       requirements({ minAudioChannels: 6 })
     )
@@ -177,6 +180,7 @@ test.group('quality_requirements | file checks', () => {
         audioCodec: null,
         audioChannels: null,
         audioBitrateKbps: null,
+        audioLanguages: [],
       },
       requirements(),
       { minHeight: 1080 }
@@ -195,6 +199,7 @@ test.group('quality_requirements | file checks', () => {
         audioCodec: null,
         audioChannels: null,
         audioBitrateKbps: null,
+        audioLanguages: [],
       },
       requirements({ minAudioChannels: 6, minAudioBitrateKbps: 384, minVideoBitrateKbps: 5000 })
     )
@@ -286,5 +291,124 @@ test.group('quality_scorer | evaluateReleases', () => {
     )
     assert.isEmpty(accepted)
     assert.match(rejected[0].evaluation.rejections[0], /maximum size/)
+  })
+})
+
+test.group('quality_requirements | audio languages', () => {
+  const claims = (title: string, overrides: Partial<QualityRequirements> = {}) =>
+    evaluateLanguageClaims(parseLanguages(title), requirements(overrides))
+
+  test('rejects a release that states only the wrong language', ({ assert }) => {
+    const result = claims('Movie.2024.ITA.1080p.BluRay.x264-GRP', {
+      requiredAudioLanguages: ['de'],
+    })
+    assert.isNotEmpty(result.rejections)
+    assert.include(result.rejections[0], 'German')
+  })
+
+  test('never rejects a release that states nothing', ({ assert }) => {
+    const result = claims('Movie.2024.1080p.BluRay.x264-GRP', {
+      requiredAudioLanguages: ['de'],
+    })
+    assert.isEmpty(result.rejections)
+    // Ranked below one that says the right thing, which is the whole mechanism.
+    assert.isBelow(result.bonus, 0)
+  })
+
+  test('never rejects MULTi for a language it does not name', ({ assert }) => {
+    const result = claims('Movie.2024.MULTi.1080p.BluRay.x264-GRP', {
+      requiredAudioLanguages: ['de'],
+    })
+    assert.isEmpty(result.rejections)
+  })
+
+  test('accepts a dual-language release under an all-of rule', ({ assert }) => {
+    const dual = claims('Movie.2024.German.DL.1080p.BluRay.x264-GRP', {
+      requiredAudioLanguages: ['de', 'en'],
+      requireAllAudioLanguages: true,
+    })
+    assert.isEmpty(dual.rejections)
+
+    const germanOnly = claims('Movie.2024.German.1080p.BluRay.x264-GRP', {
+      requiredAudioLanguages: ['de', 'en'],
+      requireAllAudioLanguages: true,
+    })
+    assert.isNotEmpty(germanOnly.rejections)
+    assert.include(germanOnly.rejections[0], 'missing English')
+  })
+
+  test('takes any one language when not asked for all of them', ({ assert }) => {
+    const result = claims('Movie.2024.German.1080p.BluRay.x264-GRP', {
+      requiredAudioLanguages: ['de', 'en'],
+    })
+    assert.isEmpty(result.rejections)
+  })
+
+  test('blocks a language only when it is the whole release', ({ assert }) => {
+    const only = claims('Movie.2024.ITA.1080p.BluRay.x264-GRP', {
+      blockedAudioLanguages: ['it'],
+    })
+    assert.isNotEmpty(only.rejections)
+
+    // An extra Italian track is not a reason to refuse an English release.
+    const alongside = claims('Movie.2024.ITA.ENG.1080p.BluRay.x264-GRP', {
+      blockedAudioLanguages: ['it'],
+    })
+    assert.isEmpty(alongside.rejections)
+  })
+
+  test('ranks the right language above the ones that merely might be', ({ assert }) => {
+    const options = { requiredAudioLanguages: ['de'] }
+    const stated = claims('Movie.2024.German.1080p.BluRay.x264-GRP', options)
+    const multi = claims('Movie.2024.MULTi.1080p.BluRay.x264-GRP', options)
+    const silent = claims('Movie.2024.1080p.BluRay.x264-GRP', options)
+
+    assert.isAbove(stated.bonus, multi.bonus)
+    assert.isAbove(multi.bonus, silent.bonus)
+  })
+
+  test('carries the rule through the full release evaluation', ({ assert }) => {
+    const parsed = parseQuality('Movie.2024.ITA.1080p.BluRay.x264-GRP', 'movies')
+    const result = evaluateReleaseAttributes(
+      parsed,
+      requirements({ requiredAudioLanguages: ['de'] })
+    )
+    assert.isNotEmpty(result.rejections)
+  })
+})
+
+test.group('quality_requirements | audio languages on disk', () => {
+  const facts = (audioLanguages: string[]) => ({
+    width: 1920,
+    height: 1080,
+    videoCodec: 'h264',
+    videoBitrateKbps: 8000,
+    audioCodec: 'EAC3' as const,
+    audioChannels: 6,
+    audioBitrateKbps: 640,
+    audioLanguages,
+  })
+
+  test('flags an imported file whose tracks are the wrong language', ({ assert }) => {
+    const issues = evaluateFileQuality(
+      facts(['it']),
+      requirements({ requiredAudioLanguages: ['de'] })
+    )
+    assert.lengthOf(issues, 1)
+    assert.equal(issues[0].code, 'audio-language')
+  })
+
+  test('says nothing about a file with no language tags at all', ({ assert }) => {
+    const issues = evaluateFileQuality(facts([]), requirements({ requiredAudioLanguages: ['de'] }))
+    assert.isEmpty(issues)
+  })
+
+  test('names what is missing under an all-of rule', ({ assert }) => {
+    const issues = evaluateFileQuality(
+      facts(['de']),
+      requirements({ requiredAudioLanguages: ['de', 'en'], requireAllAudioLanguages: true })
+    )
+    assert.lengthOf(issues, 1)
+    assert.include(issues[0].message, 'English')
   })
 })

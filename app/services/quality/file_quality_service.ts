@@ -21,6 +21,7 @@ import {
   type FileQualityIssue,
 } from './quality_requirements.js'
 import { qualityNameToId, type MediaType } from './quality_parser.js'
+import { languageName, type LanguageCode } from './language_parser.js'
 import type { QualityItem } from '#models/quality_profile'
 
 /** Minimum height implied by each video quality bucket id. */
@@ -40,6 +41,8 @@ const QUALITY_MIN_HEIGHT: Record<number, number> = {
  * Convert an ffprobe result into the media info we persist on file records.
  */
 export function analysisToMediaInfo(analysis: MediaAnalysis): VideoMediaInfo {
+  const audioLanguages = distinctLanguages(analysis.audioTracks)
+
   return {
     codec: analysis.videoCodec ?? undefined,
     resolution: analysis.videoHeight ? `${analysis.videoHeight}p` : undefined,
@@ -54,7 +57,25 @@ export function analysisToMediaInfo(analysis: MediaAnalysis): VideoMediaInfo {
     audioChannelLayout: analysis.audioChannelLayout ?? undefined,
     container: analysis.container,
     duration: analysis.duration || undefined,
+    audioTracks: analysis.audioTracks,
+    audioLanguages: audioLanguages.length > 0 ? audioLanguages : undefined,
   }
+}
+
+/**
+ * The languages present across a file's audio tracks, in track order and
+ * without repeats. Untagged tracks contribute nothing rather than an "unknown"
+ * entry — a rule reads the empty list as "we do not know", and one placeholder
+ * in it would turn that into a false claim.
+ */
+export function distinctLanguages(
+  tracks: { language: LanguageCode | null }[] | undefined
+): LanguageCode[] {
+  const seen: LanguageCode[] = []
+  for (const track of tracks ?? []) {
+    if (track.language && !seen.includes(track.language)) seen.push(track.language)
+  }
+  return seen
 }
 
 /**
@@ -85,6 +106,7 @@ export function factsFromMediaInfo(info: VideoMediaInfo | null): FileQualityFact
       audioCodec: null,
       audioChannels: null,
       audioBitrateKbps: null,
+      audioLanguages: [],
     }
   }
 
@@ -98,6 +120,7 @@ export function factsFromMediaInfo(info: VideoMediaInfo | null): FileQualityFact
     audioCodec: normalizeProbedAudioCodec(info.audioCodec, info.audioProfile),
     audioChannels: info.audioChannels ?? null,
     audioBitrateKbps: toKbps(info.audioBitrate),
+    audioLanguages: info.audioLanguages ?? distinctLanguages(info.audioTracks),
   }
 }
 
@@ -185,12 +208,18 @@ export function assessFile(
 export interface MediaInfoParts {
   video: string | null
   audio: string | null
+  /** "German, English" — spelled out, because this band has room for labels. */
+  languages: string | null
 }
 
 export function describeMediaInfoParts(info: VideoMediaInfo | null): MediaInfoParts {
-  if (!info) return { video: null, audio: null }
-  const { resolution, codec, audio } = mediaInfoFacts(info)
-  return { video: join([resolution, codec], ' '), audio }
+  if (!info) return { video: null, audio: null, languages: null }
+  const { resolution, codec, audio, languages } = mediaInfoFacts(info)
+  return {
+    video: join([resolution, codec], ' '),
+    audio,
+    languages: languages.length > 0 ? languages.map(languageName).join(', ') : null,
+  }
 }
 
 /**
@@ -199,8 +228,11 @@ export function describeMediaInfoParts(info: VideoMediaInfo | null): MediaInfoPa
  */
 export function describeMediaInfo(info: VideoMediaInfo | null): string | null {
   if (!info) return null
-  const { resolution, codec, audio } = mediaInfoFacts(info)
-  return join([resolution, codec, audio], ' · ')
+  const { resolution, codec, audio, languages } = mediaInfoFacts(info)
+  // Codes rather than names here: an episode row inside a season accordion has
+  // room for "DE/EN" and none at all for "German, English".
+  const languageTag = languages.length > 0 ? languages.map((c) => c.toUpperCase()).join('/') : null
+  return join([resolution, codec, audio, languageTag], ' · ')
 }
 
 function mediaInfoFacts(info: VideoMediaInfo) {
@@ -214,6 +246,7 @@ function mediaInfoFacts(info: VideoMediaInfo) {
     resolution: info.height ? `${info.height}p` : (info.resolution ?? null),
     codec: info.codec ?? null,
     audio: join([audioCodec, channelLabel], ' '),
+    languages: info.audioLanguages ?? distinctLanguages(info.audioTracks),
   }
 }
 
@@ -233,7 +266,10 @@ function join(parts: (string | null | undefined)[], separator: string): string |
 export async function ensureMediaInfo<
   T extends { mediaInfo: VideoMediaInfo | null; relativePath: string; save(): Promise<unknown> },
 >(file: T, rootFolderPath: string | null | undefined): Promise<VideoMediaInfo | null> {
-  if (file.mediaInfo && file.mediaInfo.audioCodec) return file.mediaInfo
+  // `audioTracks` is the newer half of this record. A file probed before we
+  // read stream tags has an audioCodec and no tracks, and skipping on the codec
+  // alone would leave every existing library permanently language-blind.
+  if (file.mediaInfo?.audioCodec && file.mediaInfo.audioTracks) return file.mediaInfo
   if (!rootFolderPath) return file.mediaInfo
 
   const info = await probeVideoFile(path.join(rootFolderPath, file.relativePath))

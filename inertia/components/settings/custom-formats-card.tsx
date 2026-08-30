@@ -27,6 +27,7 @@ type Implementation =
   | 'source'
   | 'codec'
   | 'releaseGroup'
+  | 'language'
 
 interface Specification {
   name: string
@@ -61,6 +62,7 @@ const IMPLEMENTATION_LABELS: Record<Implementation, string> = {
   source: 'Source is',
   codec: 'Video codec is',
   releaseGroup: 'Release group is',
+  language: 'Audio language is',
 }
 
 const VALUE_HINTS: Record<Implementation, string> = {
@@ -70,6 +72,9 @@ const VALUE_HINTS: Record<Implementation, string> = {
   source: 'bluray, web, hdtv, dvd, cam or remux',
   codec: 'x264, x265, av1, vp9, xvid or divx',
   releaseGroup: 'Group name, e.g. FraMeSToR',
+  // Codes rather than names, so the value means the same thing here as it does
+  // in a profile's language rules.
+  language: "Language code, e.g. de, en, ja — or 'multi'",
 }
 
 const EMPTY_SPEC: Specification = {

@@ -50,6 +50,7 @@ import { VideoPlayer } from '@/components/player/video_player'
 import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
 import { ReplaceFileDialog } from '@/components/library/replace-file-dialog'
 import { MediaFileCard } from '@/components/library/media-file-card'
+import { AudioTrackList, type AudioTrack } from '@/components/library/audio-track-list'
 
 interface QualityProfile {
   id: number
@@ -73,6 +74,9 @@ interface MovieFile {
   /** The same probe, split for the spec band: "1080p h264" and "EAC3 5.1". */
   video: string | null
   audio: string | null
+  /** "German, English" — every language across the file's audio tracks. */
+  languages: string | null
+  mediaInfo: { audioTracks?: AudioTrack[] } | null
   downloadUrl: string
 }
 
@@ -639,6 +643,7 @@ export default function MovieDetail() {
               { label: 'Size', value: formatSize(movie.movieFile.size), mono: true },
               { label: 'Video', value: movie.movieFile.video, mono: true },
               { label: 'Audio', value: movie.movieFile.audio, mono: true },
+              { label: 'Languages', value: movie.movieFile.languages },
             ]}
             actions={
               <>
@@ -682,6 +687,8 @@ export default function MovieDetail() {
               </>
             }
           >
+            <AudioTrackList tracks={movie.movieFile.mediaInfo?.audioTracks} />
+
             {movie.qualityAssessment && !movie.qualityAssessment.meetsProfile && (
               <div className="border-border space-y-2 border-t pt-3">
                 <p className="text-status-failed-ink flex items-center gap-2 text-sm font-medium">

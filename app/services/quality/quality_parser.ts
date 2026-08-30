@@ -19,6 +19,8 @@
  *   1: EPUB, 2: PDF, 3: MOBI, 4: AZW3, 5: CBZ, 6: CBR
  */
 
+import { parseLanguages, type ParsedLanguages } from './language_parser.js'
+
 export type MediaType = 'movies' | 'tv' | 'music' | 'books'
 
 /**
@@ -124,6 +126,13 @@ export interface ParsedQuality {
   mediaType: MediaType
   qualityId: number | null // ID matching the quality profile item
   qualityName: string | null // Human-readable name
+  /**
+   * What the title claims about audio language. Sits beside the quality rather
+   * than inside `video` because it is a property of the release, not of the
+   * picture — and because a foreign-language dub is the one flaw no amount of
+   * resolution makes up for.
+   */
+  languages: ParsedLanguages
   video?: ParsedVideoQuality
   music?: ParsedMusicQuality
   book?: ParsedBookQuality
@@ -616,22 +625,24 @@ function mapBookToQualityId(parsed: ParsedBookQuality): {
  * Parse a release title and determine quality for a given media type
  */
 export function parseQuality(title: string, mediaType: MediaType): ParsedQuality {
+  const languages = parseLanguages(title)
+
   switch (mediaType) {
     case 'movies':
     case 'tv': {
       const video = parseVideoQuality(title)
       const { id, name } = mapVideoToQualityId(video)
-      return { mediaType, qualityId: id, qualityName: name, video }
+      return { mediaType, qualityId: id, qualityName: name, languages, video }
     }
     case 'music': {
       const music = parseMusicQuality(title)
       const { id, name } = mapMusicToQualityId(music)
-      return { mediaType, qualityId: id, qualityName: name, music }
+      return { mediaType, qualityId: id, qualityName: name, languages, music }
     }
     case 'books': {
       const book = parseBookQuality(title)
       const { id, name } = mapBookToQualityId(book)
-      return { mediaType, qualityId: id, qualityName: name, book }
+      return { mediaType, qualityId: id, qualityName: name, languages, book }
     }
   }
 }

@@ -1,5 +1,6 @@
 import CustomFormat from '#models/custom_format'
 import type { CustomFormatSpecification } from '#models/custom_format'
+import { parseLanguages } from './language_parser.js'
 import db from '@adonisjs/lucid/services/db'
 
 export interface CustomFormatMatch {
@@ -85,6 +86,15 @@ export class CustomFormatMatcher {
         }
         const pattern = codecPatterns[value]
         result = pattern ? pattern.test(releaseTitle) : false
+        break
+      }
+
+      case 'language': {
+        // Delegates to the language parser rather than matching the raw string,
+        // so a format written for German also catches GERMAN.DL and is not
+        // fooled by a film with "German" in its own title.
+        const { audio, isMulti } = parseLanguages(releaseTitle)
+        result = audio.includes(value) || (value === 'multi' && isMulti)
         break
       }
 

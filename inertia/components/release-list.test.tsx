@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
+import { ReleaseList, releaseBadges, type AnnotatedRelease } from '@/components/release-list'
 import { ReplaceFileDialog } from '@/components/library/replace-file-dialog'
 
 const base = {
@@ -97,5 +97,33 @@ describe('ReleaseList', () => {
       />
     )
     expect(screen.getByText(/Replace Movie/)).toBeTruthy()
+  })
+})
+
+describe('releaseBadges | languages', () => {
+  const badge = (quality: Partial<typeof base>) =>
+    releaseBadges({
+      id: 'x',
+      title: 't',
+      size: 1,
+      indexer: 'i',
+      downloadUrl: 'u',
+      quality: { ...base, ...quality },
+    }).map((b) => b.label)
+
+  it('names the audio languages the title claims', () => {
+    expect(badge({ languages: ['de', 'en'] })).toContain('DE/EN')
+  })
+
+  it('says MULTI when the title claims tracks it does not name', () => {
+    expect(badge({ languages: [], isMultiAudio: true })).toContain('MULTI')
+  })
+
+  it('marks a subtitle language as subtitles, not as audio', () => {
+    // VOSTFR: French subs over the original audio. A bare "FR" here would be
+    // the badge that gets someone the wrong file.
+    const labels = badge({ languages: [], subtitleLanguages: ['fr'] })
+    expect(labels).toContain('FR subs')
+    expect(labels).not.toContain('FR')
   })
 })

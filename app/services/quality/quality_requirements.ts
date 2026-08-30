@@ -6,9 +6,9 @@
  * one — "Bluray 1080p" covers both a 25 GB remux with a TrueHD 7.1 track and a
  * 1.2 GB rip with 96 kbps stereo AAC, and both parse into the same bucket.
  *
- * Requirements add the rest of the picture: audio codec/channels, HDR, video
- * codec, upscales and burned-in subtitles, plus custom-format score. They are
- * applied twice:
+ * Requirements add the rest of the picture: audio codec/channels, audio
+ * language, HDR, video codec, upscales and burned-in subtitles, plus
+ * custom-format score. They are applied twice:
  *
  *  1. Against a *release title*, before grabbing. Titles are incomplete, so a
  *     missing attribute is never a rejection here — it is a ranking penalty.
@@ -20,6 +20,7 @@
 
 import type { AudioCodec, AudioTier, ParsedQuality } from './quality_parser.js'
 import { AUDIO_TIER_RANK, audioTierFor } from './quality_parser.js'
+import { describeLanguages, type LanguageCode, type ParsedLanguages } from './language_parser.js'
 
 export interface QualityRequirements {
   /** Reject/flag audio with fewer channels than this (2 = stereo, 6 = 5.1, 8 = 7.1). */
@@ -30,6 +31,21 @@ export interface QualityRequirements {
   blockedAudioCodecs: AudioCodec[]
   /** Rank these audio codecs above others of the same video quality. */
   preferredAudioCodecs: AudioCodec[]
+  /**
+   * Audio languages the release must carry. Empty means any language will do,
+   * which is the only sane default for a library that was filled before anyone
+   * set a language rule.
+   */
+  requiredAudioLanguages: LanguageCode[]
+  /**
+   * Demand every required language rather than any one of them — the dual-audio
+   * household, where a German track alone is as wrong as an English one alone.
+   */
+  requireAllAudioLanguages: boolean
+  /** Rank releases carrying these languages above the rest. Never a filter. */
+  preferredAudioLanguages: LanguageCode[]
+  /** Never accept a release whose only audio is one of these. */
+  blockedAudioLanguages: LanguageCode[]
   /** Require an HDR/Dolby Vision release. */
   requireHdr: boolean
   /** Never accept these video codecs ('x264', 'x265', 'AV1', 'VP9', 'XviD'). */
@@ -52,6 +68,10 @@ export const DEFAULT_QUALITY_REQUIREMENTS: QualityRequirements = {
   minAudioTier: null,
   blockedAudioCodecs: [],
   preferredAudioCodecs: [],
+  requiredAudioLanguages: [],
+  requireAllAudioLanguages: false,
+  preferredAudioLanguages: [],
+  blockedAudioLanguages: [],
   requireHdr: false,
   blockedVideoCodecs: [],
   blockUpscaled: true,
@@ -105,6 +125,82 @@ export function describeAudioTier(tier: AudioTier): string {
 }
 
 /**
+ * Judge what a release title claims about its audio language.
+ *
+ * Three rules, and one exception that runs through all of them. The exception
+ * is MULTi: a release that says "several languages" without naming them cannot
+ * be refused for missing one, because it very likely has it. Refusing there is
+ * how a language rule quietly hides half the good releases on an indexer.
+ *
+ * Silence is treated the same way it is everywhere else in this file — a title
+ * that names no language is ranked below one that names the right one, and is
+ * never rejected for it. The file check after import is where a German profile
+ * finds out the German release it grabbed is English-only.
+ */
+export function evaluateLanguageClaims(
+  languages: ParsedLanguages,
+  requirements: QualityRequirements
+): AttributeEvaluation {
+  const rejections: string[] = []
+  let bonus = 0
+
+  const { requiredAudioLanguages: required, blockedAudioLanguages: blocked } = requirements
+  const stated = languages.audio
+  const saysNothing = stated.length === 0
+
+  if (!saysNothing && !languages.isMulti && blocked.length > 0) {
+    // Only when *every* stated track is blocked. A German/English dual release
+    // is still watchable to someone who blocked German, and rejecting it would
+    // punish the release for carrying an extra track.
+    if (stated.every((code) => blocked.includes(code))) {
+      rejections.push(`Audio is ${describeLanguages(stated)}, which this profile never accepts`)
+    }
+  }
+
+  if (required.length > 0 && !saysNothing && !languages.isMulti) {
+    const missing = required.filter((code) => !stated.includes(code))
+
+    if (requirements.requireAllAudioLanguages) {
+      if (missing.length > 0) {
+        rejections.push(
+          `Release is ${describeLanguages(stated)}; profile needs ${describeLanguages(required)} and is missing ${describeLanguages(missing)}`
+        )
+      }
+    } else if (missing.length === required.length) {
+      rejections.push(
+        `Release is ${describeLanguages(stated)}; profile needs ${describeLanguages(required)}`
+      )
+    }
+  }
+
+  // --- ranking ---
+
+  if (required.length > 0) {
+    const present = required.filter((code) => stated.includes(code))
+    if (present.length === required.length) {
+      bonus += 25
+    } else if (present.length > 0) {
+      bonus += 12
+    } else if (saysNothing) {
+      // Not a rejection, but a gamble: the profile asked for a language and
+      // this release will not say whether it has one.
+      bonus -= 10
+    }
+  }
+
+  for (const code of requirements.preferredAudioLanguages) {
+    if (stated.includes(code)) bonus += 10
+  }
+
+  if (languages.isMulti) {
+    // More tracks is more chances of the right one, and nothing to lose.
+    bonus += 6
+  }
+
+  return { rejections, bonus }
+}
+
+/**
  * Apply requirements to a parsed release title.
  *
  * Unknown attributes are penalised, not rejected — see the module comment.
@@ -115,6 +211,13 @@ export function evaluateReleaseAttributes(
 ): AttributeEvaluation {
   const rejections: string[] = []
   let bonus = 0
+
+  // Language is a property of the release, not of the picture, so it is judged
+  // before the video guard below — a language rule on an audiobook profile is
+  // a coherent thing to ask for even though none of the codec rules are.
+  const language = evaluateLanguageClaims(parsed.languages, requirements)
+  rejections.push(...language.rejections)
+  bonus += language.bonus
 
   const video = parsed.video
   if (!video) {
@@ -220,6 +323,12 @@ export interface FileQualityFacts {
   audioCodec: AudioCodec | null
   audioChannels: number | null
   audioBitrateKbps: number | null
+  /**
+   * Languages of the tagged audio tracks. Empty means the file has no language
+   * tags at all, which is common enough that it must read as "unknown" and not
+   * as "no German track".
+   */
+  audioLanguages: LanguageCode[]
 }
 
 const FFPROBE_AUDIO_CODECS: Record<string, AudioCodec> = {
@@ -270,6 +379,7 @@ export interface FileQualityIssue {
     | 'resolution'
     | 'audio-codec'
     | 'audio-channels'
+    | 'audio-language'
     | 'audio-bitrate'
     | 'video-bitrate'
     | 'video-codec'
@@ -326,6 +436,34 @@ export function evaluateFileQuality(
       code: 'audio-channels',
       message: `Audio is ${describeChannels(facts.audioChannels)}, profile needs at least ${describeChannels(requirements.minAudioChannels)}`,
     })
+  }
+
+  // Languages, judged only when the file actually carries tags. An untagged
+  // file is the one case where the post-import check is no better informed
+  // than the release title was.
+  if (facts.audioLanguages.length > 0) {
+    const { requiredAudioLanguages: required, blockedAudioLanguages: blocked } = requirements
+
+    if (blocked.length > 0 && facts.audioLanguages.every((code) => blocked.includes(code))) {
+      issues.push({
+        code: 'audio-language',
+        message: `File audio is ${describeLanguages(facts.audioLanguages)}, which this profile never accepts`,
+      })
+    }
+
+    if (required.length > 0) {
+      const missing = required.filter((code) => !facts.audioLanguages.includes(code))
+      const failsRule = requirements.requireAllAudioLanguages
+        ? missing.length > 0
+        : missing.length === required.length
+
+      if (failsRule) {
+        issues.push({
+          code: 'audio-language',
+          message: `File audio is ${describeLanguages(facts.audioLanguages)}, profile needs ${describeLanguages(requirements.requireAllAudioLanguages ? missing : required)}`,
+        })
+      }
+    }
   }
 
   if (

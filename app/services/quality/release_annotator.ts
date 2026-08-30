@@ -37,6 +37,13 @@ export interface AnnotatedRelease {
     isJunkSource: boolean
     junkSourceLabel: string | null
     releaseGroup: string | null
+    /** ISO 639-1 codes the title claims for the audio. Empty means it said nothing. */
+    languages: string[]
+    /** Languages the title claims for the subtitles only — VOSTFR and its kin. */
+    subtitleLanguages: string[]
+    /** Several audio tracks, unnamed. MULTi, DUAL, and the German scene's DL. */
+    isMultiAudio: boolean
+    isDubbed: boolean
   }
   /** True when the profile would accept this release for an automatic grab. */
   accepted: boolean
@@ -61,6 +68,7 @@ export async function annotateReleases(
 
   return results.map((result) => {
     const evaluation = evaluateRelease(result.title, result.size ?? null, mediaType, context)
+    const languages = evaluation.quality.parsed.languages
     const video = evaluation.quality.parsed.video
     const music = evaluation.quality.parsed.music
     const book = evaluation.quality.parsed.book
@@ -85,6 +93,10 @@ export async function annotateReleases(
         isJunkSource: video?.isJunkSource ?? false,
         junkSourceLabel: video?.junkSourceLabel ?? null,
         releaseGroup: video?.releaseGroup ?? null,
+        languages: languages.audio,
+        subtitleLanguages: languages.subtitles,
+        isMultiAudio: languages.isMulti,
+        isDubbed: languages.isDubbed,
       },
       accepted: evaluation.allowed,
       rejections: evaluation.rejections,

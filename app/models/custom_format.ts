@@ -3,7 +3,14 @@ import { BaseModel, column } from '@adonisjs/lucid/orm'
 
 export interface CustomFormatSpecification {
   name: string
-  implementation: 'contains' | 'notContains' | 'resolution' | 'source' | 'codec' | 'releaseGroup'
+  implementation:
+    | 'contains'
+    | 'notContains'
+    | 'resolution'
+    | 'source'
+    | 'codec'
+    | 'releaseGroup'
+    | 'language'
   negate: boolean
   required: boolean
   value: string

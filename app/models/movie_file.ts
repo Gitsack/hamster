@@ -1,6 +1,8 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 
+import type { AudioTrackInfo } from '#utils/ffmpeg_utils'
+
 export interface VideoMediaInfo {
   codec?: string
   resolution?: string
@@ -18,6 +20,14 @@ export interface VideoMediaInfo {
   audioProfile?: string
   audioChannelLayout?: string
   container?: string
+  /**
+   * Every audio stream in the file, not just the first. A dual-audio release is
+   * indistinguishable from a single-track one until you look past stream zero,
+   * and that difference is the whole reason someone grabbed it.
+   */
+  audioTracks?: AudioTrackInfo[]
+  /** Distinct ISO 639-1 codes across those tracks, for rules and for filtering. */
+  audioLanguages?: string[]
 }
 
 export default class MovieFile extends BaseModel {

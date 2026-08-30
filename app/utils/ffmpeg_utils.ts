@@ -1,4 +1,26 @@
 import { spawn } from 'node:child_process'
+import { normalizeLanguageTag, type LanguageCode } from '#services/quality/language_parser'
+
+/**
+ * One audio stream, as the file describes itself.
+ *
+ * The rest of MediaAnalysis flattens a file to its first audio stream, which is
+ * all a transcode decision needs. A language rule needs every stream: the whole
+ * point of a dual-audio release is the track that is not first.
+ */
+export interface AudioTrackInfo {
+  /** Stream index, so a future track selector can address it. */
+  index: number
+  codec: string | null
+  channels: number | null
+  channelLayout: string | null
+  /** ISO 639-1, or null when the muxer never tagged the track. */
+  language: LanguageCode | null
+  /** The muxer's own label, e.g. "Commentary" or "Director's cut". */
+  title: string | null
+  isDefault: boolean
+  profile: string | null
+}
 
 export interface MediaAnalysis {
   duration: number
@@ -17,6 +39,8 @@ export interface MediaAnalysis {
    */
   audioProfile: string | null
   audioChannelLayout: string | null
+  /** Every audio stream, in file order. */
+  audioTracks: AudioTrackInfo[]
   container: string
 }
 
@@ -102,7 +126,19 @@ export async function probeFile(filePath: string): Promise<MediaAnalysis> {
 
         // Find video and audio streams
         const videoStream = streams.find((s: any) => s.codec_type === 'video')
-        const audioStream = streams.find((s: any) => s.codec_type === 'audio')
+        const audioStreams = streams.filter((s: any) => s.codec_type === 'audio')
+        const audioStream = audioStreams[0]
+
+        const audioTracks: AudioTrackInfo[] = audioStreams.map((stream: any, order: number) => ({
+          index: typeof stream.index === 'number' ? stream.index : order,
+          codec: stream.codec_name || null,
+          channels: stream.channels || null,
+          channelLayout: stream.channel_layout || null,
+          language: normalizeLanguageTag(stream.tags?.language ?? stream.tags?.LANGUAGE),
+          title: stream.tags?.title || stream.tags?.TITLE || null,
+          isDefault: stream.disposition?.default === 1,
+          profile: stream.profile || null,
+        }))
 
         const analysis: MediaAnalysis = {
           duration: Number.parseFloat(format.duration) || 0,
@@ -119,6 +155,7 @@ export async function probeFile(filePath: string): Promise<MediaAnalysis> {
             : null,
           audioProfile: audioStream?.profile || null,
           audioChannelLayout: audioStream?.channel_layout || null,
+          audioTracks,
         }
 
         resolve(analysis)
