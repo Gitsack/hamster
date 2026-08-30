@@ -1,6 +1,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { toast } from 'sonner'
 import { useMediaPreview, MediaPreviewProvider } from './media_preview_context'
 
 const mockFetch = vi.fn()
@@ -647,5 +648,158 @@ describe('openTvShowPreview', () => {
     await waitFor(() => {
       expect(screen.getByText('Choose seasons')).toBeInTheDocument()
     })
+  })
+})
+
+describe('quickAdd', () => {
+  beforeEach(() => {
+    // The sonner mock is module-level, so its calls survive between tests.
+    vi.mocked(toast.success).mockClear()
+    vi.mocked(toast.error).mockClear()
+  })
+
+  function mockConfig({
+    rootFolders,
+    qualityProfiles,
+    post,
+  }: {
+    rootFolders?: unknown[]
+    qualityProfiles?: unknown[]
+    post?: { ok: boolean; body: unknown }
+  } = {}) {
+    mockFetch.mockImplementation((url: string, init?: { method?: string }) => {
+      if (url.includes('/rootfolders')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () =>
+            rootFolders ?? [
+              { id: 'rf1', path: '/media/movies', mediaType: 'movies' },
+              { id: 'rf2', path: '/media/tv', mediaType: 'tv' },
+            ],
+        })
+      }
+      if (url.includes('/qualityprofiles')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () =>
+            qualityProfiles ?? [
+              { id: 'qp1', name: 'Movies HD', mediaType: 'movies' },
+              { id: 'qp2', name: 'Shows HD', mediaType: 'tv' },
+            ],
+        })
+      }
+      if (init?.method === 'POST') {
+        return Promise.resolve({
+          ok: post?.ok ?? true,
+          json: async () => post?.body ?? { id: 77 },
+        })
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) })
+    })
+  }
+
+  function renderQuickAdd() {
+    return renderHook(() => useMediaPreview(), {
+      wrapper: ({ children }) => <MediaPreviewProvider>{children}</MediaPreviewProvider>,
+    })
+  }
+
+  it('posts a movie to the default profile and root folder for its type', async () => {
+    mockConfig()
+    const { result } = renderQuickAdd()
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.quickAdd({
+        type: 'movie',
+        tmdbId: '100',
+        title: 'Sicario',
+        year: 2015,
+      })
+    })
+
+    expect(outcome).toEqual({ added: true, libraryId: 77 })
+    const [url, init] = mockFetch.mock.calls.find(([u]) => u === '/api/v1/movies')!
+    expect(url).toBe('/api/v1/movies')
+    expect(JSON.parse(init.body)).toEqual({
+      tmdbId: '100',
+      title: 'Sicario',
+      year: 2015,
+      qualityProfileId: 'qp1',
+      rootFolderId: 'rf1',
+      requested: true,
+      searchOnAdd: true,
+    })
+  })
+
+  it('names the destination in the toast, since no dialog stated it first', async () => {
+    mockConfig()
+    const { result } = renderQuickAdd()
+
+    await act(async () => {
+      await result.current.quickAdd({ type: 'movie', tmdbId: '100', title: 'Sicario' })
+    })
+
+    expect(toast.success).toHaveBeenCalledWith('Sicario added — Movies HD in /media/movies')
+  })
+
+  it('sends a show to the tv profile and tv root folder', async () => {
+    mockConfig()
+    const { result } = renderQuickAdd()
+
+    await act(async () => {
+      await result.current.quickAdd({ type: 'tv', tmdbId: '300', title: 'Severance' })
+    })
+
+    const [, init] = mockFetch.mock.calls.find(([u]) => u === '/api/v1/tvshows')!
+    expect(JSON.parse(init.body)).toMatchObject({
+      qualityProfileId: 'qp2',
+      rootFolderId: 'rf2',
+    })
+  })
+
+  it('refuses and says so when the media type has no root folder', async () => {
+    mockConfig({ rootFolders: [{ id: 'rf1', path: '/media/movies', mediaType: 'movies' }] })
+    const { result } = renderQuickAdd()
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.quickAdd({ type: 'tv', tmdbId: '300', title: 'Severance' })
+    })
+
+    expect(outcome).toEqual({ added: false })
+    expect(toast.error).toHaveBeenCalledWith(
+      'No root folder configured for TV shows. Add one in Settings first.'
+    )
+    expect(mockFetch.mock.calls.some(([u]) => u === '/api/v1/tvshows')).toBe(false)
+  })
+
+  it('refuses when the media type has no quality profile', async () => {
+    mockConfig({ qualityProfiles: [{ id: 'qp2', name: 'Shows HD', mediaType: 'tv' }] })
+    const { result } = renderQuickAdd()
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.quickAdd({ type: 'movie', tmdbId: '100', title: 'Sicario' })
+    })
+
+    expect(outcome).toEqual({ added: false })
+    expect(toast.error).toHaveBeenCalledWith(
+      'No quality profile configured for movies. Add one in Settings first.'
+    )
+  })
+
+  it('reports a rejected add without claiming it landed', async () => {
+    mockConfig({ post: { ok: false, body: { error: 'Movie already exists' } } })
+    const { result } = renderQuickAdd()
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.quickAdd({ type: 'movie', tmdbId: '100', title: 'Sicario' })
+    })
+
+    expect(outcome).toEqual({ added: false })
+    expect(toast.error).toHaveBeenCalledWith('Movie already exists')
+    expect(toast.success).not.toHaveBeenCalled()
   })
 })

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMediaPreview } from '@/contexts/media_preview_context'
 import { MediaTeaser } from '@/components/library/media-teaser'
+import type { MediaItemStatus } from '@/components/library/media-status-badge'
 import { useVisibleWatchProviders } from '@/hooks/use_visible_watch_providers'
 import { useInViewport } from '@/hooks/use_in_viewport'
 
@@ -22,6 +23,12 @@ interface SimilarItem {
   libraryId?: number
   requested?: boolean
   hasFile?: boolean
+}
+
+function itemStatus(item: SimilarItem): MediaItemStatus {
+  if (!item.inLibrary) return 'none'
+  if (item.hasFile) return 'downloaded'
+  return item.requested ? 'requested' : 'downloaded'
 }
 
 interface SimilarLaneProps {
@@ -45,7 +52,8 @@ export function SimilarLane({ mediaType, mediaId, tmdbId }: SimilarLaneProps) {
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
-  const { openMoviePreview, openTvShowPreview } = useMediaPreview()
+  const { openMoviePreview, openTvShowPreview, quickAdd } = useMediaPreview()
+  const [adding, setAdding] = useState<Set<string>>(new Set())
   const { ref: viewportRef, inViewport } = useInViewport<HTMLDivElement>()
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -122,6 +130,39 @@ export function SimilarLane({ mediaType, mediaId, tmdbId }: SimilarLaneProps) {
     // One screenful less a card, so the card at the edge stays as the anchor.
     const amount = Math.max(el.clientWidth - 140, 140)
     el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' })
+  }
+
+  /**
+   * The badge on the poster is the add: one tap commits the title to the default profile
+   * and root folder for its type, and the toast names both. The card flips to requested
+   * on the way back, so the lane does not have to be refetched to show it.
+   */
+  const handleAdd = async (item: SimilarItem) => {
+    if (adding.has(item.tmdbId)) return
+    setAdding((prev) => new Set(prev).add(item.tmdbId))
+
+    const result = await quickAdd({
+      type: mediaType === 'movies' ? 'movie' : 'tv',
+      tmdbId: item.tmdbId,
+      title: item.title,
+      year: item.year,
+    })
+
+    if (result.added) {
+      setItems((prev) =>
+        prev.map((entry) =>
+          entry.tmdbId === item.tmdbId
+            ? { ...entry, inLibrary: true, requested: true, libraryId: result.libraryId }
+            : entry
+        )
+      )
+    }
+
+    setAdding((prev) => {
+      const next = new Set(prev)
+      next.delete(item.tmdbId)
+      return next
+    })
   }
 
   const handleClick = (item: SimilarItem) => {
@@ -210,7 +251,11 @@ export function SimilarLane({ mediaType, mediaId, tmdbId }: SimilarLaneProps) {
               posterUrl={item.posterUrl}
               genres={item.genres}
               mediaType={mediaType === 'movies' ? 'movie' : 'tv'}
-              status={item.inLibrary ? 'downloaded' : 'none'}
+              status={itemStatus(item)}
+              isToggling={adding.has(item.tmdbId)}
+              // Only the add is reversible from here. A requested or downloaded badge with
+              // no handler renders as a statement of state rather than a dead control.
+              onToggleRequest={itemStatus(item) === 'none' ? () => void handleAdd(item) : undefined}
               streamingProviders={watchProviders[item.tmdbId]}
               isLoadingProviders={watchProviderLoading.has(item.tmdbId)}
               observerRef={watchProviderRef(item.tmdbId)}

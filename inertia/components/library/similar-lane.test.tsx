@@ -6,6 +6,7 @@ import { SimilarLane } from './similar-lane'
 const mockOpenMoviePreview = vi.fn()
 const mockOpenTvShowPreview = vi.fn()
 const mockRouterVisit = vi.fn()
+const mockQuickAdd = vi.fn()
 
 vi.mock('@inertiajs/react', () => ({
   router: { visit: (...args: unknown[]) => mockRouterVisit(...args) },
@@ -15,6 +16,7 @@ vi.mock('@/contexts/media_preview_context', () => ({
   useMediaPreview: () => ({
     openMoviePreview: mockOpenMoviePreview,
     openTvShowPreview: mockOpenTvShowPreview,
+    quickAdd: (...args: unknown[]) => mockQuickAdd(...args),
   }),
 }))
 
@@ -36,17 +38,32 @@ vi.mock('@/components/library/media-teaser', () => ({
   MediaTeaser: ({
     title,
     onClick,
+    onToggleRequest,
+    isToggling,
     tmdbId,
     status,
   }: {
     title: string
     onClick?: () => void
+    onToggleRequest?: () => void
+    isToggling?: boolean
     tmdbId: string
     status: string
   }) => (
-    <button data-testid={`teaser-${tmdbId}`} data-status={status} onClick={onClick}>
-      {title}
-    </button>
+    <div>
+      <button data-testid={`teaser-${tmdbId}`} data-status={status} onClick={onClick}>
+        {title}
+      </button>
+      {onToggleRequest && (
+        <button
+          data-testid={`add-${tmdbId}`}
+          data-toggling={isToggling ? 'true' : 'false'}
+          onClick={onToggleRequest}
+        >
+          Add {title}
+        </button>
+      )}
+    </div>
   ),
 }))
 
@@ -294,6 +311,53 @@ describe('SimilarLane', () => {
     await waitFor(() => {
       expect(screen.getByText('Directed by Denis Villeneuve')).toBeInTheDocument()
     })
+  })
+
+  it('adds a title in one tap and flips its card to requested', async () => {
+    const user = userEvent.setup()
+    mockFetchSuccess(similarMovies)
+    mockQuickAdd.mockResolvedValue({ added: true, libraryId: 77 })
+
+    render(<SimilarLane mediaType="movies" tmdbId="123" />)
+
+    await waitFor(() => expect(screen.getByTestId('add-100')).toBeInTheDocument())
+    await user.click(screen.getByTestId('add-100'))
+
+    expect(mockQuickAdd).toHaveBeenCalledWith({
+      type: 'movie',
+      tmdbId: '100',
+      title: 'Similar Movie A',
+      year: 2023,
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('teaser-100')).toHaveAttribute('data-status', 'requested')
+    })
+    // Nothing left to press: a requested card offers no second add.
+    expect(screen.queryByTestId('add-100')).not.toBeInTheDocument()
+  })
+
+  it('leaves the card alone when the add does not go through', async () => {
+    const user = userEvent.setup()
+    mockFetchSuccess(similarMovies)
+    mockQuickAdd.mockResolvedValue({ added: false })
+
+    render(<SimilarLane mediaType="movies" tmdbId="123" />)
+
+    await waitFor(() => expect(screen.getByTestId('add-100')).toBeInTheDocument())
+    await user.click(screen.getByTestId('add-100'))
+
+    await waitFor(() => expect(mockQuickAdd).toHaveBeenCalled())
+    expect(screen.getByTestId('teaser-100')).toHaveAttribute('data-status', 'none')
+    expect(screen.getByTestId('add-100')).toBeInTheDocument()
+  })
+
+  it('offers no add on a title already in the library', async () => {
+    mockFetchSuccess(similarMovies)
+
+    render(<SimilarLane mediaType="movies" tmdbId="123" />)
+
+    await waitFor(() => expect(screen.getByTestId('teaser-200')).toBeInTheDocument())
+    expect(screen.queryByTestId('add-200')).not.toBeInTheDocument()
   })
 
   it('passes correct status to MediaTeaser for library items', async () => {

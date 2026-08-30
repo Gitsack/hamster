@@ -85,9 +85,26 @@ interface TvShowDetails {
   requested?: boolean
 }
 
+/** What a one-tap add reports back, so a caller can update its own card. */
+export interface QuickAddResult {
+  added: boolean
+  libraryId?: number
+}
+
 interface MediaPreviewContextType {
   openMoviePreview: (tmdbId: string) => void
   openTvShowPreview: (tmdbId: string) => void
+  quickAdd: (item: {
+    type: 'movie' | 'tv'
+    tmdbId: string
+    title: string
+    year?: number
+  }) => Promise<QuickAddResult>
+}
+
+interface PreviewConfig {
+  rootFolders: { id: string; path: string; mediaType: string }[]
+  qualityProfiles: QualityProfile[]
 }
 
 const MediaPreviewContext = createContext<MediaPreviewContextType | null>(null)
@@ -123,6 +140,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
   )
   const [qualityProfiles, setQualityProfiles] = useState<QualityProfile[]>([])
   const [configLoaded, setConfigLoaded] = useState(false)
+  const configRef = useRef<PreviewConfig | null>(null)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [seasonPickerOpen, setSeasonPickerOpen] = useState(false)
   const [episodeSelection, setEpisodeSelection] = useState<SeasonEpisodeSelection | null>(null)
@@ -131,21 +149,28 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
   const movieProfiles = qualityProfiles.filter((p) => p.mediaType === 'movies')
   const tvProfiles = qualityProfiles.filter((p) => p.mediaType === 'tv')
 
-  // Lazy-load config
-  const ensureConfig = useCallback(async () => {
-    if (configLoaded) return
+  /**
+   * Lazy-load config, and hand it back to the caller. A one-tap add needs the values in
+   * the same tick it asks for them, and state set here would not be readable until the
+   * next render.
+   */
+  const ensureConfig = useCallback(async (): Promise<PreviewConfig | null> => {
+    if (configRef.current) return configRef.current
     try {
       const [rf, qp] = await Promise.all([
         fetch('/api/v1/rootfolders').then((r) => r.json()),
         fetch('/api/v1/qualityprofiles').then((r) => r.json()),
       ])
+      configRef.current = { rootFolders: rf, qualityProfiles: qp }
       setRootFolders(rf)
       setQualityProfiles(qp)
       setConfigLoaded(true)
+      return configRef.current
     } catch {
       toast.error('Could not load quality profiles and root folders. Check Settings, then retry.')
+      return null
     }
-  }, [configLoaded])
+  }, [])
 
   // Load one title into the sheet. Both entry points share it so a drill-down from the
   // similar lane behaves exactly like opening the sheet from a poster.
@@ -231,6 +256,75 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
     setHistoryDepth(historyRef.current.length)
     void loadPreview(previous.type, previous.tmdbId)
   }, [loadPreview])
+
+  /**
+   * Add a title in one tap, from a lane, without opening its sheet first.
+   *
+   * The destination is not a dialog here, so the toast names it: the operator running two
+   * root folders or two profiles still learns where the add landed, after the fact rather
+   * than before it.
+   */
+  const quickAdd = useCallback(
+    async ({
+      type,
+      tmdbId,
+      title,
+      year,
+    }: {
+      type: 'movie' | 'tv'
+      tmdbId: string
+      title: string
+      year?: number
+    }): Promise<QuickAddResult> => {
+      const config = await ensureConfig()
+      if (!config) return { added: false }
+
+      const mediaType = type === 'movie' ? 'movies' : 'tv'
+      const label = type === 'movie' ? 'movies' : 'TV shows'
+
+      const folder = config.rootFolders.find((rf) => rf.mediaType === mediaType)
+      if (!folder) {
+        toast.error(`No root folder configured for ${label}. Add one in Settings first.`)
+        return { added: false }
+      }
+
+      const profile = config.qualityProfiles.find((p) => p.mediaType === mediaType)
+      if (!profile) {
+        toast.error(`No quality profile configured for ${label}. Add one in Settings first.`)
+        return { added: false }
+      }
+
+      try {
+        const response = await fetch(type === 'movie' ? '/api/v1/movies' : '/api/v1/tvshows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tmdbId,
+            title,
+            year,
+            qualityProfileId: profile.id,
+            rootFolderId: folder.id,
+            requested: true,
+            searchOnAdd: true,
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}))
+          toast.error(error.error || `Could not add ${title}. Retry, or check System > Events.`)
+          return { added: false }
+        }
+
+        const data = await response.json()
+        toast.success(`${title} added — ${profile.name} in ${folder.path}`)
+        return { added: true, libraryId: data.id }
+      } catch {
+        toast.error(`Could not reach the server to add ${title}. Retry.`)
+        return { added: false }
+      }
+    },
+    [ensureConfig]
+  )
 
   const closeSheet = useCallback((open: boolean) => {
     setSheetOpen(open)
@@ -463,7 +557,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
   const tvStatus = getMediaItemStatus(tvShowDetails ?? {})
 
   return (
-    <MediaPreviewContext.Provider value={{ openMoviePreview, openTvShowPreview }}>
+    <MediaPreviewContext.Provider value={{ openMoviePreview, openTvShowPreview, quickAdd }}>
       {children}
 
       {/* Preview Sheet */}
