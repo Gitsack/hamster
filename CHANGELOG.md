@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.31.0](https://github.com/Gitsack/hamster/compare/hamster-v1.30.0...hamster-v1.31.0) (2026-08-30)
+
+
+### Features
+
+* **quality:** judge a release by the language you can watch it in ([7424fe9](https://github.com/Gitsack/hamster/commit/7424fe94196757918bd9ca8288c5a473bad13cbb))
+* **ui:** one list row everywhere, and a similar lane worth reading ([d75618f](https://github.com/Gitsack/hamster/commit/d75618f54e1395a5e8c1eb53346b93c9673394bd))
+
+
+### Bug Fixes
+
+* **ui:** make the plus on similar-lane posters do something ([bebf104](https://github.com/Gitsack/hamster/commit/bebf1048f3582f17913368faf56cda0ad243232c))
+
 ## [1.30.0](https://github.com/Gitsack/hamster/compare/hamster-v1.29.0...hamster-v1.30.0) (2026-08-29)
 
 
