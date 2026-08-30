@@ -89,12 +89,22 @@ const similarShows = {
 
 function mockFetchSuccess(data: unknown) {
   global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
     json: () => Promise.resolve(data),
   })
 }
 
 function mockFetchFailure() {
   global.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
+}
+
+function mockFetchServerError() {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: false,
+    status: 502,
+    json: () => Promise.resolve({ error: 'Could not reach TMDB for similar titles' }),
+  })
 }
 
 describe('SimilarLane', () => {
@@ -131,15 +141,23 @@ describe('SimilarLane', () => {
     expect(screen.queryByText('Similar Movies')).not.toBeInTheDocument()
   })
 
-  it('renders nothing when fetch fails', async () => {
+  it('names the failure and offers a retry when fetch fails', async () => {
     mockFetchFailure()
 
-    const { container } = render(<SimilarLane mediaType="movies" tmdbId="123" />)
+    render(<SimilarLane mediaType="movies" tmdbId="123" />)
 
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="skeleton"]')).not.toBeInTheDocument()
+      expect(screen.getByText('Could not reach TMDB for similar titles.')).toBeInTheDocument()
     })
-    expect(screen.queryByText('Similar Movies')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('teaser-100')).not.toBeInTheDocument()
+
+    // Retry re-runs the fetch, and a provider that comes back renders the lane.
+    mockFetchSuccess(similarMovies)
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Similar Movie A')).toBeInTheDocument()
+    })
   })
 
   it('renders similar movies with correct heading', async () => {
@@ -245,6 +263,37 @@ describe('SimilarLane', () => {
 
     await user.click(screen.getByText('Similar Show A'))
     expect(mockOpenTvShowPreview).toHaveBeenCalledWith('300')
+  })
+
+  it('treats an upstream error response as a failure, not an empty lane', async () => {
+    mockFetchServerError()
+
+    render(<SimilarLane mediaType="movies" tmdbId="123" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not reach TMDB for similar titles.')).toBeInTheDocument()
+    })
+  })
+
+  it('captions each poster with the reason the recommender returned', async () => {
+    mockFetchSuccess({
+      results: [
+        {
+          tmdbId: '700',
+          title: 'Sicario',
+          year: 2015,
+          posterUrl: '/sicario.jpg',
+          inLibrary: false,
+          reason: 'Directed by Denis Villeneuve',
+        },
+      ],
+    })
+
+    render(<SimilarLane mediaType="movies" tmdbId="123" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Directed by Denis Villeneuve')).toBeInTheDocument()
+    })
   })
 
   it('passes correct status to MediaTeaser for library items', async () => {

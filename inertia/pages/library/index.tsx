@@ -52,6 +52,7 @@ import {
   getMediaItemStatus,
   type MediaItemStatus,
 } from '@/components/library/media-status-badge'
+import { MediaListRow } from '@/components/library/media-list-row'
 
 interface Artist {
   id: number
@@ -1129,7 +1130,6 @@ export default function Library() {
   }) => {
     const config = MEDIA_TYPE_CONFIG[item.mediaType]
     const imageKey = `${item.mediaType}-${item.id}`
-    const showImage = item.imageUrl && !failedImages.has(imageKey)
     const queueItem = queue.find((q) => {
       switch (item.mediaType) {
         case 'music':
@@ -1152,126 +1152,92 @@ export default function Library() {
     const { status, progress } = getItemStatusInfo(item, queueItem?.progress, queueItem?.status)
 
     return (
-      <Card
+      <MediaListRow
         key={imageKey}
-        className="py-0 gap-0 group overflow-hidden transition-colors duration-150 ease-out hover:bg-accent has-[a:focus-visible]:border-primary has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-[3px]"
-      >
-        {/* No padding around the artwork — it runs to the card edge and stretches to the
-            row's full height. The padding belongs to the text column. */}
-        <CardContent className="flex items-stretch p-0">
-          {/* The artwork is a sibling of the wrapping column, so on a phone it sits beside
-              both the title and the action row rather than only the first of them. */}
-          <Link
-            href={item.detailUrl}
-            tabIndex={-1}
-            aria-hidden="true"
-            className={`${config.artworkAspect} min-h-24 shrink-0 self-stretch bg-muted overflow-hidden relative`}
-          >
-            {showImage ? (
-              <img
-                src={item.imageUrl!}
-                alt=""
-                className={`absolute inset-0 h-full w-full object-cover transition-all duration-200 ease-out ${
-                  isNotRequested
-                    ? 'grayscale opacity-60 group-hover:grayscale-0 group-hover:opacity-100'
-                    : ''
-                }`}
-                loading="lazy"
-                onError={() => handleImageError(imageKey)}
+        href={item.detailUrl}
+        artworkAspect={config.artworkAspect}
+        icon={config.icon}
+        imageUrl={item.imageUrl}
+        imageFailed={failedImages.has(imageKey)}
+        onImageError={() => handleImageError(imageKey)}
+        mutedArtwork={isNotRequested}
+        title={item.name}
+        subtitle={item.subtitle}
+        subtitleClassName="readout"
+        meta={
+          item.downloadedEpisodeCount !== undefined ? (
+            <p className="text-muted-foreground flex items-center gap-1 truncate text-xs">
+              <HugeiconsIcon
+                icon={Download01Icon}
+                className="text-status-complete-ink h-3 w-3 shrink-0"
               />
-            ) : (
-              <div
-                className={`absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out ${
-                  isNotRequested ? 'opacity-40 group-hover:opacity-60' : ''
-                }`}
-              >
-                <HugeiconsIcon icon={config.icon} className="h-6 w-6 text-muted-foreground/40" />
-              </div>
+              <span className="readout">{item.downloadedEpisodeCount}</span> episode
+              {item.downloadedEpisodeCount !== 1 ? 's' : ''} on disk
+            </p>
+          ) : undefined
+        }
+        actions={
+          <>
+            {status !== 'none' && (
+              <MediaStatusBadge
+                status={status}
+                progress={progress}
+                size="tiny"
+                isToggling={isToggling}
+                onToggleRequest={() =>
+                  handleToggleRequest(
+                    item.mediaType,
+                    item.id,
+                    item.requested ?? false,
+                    item.hasFile,
+                    item.name
+                  )
+                }
+                showRequestButton={false}
+              />
             )}
-          </Link>
-
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5 p-3 sm:flex-nowrap sm:gap-3">
-            <Link
-              href={item.detailUrl}
-              className={`basis-full min-w-0 outline-none transition-opacity duration-200 ease-out sm:flex-1 sm:basis-auto ${isNotRequested ? 'opacity-60 group-hover:opacity-100' : ''}`}
-            >
-              <h3 className="text-sm font-medium truncate">{item.name}</h3>
-              {item.subtitle && (
-                <p className="readout text-xs text-muted-foreground truncate">{item.subtitle}</p>
-              )}
-              {item.downloadedEpisodeCount !== undefined && (
-                <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                  <HugeiconsIcon
-                    icon={Download01Icon}
-                    className="h-3 w-3 shrink-0 text-status-complete-ink"
-                  />
-                  <span className="readout">{item.downloadedEpisodeCount}</span> episode
-                  {item.downloadedEpisodeCount !== 1 ? 's' : ''} on disk
-                </p>
-              )}
-            </Link>
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-              {status !== 'none' && (
-                <MediaStatusBadge
-                  status={status}
-                  progress={progress}
-                  size="tiny"
-                  isToggling={isToggling}
-                  onToggleRequest={() =>
-                    handleToggleRequest(
-                      item.mediaType,
-                      item.id,
-                      item.requested ?? false,
-                      item.hasFile,
-                      item.name
-                    )
-                  }
-                  showRequestButton={false}
-                />
-              )}
-              {item.badges?.map((badge, i) => (
-                <Badge key={i} variant="outline">
-                  {badge}
-                </Badge>
-              ))}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <Link href={item.detailUrl}>
-                      <HugeiconsIcon icon={EyeIcon} className="h-4 w-4" />
-                      View Details
-                    </Link>
-                  </DropdownMenuItem>
-                  {!item.externalId && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={(e) => handleEnrich(item.mediaType, item.id, item.name, e)}
-                        disabled={enrichingItems.has(`${item.mediaType}-${item.id}`)}
-                      >
-                        <HugeiconsIcon
-                          icon={Search01Icon}
-                          className={`h-4 w-4 ${enrichingItems.has(`${item.mediaType}-${item.id}`) ? 'animate-spin' : ''}`}
-                        />
-                        {enrichingItems.has(`${item.mediaType}-${item.id}`)
-                          ? 'Enriching…'
-                          : item.mediaType === 'music'
-                            ? 'Enrich from MusicBrainz'
-                            : 'Enrich from TMDB'}
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            {item.badges?.map((badge, i) => (
+              <Badge key={i} variant="outline">
+                {badge}
+              </Badge>
+            ))}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <HugeiconsIcon icon={MoreVerticalIcon} className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href={item.detailUrl}>
+                    <HugeiconsIcon icon={EyeIcon} className="h-4 w-4" />
+                    View Details
+                  </Link>
+                </DropdownMenuItem>
+                {!item.externalId && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={(e) => handleEnrich(item.mediaType, item.id, item.name, e)}
+                      disabled={enrichingItems.has(`${item.mediaType}-${item.id}`)}
+                    >
+                      <HugeiconsIcon
+                        icon={Search01Icon}
+                        className={`h-4 w-4 ${enrichingItems.has(`${item.mediaType}-${item.id}`) ? 'animate-spin' : ''}`}
+                      />
+                      {enrichingItems.has(`${item.mediaType}-${item.id}`)
+                        ? 'Enriching…'
+                        : item.mediaType === 'music'
+                          ? 'Enrich from MusicBrainz'
+                          : 'Enrich from TMDB'}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
     )
   }
 

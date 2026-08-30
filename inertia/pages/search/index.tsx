@@ -76,6 +76,7 @@ import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/se
 import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dialog'
 import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaTeaser } from '@/components/library/media-teaser'
+import { MediaListRow } from '@/components/library/media-list-row'
 import { useVisibleWatchProviders } from '@/hooks/use_visible_watch_providers'
 import { useMediaPreview } from '@/contexts/media_preview_context'
 import { useDebounce } from '@/hooks/use_debounce'
@@ -1887,76 +1888,57 @@ export default function SearchPage({
       extra?: ReactNode
       imageUrl?: string
       inLibrary: boolean
+      /** Posters for film, TV and books; square for people and covers. */
+      artworkAspect?: string
     },
     icon: typeof MusicNote01Icon,
     onClick: () => void,
-    onAdd: () => void
+    onAdd?: () => void
   ) => {
     const imageKey = `search-${item.id}`
-    const showImage = item.imageUrl && !failedImages.has(imageKey)
 
     return (
-      <Card
+      <MediaListRow
         key={item.id}
         data-search-result
         tabIndex={0}
-        className={`${item.inLibrary ? 'opacity-60' : ''} cursor-pointer transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none`}
-        onClick={onClick}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            onClick()
-          }
-        }}
-      >
-        <CardContent className="flex items-center gap-3 p-3">
-          <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden">
-            {showImage ? (
-              <img
-                src={item.imageUrl!}
-                alt={item.name}
-                className="w-full h-full object-cover"
-                onError={() => handleImageError(imageKey)}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <HugeiconsIcon icon={icon} className="h-5 w-5 text-muted-foreground/50" />
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-medium truncate">{item.name}</h3>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        artworkAspect={item.artworkAspect}
+        icon={icon}
+        imageUrl={item.imageUrl}
+        imageFailed={failedImages.has(imageKey)}
+        onImageError={() => handleImageError(imageKey)}
+        onActivate={onClick}
+        dimmed={item.inLibrary}
+        title={item.name}
+        subtitle={
+          item.subtitle || item.extra ? (
+            <span className="flex items-center gap-1.5">
               {item.subtitle && <span>{item.subtitle}</span>}
-              {item.extra && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span>{item.extra}</span>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {item.inLibrary ? (
-              <Badge variant="outline" className="gap-1 text-xs">
-                <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
-                In Library
-              </Badge>
-            ) : (
-              <Button
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onAdd()
-                }}
-              >
-                <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
-                Add
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              {item.subtitle && item.extra && <span aria-hidden="true">·</span>}
+              {item.extra && <span>{item.extra}</span>}
+            </span>
+          ) : undefined
+        }
+        actions={
+          item.inLibrary ? (
+            <Badge variant="outline" className="gap-1 text-xs">
+              <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+              In Library
+            </Badge>
+          ) : (
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                ;(onAdd ?? onClick)()
+              }}
+            >
+              <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
+              Add
+            </Button>
+          )
+        }
+      />
     )
   }
 
@@ -2000,53 +1982,48 @@ export default function SearchPage({
             const isLoading = loadingArtistAlbums.has(artist.musicbrainzId)
 
             return (
-              <Card key={artist.musicbrainzId} className={artist.inLibrary ? 'opacity-60' : ''}>
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                      <HugeiconsIcon
-                        icon={MusicNote01Icon}
-                        className="h-5 w-5 text-muted-foreground/50"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium truncate">{artist.name}</h3>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {artist.type && <span>{artist.type}</span>}
-                        {artist.country && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span>{artist.country}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {artist.inLibrary ? (
-                        <Badge variant="outline" className="gap-1 text-xs">
-                          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
-                          In Library
-                        </Badge>
-                      ) : (
-                        <Button size="sm" onClick={() => handleAddArtist(artist)}>
-                          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
-                          Add
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => toggleArtistExpand(artist.musicbrainzId)}
-                      >
-                        <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-1" />
-                        {isExpanded ? 'Hide Albums' : 'Show Albums'}
+              <MediaListRow
+                key={artist.musicbrainzId}
+                artworkAspect="aspect-square"
+                icon={MusicNote01Icon}
+                dimmed={artist.inLibrary}
+                title={artist.name}
+                subtitle={
+                  artist.type || artist.country ? (
+                    <span className="flex items-center gap-1.5">
+                      {artist.type && <span>{artist.type}</span>}
+                      {artist.type && artist.country && <span aria-hidden="true">·</span>}
+                      {artist.country && <span>{artist.country}</span>}
+                    </span>
+                  ) : undefined
+                }
+                actions={
+                  <>
+                    {artist.inLibrary ? (
+                      <Badge variant="outline" className="gap-1 text-xs">
+                        <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                        In Library
+                      </Badge>
+                    ) : (
+                      <Button size="sm" onClick={() => handleAddArtist(artist)}>
+                        <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
+                        Add
                       </Button>
-                    </div>
-                  </div>
-
-                  {/* Expanded albums section */}
-                  {isExpanded && (
-                    <div className="mt-3 border-t border-border pt-3">
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-expanded={isExpanded}
+                      onClick={() => toggleArtistExpand(artist.musicbrainzId)}
+                    >
+                      <HugeiconsIcon icon={ViewIcon} className="h-4 w-4 mr-1" />
+                      {isExpanded ? 'Hide Albums' : 'Show Albums'}
+                    </Button>
+                  </>
+                }
+                expanded={
+                  isExpanded ? (
+                    <div className="border-t border-border p-3">
                       <h4 className="text-sm font-medium mb-3">Albums</h4>
                       {isLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -2184,9 +2161,9 @@ export default function SearchPage({
                         </div>
                       )}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  ) : undefined
+                }
+              />
             )
           })}
         </div>
@@ -2203,70 +2180,69 @@ export default function SearchPage({
             const isExpanded = expandedAlbumId === album.musicbrainzId
             const tracks = albumTracks[album.musicbrainzId] || []
             const isLoading = loadingAlbumTracks.has(album.musicbrainzId)
+            const imageKey = `album-${album.musicbrainzId}`
 
             return (
-              <Card key={album.musicbrainzId} className={album.inLibrary ? 'opacity-60' : ''}>
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                      <HugeiconsIcon
-                        icon={Album01Icon}
-                        className="h-5 w-5 text-muted-foreground/50"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium truncate">{album.title}</h3>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <button
-                          className="rounded-sm underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                          onClick={() =>
-                            navigateToArtist(album.artistName, album.artistMusicbrainzId)
-                          }
-                        >
-                          {album.artistName}
-                        </button>
-                        {album.releaseDate && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span className="readout">{album.releaseDate}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {album.inLibrary ? (
-                        <Badge variant="outline" className="gap-1 text-xs">
-                          <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
-                          In Library
-                        </Badge>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            handleAddAlbum(album)
-                          }}
-                        >
-                          <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
-                          Add
-                        </Button>
-                      )}
+              <MediaListRow
+                key={album.musicbrainzId}
+                artworkAspect="aspect-square"
+                icon={Album01Icon}
+                imageUrl={`https://coverartarchive.org/release-group/${album.musicbrainzId}/front-250`}
+                imageFailed={failedImages.has(imageKey)}
+                onImageError={() => handleImageError(imageKey)}
+                dimmed={album.inLibrary}
+                title={album.title}
+                subtitle={
+                  <span className="flex items-center gap-1.5">
+                    <button
+                      className="rounded-sm underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      onClick={() => navigateToArtist(album.artistName, album.artistMusicbrainzId)}
+                    >
+                      {album.artistName}
+                    </button>
+                    {album.releaseDate && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="readout">{album.releaseDate}</span>
+                      </>
+                    )}
+                  </span>
+                }
+                actions={
+                  <>
+                    {album.inLibrary ? (
+                      <Badge variant="outline" className="gap-1 text-xs">
+                        <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
+                        In Library
+                      </Badge>
+                    ) : (
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => toggleAlbumExpand(album.musicbrainzId)}
+                        onClick={() => {
+                          handleAddAlbum(album)
+                        }}
                       >
-                        <HugeiconsIcon
-                          icon={ArrowRight01Icon}
-                          className={`h-4 w-4 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                        />
-                        {isExpanded ? 'Hide Tracks' : 'Show Tracks'}
+                        <HugeiconsIcon icon={Add01Icon} className="h-4 w-4 mr-1" />
+                        Add
                       </Button>
-                    </div>
-                  </div>
-
-                  {/* Expanded tracks section */}
-                  {isExpanded && (
-                    <div className="mt-3 border-t border-border pt-3">
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-expanded={isExpanded}
+                      onClick={() => toggleAlbumExpand(album.musicbrainzId)}
+                    >
+                      <HugeiconsIcon
+                        icon={ArrowRight01Icon}
+                        className={`h-4 w-4 mr-1 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      />
+                      {isExpanded ? 'Hide Tracks' : 'Show Tracks'}
+                    </Button>
+                  </>
+                }
+                expanded={
+                  isExpanded ? (
+                    <div className="border-t border-border p-3">
                       <h4 className="text-sm font-medium mb-2">Tracks</h4>
                       {isLoading ? (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -2300,9 +2276,9 @@ export default function SearchPage({
                         </div>
                       )}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  ) : undefined
+                }
+              />
             )
           })}
         </div>
@@ -2315,18 +2291,25 @@ export default function SearchPage({
           <div className="text-xs text-muted-foreground mb-2">
             Found <span className="readout">{trackResults.length}</span> tracks
           </div>
-          {trackResults.map((track) => (
-            <Card key={track.musicbrainzId} className={track.inLibrary ? 'opacity-60' : ''}>
-              <CardContent className="flex items-center gap-3 p-3">
-                <div className="h-10 w-10 rounded-lg bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center">
-                  <HugeiconsIcon
-                    icon={MusicNoteSquare01Icon}
-                    className="h-5 w-5 text-muted-foreground/50"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-medium truncate">{track.title}</h3>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          {trackResults.map((track) => {
+            const imageKey = `track-album-${track.albumMusicbrainzId}`
+
+            return (
+              <MediaListRow
+                key={track.musicbrainzId}
+                artworkAspect="aspect-square"
+                icon={MusicNoteSquare01Icon}
+                imageUrl={
+                  track.albumMusicbrainzId
+                    ? `https://coverartarchive.org/release-group/${track.albumMusicbrainzId}/front-250`
+                    : undefined
+                }
+                imageFailed={failedImages.has(imageKey)}
+                onImageError={() => handleImageError(imageKey)}
+                dimmed={track.inLibrary}
+                title={track.title}
+                subtitle={
+                  <span className="flex items-center gap-1.5">
                     <button
                       className="rounded-sm underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                       onClick={() => navigateToArtist(track.artistName, track.artistMusicbrainzId)}
@@ -2337,7 +2320,7 @@ export default function SearchPage({
                       <>
                         <span aria-hidden="true">·</span>
                         <button
-                          className="rounded-sm underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                          className="truncate rounded-sm underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                           onClick={() =>
                             navigateToAlbum(track.albumTitle!, track.albumMusicbrainzId!)
                           }
@@ -2352,10 +2335,10 @@ export default function SearchPage({
                         <span className="readout">{formatDuration(track.duration)}</span>
                       </>
                     )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {track.inLibrary ? (
+                  </span>
+                }
+                actions={
+                  track.inLibrary ? (
                     <Badge variant="outline" className="gap-1 text-xs">
                       <HugeiconsIcon icon={CheckmarkCircle01Icon} className="h-3 w-3" />
                       In Library
@@ -2380,11 +2363,11 @@ export default function SearchPage({
                     </Button>
                   ) : (
                     <span className="text-xs text-muted-foreground">No album linked</span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  )
+                }
+              />
+            )
+          })}
         </div>
       )
     }

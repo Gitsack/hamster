@@ -131,6 +131,35 @@ export interface TmdbCastMember {
   order: number
 }
 
+/** A named person or franchise a title shares with its neighbours. */
+export interface TmdbLink {
+  id: number
+  name: string
+}
+
+/**
+ * The facets a title can be "like" another one through: its franchise, the people who
+ * made it, who is in it, and what it is about. Assembled from one details call so the
+ * recommender can widen a search without paying per facet.
+ */
+export interface TmdbMovieFacets {
+  genreIds: number[]
+  genres: string[]
+  collection: TmdbLink | null
+  keywords: TmdbLink[]
+  directors: TmdbLink[]
+  cast: TmdbLink[]
+}
+
+export interface TmdbTvFacets {
+  genreIds: number[]
+  genres: string[]
+  keywords: TmdbLink[]
+  creators: TmdbLink[]
+  cast: TmdbLink[]
+  networkIds: number[]
+}
+
 export class TmdbService {
   private apiKey: string | null = null
 
@@ -567,23 +596,127 @@ export class TmdbService {
   // Recommendations & Similar
 
   async getMovieRecommendations(movieId: number): Promise<TmdbMovie[]> {
-    const data = await this.fetch(`/movie/${movieId}/recommendations`)
-    return data.results.map((m: any) => this.mapMovie(m))
+    return cache.getOrSet(`tmdb:movie:${movieId}:recommendations`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/movie/${movieId}/recommendations`)
+      return data.results.map((m: any) => this.mapMovie(m))
+    })
   }
 
   async getSimilarMovies(movieId: number): Promise<TmdbMovie[]> {
-    const data = await this.fetch(`/movie/${movieId}/similar`)
-    return data.results.map((m: any) => this.mapMovie(m))
+    return cache.getOrSet(`tmdb:movie:${movieId}:similar`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/movie/${movieId}/similar`)
+      return data.results.map((m: any) => this.mapMovie(m))
+    })
   }
 
   async getTvShowRecommendations(showId: number): Promise<TmdbTvShow[]> {
-    const data = await this.fetch(`/tv/${showId}/recommendations`)
-    return data.results.map((s: any) => this.mapTvShow(s))
+    return cache.getOrSet(`tmdb:tv:${showId}:recommendations`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/tv/${showId}/recommendations`)
+      return data.results.map((s: any) => this.mapTvShow(s))
+    })
   }
 
   async getSimilarTvShows(showId: number): Promise<TmdbTvShow[]> {
-    const data = await this.fetch(`/tv/${showId}/similar`)
-    return data.results.map((s: any) => this.mapTvShow(s))
+    return cache.getOrSet(`tmdb:tv:${showId}:similar`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/tv/${showId}/similar`)
+      return data.results.map((s: any) => this.mapTvShow(s))
+    })
+  }
+
+  // Similarity facets — franchise, people, themes
+
+  /** Genres, franchise, keywords, directors and billed cast, from a single details call. */
+  async getMovieFacets(id: number): Promise<TmdbMovieFacets> {
+    return cache.getOrSet(`tmdb:movie:${id}:facets`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/movie/${id}?append_to_response=credits,keywords`)
+      return {
+        genreIds: (data.genres || []).map((g: any) => g.id),
+        genres: (data.genres || []).map((g: any) => g.name),
+        collection: data.belongs_to_collection
+          ? { id: data.belongs_to_collection.id, name: data.belongs_to_collection.name }
+          : null,
+        keywords: this.mapLinks(data.keywords?.keywords),
+        directors: this.mapLinks(
+          (data.credits?.crew || []).filter((c: any) => c.job === 'Director')
+        ),
+        cast: this.mapLinks(data.credits?.cast),
+      }
+    })
+  }
+
+  /**
+   * The TV equivalent. Episodic crew is credited per episode rather than per show, so the
+   * authorship signal here is created_by rather than a director.
+   */
+  async getTvFacets(id: number): Promise<TmdbTvFacets> {
+    return cache.getOrSet(`tmdb:tv:${id}:facets`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/tv/${id}?append_to_response=credits,keywords`)
+      return {
+        genreIds: (data.genres || []).map((g: any) => g.id),
+        genres: (data.genres || []).map((g: any) => g.name),
+        keywords: this.mapLinks(data.keywords?.results),
+        creators: this.mapLinks(data.created_by),
+        cast: this.mapLinks(data.credits?.cast),
+        networkIds: (data.networks || []).map((n: any) => n.id),
+      }
+    })
+  }
+
+  private mapLinks(entries: any[] | undefined): TmdbLink[] {
+    if (!entries) return []
+    const seen = new Set<number>()
+    return entries.reduce<TmdbLink[]>((links, entry: any) => {
+      if (entry?.id && entry.name && !seen.has(entry.id)) {
+        seen.add(entry.id)
+        links.push({ id: entry.id, name: entry.name })
+      }
+      return links
+    }, [])
+  }
+
+  /** The other entries in a franchise, in release order. */
+  async getCollectionMovies(collectionId: number): Promise<TmdbMovie[]> {
+    return cache.getOrSet(`tmdb:collection:${collectionId}`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/collection/${collectionId}`)
+      const parts = (data.parts || []).map((m: any) => this.mapMovie(m))
+      return parts.sort((a: TmdbMovie, b: TmdbMovie) => a.year - b.year)
+    })
+  }
+
+  /** Generic discover, for the recommender's people- and theme-driven queries. */
+  async discoverMovies(params: Record<string, string | number>): Promise<TmdbMovie[]> {
+    const query = this.toQuery(params)
+    return cache.getOrSet(`tmdb:discover:movie:${query}`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/discover/movie?${query}`)
+      return data.results.map((m: any) => this.mapMovie(m))
+    })
+  }
+
+  async discoverTvShows(params: Record<string, string | number>): Promise<TmdbTvShow[]> {
+    const query = this.toQuery(params)
+    return cache.getOrSet(`tmdb:discover:tv:${query}`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/discover/tv?${query}`)
+      return data.results.map((s: any) => this.mapTvShow(s))
+    })
+  }
+
+  /**
+   * A person's shows. Discover has no with_cast/with_crew for TV, so a creator's or a
+   * lead's other work has to come from their credits.
+   */
+  async getPersonTvShows(personId: number, role: 'cast' | 'crew'): Promise<TmdbTvShow[]> {
+    return cache.getOrSet(`tmdb:person:${personId}:tv:${role}`, CACHE_TTL.METADATA, async () => {
+      const data = await this.fetch(`/person/${personId}/tv_credits`)
+      const credits = (data[role] || []) as any[]
+      const shows = credits.map((s: any) => this.mapTvShow(s))
+      return shows.sort((a: TmdbTvShow, b: TmdbTvShow) => b.voteCount - a.voteCount)
+    })
+  }
+
+  private toQuery(params: Record<string, string | number>): string {
+    return Object.entries(params)
+      .map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`)
+      .join('&')
   }
 }
 

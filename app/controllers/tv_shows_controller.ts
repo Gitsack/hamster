@@ -13,6 +13,7 @@ import Download from '#models/download'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
+import { similarMediaService } from '#services/metadata/similar_media_service'
 import { justwatchService } from '#services/metadata/justwatch_service'
 import AppSetting from '#models/app_setting'
 import { downloadManager } from '#services/download_clients/download_manager'
@@ -1460,25 +1461,25 @@ export default class TvShowsController {
     }
 
     try {
-      const results = await tmdbService.getSimilarTvShows(Number.parseInt(tmdbIdStr))
-
-      const sliced = results.slice(0, 20)
+      const results = await similarMediaService.getSimilarTvShows(Number.parseInt(tmdbIdStr))
 
       // Check library status
-      const tmdbIds = sliced.map((r) => String(r.id))
+      const tmdbIds = results.map((r) => String(r.tmdbId))
       const existing = await TvShow.query().whereIn('tmdbId', tmdbIds)
       const existingMap = new Map(existing.map((s) => [s.tmdbId, s]))
 
       return response.json({
-        results: sliced.map((s) => {
-          const libraryShow = existingMap.get(String(s.id))
+        results: results.map((s) => {
+          const libraryShow = existingMap.get(String(s.tmdbId))
           return {
-            tmdbId: String(s.id),
-            title: s.name,
+            tmdbId: String(s.tmdbId),
+            title: s.title,
             year: s.year,
-            posterUrl: s.posterPath,
-            rating: s.voteAverage,
+            posterUrl: s.posterUrl,
+            rating: s.rating,
             genres: s.genres,
+            // Why this title is here — "Created by …", "With …", "Viewers also liked".
+            reason: s.reason,
             inLibrary: !!libraryShow,
             libraryId: libraryShow?.id,
             requested: libraryShow?.requested ?? false,
@@ -1487,7 +1488,8 @@ export default class TvShowsController {
       })
     } catch (error) {
       console.error('Failed to fetch similar TV shows:', error)
-      return response.json({ results: [] })
+      // Say the provider could not be reached; an empty list would read as "nothing alike".
+      return response.status(502).json({ error: 'Could not reach TMDB for similar titles' })
     }
   }
 

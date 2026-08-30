@@ -24,6 +24,7 @@ import {
   Tv01Icon,
   Refresh01Icon,
   LinkSquare02Icon,
+  ArrowLeft01Icon,
 } from '@hugeicons/core-free-icons'
 import { MediaStatusBadge, getMediaItemStatus } from '@/components/library/media-status-badge'
 import { MediaGallery } from '@/components/media-gallery'
@@ -32,6 +33,7 @@ import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/se
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import type { StreamingOffer } from '@/components/library/streaming-offers'
 import { CastLane, type CastMember } from '@/components/library/cast-lane'
+import { SimilarLane } from '@/components/library/similar-lane'
 
 interface MovieDetails {
   tmdbId: string
@@ -110,6 +112,10 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
     null
   )
   const lastRequest = useRef<{ type: 'movie' | 'tv'; tmdbId: string } | null>(null)
+  // Titles the operator drilled down from, so a similar-title tap is reversible.
+  const historyRef = useRef<{ type: 'movie' | 'tv'; tmdbId: string }[]>([])
+  const [historyDepth, setHistoryDepth] = useState(0)
+  const sheetOpenRef = useRef(false)
 
   // Add flow state
   const [rootFolders, setRootFolders] = useState<{ id: string; path: string; mediaType: string }[]>(
@@ -141,82 +147,105 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
     }
   }, [configLoaded])
 
-  // Open movie preview
+  // Load one title into the sheet. Both entry points share it so a drill-down from the
+  // similar lane behaves exactly like opening the sheet from a poster.
+  const loadPreview = useCallback(
+    async (type: 'movie' | 'tv', tmdbId: string) => {
+      setDetailsType(type)
+      setSheetOpen(true)
+      sheetOpenRef.current = true
+      setDetailsLoading(true)
+      setMovieDetails(null)
+      setTvShowDetails(null)
+      setPreviewError(null)
+      lastRequest.current = { type, tmdbId }
+
+      const endpoint =
+        type === 'movie'
+          ? `/api/v1/movies/preview?tmdbId=${tmdbId}`
+          : `/api/v1/tvshows/preview?tmdbId=${tmdbId}`
+
+      try {
+        const response = await fetch(endpoint)
+        if (response.ok) {
+          const data = await response.json()
+          if (type === 'movie') setMovieDetails(data)
+          else setTvShowDetails(data)
+        } else {
+          setPreviewError({
+            message: `TMDB did not return details for this ${
+              type === 'movie' ? 'movie' : 'show'
+            } (HTTP ${response.status}).`,
+            endpoint,
+          })
+        }
+      } catch {
+        setPreviewError({
+          message: `Could not reach TMDB for ${type === 'movie' ? 'movie' : 'show'} details.`,
+          endpoint,
+        })
+      } finally {
+        setDetailsLoading(false)
+        // Loaded once the sheet has content, so the footer can state the destination
+        // before anything is committed.
+        void ensureConfig()
+      }
+    },
+    [ensureConfig]
+  )
+
+  /**
+   * Opening a title while the sheet is already up is a drill-down — the operator followed
+   * a similar title out of the one they were reading — so the title they left is kept and
+   * the header grows a Back. Opening from a page starts a fresh trail.
+   */
+  const pushHistory = useCallback(() => {
+    if (sheetOpenRef.current && lastRequest.current) {
+      historyRef.current = [...historyRef.current, lastRequest.current]
+    } else {
+      historyRef.current = []
+    }
+    setHistoryDepth(historyRef.current.length)
+  }, [])
+
   const openMoviePreview = useCallback(
-    async (tmdbId: string) => {
-      setDetailsType('movie')
-      setSheetOpen(true)
-      setDetailsLoading(true)
-      setMovieDetails(null)
-      setTvShowDetails(null)
-      setPreviewError(null)
-      lastRequest.current = { type: 'movie', tmdbId }
-
-      const endpoint = `/api/v1/movies/preview?tmdbId=${tmdbId}`
-      try {
-        const response = await fetch(endpoint)
-        if (response.ok) {
-          const data = await response.json()
-          setMovieDetails(data)
-        } else {
-          setPreviewError({
-            message: `TMDB did not return details for this movie (HTTP ${response.status}).`,
-            endpoint,
-          })
-        }
-      } catch {
-        setPreviewError({ message: 'Could not reach TMDB for movie details.', endpoint })
-      } finally {
-        setDetailsLoading(false)
-        // Loaded once the sheet has content, so the footer can state the destination
-        // before anything is committed.
-        void ensureConfig()
-      }
+    (tmdbId: string) => {
+      pushHistory()
+      void loadPreview('movie', tmdbId)
     },
-    [ensureConfig]
+    [loadPreview, pushHistory]
   )
 
-  // Open TV show preview
   const openTvShowPreview = useCallback(
-    async (tmdbId: string) => {
-      setDetailsType('tv')
-      setSheetOpen(true)
-      setDetailsLoading(true)
-      setMovieDetails(null)
-      setTvShowDetails(null)
-      setPreviewError(null)
-      lastRequest.current = { type: 'tv', tmdbId }
-
-      const endpoint = `/api/v1/tvshows/preview?tmdbId=${tmdbId}`
-      try {
-        const response = await fetch(endpoint)
-        if (response.ok) {
-          const data = await response.json()
-          setTvShowDetails(data)
-        } else {
-          setPreviewError({
-            message: `TMDB did not return details for this show (HTTP ${response.status}).`,
-            endpoint,
-          })
-        }
-      } catch {
-        setPreviewError({ message: 'Could not reach TMDB for show details.', endpoint })
-      } finally {
-        setDetailsLoading(false)
-        // Loaded once the sheet has content, so the footer can state the destination
-        // before anything is committed.
-        void ensureConfig()
-      }
+    (tmdbId: string) => {
+      pushHistory()
+      void loadPreview('tv', tmdbId)
     },
-    [ensureConfig]
+    [loadPreview, pushHistory]
   )
+
+  const goBackPreview = useCallback(() => {
+    const previous = historyRef.current[historyRef.current.length - 1]
+    if (!previous) return
+    historyRef.current = historyRef.current.slice(0, -1)
+    setHistoryDepth(historyRef.current.length)
+    void loadPreview(previous.type, previous.tmdbId)
+  }, [loadPreview])
+
+  const closeSheet = useCallback((open: boolean) => {
+    setSheetOpen(open)
+    sheetOpenRef.current = open
+    if (!open) {
+      historyRef.current = []
+      setHistoryDepth(0)
+    }
+  }, [])
 
   const retryPreview = useCallback(() => {
     const last = lastRequest.current
     if (!last) return
-    if (last.type === 'movie') openMoviePreview(last.tmdbId)
-    else openTvShowPreview(last.tmdbId)
-  }, [openMoviePreview, openTvShowPreview])
+    void loadPreview(last.type, last.tmdbId)
+  }, [loadPreview])
 
   // Toggle movie requested
   const toggleMovieDetailsRequested = async () => {
@@ -438,7 +467,7 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
       {children}
 
       {/* Preview Sheet */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+      <Sheet open={sheetOpen} onOpenChange={closeSheet}>
         <SheetContent className="sm:max-w-lg">
           {detailsLoading ? (
             <div className="space-y-4 p-6" aria-busy="true">
@@ -456,6 +485,12 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
           ) : previewError ? (
             <>
               <SheetHeader className="pr-12 pb-4">
+                {historyDepth > 0 && (
+                  <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={goBackPreview}>
+                    <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-1 h-4 w-4" />
+                    Back
+                  </Button>
+                )}
                 <SheetTitle>Details unavailable</SheetTitle>
               </SheetHeader>
               <SheetBody className="px-6 pb-6">
@@ -479,6 +514,12 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
           ) : detailsType === 'movie' && movieDetails ? (
             <>
               <SheetHeader className="pr-12 pb-4">
+                {historyDepth > 0 && (
+                  <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={goBackPreview}>
+                    <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-1 h-4 w-4" />
+                    Back
+                  </Button>
+                )}
                 <SheetTitle>
                   {movieDetails.title}
                   {movieDetails.year && (
@@ -595,13 +636,21 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                 )}
 
                 <CastLane cast={movieDetails.cast} />
+
+                {/* Last, and only fetched once it is scrolled to — the add decision above
+                    it never waits on a lane the operator may not reach. */}
+                <SimilarLane
+                  mediaType="movies"
+                  mediaId={movieDetails.libraryId}
+                  tmdbId={movieDetails.tmdbId}
+                />
               </SheetBody>
 
               <SheetFooter>
                 {movieDetails.inLibrary ? (
                   <Button
                     onClick={() => {
-                      setSheetOpen(false)
+                      closeSheet(false)
                       router.visit(`/movie/${movieDetails.libraryId}`)
                     }}
                   >
@@ -631,6 +680,12 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
           ) : detailsType === 'tv' && tvShowDetails ? (
             <>
               <SheetHeader className="pr-12 pb-4">
+                {historyDepth > 0 && (
+                  <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={goBackPreview}>
+                    <HugeiconsIcon icon={ArrowLeft01Icon} className="mr-1 h-4 w-4" />
+                    Back
+                  </Button>
+                )}
                 <SheetTitle>
                   {tvShowDetails.title}
                   {tvShowDetails.year && (
@@ -752,13 +807,21 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                 )}
 
                 <CastLane cast={tvShowDetails.cast} />
+
+                {/* Last, and only fetched once it is scrolled to — the add decision above
+                    it never waits on a lane the operator may not reach. */}
+                <SimilarLane
+                  mediaType="tv"
+                  mediaId={tvShowDetails.libraryId}
+                  tmdbId={tvShowDetails.tmdbId}
+                />
               </SheetBody>
 
               <SheetFooter>
                 {tvShowDetails.inLibrary ? (
                   <Button
                     onClick={() => {
-                      setSheetOpen(false)
+                      closeSheet(false)
                       router.visit(`/tvshow/${tvShowDetails.libraryId}`)
                     }}
                   >

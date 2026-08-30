@@ -11,6 +11,7 @@ import {
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { tmdbService } from '#services/metadata/tmdb_service'
+import { similarMediaService } from '#services/metadata/similar_media_service'
 import { justwatchService } from '#services/metadata/justwatch_service'
 import AppSetting from '#models/app_setting'
 import * as fs from 'node:fs/promises'
@@ -873,25 +874,25 @@ export default class MoviesController {
     }
 
     try {
-      const results = await tmdbService.getSimilarMovies(Number.parseInt(tmdbIdStr))
-
-      const sliced = results.slice(0, 20)
+      const results = await similarMediaService.getSimilarMovies(Number.parseInt(tmdbIdStr))
 
       // Check library status
-      const tmdbIds = sliced.map((r) => String(r.id))
+      const tmdbIds = results.map((r) => String(r.tmdbId))
       const existing = await Movie.query().whereIn('tmdbId', tmdbIds)
       const existingMap = new Map(existing.map((m) => [m.tmdbId, m]))
 
       return response.json({
-        results: sliced.map((m) => {
-          const libraryMovie = existingMap.get(String(m.id))
+        results: results.map((m) => {
+          const libraryMovie = existingMap.get(String(m.tmdbId))
           return {
-            tmdbId: String(m.id),
+            tmdbId: String(m.tmdbId),
             title: m.title,
             year: m.year,
-            posterUrl: m.posterPath,
-            rating: m.voteAverage,
+            posterUrl: m.posterUrl,
+            rating: m.rating,
             genres: m.genres,
+            // Why this title is here — "Directed by …", "Part of …", "With …".
+            reason: m.reason,
             inLibrary: !!libraryMovie,
             libraryId: libraryMovie?.id,
             requested: libraryMovie?.requested ?? false,
@@ -901,7 +902,8 @@ export default class MoviesController {
       })
     } catch (error) {
       console.error('Failed to fetch similar movies:', error)
-      return response.json({ results: [] })
+      // Say the provider could not be reached; an empty list would read as "nothing alike".
+      return response.status(502).json({ error: 'Could not reach TMDB for similar titles' })
     }
   }
 

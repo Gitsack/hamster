@@ -58,6 +58,10 @@ export function useVisibleWatchProviders(type: 'movie' | 'tv') {
 
   // Create observer once
   useEffect(() => {
+    // No observer outside a browser (SSR, jsdom): the badges are decoration, so the lane
+    // simply renders without them rather than throwing on mount.
+    if (typeof IntersectionObserver === 'undefined') return
+
     observerRef.current = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
