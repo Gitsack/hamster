@@ -23,6 +23,10 @@ export default class Movie extends BaseModel {
   @column()
   declare originalTitle: string | null
 
+  /** ISO 639-1 language this was made in, per TMDB. Null when unknown. */
+  @column()
+  declare originalLanguage: string | null
+
   @column()
   declare sortTitle: string | null
 

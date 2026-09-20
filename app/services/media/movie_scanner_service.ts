@@ -458,6 +458,7 @@ export class MovieScannerService {
       imdbId: tmdb.imdbId,
       title: tmdb.title,
       originalTitle: tmdb.originalTitle,
+      originalLanguage: tmdb.originalLanguage,
       sortTitle: this.generateSortTitle(tmdb.title),
       overview: tmdb.overview,
       releaseDate: tmdb.releaseDate ? DateTime.fromISO(tmdb.releaseDate) : null,

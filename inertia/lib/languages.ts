@@ -47,7 +47,18 @@ export const LANGUAGES: Language[] = [
 const BY_CODE = new Map(LANGUAGES.map((language) => [language.code, language]))
 
 /** Human name for a code, falling back to the code so unknown data still renders. */
+/**
+ * Stands in for whatever language a title was made in, resolved per title
+ * against TMDB. Mirrors ORIGINAL_LANGUAGE in the server's quality rules.
+ *
+ * It travels in the same arrays as real codes, so everything that renders a
+ * language has to know about it — otherwise it surfaces as "ORIGINAL" in the
+ * middle of an English sentence.
+ */
+export const ORIGINAL_LANGUAGE = 'original'
+
 export function languageName(code: string): string {
+  if (code === ORIGINAL_LANGUAGE) return 'the original language'
   return BY_CODE.get(code)?.name ?? code.toUpperCase()
 }
 

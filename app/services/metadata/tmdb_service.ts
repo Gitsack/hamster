@@ -54,6 +54,8 @@ export interface TmdbMovie {
   id: number
   title: string
   originalTitle: string
+  /** ISO 639-1 language the film was made in, when TMDB knows it. */
+  originalLanguage: string | null
   overview: string
   releaseDate: string
   year: number
@@ -71,6 +73,8 @@ export interface TmdbTvShow {
   id: number
   name: string
   originalName: string
+  /** ISO 639-1 language the show was made in, when TMDB knows it. */
+  originalLanguage: string | null
   overview: string
   firstAirDate: string
   year: number
@@ -218,6 +222,7 @@ export class TmdbService {
       id: m.id,
       title: m.title,
       originalTitle: m.original_title,
+      originalLanguage: m.original_language ?? null,
       overview: m.overview || '',
       releaseDate: m.release_date || '',
       year: m.release_date ? Number.parseInt(m.release_date.substring(0, 4)) : 0,
@@ -386,6 +391,7 @@ export class TmdbService {
       id: s.id,
       name: s.name,
       originalName: s.original_name,
+      originalLanguage: s.original_language ?? null,
       overview: s.overview || '',
       firstAirDate: s.first_air_date || '',
       year: s.first_air_date ? Number.parseInt(s.first_air_date.substring(0, 4)) : 0,

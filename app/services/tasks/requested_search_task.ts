@@ -270,13 +270,17 @@ export interface ReleaseSelection {
 async function selectRelease(
   results: UnifiedSearchResult[],
   mediaType: MediaType,
-  profile: QualityProfile | null
+  profile: QualityProfile | null,
+  /** The title's own language, for a profile that asks for the original. */
+  originalLanguage?: string | null
 ): Promise<ReleaseSelection> {
   if (results.length === 0) {
     return { release: null, reason: 'No releases found', rejected: 0 }
   }
 
-  const context = profile ? await buildProfileContext(profile) : permissiveContext()
+  const context = profile
+    ? await buildProfileContext(profile, originalLanguage)
+    : permissiveContext()
 
   const { accepted, rejected } = evaluateReleases(results, mediaType, context)
 
@@ -621,7 +625,12 @@ class RequestedSearchTask {
 
         // Load quality profile and rank by quality
         const profile = await loadQualityProfile(movie.qualityProfileId)
-        const selection = await selectRelease(availableResults, 'movies', profile)
+        const selection = await selectRelease(
+          availableResults,
+          'movies',
+          profile,
+          movie.originalLanguage
+        )
         const bestResult = selection.release
 
         if (!bestResult) {
@@ -930,7 +939,12 @@ class RequestedSearchTask {
 
         // Load quality profile from the TV show and rank by quality
         const profile = await loadQualityProfile(tvShow.qualityProfileId)
-        const selection = await selectRelease(availableResults, 'tv', profile)
+        const selection = await selectRelease(
+          availableResults,
+          'tv',
+          profile,
+          tvShow.originalLanguage
+        )
         const bestResult = selection.release
 
         if (!bestResult) {
@@ -1154,7 +1168,12 @@ class RequestedSearchTask {
 
       // Load quality profile and rank by quality
       const profile = await loadQualityProfile(movie.qualityProfileId)
-      const selection = await selectRelease(availableResults, 'movies', profile)
+      const selection = await selectRelease(
+        availableResults,
+        'movies',
+        profile,
+        movie.originalLanguage
+      )
       const bestResult = selection.release
 
       if (!bestResult) {
@@ -1298,7 +1317,12 @@ class RequestedSearchTask {
 
       // Load quality profile from the TV show and rank by quality
       const profile = await loadQualityProfile(tvShow.qualityProfileId)
-      const selection = await selectRelease(availableResults, 'tv', profile)
+      const selection = await selectRelease(
+        availableResults,
+        'tv',
+        profile,
+        tvShow.originalLanguage
+      )
       const bestResult = selection.release
 
       if (!bestResult) {
@@ -1548,7 +1572,12 @@ class RequestedSearchTask {
 
           // Load quality profile from the TV show and rank by quality
           const profile = await loadQualityProfile(tvShow.qualityProfileId)
-          const selection = await selectRelease(matchingResults, 'tv', profile)
+          const selection = await selectRelease(
+            matchingResults,
+            'tv',
+            profile,
+            tvShow.originalLanguage
+          )
           const bestResult = selection.release
 
           if (!bestResult) continue

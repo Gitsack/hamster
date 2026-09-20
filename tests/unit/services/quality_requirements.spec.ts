@@ -13,6 +13,8 @@ import {
   evaluateFileQuality,
   normalizeProbedAudioCodec,
   normalizeRequirements,
+  ORIGINAL_LANGUAGE,
+  resolveOriginalLanguage,
   type QualityRequirements,
 } from '../../../app/services/quality/quality_requirements.js'
 import { parseQuality } from '../../../app/services/quality/quality_parser.js'
@@ -410,5 +412,82 @@ test.group('quality_requirements | audio languages on disk', () => {
     )
     assert.lengthOf(issues, 1)
     assert.include(issues[0].message, 'English')
+  })
+})
+
+test.group('quality_requirements | resolveOriginalLanguage', () => {
+  const withLanguages = (overrides: Partial<QualityRequirements>): QualityRequirements => ({
+    ...DEFAULT_QUALITY_REQUIREMENTS,
+    ...overrides,
+  })
+
+  test('substitutes the title language into the required list', ({ assert }) => {
+    const resolved = resolveOriginalLanguage(
+      withLanguages({ requiredAudioLanguages: [ORIGINAL_LANGUAGE] }),
+      'ja'
+    )
+    assert.deepEqual(resolved.requiredAudioLanguages, ['ja'])
+  })
+
+  test('keeps explicit languages alongside the token', ({ assert }) => {
+    const resolved = resolveOriginalLanguage(
+      withLanguages({ requiredAudioLanguages: ['en', ORIGINAL_LANGUAGE] }),
+      'fr'
+    )
+    assert.deepEqual(resolved.requiredAudioLanguages, ['en', 'fr'])
+  })
+
+  test('does not duplicate a language already named explicitly', ({ assert }) => {
+    const resolved = resolveOriginalLanguage(
+      withLanguages({ requiredAudioLanguages: ['en', ORIGINAL_LANGUAGE] }),
+      'en'
+    )
+    assert.deepEqual(resolved.requiredAudioLanguages, ['en'])
+  })
+
+  test('drops the token when the original language is unknown', ({ assert }) => {
+    const resolved = resolveOriginalLanguage(
+      withLanguages({ requiredAudioLanguages: [ORIGINAL_LANGUAGE] }),
+      null
+    )
+    // Nothing required, so nothing is filtered — a missing metadata field must
+    // not reject every release for the title.
+    assert.deepEqual(resolved.requiredAudioLanguages, [])
+  })
+
+  test('resolves the preferred and blocked lists too', ({ assert }) => {
+    const resolved = resolveOriginalLanguage(
+      withLanguages({
+        preferredAudioLanguages: [ORIGINAL_LANGUAGE],
+        blockedAudioLanguages: [ORIGINAL_LANGUAGE],
+      }),
+      'ko'
+    )
+    assert.deepEqual(resolved.preferredAudioLanguages, ['ko'])
+    assert.deepEqual(resolved.blockedAudioLanguages, ['ko'])
+  })
+
+  test('leaves requirements without the token untouched', ({ assert }) => {
+    const original = withLanguages({ requiredAudioLanguages: ['de'] })
+    const resolved = resolveOriginalLanguage(original, 'ja')
+    assert.deepEqual(resolved.requiredAudioLanguages, ['de'])
+  })
+
+  test('does not mutate the requirements it is given', ({ assert }) => {
+    const original = withLanguages({ requiredAudioLanguages: [ORIGINAL_LANGUAGE] })
+    resolveOriginalLanguage(original, 'ja')
+    assert.deepEqual(original.requiredAudioLanguages, [ORIGINAL_LANGUAGE])
+  })
+
+  test('a resolved rule then judges a release the ordinary way', ({ assert }) => {
+    const resolved = resolveOriginalLanguage(
+      withLanguages({ requiredAudioLanguages: [ORIGINAL_LANGUAGE] }),
+      'ja'
+    )
+    const japanese = evaluateLanguageClaims(parseLanguages('Show.S01E01.JAPANESE.1080p'), resolved)
+    const german = evaluateLanguageClaims(parseLanguages('Show.S01E01.GERMAN.1080p'), resolved)
+
+    assert.isEmpty(japanese.rejections)
+    assert.isNotEmpty(german.rejections)
   })
 })

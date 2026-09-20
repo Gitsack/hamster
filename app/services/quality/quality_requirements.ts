@@ -93,6 +93,52 @@ export function normalizeRequirements(
   return { ...DEFAULT_QUALITY_REQUIREMENTS, ...(value ?? {}) }
 }
 
+/**
+ * Stands in for whatever language the title was actually made in.
+ *
+ * Naming languages one at a time does not survive a mixed library: the profile
+ * that wants French audio for a French film wants Japanese for an anime and
+ * English for everything out of Hollywood, and no fixed list says that. This
+ * token says it once and resolves per title against TMDB's original language.
+ *
+ * Deliberately not a valid ISO code, so it can never collide with a real one.
+ */
+export const ORIGINAL_LANGUAGE = 'original'
+
+/**
+ * Replace {@link ORIGINAL_LANGUAGE} with the title's own language.
+ *
+ * Kept out of the evaluation so the rules stay a pure function of the release
+ * and the profile: by the time a release is judged, "original" has already
+ * become a language code or gone away.
+ *
+ * When the original language is unknown — TMDB does not always say, and a
+ * metadata refresh may not have run yet — the token is dropped rather than
+ * guessed at. That means a required list naming nothing else stops filtering,
+ * which is the right direction to fail in: a profile should not reject every
+ * release for a title because one metadata field is missing.
+ */
+export function resolveOriginalLanguage(
+  requirements: QualityRequirements,
+  originalLanguage: LanguageCode | null | undefined
+): QualityRequirements {
+  const resolve = (codes: LanguageCode[]): LanguageCode[] => {
+    if (!codes.includes(ORIGINAL_LANGUAGE)) return codes
+    const withoutToken = codes.filter((code) => code !== ORIGINAL_LANGUAGE)
+    if (!originalLanguage) return withoutToken
+    return withoutToken.includes(originalLanguage)
+      ? withoutToken
+      : [...withoutToken, originalLanguage]
+  }
+
+  return {
+    ...requirements,
+    requiredAudioLanguages: resolve(requirements.requiredAudioLanguages),
+    preferredAudioLanguages: resolve(requirements.preferredAudioLanguages),
+    blockedAudioLanguages: resolve(requirements.blockedAudioLanguages),
+  }
+}
+
 export interface AttributeEvaluation {
   /** Non-empty means the release must not be grabbed. */
   rejections: string[]

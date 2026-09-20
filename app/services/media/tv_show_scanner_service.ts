@@ -441,6 +441,7 @@ export class TvShowScannerService {
       tmdbId: String(tmdb.id),
       title: tmdb.name,
       originalTitle: tmdb.originalName,
+      originalLanguage: tmdb.originalLanguage,
       sortTitle: this.generateSortTitle(tmdb.name),
       overview: tmdb.overview,
       firstAired: tmdb.firstAirDate ? DateTime.fromISO(tmdb.firstAirDate) : null,

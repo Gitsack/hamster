@@ -285,6 +285,7 @@ export default class TvShowsController {
           tmdbId: String(tmdbData.id),
           title: tmdbData.name,
           originalTitle: tmdbData.originalName,
+          originalLanguage: tmdbData.originalLanguage,
           sortTitle: tmdbData.name.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
           overview: tmdbData.overview,
           firstAired: tmdbData.firstAirDate ? DateTime.fromISO(tmdbData.firstAirDate) : null,
@@ -925,7 +926,9 @@ export default class TvShowsController {
         ? await QualityProfile.find(show.qualityProfileId)
         : null
 
-      return response.json(sortAnnotated(await annotateReleases(results, 'tv', profile)))
+      return response.json(
+        sortAnnotated(await annotateReleases(results, 'tv', profile, show.originalLanguage))
+      )
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search releases',
@@ -975,7 +978,9 @@ export default class TvShowsController {
         ? await QualityProfile.find(tvShow.qualityProfileId)
         : null
 
-      return response.json(sortAnnotated(await annotateReleases(results, 'tv', profile)))
+      return response.json(
+        sortAnnotated(await annotateReleases(results, 'tv', profile, tvShow.originalLanguage))
+      )
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search releases',
@@ -1183,6 +1188,7 @@ export default class TvShowsController {
       show.merge({
         tmdbId: String(tmdbData.id),
         originalTitle: tmdbData.originalName || null,
+        originalLanguage: tmdbData.originalLanguage,
         sortTitle: tmdbData.name.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
         overview: tmdbData.overview || null,
         firstAired: tmdbData.firstAirDate ? DateTime.fromISO(tmdbData.firstAirDate) : null,
@@ -1320,6 +1326,7 @@ export default class TvShowsController {
 
       show.merge({
         originalTitle: tmdbData.originalName || show.originalTitle,
+        originalLanguage: tmdbData.originalLanguage ?? show.originalLanguage,
         overview: tmdbData.overview || show.overview,
         status: tmdbData.status || show.status,
         posterUrl: tmdbData.posterPath || show.posterUrl,

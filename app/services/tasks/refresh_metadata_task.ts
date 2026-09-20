@@ -80,6 +80,7 @@ class RefreshMetadataTask {
 
         show.merge({
           originalTitle: tmdbData.originalName || show.originalTitle,
+          originalLanguage: tmdbData.originalLanguage ?? show.originalLanguage,
           overview: tmdbData.overview || show.overview,
           status: tmdbData.status || show.status,
           posterUrl: tmdbData.posterPath || show.posterUrl,
@@ -210,6 +211,7 @@ class RefreshMetadataTask {
 
         movie.merge({
           originalTitle: tmdbData.originalTitle || movie.originalTitle,
+          originalLanguage: tmdbData.originalLanguage ?? movie.originalLanguage,
           overview: tmdbData.overview || movie.overview,
           status: tmdbData.status || movie.status,
           posterUrl: tmdbData.posterPath || movie.posterUrl,

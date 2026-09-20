@@ -62,9 +62,13 @@ export interface AnnotatedRelease {
 export async function annotateReleases(
   results: UnifiedSearchResult[],
   mediaType: MediaType,
-  profile: QualityProfile | null
+  profile: QualityProfile | null,
+  /** The title's own language, for a profile that asks for the original. */
+  originalLanguage?: string | null
 ): Promise<AnnotatedRelease[]> {
-  const context = profile ? await buildProfileContext(profile) : permissiveContext()
+  const context = profile
+    ? await buildProfileContext(profile, originalLanguage)
+    : permissiveContext()
 
   return results.map((result) => {
     const evaluation = evaluateRelease(result.title, result.size ?? null, mediaType, context)

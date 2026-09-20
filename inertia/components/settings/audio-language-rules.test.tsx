@@ -113,3 +113,54 @@ describe('QualityRequirementsFields | language placement', () => {
     expect(screen.queryByRole('heading', { name: 'Video' })).toBeNull()
   })
 })
+
+describe('AudioLanguageRules | original language', () => {
+  it('offers the original-language token in the picker', async () => {
+    const onChange = vi.fn()
+    render(<AudioLanguageRules value={empty} onChange={onChange} />)
+
+    await userEvent.type(screen.getByLabelText('Search languages'), 'orig')
+    await userEvent.click(screen.getByRole('button', { name: /Original language/ }))
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ requiredAudioLanguages: ['original'] })
+    )
+  })
+
+  it('shows a chosen original-language rule as a row', () => {
+    render(
+      <AudioLanguageRules
+        value={{ ...empty, requiredAudioLanguages: ['original'] }}
+        onChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Original language')).toBeInTheDocument()
+    // The token is not an ISO code, so the code chip says how it resolves
+    expect(screen.getByText('per title')).toBeInTheDocument()
+  })
+
+  it('reads the token as words in the summary, never as a bare code', () => {
+    render(
+      <AudioLanguageRules
+        value={{ ...empty, requiredAudioLanguages: ['original'] }}
+        onChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/must carry the original language/)).toBeInTheDocument()
+    expect(screen.queryByText(/ORIGINAL/)).not.toBeInTheDocument()
+  })
+
+  it('can sit alongside an explicit language', () => {
+    render(
+      <AudioLanguageRules
+        value={{ ...empty, requiredAudioLanguages: ['original', 'en'] }}
+        onChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Original language')).toBeInTheDocument()
+    expect(screen.getByText('English')).toBeInTheDocument()
+  })
+})

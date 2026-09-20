@@ -18,6 +18,7 @@ import {
   DEFAULT_QUALITY_REQUIREMENTS,
   evaluateReleaseAttributes,
   normalizeRequirements,
+  resolveOriginalLanguage,
   type QualityRequirements,
 } from './quality_requirements.js'
 
@@ -293,16 +294,24 @@ const ALL_QUALITY_ITEMS: QualityItem[] = Array.from({ length: 9 }, (_, index) =>
 /**
  * Build the scoring context for a profile, loading its custom formats once.
  */
-export async function buildProfileContext(profile: {
-  id: string
-  name: string
-  items: QualityItem[]
-  cutoff: number
-  upgradeAllowed: boolean
-  minSizeMb: number | null
-  maxSizeMb: number | null
-  requirements: Partial<QualityRequirements> | null
-}): Promise<ProfileContext> {
+export async function buildProfileContext(
+  profile: {
+    id: string
+    name: string
+    items: QualityItem[]
+    cutoff: number
+    upgradeAllowed: boolean
+    minSizeMb: number | null
+    maxSizeMb: number | null
+    requirements: Partial<QualityRequirements> | null
+  },
+  /**
+   * The language this particular title was made in, so a profile asking for
+   * ORIGINAL_LANGUAGE can be resolved before any release is judged. Omitted by
+   * callers with no title in hand, which simply drops the token.
+   */
+  originalLanguage?: string | null
+): Promise<ProfileContext> {
   const customFormats = await customFormatMatcher
     .loadFormatsForProfile(profile.id)
     .catch(() => [] as { format: CustomFormat; score: number }[])
@@ -310,7 +319,10 @@ export async function buildProfileContext(profile: {
   return {
     items: profile.items ?? [],
     cutoff: profile.cutoff,
-    requirements: normalizeRequirements(profile.requirements),
+    requirements: resolveOriginalLanguage(
+      normalizeRequirements(profile.requirements),
+      originalLanguage
+    ),
     customFormats,
     minSizeBytes:
       profile.minSizeMb !== null && profile.minSizeMb !== undefined

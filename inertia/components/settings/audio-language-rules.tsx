@@ -4,8 +4,21 @@ import { Add01Icon, Cancel01Icon, Search01Icon } from '@hugeicons/core-free-icon
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { LANGUAGES, describeLanguages } from '@/lib/languages'
+import { LANGUAGES, ORIGINAL_LANGUAGE, describeLanguages, type Language } from '@/lib/languages'
 import { cn } from '@/lib/utils'
+
+/**
+ * Stands in for whatever language the title was made in, resolved per title
+ * against TMDB. Mirrors ORIGINAL_LANGUAGE on the server.
+ *
+ * Offered first, and never buried in the alphabetical list: for a library with
+ * more than one language in it this is usually the rule someone actually wants,
+ * and naming French, Japanese and Korean by hand is the long way round to it.
+ */
+const ORIGINAL_ENTRY: Language = { code: ORIGINAL_LANGUAGE, name: 'Original language' }
+
+/** The catalogue plus the original-language token, which sorts first. */
+const SELECTABLE: Language[] = [ORIGINAL_ENTRY, ...LANGUAGES]
 
 /** The four requirement fields this control owns, and nothing else. */
 export interface AudioLanguageValue {
@@ -77,16 +90,15 @@ export function AudioLanguageRules({
 
   const chosen = useMemo(
     () =>
-      LANGUAGES.map((language) => ({ ...language, role: roleOf(value, language.code) })).filter(
-        (language): language is (typeof LANGUAGES)[number] & { role: Role } =>
-          language.role !== null
+      SELECTABLE.map((language) => ({ ...language, role: roleOf(value, language.code) })).filter(
+        (language): language is Language & { role: Role } => language.role !== null
       ),
     [value]
   )
 
   const candidates = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return LANGUAGES.filter(
+    return SELECTABLE.filter(
       (language) =>
         roleOf(value, language.code) === null &&
         (needle === '' || language.name.toLowerCase().includes(needle) || language.code === needle)
@@ -139,7 +151,7 @@ export function AudioLanguageRules({
             <li key={language.code} className="flex items-center gap-3 px-3 py-2">
               <span className="min-w-0 flex-1 truncate text-sm">{language.name}</span>
               <span className="readout text-muted-foreground hidden text-xs sm:inline">
-                {language.code}
+                {language.code === ORIGINAL_LANGUAGE ? 'per title' : language.code}
               </span>
 
               <div className="border-border inline-flex rounded-md border p-0.5">
@@ -216,7 +228,9 @@ export function AudioLanguageRules({
                       className="text-muted-foreground h-3.5 w-3.5 shrink-0"
                     />
                     <span className="flex-1 truncate">{language.name}</span>
-                    <span className="readout text-muted-foreground text-xs">{language.code}</span>
+                    <span className="readout text-muted-foreground text-xs">
+                      {language.code === ORIGINAL_LANGUAGE ? 'per title' : language.code}
+                    </span>
                   </button>
                 </li>
               ))}

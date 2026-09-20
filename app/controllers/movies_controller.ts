@@ -276,6 +276,7 @@ export default class MoviesController {
           imdbId: tmdbData.imdbId,
           title: tmdbData.title,
           originalTitle: tmdbData.originalTitle,
+          originalLanguage: tmdbData.originalLanguage,
           sortTitle: tmdbData.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
           overview: tmdbData.overview,
           releaseDate: tmdbData.releaseDate ? DateTime.fromISO(tmdbData.releaseDate) : null,
@@ -596,7 +597,9 @@ export default class MoviesController {
         ? await QualityProfile.find(movie.qualityProfileId)
         : null
 
-      return response.json(sortAnnotated(await annotateReleases(results, 'movies', profile)))
+      return response.json(
+        sortAnnotated(await annotateReleases(results, 'movies', profile, movie.originalLanguage))
+      )
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search releases',
@@ -830,6 +833,7 @@ export default class MoviesController {
         tmdbId: String(tmdbData.id),
         imdbId: tmdbData.imdbId || null,
         originalTitle: tmdbData.originalTitle || null,
+        originalLanguage: tmdbData.originalLanguage,
         sortTitle: tmdbData.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
         overview: tmdbData.overview || null,
         releaseDate: tmdbData.releaseDate ? DateTime.fromISO(tmdbData.releaseDate) : null,
