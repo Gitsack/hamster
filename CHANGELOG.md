@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.32.0](https://github.com/Gitsack/hamster/compare/hamster-v1.31.0...hamster-v1.32.0) (2026-09-20)
+
+
+### Features
+
+* **import:** keep the subtitle tracks someone will actually read ([d657294](https://github.com/Gitsack/hamster/commit/d657294c49104c4b872334fb0618ec2b1d1b8616))
+* **quality:** ask for the language a title was actually made in ([609f5c9](https://github.com/Gitsack/hamster/commit/609f5c9ebede2e8bf6f6dbdeef40676f78031c88))
+
 ## [1.31.0](https://github.com/Gitsack/hamster/compare/hamster-v1.30.0...hamster-v1.31.0) (2026-08-30)
 
 
