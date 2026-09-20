@@ -2,169 +2,169 @@
 name: Hamster
 description: Operator-grade media management for music, movies, TV and books — one control room instead of five dashboards.
 colors:
-  signal-violet: "oklch(0.52 0.27 277)"
-  signal-violet-dark: "oklch(0.65 0.24 277)"
-  chassis-white: "oklch(1 0 0)"
-  chassis-black: "oklch(0.141 0.005 285.823)"
-  panel-graphite: "oklch(0.21 0.006 285.885)"
-  rail-bone: "oklch(0.985 0 0)"
-  tray-ash: "oklch(0.967 0.001 286.375)"
-  tray-slate: "oklch(0.274 0.006 286.033)"
-  readout-grey: "oklch(0.552 0.016 285.938)"
-  readout-grey-dark: "oklch(0.705 0.015 286.067)"
-  seam-light: "oklch(0.92 0.004 286.32)"
-  seam-dark: "oklch(1 0 0 / 10%)"
-  alarm-red: "oklch(0.577 0.245 27.325)"
-  alarm-red-dark: "oklch(0.704 0.191 22.216)"
-  status-complete-green: "oklch(0.55 0.15 152)"
-  status-transfer-cyan: "oklch(0.55 0.14 228)"
-  status-transit-magenta: "oklch(0.55 0.19 330)"
-  status-queued-amber: "oklch(0.56 0.12 70)"
+  signal-violet: 'oklch(0.52 0.27 277)'
+  signal-violet-dark: 'oklch(0.65 0.24 277)'
+  chassis-white: 'oklch(1 0 0)'
+  chassis-black: 'oklch(0.141 0.005 285.823)'
+  panel-graphite: 'oklch(0.21 0.006 285.885)'
+  rail-bone: 'oklch(0.985 0 0)'
+  tray-ash: 'oklch(0.967 0.001 286.375)'
+  tray-slate: 'oklch(0.274 0.006 286.033)'
+  readout-grey: 'oklch(0.552 0.016 285.938)'
+  readout-grey-dark: 'oklch(0.705 0.015 286.067)'
+  seam-light: 'oklch(0.92 0.004 286.32)'
+  seam-dark: 'oklch(1 0 0 / 10%)'
+  alarm-red: 'oklch(0.577 0.245 27.325)'
+  alarm-red-dark: 'oklch(0.704 0.191 22.216)'
+  status-complete-green: 'oklch(0.55 0.15 152)'
+  status-transfer-cyan: 'oklch(0.55 0.14 228)'
+  status-transit-magenta: 'oklch(0.55 0.19 330)'
+  status-queued-amber: 'oklch(0.56 0.12 70)'
 typography:
   headline:
     fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-    fontSize: "1.5rem"
+    fontSize: '1.5rem'
     fontWeight: 700
     lineHeight: 2rem
-    letterSpacing: "-0.01em"
+    letterSpacing: '-0.01em'
   title:
     fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-    fontSize: "1.125rem"
+    fontSize: '1.125rem'
     fontWeight: 600
     lineHeight: 1.75rem
-    letterSpacing: "normal"
+    letterSpacing: 'normal'
   subtitle:
     fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-    fontSize: "1rem"
+    fontSize: '1rem'
     fontWeight: 600
     lineHeight: 1.5rem
-    letterSpacing: "normal"
+    letterSpacing: 'normal'
   body:
     fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-    fontSize: "0.875rem"
+    fontSize: '0.875rem'
     fontWeight: 400
     lineHeight: 1.25rem
-    letterSpacing: "normal"
+    letterSpacing: 'normal'
   label:
     fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-    fontSize: "0.75rem"
+    fontSize: '0.75rem'
     fontWeight: 500
     lineHeight: 1rem
-    letterSpacing: "normal"
+    letterSpacing: 'normal'
   micro:
     fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-    fontSize: "0.625rem"
+    fontSize: '0.625rem'
     fontWeight: 500
     lineHeight: 0.875rem
-    letterSpacing: "0.01em"
+    letterSpacing: '0.01em'
   readout:
     fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace"
-    fontSize: "0.75rem"
+    fontSize: '0.75rem'
     fontWeight: 400
     lineHeight: 1rem
-    letterSpacing: "normal"
-    fontFeature: "tnum"
+    letterSpacing: 'normal'
+    fontFeature: 'tnum'
 rounded:
-  sm: "0.225rem"
-  md: "0.425rem"
-  lg: "0.625rem"
-  xl: "0.825rem"
-  full: "9999px"
+  sm: '0.225rem'
+  md: '0.425rem'
+  lg: '0.625rem'
+  xl: '0.825rem'
+  full: '9999px'
 spacing:
-  hairline: "4px"
-  tight: "8px"
-  step: "12px"
-  block: "16px"
-  section: "24px"
+  hairline: '4px'
+  tight: '8px'
+  step: '12px'
+  block: '16px'
+  section: '24px'
 components:
   button-primary:
-    backgroundColor: "{colors.signal-violet}"
-    textColor: "{colors.chassis-white}"
-    typography: "{typography.label}"
-    rounded: "{rounded.md}"
-    padding: "0 16px"
-    height: "36px"
+    backgroundColor: '{colors.signal-violet}'
+    textColor: '{colors.chassis-white}'
+    typography: '{typography.label}'
+    rounded: '{rounded.md}'
+    padding: '0 16px'
+    height: '36px'
   button-primary-hover:
-    backgroundColor: "oklch(0.52 0.27 277 / 0.9)"
-    textColor: "{colors.chassis-white}"
+    backgroundColor: 'oklch(0.52 0.27 277 / 0.9)'
+    textColor: '{colors.chassis-white}'
   button-outline:
-    backgroundColor: "{colors.chassis-white}"
-    textColor: "{colors.chassis-black}"
-    typography: "{typography.label}"
-    rounded: "{rounded.md}"
-    padding: "0 16px"
-    height: "36px"
+    backgroundColor: '{colors.chassis-white}'
+    textColor: '{colors.chassis-black}'
+    typography: '{typography.label}'
+    rounded: '{rounded.md}'
+    padding: '0 16px'
+    height: '36px'
   button-outline-hover:
-    backgroundColor: "{colors.tray-ash}"
-    textColor: "{colors.panel-graphite}"
+    backgroundColor: '{colors.tray-ash}'
+    textColor: '{colors.panel-graphite}'
   button-ghost:
-    backgroundColor: "transparent"
-    textColor: "{colors.chassis-black}"
-    typography: "{typography.label}"
-    rounded: "{rounded.md}"
-    padding: "0 16px"
-    height: "36px"
+    backgroundColor: 'transparent'
+    textColor: '{colors.chassis-black}'
+    typography: '{typography.label}'
+    rounded: '{rounded.md}'
+    padding: '0 16px'
+    height: '36px'
   button-destructive:
-    backgroundColor: "{colors.alarm-red}"
-    textColor: "{colors.chassis-white}"
-    typography: "{typography.label}"
-    rounded: "{rounded.md}"
-    padding: "0 16px"
-    height: "36px"
+    backgroundColor: '{colors.alarm-red}'
+    textColor: '{colors.chassis-white}'
+    typography: '{typography.label}'
+    rounded: '{rounded.md}'
+    padding: '0 16px'
+    height: '36px'
   input-field:
-    backgroundColor: "transparent"
-    textColor: "{colors.chassis-black}"
-    typography: "{typography.body}"
-    rounded: "{rounded.md}"
-    padding: "4px 12px"
-    height: "36px"
+    backgroundColor: 'transparent'
+    textColor: '{colors.chassis-black}'
+    typography: '{typography.body}'
+    rounded: '{rounded.md}'
+    padding: '4px 12px'
+    height: '36px'
   card-surface:
-    backgroundColor: "{colors.chassis-white}"
-    textColor: "{colors.chassis-black}"
-    rounded: "{rounded.xl}"
-    padding: "24px"
+    backgroundColor: '{colors.chassis-white}'
+    textColor: '{colors.chassis-black}'
+    rounded: '{rounded.xl}'
+    padding: '24px'
   status-badge-complete:
-    backgroundColor: "{colors.status-complete-green}"
-    textColor: "{colors.chassis-white}"
-    typography: "{typography.label}"
-    rounded: "{rounded.full}"
-    padding: "0 8px"
-    height: "24px"
+    backgroundColor: '{colors.status-complete-green}'
+    textColor: '{colors.chassis-white}'
+    typography: '{typography.label}'
+    rounded: '{rounded.full}'
+    padding: '0 8px'
+    height: '24px'
   status-badge-transfer:
-    backgroundColor: "{colors.status-transfer-cyan}"
-    textColor: "{colors.chassis-white}"
-    typography: "{typography.label}"
-    rounded: "{rounded.full}"
-    padding: "0 8px"
-    height: "24px"
+    backgroundColor: '{colors.status-transfer-cyan}'
+    textColor: '{colors.chassis-white}'
+    typography: '{typography.label}'
+    rounded: '{rounded.full}'
+    padding: '0 8px'
+    height: '24px'
   status-badge-transit:
-    backgroundColor: "{colors.status-transit-magenta}"
-    textColor: "{colors.chassis-white}"
-    typography: "{typography.label}"
-    rounded: "{rounded.full}"
-    padding: "0 8px"
-    height: "24px"
+    backgroundColor: '{colors.status-transit-magenta}'
+    textColor: '{colors.chassis-white}'
+    typography: '{typography.label}'
+    rounded: '{rounded.full}'
+    padding: '0 8px'
+    height: '24px'
   status-badge-queued:
-    backgroundColor: "{colors.status-queued-amber}"
-    textColor: "{colors.chassis-white}"
-    typography: "{typography.label}"
-    rounded: "{rounded.full}"
-    padding: "0 8px"
-    height: "24px"
+    backgroundColor: '{colors.status-queued-amber}'
+    textColor: '{colors.chassis-white}'
+    typography: '{typography.label}'
+    rounded: '{rounded.full}'
+    padding: '0 8px'
+    height: '24px'
   status-badge-failed:
-    backgroundColor: "{colors.alarm-red}"
-    textColor: "{colors.chassis-white}"
-    typography: "{typography.label}"
-    rounded: "{rounded.full}"
-    padding: "0 8px"
-    height: "24px"
+    backgroundColor: '{colors.alarm-red}'
+    textColor: '{colors.chassis-white}'
+    typography: '{typography.label}'
+    rounded: '{rounded.full}'
+    padding: '0 8px'
+    height: '24px'
   nav-item-active:
-    backgroundColor: "{colors.tray-ash}"
-    textColor: "{colors.panel-graphite}"
-    typography: "{typography.body}"
-    rounded: "{rounded.md}"
-    padding: "0 8px"
-    height: "32px"
+    backgroundColor: '{colors.tray-ash}'
+    textColor: '{colors.panel-graphite}'
+    typography: '{typography.body}'
+    rounded: '{rounded.md}'
+    padding: '0 8px'
+    height: '32px'
 ---
 
 # Design System: Hamster
@@ -247,7 +247,7 @@ These values **retune** the incumbent implementation, which uses raw Tailwind cl
 - **Subtitle** (600, 16px / 24px): section headings inside a page, card titles, dialog titles.
 - **Body** (400, 14px / 20px): the working size and the system's centre of gravity — table cells, descriptions, form values, list rows. Prose blocks such as overviews cap at 65–75ch.
 - **Label** (500, 12px / 16px): metadata, badge text, form labels, column headers, timestamps.
-- **Micro** (500, 10px / 14px, 0.01em): annotations that sit *on* artwork — the genre chip, the tiny status badge, the provider overflow counter. Legitimate only over an image, where the text is a secondary annotation on a surface that already carries its own contrast.
+- **Micro** (500, 10px / 14px, 0.01em): annotations that sit _on_ artwork — the genre chip, the tiny status badge, the provider overflow counter. Legitimate only over an image, where the text is a secondary annotation on a surface that already carries its own contrast.
 - **Readout** (mono, 400, 12px, `tabular-nums`): byte counts, progress percentages, durations, bitrates, file paths, release names, indexer identifiers, log lines.
 
 The ramp bottoms out at Micro. 9px and 11px are off-system: 9px is below the legibility floor even on artwork, and 11px is an unmotivated step between Micro and Label. Both exist in the incumbent code and both are defects.

@@ -89,14 +89,16 @@ const emptyOkResponse = () => ({
   json: () => Promise.resolve([]),
 })
 
-function setupFetchMock(options: {
-  enabledTypes?: string[]
-  movies?: any[]
-  artists?: any[]
-  tvShows?: any[]
-  authors?: any[]
-  queue?: any[]
-} = {}) {
+function setupFetchMock(
+  options: {
+    enabledTypes?: string[]
+    movies?: any[]
+    artists?: any[]
+    tvShows?: any[]
+    authors?: any[]
+    queue?: any[]
+  } = {}
+) {
   const {
     enabledTypes = ['movies'],
     movies = [],
@@ -198,9 +200,45 @@ describe('Library', () => {
 
   describe('movies content', () => {
     const sampleMovies = [
-      { id: 1, title: 'Inception', year: 2010, posterUrl: null, tmdbId: 'tt123', requested: true, hasFile: true, status: 'Released', runtime: 148, rating: 8.8, overview: null },
-      { id: 2, title: 'Avatar', year: 2009, posterUrl: null, tmdbId: 'tt456', requested: true, hasFile: false, status: 'Released', runtime: 162, rating: 7.9, overview: null },
-      { id: 3, title: 'Blade Runner', year: 1982, posterUrl: null, tmdbId: 'tt789', requested: false, hasFile: false, status: 'Released', runtime: 117, rating: 8.1, overview: null },
+      {
+        id: 1,
+        title: 'Inception',
+        year: 2010,
+        posterUrl: null,
+        tmdbId: 'tt123',
+        requested: true,
+        hasFile: true,
+        status: 'Released',
+        runtime: 148,
+        rating: 8.8,
+        overview: null,
+      },
+      {
+        id: 2,
+        title: 'Avatar',
+        year: 2009,
+        posterUrl: null,
+        tmdbId: 'tt456',
+        requested: true,
+        hasFile: false,
+        status: 'Released',
+        runtime: 162,
+        rating: 7.9,
+        overview: null,
+      },
+      {
+        id: 3,
+        title: 'Blade Runner',
+        year: 1982,
+        posterUrl: null,
+        tmdbId: 'tt789',
+        requested: false,
+        hasFile: false,
+        status: 'Released',
+        runtime: 117,
+        rating: 8.1,
+        overview: null,
+      },
     ]
 
     it('displays movie titles after loading', async () => {
@@ -226,9 +264,45 @@ describe('Library', () => {
 
   describe('search filtering', () => {
     const sampleMovies = [
-      { id: 1, title: 'Inception', year: 2010, posterUrl: null, tmdbId: 'tt1', requested: true, hasFile: true, status: 'Released', runtime: 148, rating: 8.8, overview: null },
-      { id: 2, title: 'Interstellar', year: 2014, posterUrl: null, tmdbId: 'tt2', requested: true, hasFile: true, status: 'Released', runtime: 169, rating: 8.7, overview: null },
-      { id: 3, title: 'The Matrix', year: 1999, posterUrl: null, tmdbId: 'tt3', requested: true, hasFile: true, status: 'Released', runtime: 136, rating: 8.7, overview: null },
+      {
+        id: 1,
+        title: 'Inception',
+        year: 2010,
+        posterUrl: null,
+        tmdbId: 'tt1',
+        requested: true,
+        hasFile: true,
+        status: 'Released',
+        runtime: 148,
+        rating: 8.8,
+        overview: null,
+      },
+      {
+        id: 2,
+        title: 'Interstellar',
+        year: 2014,
+        posterUrl: null,
+        tmdbId: 'tt2',
+        requested: true,
+        hasFile: true,
+        status: 'Released',
+        runtime: 169,
+        rating: 8.7,
+        overview: null,
+      },
+      {
+        id: 3,
+        title: 'The Matrix',
+        year: 1999,
+        posterUrl: null,
+        tmdbId: 'tt3',
+        requested: true,
+        hasFile: true,
+        status: 'Released',
+        runtime: 136,
+        rating: 8.7,
+        overview: null,
+      },
     ]
 
     it('filters items by search query', async () => {
@@ -302,7 +376,19 @@ describe('Library', () => {
 
   describe('view mode toggle', () => {
     const sampleMovies = [
-      { id: 1, title: 'Inception', year: 2010, posterUrl: null, tmdbId: 'tt1', requested: true, hasFile: true, status: 'Released', runtime: 148, rating: 8.8, overview: null },
+      {
+        id: 1,
+        title: 'Inception',
+        year: 2010,
+        posterUrl: null,
+        tmdbId: 'tt1',
+        requested: true,
+        hasFile: true,
+        status: 'Released',
+        runtime: 148,
+        rating: 8.8,
+        overview: null,
+      },
     ]
 
     it('defaults to grid view', async () => {

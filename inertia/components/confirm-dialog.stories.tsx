@@ -45,7 +45,8 @@ export const RefreshLibrary: Story = {
     state: {
       open: true,
       title: 'Refresh library?',
-      description: 'This will rescan all media folders and update your library. This may take a while.',
+      description:
+        'This will rescan all media folders and update your library. This may take a while.',
       confirmLabel: 'Refresh',
       loadingLabel: 'Refreshing...',
     },

@@ -144,12 +144,7 @@ describe('ResetPassword', () => {
 
   describe('token error', () => {
     it('displays token error from errors prop', () => {
-      render(
-        <ResetPassword
-          {...defaultProps}
-          errors={{ token: 'Token has expired' }}
-        />
-      )
+      render(<ResetPassword {...defaultProps} errors={{ token: 'Token has expired' }} />)
       expect(screen.getByText(/Token has expired/)).toBeInTheDocument()
     })
 

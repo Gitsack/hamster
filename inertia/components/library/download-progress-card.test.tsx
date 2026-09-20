@@ -112,21 +112,13 @@ describe('DownloadProgressCard', () => {
     })
 
     it('does not show size when size is null', () => {
-      render(
-        <DownloadProgressCard
-          downloads={[makeDownload({ size: null, remaining: null })]}
-        />
-      )
+      render(<DownloadProgressCard downloads={[makeDownload({ size: null, remaining: null })]} />)
       // No size text should appear - check that HardDrive icon section is not rendered
       expect(screen.queryByText(/KB|MB|GB/)).not.toBeInTheDocument()
     })
 
     it('does not show size when remaining is null', () => {
-      render(
-        <DownloadProgressCard
-          downloads={[makeDownload({ remaining: null })]}
-        />
-      )
+      render(<DownloadProgressCard downloads={[makeDownload({ remaining: null })]} />)
       expect(screen.queryByText(/\//)).not.toBeInTheDocument()
     })
   })
@@ -147,48 +139,34 @@ describe('DownloadProgressCard', () => {
     })
 
     it('displays only seconds for small ETAs', () => {
-      render(
-        <DownloadProgressCard downloads={[makeDownload({ eta: 45 })]} />
-      )
+      render(<DownloadProgressCard downloads={[makeDownload({ eta: 45 })]} />)
       expect(screen.getByText('45s remaining')).toBeInTheDocument()
     })
 
     it('does not show ETA when eta is null', () => {
-      render(
-        <DownloadProgressCard downloads={[makeDownload({ eta: null })]} />
-      )
+      render(<DownloadProgressCard downloads={[makeDownload({ eta: null })]} />)
       expect(screen.queryByText(/remaining/)).not.toBeInTheDocument()
     })
 
     it('does not show ETA when eta is 0 or negative', () => {
-      render(
-        <DownloadProgressCard downloads={[makeDownload({ eta: 0 })]} />
-      )
+      render(<DownloadProgressCard downloads={[makeDownload({ eta: 0 })]} />)
       expect(screen.queryByText(/remaining/)).not.toBeInTheDocument()
     })
 
     it('does not show ETA when importing', () => {
-      render(
-        <DownloadProgressCard
-          downloads={[makeDownload({ status: 'importing', eta: 120 })]}
-        />
-      )
+      render(<DownloadProgressCard downloads={[makeDownload({ status: 'importing', eta: 120 })]} />)
       expect(screen.queryByText(/remaining/)).not.toBeInTheDocument()
     })
   })
 
   describe('download client', () => {
     it('displays download client name', () => {
-      render(
-        <DownloadProgressCard downloads={[makeDownload({ downloadClient: 'SABnzbd' })]} />
-      )
+      render(<DownloadProgressCard downloads={[makeDownload({ downloadClient: 'SABnzbd' })]} />)
       expect(screen.getByText('SABnzbd')).toBeInTheDocument()
     })
 
     it('does not show download client when null', () => {
-      render(
-        <DownloadProgressCard downloads={[makeDownload({ downloadClient: null as any })]} />
-      )
+      render(<DownloadProgressCard downloads={[makeDownload({ downloadClient: null as any })]} />)
       expect(screen.queryByText('SABnzbd')).not.toBeInTheDocument()
     })
   })

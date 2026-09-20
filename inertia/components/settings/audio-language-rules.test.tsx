@@ -33,7 +33,10 @@ describe('AudioLanguageRules', () => {
   it('gives a language one role at a time', async () => {
     const onChange = vi.fn()
     render(
-      <AudioLanguageRules value={{ ...empty, requiredAudioLanguages: ['de'] }} onChange={onChange} />
+      <AudioLanguageRules
+        value={{ ...empty, requiredAudioLanguages: ['de'] }}
+        onChange={onChange}
+      />
     )
 
     await userEvent.click(screen.getByRole('button', { name: 'Blocked' }))

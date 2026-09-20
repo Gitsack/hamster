@@ -39,9 +39,7 @@ export const CustomFallback: Story = {
   render: () => (
     <ErrorBoundary
       fallback={
-        <div className="p-8 text-center text-muted-foreground">
-          Custom error fallback content
-        </div>
+        <div className="p-8 text-center text-muted-foreground">Custom error fallback content</div>
       }
     >
       <ThrowError />
