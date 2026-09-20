@@ -44,3 +44,8 @@ coverage/
 .claude/worktrees/
 # Personal Claude Code settings (permission mode, local hooks) — not team config
 .claude/settings.local.json
+
+# Lucid regenerates this on every local `migration:run` (skipped in production).
+# Nothing imports it, so committing it would mean a 1700-line generated diff and
+# a merge conflict on every schema change, for a file no code reads.
+database/schema.ts
