@@ -64,8 +64,16 @@ export interface SabnzbdHistory {
 }
 
 export class SabnzbdService {
-  // Default timeout for API calls (10 seconds)
-  private readonly DEFAULT_TIMEOUT = 10000
+  // Default timeout for API calls. SABnzbd answers `queue` and `history` from
+  // the same thread that writes the queue to disk, so a busy instance on
+  // network storage regularly takes well over ten seconds to reply.
+  private readonly DEFAULT_TIMEOUT = 30000
+
+  // Uploading an NZB is not a read: SABnzbd parses it and writes the job and
+  // its admin directory to the download folder before it answers. On network
+  // storage that takes a minute of wall clock, and giving up early does not
+  // undo it — the job is queued whether or not we are still listening.
+  private readonly ADD_FILE_TIMEOUT = 180000
 
   private buildUrl(config: SabnzbdConfig, params: Record<string, string>): string {
     const protocol = config.useSsl ? 'https' : 'http'
@@ -234,7 +242,7 @@ export class SabnzbdService {
     const response = await fetch(baseUrl, {
       method: 'POST',
       body: formData,
-      signal: AbortSignal.timeout(this.DEFAULT_TIMEOUT),
+      signal: AbortSignal.timeout(this.ADD_FILE_TIMEOUT),
     })
 
     if (!response.ok) {

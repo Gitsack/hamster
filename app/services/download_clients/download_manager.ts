@@ -24,6 +24,7 @@ import { eventEmitter } from '#services/events/event_emitter'
 import { DateTime } from 'luxon'
 import { mapPath } from '#utils/host_mapping'
 import { deriveMediaType } from '#utils/media_type'
+import { isSameJob } from '#utils/sab_job_match'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 
@@ -67,6 +68,38 @@ export interface QueueItem {
 // re-grabbing it automatically. The blacklist normally catches this first; this
 // is the backstop for failures the blacklist declines to act on.
 const MAX_GUID_FAILURES = 3
+
+// How long a grab whose result we never saw may sit unclaimed before we treat
+// it as lost. Long enough for a slow client to surface the job in its queue,
+// short enough that a genuinely lost grab is retried within one search cycle.
+const UNCONFIRMED_GRAB_TTL_MINUTES = 30
+
+/**
+ * The add request to the download client did not come back with an answer, so
+ * whether the job is queued is unknown.
+ *
+ * This is not a failure. SABnzbd writes the job to disk before it replies, and
+ * on network storage that outlives our HTTP timeout — the NZB is queued, we
+ * just never heard so. Retrying on that signal is what put the same release in
+ * the queue three times over.
+ */
+export class GrabResultUnknownError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'GrabResultUnknownError'
+  }
+}
+
+/**
+ * Whether an error leaves the outcome of a request open: the request may have
+ * been carried out in full, and only the answer was lost. A rejection the
+ * client actually sent us (an HTTP status, an error body) is not one of these.
+ */
+function isAmbiguousTransportError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') return true
+  return /timed out|timeout|socket hang up|network|fetch failed|ECONNRESET/i.test(error.message)
+}
 
 /**
  * Release titles become the NZB filename we hand the download client. Strip the
@@ -304,7 +337,7 @@ export class DownloadManager {
 
     let sabQueue: Awaited<ReturnType<typeof sabnzbdService.getQueue>>
     try {
-      sabQueue = await sabnzbdService.getQueue(config, 10000)
+      sabQueue = await sabnzbdService.getQueue(config)
     } catch (error) {
       logger.warn(
         { err: error },
@@ -693,6 +726,21 @@ export class DownloadManager {
 
       return download
     } catch (error) {
+      // An add we never got an answer to is not a failed grab. Park the row
+      // instead: it keeps the media item's slot, so nothing grabs the same
+      // release again while the job may already be queued, and the next queue
+      // refresh either adopts the job or expires the row.
+      if (error instanceof GrabResultUnknownError) {
+        download.status = 'queued'
+        download.errorMessage = error.message
+        await download.save()
+        logger.warn(
+          { title: request.title, downloadId: download.id },
+          'DownloadManager: Grab unconfirmed, waiting for the client to show the job'
+        )
+        throw error
+      }
+
       // Now that we fetch the NZB ourselves, this catch sees real indexer
       // problems (404, 403, grab limit, non-NZB body). Route them through the
       // shared failure path so a dead release is blacklisted and an alternative
@@ -772,14 +820,42 @@ export class DownloadManager {
         }
 
         const nzb = await this.fetchNzb(request)
-        const result = await sabnzbdService.addFromFile(
-          config,
-          nzb,
-          `${sanitizeNzbFilename(request.title)}.nzb`,
-          { category: client.settings.category }
-        )
 
-        return result.nzo_ids[0]
+        try {
+          const result = await sabnzbdService.addFromFile(
+            config,
+            nzb,
+            `${sanitizeNzbFilename(request.title)}.nzb`,
+            { category: client.settings.category }
+          )
+
+          return result.nzo_ids[0]
+        } catch (error) {
+          if (!isAmbiguousTransportError(error)) throw error
+
+          // The upload very likely landed — SABnzbd queues the job before it
+          // answers. Look for it under the name we sent rather than sending it
+          // a second time.
+          const reason = error instanceof Error ? error.message : String(error)
+          const found = await this.findSabJobByName(config, client.id, request.title)
+
+          if (found.nzoId) {
+            logger.warn(
+              { title: request.title, nzoId: found.nzoId, reason },
+              'DownloadManager: Add timed out but the job is in the client, adopting it'
+            )
+            return found.nzoId
+          }
+
+          if (found.claimed) {
+            throw new Error('Already in download client queue')
+          }
+
+          throw new GrabResultUnknownError(
+            `The download client did not answer the add request (${reason}). ` +
+              `The release may still have been queued.`
+          )
+        }
       }
 
       case 'nzbget': {
@@ -875,6 +951,98 @@ export class DownloadManager {
   }
 
   /**
+   * Look for a job in SABnzbd carrying the name we uploaded.
+   *
+   * Used when an add request left us without an answer: the job is usually
+   * sitting in the queue already, and adopting it is the difference between
+   * one download and two.
+   */
+  private async findSabJobByName(
+    config: SabnzbdConfig,
+    clientId: DownloadClient['id'],
+    releaseTitle: string
+  ): Promise<{ nzoId: string | null; claimed: boolean }> {
+    const candidates: Array<{ nzoId: string; name: string }> = []
+
+    try {
+      const queue = await sabnzbdService.getQueue(config)
+      candidates.push(...queue.slots.map((slot) => ({ nzoId: slot.nzo_id, name: slot.filename })))
+    } catch (error) {
+      logger.warn(
+        { err: error },
+        'DownloadManager: Could not read the client queue to confirm a grab'
+      )
+    }
+
+    try {
+      const history = await sabnzbdService.getHistory(config, 50)
+      candidates.push(...history.slots.map((slot) => ({ nzoId: slot.nzo_id, name: slot.name })))
+    } catch (error) {
+      logger.warn(
+        { err: error },
+        'DownloadManager: Could not read the client history to confirm a grab'
+      )
+    }
+
+    const matching = candidates.filter((candidate) => isSameJob(candidate.name, releaseTitle))
+    if (matching.length === 0) return { nzoId: null, claimed: false }
+
+    const tracked = await Download.query()
+      .where('downloadClientId', clientId)
+      .whereIn(
+        'externalId',
+        matching.map((match) => match.nzoId)
+      )
+    const claimedIds = new Set(tracked.map((download) => download.externalId))
+
+    const free = matching.find((match) => !claimedIds.has(match.nzoId))
+    return { nzoId: free?.nzoId ?? null, claimed: !free }
+  }
+
+  /**
+   * A download row whose grab we sent but never had confirmed, waiting for the
+   * job of that name to appear in the client.
+   */
+  private async findUnconfirmedGrab(
+    clientId: DownloadClient['id'],
+    jobName: string
+  ): Promise<Download | null> {
+    const parked = await Download.query()
+      .where('downloadClientId', clientId)
+      .whereNull('externalId')
+      .whereIn('status', ['queued', 'downloading'])
+      .where('createdAt', '>=', DateTime.now().minus({ hours: 6 }).toSQL())
+
+    return parked.find((download) => isSameJob(jobName, download.title)) ?? null
+  }
+
+  /**
+   * Fail the grabs the client never owned up to. Until this runs they hold the
+   * media item's slot, which is the point — nothing re-grabs it while the job
+   * might still be queued. Once the window passes, the grab really is lost and
+   * searching again is the right move.
+   */
+  private async expireUnconfirmedGrabs(clientId: DownloadClient['id']): Promise<void> {
+    const expired = await Download.query()
+      .where('downloadClientId', clientId)
+      .whereNull('externalId')
+      .whereIn('status', ['queued', 'downloading'])
+      .where(
+        'createdAt',
+        '<',
+        DateTime.now().minus({ minutes: UNCONFIRMED_GRAB_TTL_MINUTES }).toSQL()
+      )
+
+    for (const download of expired) {
+      logger.warn(
+        { title: download.title },
+        'DownloadManager: Grab never showed up in the client, giving up on it'
+      )
+      await this.failDownload(download, 'The download client never confirmed this grab')
+    }
+  }
+
+  /**
    * Get active queue
    */
   async getQueue(): Promise<QueueItem[]> {
@@ -961,6 +1129,26 @@ export class DownloadManager {
             download.etaSeconds = this.parseTimeLeft(slot.timeleft)
             await download.save()
           } else {
+            // A grab of ours whose add request never came back: the job is here
+            // after all, so give the row its external id rather than leaving it
+            // parked and letting a second copy be grabbed later.
+            const unconfirmed = await this.findUnconfirmedGrab(client.id, slot.filename)
+            if (unconfirmed) {
+              logger.info(
+                { title: unconfirmed.title, nzoId: slot.nzo_id },
+                'DownloadManager: Matched an unconfirmed grab to the job in the client'
+              )
+              unconfirmed.externalId = slot.nzo_id
+              unconfirmed.errorMessage = null
+              unconfirmed.progress = Number.parseFloat(slot.percentage)
+              unconfirmed.status = this.mapSabnzbdStatus(slot.status)
+              unconfirmed.remainingBytes = Math.floor(Number.parseFloat(slot.mbleft) * 1024 * 1024)
+              unconfirmed.etaSeconds = this.parseTimeLeft(slot.timeleft)
+              await unconfirmed.save()
+              downloadsByExternalId.set(slot.nzo_id, unconfirmed)
+              continue
+            }
+
             // Create a tracking record for SABnzbd items not initiated by Hamster
             // so they appear in the queue UI
             logger.info(
@@ -999,7 +1187,24 @@ export class DownloadManager {
           foundExternalIds.add(slot.nzo_id)
 
           try {
-            const download = downloadsByExternalId.get(slot.nzo_id)
+            let download = downloadsByExternalId.get(slot.nzo_id)
+
+            if (!download) {
+              // Same rescue as in the queue loop: a grab we never had confirmed
+              // can just as well finish before we next look at the client.
+              const unconfirmed = await this.findUnconfirmedGrab(client.id, slot.name)
+              if (unconfirmed) {
+                logger.info(
+                  { title: unconfirmed.title, nzoId: slot.nzo_id },
+                  'DownloadManager: Matched an unconfirmed grab to a job in the client history'
+                )
+                unconfirmed.externalId = slot.nzo_id
+                unconfirmed.errorMessage = null
+                await unconfirmed.save()
+                downloadsByExternalId.set(slot.nzo_id, unconfirmed)
+                download = unconfirmed
+              }
+            }
 
             if (download) {
               logger.debug(
@@ -1319,6 +1524,8 @@ export class DownloadManager {
             }
           }
         }
+
+        await this.expireUnconfirmedGrabs(client.id)
 
         break
       }
