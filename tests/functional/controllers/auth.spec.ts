@@ -46,7 +46,7 @@ test.group('AuthController', (group) => {
       },
     } as never)
 
-    assert.equal(redirectTarget, '/library')
+    assert.equal(redirectTarget, '/dashboard')
     assert.isNull(flashedErrors)
 
     await user.delete()
@@ -123,7 +123,7 @@ test.group('AuthController', (group) => {
       },
     } as never)
 
-    assert.equal(redirectTarget, '/library')
+    assert.equal(redirectTarget, '/dashboard')
 
     const created = await User.findBy('email', 'register@auth-test.com')
     assert.isNotNull(created)
