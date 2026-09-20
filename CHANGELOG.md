@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.1](https://github.com/Gitsack/hamster/compare/hamster-v1.32.0...hamster-v1.32.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* **downloads:** stop a lost add reply from grabbing the same NZB twice ([6b3d9ce](https://github.com/Gitsack/hamster/commit/6b3d9ce11c5458415fde9849ed0f3f652ce582b1))
+
 ## [1.32.0](https://github.com/Gitsack/hamster/compare/hamster-v1.31.0...hamster-v1.32.0) (2026-09-20)
 
 
