@@ -4,6 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
 import { fileTransferService } from './file_transfer_service.js'
+import { subtitlePruningService } from './subtitle_pruning_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
 import { probeFile, checkFfmpegAvailable } from '#utils/ffmpeg_utils'
 import { analysisToMediaInfo } from '#services/quality/file_quality_service'
@@ -360,7 +361,15 @@ export class EpisodeImportService {
     // Move file to destination
     await fileTransferService.move(sourcePath, absolutePath)
 
-    // Get file stats
+    // Trim surplus subtitle tracks, if the policy asks for it. Done after the
+    // move so a failure costs nothing: the file is already where it belongs and
+    // the import stands either way.
+    const prune = await subtitlePruningService.pruneFile(absolutePath)
+    if (prune.pruned && prune.analysis) {
+      probedInfo = analysisToMediaInfo(prune.analysis)
+    }
+
+    // Get file stats — after any prune, so the recorded size matches the file
     const stats = await fs.stat(absolutePath)
 
     // Create or update episode file record and update episode in a transaction

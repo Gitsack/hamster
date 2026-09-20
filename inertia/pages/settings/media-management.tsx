@@ -21,6 +21,7 @@ import {
 } from '@/components/settings/quality-requirements-fields'
 import { ReleaseTester } from '@/components/settings/release-tester'
 import { CustomFormatsCard } from '@/components/settings/custom-formats-card'
+import { SubtitlePruningCard } from '@/components/settings/subtitle-pruning-card'
 import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
@@ -1612,6 +1613,8 @@ export default function MediaManagement() {
         </Card>
 
         <CustomFormatsCard qualityProfiles={qualityProfiles} />
+
+        <SubtitlePruningCard />
       </div>
 
       {/* Folder Dialog */}

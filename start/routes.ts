@@ -495,6 +495,8 @@ router
         router.get('/settings/naming-patterns', [AppSettingsController, 'getNamingPatterns'])
         router.put('/settings/naming-patterns', [AppSettingsController, 'updateNamingPatterns'])
         router.get('/settings/watch-providers', [AppSettingsController, 'getWatchProviders'])
+        router.get('/settings/subtitle-pruning', [AppSettingsController, 'getSubtitlePruning'])
+        router.put('/settings/subtitle-pruning', [AppSettingsController, 'updateSubtitlePruning'])
 
         // Media servers
         router.get('/mediaservers', [MediaServersController, 'index'])

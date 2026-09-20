@@ -7,6 +7,12 @@ import {
   type NamingPatterns,
 } from '#services/media/naming_template_service'
 import { fileNamingService } from '#services/media/file_naming_service'
+import {
+  subtitlePruningService,
+  SUBTITLE_PRUNING_SETTING_KEY,
+} from '#services/media/subtitle_pruning_service'
+import { checkFfmpegAvailable, type SubtitlePruningOptions } from '#utils/ffmpeg_utils'
+import { isKnownLanguage } from '#services/quality/language_parser'
 
 function ensureArray<T>(value: T[] | string | undefined, defaultValue: T[]): T[] {
   if (Array.isArray(value)) {
@@ -330,5 +336,59 @@ export default class AppSettingsController {
       patterns: updated[mediaType as MediaType],
       examples,
     })
+  }
+
+  /**
+   * Get the subtitle pruning policy applied at import.
+   */
+  async getSubtitlePruning({ response }: HttpContext) {
+    const options = await subtitlePruningService.getOptions()
+    const { ffmpeg } = await checkFfmpegAvailable()
+
+    return response.json({
+      options,
+      // Without ffmpeg the importers skip pruning silently, so the UI needs to
+      // be able to say so rather than show a switch that does nothing.
+      ffmpegAvailable: ffmpeg,
+    })
+  }
+
+  /**
+   * Update the subtitle pruning policy.
+   */
+  async updateSubtitlePruning({ request, response }: HttpContext) {
+    const { enabled, maxTracks, keepLanguages } = request.only([
+      'enabled',
+      'maxTracks',
+      'keepLanguages',
+    ])
+
+    if (typeof enabled !== 'boolean') {
+      return response.badRequest({ error: 'enabled must be a boolean' })
+    }
+
+    const parsedMax = Number(maxTracks)
+    if (!Number.isInteger(parsedMax) || parsedMax < 1 || parsedMax > 100) {
+      return response.badRequest({ error: 'maxTracks must be a whole number between 1 and 100' })
+    }
+
+    if (!Array.isArray(keepLanguages) || keepLanguages.some((c) => typeof c !== 'string')) {
+      return response.badRequest({ error: 'keepLanguages must be an array of language codes' })
+    }
+
+    const unknown = keepLanguages.filter((code: string) => !isKnownLanguage(code))
+    if (unknown.length > 0) {
+      return response.badRequest({ error: `Unknown language code(s): ${unknown.join(', ')}` })
+    }
+
+    const options: SubtitlePruningOptions = {
+      enabled,
+      maxTracks: parsedMax,
+      keepLanguages: [...new Set(keepLanguages as string[])],
+    }
+
+    await AppSetting.set(SUBTITLE_PRUNING_SETTING_KEY, options)
+
+    return response.json({ options })
   }
 }

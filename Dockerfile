@@ -46,8 +46,12 @@ RUN bun install --production --omit=optional --omit=peer --frozen-lockfile && \
 FROM oven/bun:1-alpine AS production
 
 # Install only essential runtime dependencies (removed bash)
+# ffmpeg carries ffprobe, which the importers use to verify a download is not
+# corrupt and to trim surplus subtitle tracks. Without it both checks silently
+# skip themselves, so a corrupt file imports looking perfectly healthy.
 RUN apk add --no-cache \
     curl \
+    ffmpeg \
     tini \
     shadow \
     su-exec
