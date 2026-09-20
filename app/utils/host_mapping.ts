@@ -33,11 +33,39 @@ function getPathMap(): Array<{ from: string; to: string }> {
     }
   }
 
-  // Sort by FROM length descending so the longest, most-specific prefix wins.
-  // Without this, "/d" would shadow "/downloads" if both were configured.
-  pathMap.sort((a, b) => b.from.length - a.from.length)
-
   return pathMap
+}
+
+export interface PathMapRule {
+  from: string
+  to: string
+}
+
+/**
+ * Replace the longest matching prefix in `p`, on a path-segment boundary.
+ *
+ * Split out from {@link mapPath} because the rules there come from the
+ * environment and are cached for the life of the process — which leaves the
+ * substitution itself untestable, and makes any test of it pass or fail
+ * depending on whether the machine running it happens to have SERVICE_PATH_MAP
+ * set. This function takes its rules as an argument, so the behaviour can be
+ * pinned down exactly.
+ */
+export function applyPathMap(p: string | null | undefined, rules: PathMapRule[]): string {
+  if (!p) return p ?? ''
+
+  // Longest, most-specific prefix wins: without this "/d" would shadow
+  // "/downloads" if both were configured.
+  const ordered = [...rules].sort((a, b) => b.from.length - a.from.length)
+
+  for (const { from, to } of ordered) {
+    if (p === from) return to
+    // Only on a full segment boundary, so "/downloadsX" is never rewritten.
+    if (p.startsWith(from + '/')) {
+      return to + p.slice(from.length)
+    }
+  }
+  return p
 }
 
 /**
@@ -78,12 +106,5 @@ export function mapUrl(url: string): string {
  * segment boundary ("/" or end-of-string) to avoid translating "/downloadsX".
  */
 export function mapPath(p: string | null | undefined): string {
-  if (!p) return p ?? ''
-  for (const { from, to } of getPathMap()) {
-    if (p === from) return to
-    if (p.startsWith(from + '/')) {
-      return to + p.slice(from.length)
-    }
-  }
-  return p
+  return applyPathMap(p, getPathMap())
 }
