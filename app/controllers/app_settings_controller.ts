@@ -11,6 +11,11 @@ import {
   subtitlePruningService,
   SUBTITLE_PRUNING_SETTING_KEY,
 } from '#services/media/subtitle_pruning_service'
+import {
+  subtitleSidecarService,
+  SUBTITLE_EXTRACTION_SETTING_KEY,
+  type SubtitleExtractionOptions,
+} from '#services/media/subtitle_sidecar_service'
 import { checkFfmpegAvailable, type SubtitlePruningOptions } from '#utils/ffmpeg_utils'
 import { isKnownLanguage } from '#services/quality/language_parser'
 
@@ -388,6 +393,37 @@ export default class AppSettingsController {
     }
 
     await AppSetting.set(SUBTITLE_PRUNING_SETTING_KEY, options)
+
+    return response.json({ options })
+  }
+
+  /**
+   * Get the sidecar subtitle extraction policy applied at import.
+   */
+  async getSubtitleExtraction({ response }: HttpContext) {
+    const options = await subtitleSidecarService.getOptions()
+    const { ffmpeg } = await checkFfmpegAvailable()
+
+    return response.json({
+      options,
+      // Without ffmpeg the importers skip extraction silently, so the UI needs
+      // to be able to say so rather than show a switch that does nothing.
+      ffmpegAvailable: ffmpeg,
+    })
+  }
+
+  /**
+   * Update the sidecar subtitle extraction policy.
+   */
+  async updateSubtitleExtraction({ request, response }: HttpContext) {
+    const { enabled } = request.only(['enabled'])
+
+    if (typeof enabled !== 'boolean') {
+      return response.badRequest({ error: 'enabled must be a boolean' })
+    }
+
+    const options: SubtitleExtractionOptions = { enabled }
+    await AppSetting.set(SUBTITLE_EXTRACTION_SETTING_KEY, options)
 
     return response.json({ options })
   }

@@ -22,7 +22,11 @@ const MIN_SIZE_RATIO = 0.5
 const MAX_DURATION_DRIFT = 2
 
 export interface SubtitlePruneResult {
-  /** True only when the file on disk was actually replaced. */
+  /**
+   * True only when the rewrite happened and the destination now holds it.
+   * False means the destination was not written at all and the caller still
+   * has to put the file there itself.
+   */
   pruned: boolean
   /** Why it was or was not touched — this is what ends up in the log. */
   reason: string
@@ -59,21 +63,46 @@ export class SubtitlePruningService {
    * allows. Returns what happened; never throws.
    */
   async pruneFile(filePath: string): Promise<SubtitlePruneResult> {
+    return this.pruneInto(filePath, filePath)
+  }
+
+  /**
+   * Rewrite `sourcePath` into `destinationPath`, keeping only the subtitle
+   * tracks the policy allows. Returns what happened; never throws.
+   *
+   * Importers use this instead of copying a file into the library and then
+   * rewriting it where it landed. Both do the same work to the same bytes, but
+   * the two-step version moves them across the network twice: once for the
+   * copy, once more for the remux that reads the copy back and writes it out
+   * again. Letting ffmpeg write straight to the destination halves that.
+   *
+   * On anything other than `pruned: true` the destination is left untouched and
+   * the caller is still responsible for putting the file there.
+   */
+  async pruneInto(
+    sourcePath: string,
+    destinationPath: string,
+    knownAnalysis?: MediaAnalysis
+  ): Promise<SubtitlePruneResult> {
     const options = await this.getOptions()
     if (!options.enabled) {
-      return { pruned: false, reason: 'pruning disabled' }
+      return { pruned: false, reason: 'pruning disabled', analysis: knownAnalysis }
     }
 
     const { ffmpeg, ffprobe } = await checkFfmpegAvailable()
     if (!ffmpeg || !ffprobe) {
-      return { pruned: false, reason: 'ffmpeg/ffprobe not available' }
+      return { pruned: false, reason: 'ffmpeg/ffprobe not available', analysis: knownAnalysis }
     }
 
     let source: MediaAnalysis
-    try {
-      source = await probeFile(filePath)
-    } catch (error) {
-      return { pruned: false, reason: `probe failed: ${describeError(error)}` }
+    if (knownAnalysis) {
+      source = knownAnalysis
+    } else {
+      try {
+        source = await probeFile(sourcePath)
+      } catch (error) {
+        return { pruned: false, reason: `probe failed: ${describeError(error)}` }
+      }
     }
 
     const selection = selectSubtitleTracksToKeep(source.subtitleTracks, options)
@@ -87,11 +116,11 @@ export class SubtitlePruningService {
       }
     }
 
-    const extension = path.extname(filePath)
-    const tempPath = `${filePath}.hamster-prune${extension || '.mkv'}`
+    const extension = path.extname(destinationPath)
+    const tempPath = `${destinationPath}.hamster-prune${extension || '.mkv'}`
 
     try {
-      await runFfmpeg(getSubtitlePruneArgs(filePath, tempPath, selection.keep))
+      await runFfmpeg(getSubtitlePruneArgs(sourcePath, tempPath, selection.keep))
     } catch (error) {
       await discard(tempPath)
       return { pruned: false, reason: `remux failed: ${describeError(error)}` }
@@ -108,7 +137,7 @@ export class SubtitlePruningService {
     }
 
     const problem = await verifyRewrite(
-      filePath,
+      sourcePath,
       tempPath,
       source,
       rewritten,
@@ -120,14 +149,14 @@ export class SubtitlePruningService {
     }
 
     try {
-      await fs.rename(tempPath, filePath)
+      await fs.rename(tempPath, destinationPath)
     } catch (error) {
       await discard(tempPath)
-      return { pruned: false, reason: `could not replace original: ${describeError(error)}` }
+      return { pruned: false, reason: `could not place result: ${describeError(error)}` }
     }
 
     logger.info(
-      `Subtitle prune: ${path.basename(filePath)} ${source.subtitleTracks.length} -> ${rewritten.subtitleTracks.length} track(s) (${selection.reason})`
+      `Subtitle prune: ${path.basename(destinationPath)} ${source.subtitleTracks.length} -> ${rewritten.subtitleTracks.length} track(s) (${selection.reason})`
     )
 
     return {

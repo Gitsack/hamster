@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import path from 'node:path'
 import { normalizeLanguageTag, type LanguageCode } from '#services/quality/language_parser'
 
 /**
@@ -42,6 +43,8 @@ export interface SubtitleTrackInfo {
   isDefault: boolean
   /** Forced tracks carry signs and foreign dialogue, not the whole script. */
   isForced: boolean
+  /** SDH tracks transcribe sound effects as well as dialogue. */
+  isHearingImpaired: boolean
 }
 
 export interface MediaAnalysis {
@@ -162,6 +165,7 @@ export async function probeFile(filePath: string): Promise<MediaAnalysis> {
             title: stream.tags?.title || stream.tags?.TITLE || null,
             isDefault: stream.disposition?.default === 1,
             isForced: stream.disposition?.forced === 1,
+            isHearingImpaired: stream.disposition?.hearing_impaired === 1,
           })
         )
 
@@ -456,5 +460,132 @@ export function getSubtitlePruneArgs(
     args.push('-map', `0:${index}`)
   }
   args.push('-c', 'copy', outputPath)
+  return args
+}
+
+/**
+ * Subtitle codecs that have a standalone text form, and what to write them as.
+ *
+ * Image-based tracks — PGS on a Blu-ray remux, VobSub on a DVD rip — are
+ * deliberately absent. There is no text to extract, only pictures, and the only
+ * ways to get them onto a screen are to hand the client the whole container or
+ * to burn them into the video. Neither is something an importer should decide.
+ */
+const SIDECAR_SUBTITLE_FORMATS: Record<string, { extension: string; encoder: string }> = {
+  subrip: { extension: '.srt', encoder: 'copy' },
+  srt: { extension: '.srt', encoder: 'copy' },
+  ass: { extension: '.ass', encoder: 'copy' },
+  ssa: { extension: '.ass', encoder: 'copy' },
+  webvtt: { extension: '.vtt', encoder: 'copy' },
+  // Timed text in an MP4. Nothing reads it as a sidecar, so it becomes SRT.
+  mov_text: { extension: '.srt', encoder: 'srt' },
+  text: { extension: '.srt', encoder: 'srt' },
+}
+
+/**
+ * Plenty of releases label a track only in its title and never set the
+ * disposition bit ffprobe reports — "SDH" in the name, nothing in the flags.
+ * Reading both is what keeps two English tracks from coming out as a pair of
+ * names that say nothing about which is which.
+ */
+function isHearingImpaired(track: SubtitleTrackInfo): boolean {
+  return track.isHearingImpaired || /\b(sdh|cc|hearing[\s-]?impaired)\b/i.test(track.title ?? '')
+}
+
+function isForced(track: SubtitleTrackInfo): boolean {
+  return track.isForced || /\b(forced|signs?)\b/i.test(track.title ?? '')
+}
+
+export interface SubtitleSidecar {
+  /** Stream index, in the form `-map 0:<index>` expects. */
+  index: number
+  /** File name only; the caller decides which directory it lands in. */
+  fileName: string
+  /** ffmpeg `-c:s` value — `copy` whenever the track is already in that format. */
+  encoder: string
+}
+
+/**
+ * Work out which subtitle tracks can be written beside the video, and what to
+ * call each one.
+ *
+ * The names follow the convention every media server already understands:
+ * `<video name>.<language>[.forced][.sdh].<ext>`. A server that finds those
+ * reads a few kilobytes off disk when someone turns subtitles on. A server that
+ * does not has to demux the track out of the container instead, which means
+ * reading the entire file — minutes, over a network share, with the person
+ * staring at a black screen while it happens.
+ *
+ * Pure on purpose: the naming is the part worth testing, and it needs neither
+ * ffmpeg nor a multi-gigabyte file to exercise.
+ */
+export function planSubtitleSidecars(
+  tracks: SubtitleTrackInfo[],
+  videoFileName: string
+): SubtitleSidecar[] {
+  const base = videoFileName.replace(/\.[^.]+$/, '')
+  const sidecars: SubtitleSidecar[] = []
+  const taken = new Set<string>()
+
+  for (const track of tracks) {
+    const format = SIDECAR_SUBTITLE_FORMATS[track.codec?.toLowerCase() ?? '']
+    if (!format) {
+      continue
+    }
+
+    // "und" rather than nothing: a name with no language token at all reads as
+    // part of the title, and the track shows up unlabelled.
+    const parts = [base, track.language ?? 'und']
+    if (isForced(track)) {
+      parts.push('forced')
+    }
+    if (isHearingImpaired(track)) {
+      parts.push('sdh')
+    }
+    if (track.isDefault) {
+      parts.push('default')
+    }
+
+    // Two English tracks with identical flags are common — a plain one and a
+    // commentary, say. The stream index is the only thing guaranteed to differ.
+    let fileName = parts.join('.') + format.extension
+    if (taken.has(fileName)) {
+      fileName = [...parts, track.index].join('.') + format.extension
+    }
+    taken.add(fileName)
+
+    sidecars.push({ index: track.index, fileName, encoder: format.encoder })
+  }
+
+  return sidecars
+}
+
+/**
+ * ffmpeg arguments that write every planned sidecar in one pass.
+ *
+ * One pass matters more than it looks: each output is cheap, but the input is
+ * read from start to finish because subtitle packets are interleaved through
+ * the whole container. Extracting five tracks in five invocations reads the
+ * file five times.
+ */
+export function getSubtitleExtractArgs(
+  inputPath: string,
+  sidecars: SubtitleSidecar[],
+  outputDir: string
+): string[] {
+  const args = ['-nostdin', '-v', 'error', '-y', '-i', inputPath]
+
+  for (const sidecar of sidecars) {
+    args.push(
+      '-map',
+      `0:${sidecar.index}`,
+      '-an',
+      '-vn',
+      '-c:s',
+      sidecar.encoder,
+      path.join(outputDir, sidecar.fileName)
+    )
+  }
+
   return args
 }

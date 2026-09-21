@@ -497,6 +497,14 @@ router
         router.get('/settings/watch-providers', [AppSettingsController, 'getWatchProviders'])
         router.get('/settings/subtitle-pruning', [AppSettingsController, 'getSubtitlePruning'])
         router.put('/settings/subtitle-pruning', [AppSettingsController, 'updateSubtitlePruning'])
+        router.get('/settings/subtitle-extraction', [
+          AppSettingsController,
+          'getSubtitleExtraction',
+        ])
+        router.put('/settings/subtitle-extraction', [
+          AppSettingsController,
+          'updateSubtitleExtraction',
+        ])
 
         // Media servers
         router.get('/mediaservers', [MediaServersController, 'index'])

@@ -5,8 +5,9 @@ import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
 import { fileTransferService } from './file_transfer_service.js'
 import { subtitlePruningService } from './subtitle_pruning_service.js'
+import { subtitleSidecarService } from './subtitle_sidecar_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
-import { probeFile, checkFfmpegAvailable } from '#utils/ffmpeg_utils'
+import { probeFile, checkFfmpegAvailable, type MediaAnalysis } from '#utils/ffmpeg_utils'
 import { analysisToMediaInfo } from '#services/quality/file_quality_service'
 import type { VideoMediaInfo } from '#models/movie_file'
 import Download from '#models/download'
@@ -261,18 +262,21 @@ export class MovieImportService {
     // file actually contains, and it is what lets the library flag "good video,
     // stereo AAC audio" instead of trusting the release name.
     let probedInfo: VideoMediaInfo | null = null
+    // Held on to for the placement step below, which would otherwise probe the
+    // same file a second time to decide what to do with its subtitle tracks.
+    let sourceAnalysis: MediaAnalysis | null = null
     const { ffprobe } = await checkFfmpegAvailable()
     if (ffprobe) {
       try {
-        const analysis = await probeFile(sourcePath)
-        probedInfo = analysisToMediaInfo(analysis)
-        if (!analysis.videoCodec) {
+        sourceAnalysis = await probeFile(sourcePath)
+        probedInfo = analysisToMediaInfo(sourceAnalysis)
+        if (!sourceAnalysis.videoCodec) {
           return {
             success: false,
             error: `Source file has no valid video stream — likely corrupt`,
           }
         }
-        if (analysis.duration <= 0) {
+        if (sourceAnalysis.duration <= 0) {
           return {
             success: false,
             error: `Source file has no valid duration — likely corrupt or incomplete`,
@@ -323,16 +327,35 @@ export class MovieImportService {
     // Create directories
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
 
-    // Move file to destination
-    await fileTransferService.move(sourcePath, absolutePath)
-
-    // Trim surplus subtitle tracks, if the policy asks for it. Done after the
-    // move so a failure costs nothing: the file is already where it belongs and
-    // the import stands either way.
-    const prune = await subtitlePruningService.pruneFile(absolutePath)
-    if (prune.pruned && prune.analysis) {
-      probedInfo = analysisToMediaInfo(prune.analysis)
+    // Place the file in the library. When the subtitle policy calls for a
+    // rewrite, ffmpeg writes the trimmed file straight to its destination:
+    // copying first and remuxing afterwards sends the same gigabytes across the
+    // network twice to arrive at one result. Anything short of a completed
+    // prune leaves the destination untouched, so a plain move is the fallback.
+    const prune = await subtitlePruningService.pruneInto(
+      sourcePath,
+      absolutePath,
+      sourceAnalysis ?? undefined
+    )
+    if (prune.pruned) {
+      if (prune.analysis) {
+        probedInfo = analysisToMediaInfo(prune.analysis)
+      }
+      // pruneInto only wrote the destination; the source is still ours to drop.
+      await fs.unlink(sourcePath).catch(() => {})
+    } else {
+      if (prune.reason !== 'pruning disabled') {
+        logger.info(`Subtitle prune skipped for ${path.basename(absolutePath)}: ${prune.reason}`)
+      }
+      await fileTransferService.move(sourcePath, absolutePath)
     }
+
+    // Write the text subtitle tracks out beside the video. A media server that
+    // has to demux them itself does it on first play, reading the whole file off
+    // the share while someone waits for a picture to appear.
+    await subtitleSidecarService.extract(absolutePath, {
+      analysis: prune.analysis ?? sourceAnalysis ?? undefined,
+    })
 
     // Get file stats — after any prune, so the recorded size matches the file
     const stats = await fs.stat(absolutePath)
