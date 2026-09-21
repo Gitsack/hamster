@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.0](https://github.com/Gitsack/hamster/compare/hamster-v1.32.1...hamster-v1.33.0) (2026-09-21)
+
+
+### Features
+
+* **import:** write embedded subtitles out beside the video ([4c273ec](https://github.com/Gitsack/hamster/commit/4c273ec8116a5ac751b6f4f9513e2d4c2a4f8c7a))
+
 ## [1.32.1](https://github.com/Gitsack/hamster/compare/hamster-v1.32.0...hamster-v1.32.1) (2026-09-20)
 
 
