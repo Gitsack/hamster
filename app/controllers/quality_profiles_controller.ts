@@ -1,7 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import QualityProfile from '#models/quality_profile'
 import vine from '@vinejs/vine'
-import { normalizeRequirements } from '#services/quality/quality_requirements'
+import { normalizeRequirements, ORIGINAL_LANGUAGE } from '#services/quality/quality_requirements'
 import { LANGUAGES } from '#services/quality/language_parser'
 
 const AUDIO_CODECS = [
@@ -25,8 +25,12 @@ const AUDIO_TIERS = ['unknown', 'lossy-sd', 'lossy-hd', 'lossless', 'lossless-ob
 
 const VIDEO_CODECS = ['x264', 'x265', 'AV1', 'VP9', 'XviD'] as const
 
-/** The picker in settings offers exactly these, so the API accepts exactly these. */
-const LANGUAGE_CODES = LANGUAGES.map((language) => language.code)
+/**
+ * The picker in settings offers exactly these, so the API accepts exactly these
+ * — the catalogue plus the per-title `original` token, which is not a language
+ * and so is absent from the catalogue.
+ */
+const LANGUAGE_CODES = [ORIGINAL_LANGUAGE, ...LANGUAGES.map((language) => language.code)]
 
 /**
  * Attribute rules. Every field is optional so an older client that knows
@@ -53,7 +57,7 @@ const requirementsSchema = vine
   })
   .optional()
 
-const qualityProfileValidator = vine.compile(
+export const qualityProfileValidator = vine.compile(
   vine.object({
     name: vine.string().minLength(1).maxLength(255),
     mediaType: vine.string().optional(),

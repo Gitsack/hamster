@@ -1,7 +1,10 @@
 import { test } from '@japa/runner'
 import QualityProfile from '#models/quality_profile'
 import Artist from '#models/artist'
-import QualityProfilesController from '#controllers/quality_profiles_controller'
+import QualityProfilesController, {
+  qualityProfileValidator,
+} from '#controllers/quality_profiles_controller'
+import { ORIGINAL_LANGUAGE } from '#services/quality/quality_requirements'
 import { ArtistFactory } from '../../../database/factories/artist_factory.js'
 
 const sampleItems = [
@@ -323,5 +326,35 @@ test.group('QualityProfilesController', (group) => {
     // Cleanup
     await artist.delete()
     await profileInUse.delete()
+  })
+
+  // ---- validation ----
+
+  test('validator accepts the per-title original-language token', async ({ assert }) => {
+    const data = await qualityProfileValidator.validate({
+      name: 'QP Test Original Language',
+      cutoff: 1,
+      items: sampleItems,
+      requirements: {
+        requiredAudioLanguages: [ORIGINAL_LANGUAGE],
+        preferredAudioLanguages: [ORIGINAL_LANGUAGE],
+        blockedAudioLanguages: [ORIGINAL_LANGUAGE],
+      },
+    })
+
+    assert.deepEqual(data.requirements?.requiredAudioLanguages, [ORIGINAL_LANGUAGE])
+    assert.deepEqual(data.requirements?.preferredAudioLanguages, [ORIGINAL_LANGUAGE])
+    assert.deepEqual(data.requirements?.blockedAudioLanguages, [ORIGINAL_LANGUAGE])
+  })
+
+  test('validator still rejects a language code that is not offered', async ({ assert }) => {
+    await assert.rejects(() =>
+      qualityProfileValidator.validate({
+        name: 'QP Test Bogus Language',
+        cutoff: 1,
+        items: sampleItems,
+        requirements: { requiredAudioLanguages: ['klingon'] },
+      })
+    )
   })
 })
