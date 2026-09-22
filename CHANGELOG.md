@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.1](https://github.com/Gitsack/hamster/compare/hamster-v1.33.0...hamster-v1.33.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* **profiles:** accept "original language" in audio rules ([b6442d9](https://github.com/Gitsack/hamster/commit/b6442d9a048dda973acf9af957878ccf65b6b659))
+
 ## [1.33.0](https://github.com/Gitsack/hamster/compare/hamster-v1.32.1...hamster-v1.33.0) (2026-09-21)
 
 
