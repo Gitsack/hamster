@@ -3,6 +3,18 @@ import path from 'node:path'
 import { normalizeLanguageTag, type LanguageCode } from '#services/quality/language_parser'
 
 /**
+ * A stream's language tag as muxed, cleaned the same way normalizeLanguageTag
+ * cleans it but without mapping it to a code we know. Null for a missing tag
+ * and for the ISO placeholders that mean "no language". Anything that is not
+ * plain letters is treated as missing too: this ends up in a file name.
+ */
+export function rawLanguageTag(tag: string | null | undefined): string | null {
+  const cleaned = tag?.trim().toLowerCase().split(/[-_]/)[0]
+  if (!cleaned || cleaned === 'und' || cleaned === 'mis' || cleaned === 'zxx') return null
+  return /^[a-z]{2,8}$/.test(cleaned) ? cleaned : null
+}
+
+/**
  * One audio stream, as the file describes itself.
  *
  * The rest of MediaAnalysis flattens a file to its first audio stream, which is
@@ -36,8 +48,15 @@ export interface SubtitleTrackInfo {
   /** Stream index, in the form `-map 0:<index>` expects. */
   index: number
   codec: string | null
-  /** ISO 639-1, or null when the muxer never tagged the track. */
+  /** ISO 639-1, or null when the tag is missing or not a language we know. */
   language: LanguageCode | null
+  /**
+   * The language tag as muxed, lowercased — null only when the track really is
+   * untagged ("und" and friends count as untagged). This is what tells a track
+   * nobody labelled apart from one labelled in a language `language` has no
+   * code for, such as Catalan or Malay.
+   */
+  languageTag?: string | null
   /** The muxer's own label, e.g. "SDH" or "Forced". */
   title: string | null
   isDefault: boolean
@@ -162,6 +181,7 @@ export async function probeFile(filePath: string): Promise<MediaAnalysis> {
             index: typeof stream.index === 'number' ? stream.index : order,
             codec: stream.codec_name || null,
             language: normalizeLanguageTag(stream.tags?.language ?? stream.tags?.LANGUAGE),
+            languageTag: rawLanguageTag(stream.tags?.language ?? stream.tags?.LANGUAGE),
             title: stream.tags?.title || stream.tags?.TITLE || null,
             isDefault: stream.disposition?.default === 1,
             isForced: stream.disposition?.forced === 1,
@@ -421,9 +441,13 @@ export function selectSubtitleTracksToKeep(
 
   if (options.keepLanguages.length > 0) {
     const wanted = new Set(options.keepLanguages)
-    // Untagged tracks are kept on purpose: a null language is usually a forced
+    // Untagged tracks are kept on purpose: a missing tag is usually a forced
     // signs track, and there is no way to tell it apart from one worth losing.
-    chosen = tracks.filter((track) => track.language === null || wanted.has(track.language))
+    // A track tagged in a language we have no code for is not untagged — it is
+    // Catalan or Malay, and it goes like any other language nobody asked for.
+    chosen = tracks.filter((track) =>
+      track.language === null ? !track.languageTag : wanted.has(track.language)
+    )
     reason = `kept ${options.keepLanguages.join(', ')} and untagged tracks`
   }
 
@@ -535,7 +559,7 @@ export function planSubtitleSidecars(
 
     // "und" rather than nothing: a name with no language token at all reads as
     // part of the title, and the track shows up unlabelled.
-    const parts = [base, track.language ?? 'und']
+    const parts = [base, track.language ?? track.languageTag ?? 'und']
     if (isForced(track)) {
       parts.push('forced')
     }

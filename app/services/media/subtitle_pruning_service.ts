@@ -67,6 +67,15 @@ export class SubtitlePruningService {
   }
 
   /**
+   * Stream indices of the subtitle tracks the policy keeps — every track when
+   * pruning is off. Importers write sidecars for exactly these, so a track the
+   * policy drops from the container does not come back as a file beside it.
+   */
+  async tracksToKeep(analysis: MediaAnalysis): Promise<number[]> {
+    return selectSubtitleTracksToKeep(analysis.subtitleTracks, await this.getOptions()).keep
+  }
+
+  /**
    * Rewrite `sourcePath` into `destinationPath`, keeping only the subtitle
    * tracks the policy allows. Returns what happened; never throws.
    *
@@ -76,16 +85,24 @@ export class SubtitlePruningService {
    * copy, once more for the remux that reads the copy back and writes it out
    * again. Letting ffmpeg write straight to the destination halves that.
    *
+   * `externalized` lists tracks that already sit beside the destination as
+   * sidecar files. Those are dropped from the container whatever the policy
+   * says, pruning enabled or not: left in, every one shows up twice — which is
+   * exactly how a release lands over Infuse's twenty-track limit — and the
+   * media server still demuxes the embedded copy on first play, reading the
+   * whole file while someone waits, which is what the sidecar was there to stop.
+   *
    * On anything other than `pruned: true` the destination is left untouched and
    * the caller is still responsible for putting the file there.
    */
   async pruneInto(
     sourcePath: string,
     destinationPath: string,
-    knownAnalysis?: MediaAnalysis
+    knownAnalysis?: MediaAnalysis,
+    externalized: number[] = []
   ): Promise<SubtitlePruneResult> {
     const options = await this.getOptions()
-    if (!options.enabled) {
+    if (!options.enabled && externalized.length === 0) {
       return { pruned: false, reason: 'pruning disabled', analysis: knownAnalysis }
     }
 
@@ -106,7 +123,17 @@ export class SubtitlePruningService {
     }
 
     const selection = selectSubtitleTracksToKeep(source.subtitleTracks, options)
-    if (selection.unchanged) {
+    const moved = new Set(externalized)
+    const keep = selection.keep.filter((index) => !moved.has(index))
+    const dropped = selection.keep.length - keep.length
+    const reason = [
+      selection.unchanged ? null : selection.reason,
+      dropped > 0 ? `${dropped} moved to sidecar files` : null,
+    ]
+      .filter(Boolean)
+      .join('; ')
+
+    if (keep.length === source.subtitleTracks.length) {
       return {
         pruned: false,
         reason: selection.reason,
@@ -120,7 +147,7 @@ export class SubtitlePruningService {
     const tempPath = `${destinationPath}.hamster-prune${extension || '.mkv'}`
 
     try {
-      await runFfmpeg(getSubtitlePruneArgs(sourcePath, tempPath, selection.keep))
+      await runFfmpeg(getSubtitlePruneArgs(sourcePath, tempPath, keep))
     } catch (error) {
       await discard(tempPath)
       return { pruned: false, reason: `remux failed: ${describeError(error)}` }
@@ -136,13 +163,7 @@ export class SubtitlePruningService {
       return { pruned: false, reason: `result could not be probed: ${describeError(error)}` }
     }
 
-    const problem = await verifyRewrite(
-      sourcePath,
-      tempPath,
-      source,
-      rewritten,
-      selection.keep.length
-    )
+    const problem = await verifyRewrite(sourcePath, tempPath, source, rewritten, keep.length)
     if (problem) {
       await discard(tempPath)
       return { pruned: false, reason: `verification failed: ${problem}` }
@@ -156,12 +177,12 @@ export class SubtitlePruningService {
     }
 
     logger.info(
-      `Subtitle prune: ${path.basename(destinationPath)} ${source.subtitleTracks.length} -> ${rewritten.subtitleTracks.length} track(s) (${selection.reason})`
+      `Subtitle prune: ${path.basename(destinationPath)} ${source.subtitleTracks.length} -> ${rewritten.subtitleTracks.length} track(s) (${reason})`
     )
 
     return {
       pruned: true,
-      reason: selection.reason,
+      reason,
       tracksBefore: source.subtitleTracks.length,
       tracksAfter: rewritten.subtitleTracks.length,
       analysis: rewritten,

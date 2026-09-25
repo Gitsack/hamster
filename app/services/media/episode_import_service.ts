@@ -362,15 +362,28 @@ export class EpisodeImportService {
     // Create directories
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
 
-    // Place the file in the library. When the subtitle policy calls for a
-    // rewrite, ffmpeg writes the trimmed file straight to its destination:
-    // copying first and remuxing afterwards sends the same gigabytes across the
-    // network twice to arrive at one result. Anything short of a completed
-    // prune leaves the destination untouched, so a plain move is the fallback.
+    // Write the text subtitle tracks out beside where the video is going. A
+    // media server that has to demux them itself does it on first play, reading
+    // the whole file off the share while someone waits for a picture to appear.
+    // Reading the download now, while it is still on the local disk, keeps that
+    // read off the share too. Only tracks the subtitle policy keeps get a file.
+    const sidecars = await subtitleSidecarService.extract(sourcePath, {
+      analysis: sourceAnalysis ?? undefined,
+      destinationPath: absolutePath,
+      only: sourceAnalysis ? await subtitlePruningService.tracksToKeep(sourceAnalysis) : undefined,
+    })
+
+    // Place the file in the library, without the tracks that now live beside it
+    // and any the policy drops. When that calls for a rewrite, ffmpeg writes the
+    // trimmed file straight to its destination: copying first and remuxing
+    // afterwards sends the same gigabytes across the network twice to arrive at
+    // one result. Anything short of a completed prune leaves the destination
+    // untouched, so a plain move is the fallback.
     const prune = await subtitlePruningService.pruneInto(
       sourcePath,
       absolutePath,
-      sourceAnalysis ?? undefined
+      sourceAnalysis ?? undefined,
+      sidecars.covered
     )
     if (prune.pruned) {
       if (prune.analysis) {
@@ -384,13 +397,6 @@ export class EpisodeImportService {
       }
       await fileTransferService.move(sourcePath, absolutePath)
     }
-
-    // Write the text subtitle tracks out beside the video. A media server that
-    // has to demux them itself does it on first play, reading the whole file off
-    // the share while someone waits for a picture to appear.
-    await subtitleSidecarService.extract(absolutePath, {
-      analysis: prune.analysis ?? sourceAnalysis ?? undefined,
-    })
 
     // Get file stats — after any prune, so the recorded size matches the file
     const stats = await fs.stat(absolutePath)

@@ -33,6 +33,11 @@ export interface SubtitleExtractionResult {
   extracted: string[]
   /** Sidecars that were already on disk and left alone. */
   skipped: number
+  /**
+   * Stream indices whose text now sits beside the video, written this run or
+   * already there. An importer drops exactly these from the container.
+   */
+  covered: number[]
   /** Why it did or did not do anything — this is what ends up in the log. */
   reason: string
 }
@@ -66,21 +71,32 @@ export class SubtitleSidecarService {
    *
    * Pass `analysis` when the caller has already probed the file — an importer
    * always has — to save a round trip to the file.
+   *
+   * `destinationPath` names and places the sidecars after a video other than
+   * the one being read. An importer reads the download while it is still on
+   * the local disk, before the video goes anywhere, rather than reading the
+   * whole thing back off the share once it has landed. `only` limits the work
+   * to the given stream indices.
    */
   async extract(
     videoPath: string,
-    options: { analysis?: MediaAnalysis; ignoreSetting?: boolean } = {}
+    options: {
+      analysis?: MediaAnalysis
+      ignoreSetting?: boolean
+      destinationPath?: string
+      only?: number[]
+    } = {}
   ): Promise<SubtitleExtractionResult> {
     if (!options.ignoreSetting) {
       const settings = await this.getOptions()
       if (!settings.enabled) {
-        return { extracted: [], skipped: 0, reason: 'subtitle extraction disabled' }
+        return { extracted: [], skipped: 0, covered: [], reason: 'subtitle extraction disabled' }
       }
     }
 
     const { ffmpeg, ffprobe } = await checkFfmpegAvailable()
     if (!ffmpeg || !ffprobe) {
-      return { extracted: [], skipped: 0, reason: 'ffmpeg/ffprobe not available' }
+      return { extracted: [], skipped: 0, covered: [], reason: 'ffmpeg/ffprobe not available' }
     }
 
     let analysis = options.analysis
@@ -88,27 +104,50 @@ export class SubtitleSidecarService {
       try {
         analysis = await probeFile(videoPath)
       } catch (error) {
-        return { extracted: [], skipped: 0, reason: `probe failed: ${describeError(error)}` }
+        return {
+          extracted: [],
+          skipped: 0,
+          covered: [],
+          reason: `probe failed: ${describeError(error)}`,
+        }
       }
     }
 
-    const directory = path.dirname(videoPath)
-    const planned = planSubtitleSidecars(analysis.subtitleTracks, path.basename(videoPath))
+    const target = options.destinationPath ?? videoPath
+    const directory = path.dirname(target)
+    const only = options.only ? new Set(options.only) : null
+    const tracks = only
+      ? analysis.subtitleTracks.filter((track) => only.has(track.index))
+      : analysis.subtitleTracks
+    const planned = planSubtitleSidecars(tracks, path.basename(target))
 
     if (planned.length === 0) {
-      return { extracted: [], skipped: 0, reason: 'no text subtitle tracks to extract' }
+      return {
+        extracted: [],
+        skipped: 0,
+        covered: [],
+        reason: 'no text subtitle tracks to extract',
+      }
     }
 
     const missing: SubtitleSidecar[] = []
+    const present: number[] = []
     for (const sidecar of planned) {
-      if (!(await exists(path.join(directory, sidecar.fileName)))) {
+      if (await exists(path.join(directory, sidecar.fileName))) {
+        present.push(sidecar.index)
+      } else {
         missing.push(sidecar)
       }
     }
 
     const skipped = planned.length - missing.length
     if (missing.length === 0) {
-      return { extracted: [], skipped, reason: `all ${skipped} sidecar(s) already present` }
+      return {
+        extracted: [],
+        skipped,
+        covered: present,
+        reason: `all ${skipped} sidecar(s) already present`,
+      }
     }
 
     // Extract into a scratch directory first. ffmpeg writes each output as it
@@ -119,17 +158,28 @@ export class SubtitleSidecarService {
     try {
       scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'hamster-subs-'))
     } catch (error) {
-      return { extracted: [], skipped, reason: `no scratch dir: ${describeError(error)}` }
+      return {
+        extracted: [],
+        skipped,
+        covered: present,
+        reason: `no scratch dir: ${describeError(error)}`,
+      }
     }
 
     try {
       await runFfmpeg(getSubtitleExtractArgs(videoPath, missing, scratch))
     } catch (error) {
       await discard(scratch)
-      return { extracted: [], skipped, reason: `extraction failed: ${describeError(error)}` }
+      return {
+        extracted: [],
+        skipped,
+        covered: present,
+        reason: `extraction failed: ${describeError(error)}`,
+      }
     }
 
     const extracted: string[] = []
+    const covered = [...present]
     for (const sidecar of missing) {
       const from = path.join(scratch, sidecar.fileName)
       const to = path.join(directory, sidecar.fileName)
@@ -146,6 +196,7 @@ export class SubtitleSidecarService {
         // so rename is not an option. These are kilobytes; a copy costs nothing.
         await fs.copyFile(from, to)
         extracted.push(sidecar.fileName)
+        covered.push(sidecar.index)
       } catch (error) {
         logger.warn(
           `Subtitle sidecar ${sidecar.fileName} could not be placed: ${describeError(error)}`
@@ -157,7 +208,7 @@ export class SubtitleSidecarService {
 
     if (extracted.length > 0) {
       logger.info(
-        `Subtitle sidecars: ${path.basename(videoPath)} -> ${extracted.length} file(s)` +
+        `Subtitle sidecars: ${path.basename(target)} -> ${extracted.length} file(s)` +
           (skipped > 0 ? ` (${skipped} already present)` : '')
       )
     }
@@ -165,6 +216,7 @@ export class SubtitleSidecarService {
     return {
       extracted,
       skipped,
+      covered,
       reason: `wrote ${extracted.length} of ${missing.length} missing sidecar(s)`,
     }
   }

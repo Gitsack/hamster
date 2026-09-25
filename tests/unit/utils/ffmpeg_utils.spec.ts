@@ -289,6 +289,20 @@ test.group('ffmpeg_utils | selectSubtitleTracksToKeep', () => {
     assert.include(result.keep, 38)
   })
 
+  test('a language we have no code for is not mistaken for untagged', ({ assert }) => {
+    const tracks = [
+      ...manyTracks(),
+      subtitle(38, null, { languageTag: 'cat' }),
+      subtitle(39, null, { languageTag: 'baq' }),
+    ]
+    const result = selectSubtitleTracksToKeep(
+      tracks,
+      options({ enabled: true, maxTracks: 20, keepLanguages: ['en'] })
+    )
+    assert.notInclude(result.keep, 38)
+    assert.notInclude(result.keep, 39)
+  })
+
   test('falls back to file order rather than stripping every track', ({ assert }) => {
     const result = selectSubtitleTracksToKeep(
       manyTracks(),
@@ -390,6 +404,11 @@ test.group('ffmpeg_utils | planSubtitleSidecars', () => {
   test('labels an untagged track rather than leaving the token out', ({ assert }) => {
     const plan = planSubtitleSidecars([subtitle(2, null)], 'Show.mkv')
     assert.equal(plan[0].fileName, 'Show.und.srt')
+  })
+
+  test('names a track by its raw tag when the language has no code', ({ assert }) => {
+    const plan = planSubtitleSidecars([subtitle(2, null, { languageTag: 'cat' })], 'Show.mkv')
+    assert.equal(plan[0].fileName, 'Show.cat.srt')
   })
 
   test('disambiguates two tracks that would collide', ({ assert }) => {
