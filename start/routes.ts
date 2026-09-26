@@ -505,6 +505,8 @@ router
           AppSettingsController,
           'updateSubtitleExtraction',
         ])
+        router.get('/settings/local-access', [AppSettingsController, 'getLocalAccess'])
+        router.put('/settings/local-access', [AppSettingsController, 'updateLocalAccess'])
 
         // Media servers
         router.get('/mediaservers', [MediaServersController, 'index'])

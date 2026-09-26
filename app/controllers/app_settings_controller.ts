@@ -18,6 +18,7 @@ import {
 } from '#services/media/subtitle_sidecar_service'
 import { checkFfmpegAvailable, type SubtitlePruningOptions } from '#utils/ffmpeg_utils'
 import { isKnownLanguage } from '#services/quality/language_parser'
+import { localAccessService } from '#services/auth/local_access_service'
 
 function ensureArray<T>(value: T[] | string | undefined, defaultValue: T[]): T[] {
   if (Array.isArray(value)) {
@@ -426,5 +427,30 @@ export default class AppSettingsController {
     await AppSetting.set(SUBTITLE_EXTRACTION_SETTING_KEY, options)
 
     return response.json({ options })
+  }
+
+  /**
+   * Whether requests from the local network are let in without a login, and
+   * whether the request asking counts as local — which is what tells someone
+   * behind a reverse proxy or VPN whether the switch would reach them.
+   */
+  async getLocalAccess(ctx: HttpContext) {
+    const options = await localAccessService.getOptions()
+    return ctx.response.json({ options, requestIsLocal: localAccessService.isLocal(ctx) })
+  }
+
+  /**
+   * Turn login-free local access on or off.
+   */
+  async updateLocalAccess({ request, response }: HttpContext) {
+    const { enabled } = request.only(['enabled'])
+
+    if (typeof enabled !== 'boolean') {
+      return response.badRequest({ error: 'enabled must be a boolean' })
+    }
+
+    await localAccessService.setOptions({ enabled })
+
+    return response.json({ options: { enabled } })
   }
 }

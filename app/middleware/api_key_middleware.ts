@@ -1,6 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import ApiKey from '#models/api_key'
+import { localAccessService } from '#services/auth/local_access_service'
 import { DateTime } from 'luxon'
 
 /**
@@ -36,7 +37,10 @@ export default class ApiKeyMiddleware {
       }
     }
 
-    // Fall through to session auth
+    // Fall through to session auth, then to local access
+    if (!(await ctx.auth.check()) && (await localAccessService.authenticate(ctx))) {
+      return next()
+    }
     await ctx.auth.authenticateUsing(undefined, { loginRoute: this.redirectTo })
     return next()
   }

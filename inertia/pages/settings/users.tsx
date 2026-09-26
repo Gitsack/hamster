@@ -30,6 +30,7 @@ import {
   LockPasswordIcon,
   UserGroupIcon,
 } from '@hugeicons/core-free-icons'
+import { LocalAccessCard } from '@/components/settings/local-access-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { useState, useEffect, useCallback } from 'react'
@@ -210,6 +211,8 @@ export default function UsersSettings() {
       <Head title="User Management" />
 
       <div className="space-y-6">
+        <LocalAccessCard />
+
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
