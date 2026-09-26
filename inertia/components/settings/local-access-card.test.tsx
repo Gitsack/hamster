@@ -30,28 +30,14 @@ describe('LocalAccessCard', () => {
   })
 
   it('shows the stored setting once loaded', async () => {
-    mockFetch({ options: { enabled: true }, requestIsLocal: true })
+    mockFetch({ options: { enabled: true } })
     render(<LocalAccessCard />)
 
     expect(await screen.findByRole('switch')).toBeChecked()
   })
 
-  it('says when the current browser counts as local', async () => {
-    mockFetch({ options: { enabled: false }, requestIsLocal: true })
-    render(<LocalAccessCard />)
-
-    expect(await screen.findByText('This browser counts as local.')).toBeInTheDocument()
-  })
-
-  it('says when the current browser would still have to sign in', async () => {
-    mockFetch({ options: { enabled: true }, requestIsLocal: false })
-    render(<LocalAccessCard />)
-
-    expect(await screen.findByText(/does not count as local/)).toBeInTheDocument()
-  })
-
   it('saves when switched on', async () => {
-    const { put } = mockFetch({ options: { enabled: false }, requestIsLocal: true })
+    const { put } = mockFetch({ options: { enabled: false } })
     render(<LocalAccessCard />)
 
     await userEvent.click(await screen.findByRole('switch'))

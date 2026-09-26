@@ -430,13 +430,11 @@ export default class AppSettingsController {
   }
 
   /**
-   * Whether requests from the local network are let in without a login, and
-   * whether the request asking counts as local — which is what tells someone
-   * behind a reverse proxy or VPN whether the switch would reach them.
+   * Whether requests from the local network are let in without a login.
    */
-  async getLocalAccess(ctx: HttpContext) {
+  async getLocalAccess({ response }: HttpContext) {
     const options = await localAccessService.getOptions()
-    return ctx.response.json({ options, requestIsLocal: localAccessService.isLocal(ctx) })
+    return response.json({ options })
   }
 
   /**

@@ -11,16 +11,9 @@ export interface LocalAccessOptions {
 
 /**
  * Whether the local network gets in without a login.
- *
- * The line under the switch says whether the browser looking at it counts as
- * local. Behind a reverse proxy or a VPN that is the question that matters,
- * and the answer is not obvious from the outside: a proxy that passes the
- * client address on makes remote visitors log in; one that does not makes
- * everyone look like the proxy.
  */
 export function LocalAccessCard() {
   const [options, setOptions] = useState<LocalAccessOptions | null>(null)
-  const [requestIsLocal, setRequestIsLocal] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -34,7 +27,6 @@ export function LocalAccessCard() {
       if (response.ok) {
         const data = await response.json()
         setOptions(data.options)
-        setRequestIsLocal(data.requestIsLocal)
       }
     } catch {
       toast.error('Sign-in settings could not be loaded — Hamster is unreachable.')
@@ -89,7 +81,7 @@ export function LocalAccessCard() {
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-3">
+      <CardContent>
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <Label htmlFor="local-access-enabled">No login from the local network</Label>
@@ -105,12 +97,6 @@ export function LocalAccessCard() {
             onCheckedChange={(enabled) => save({ enabled })}
           />
         </div>
-
-        <p className="text-muted-foreground text-xs">
-          {requestIsLocal
-            ? 'This browser counts as local.'
-            : 'This browser does not count as local, so it would still be asked to sign in.'}
-        </p>
       </CardContent>
     </Card>
   )
