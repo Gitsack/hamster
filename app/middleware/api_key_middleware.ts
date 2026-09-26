@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import ApiKey from '#models/api_key'
 import { localAccessService } from '#services/auth/local_access_service'
+import { signInForRequest } from '#services/auth/sign_in_for_request'
 import { DateTime } from 'luxon'
 
 /**
@@ -25,13 +26,7 @@ export default class ApiKeyMiddleware {
         apiKey.lastUsedAt = DateTime.now()
         apiKey.save().catch(() => {})
 
-        // Set authenticated state on the auth object.
-        // We bypass the guard's read-only properties since API key auth
-        // is a custom flow that doesn't go through session login.
-        const auth = ctx.auth as unknown as Record<string, unknown>
-        auth.user = apiKey.user
-        auth.isAuthenticated = true
-        auth.authenticatedViaGuard = 'web'
+        await signInForRequest(ctx, apiKey.user)
 
         return next()
       }

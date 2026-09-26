@@ -1,6 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import AppSetting from '#models/app_setting'
 import User from '#models/user'
+import { signInForRequest } from '#services/auth/sign_in_for_request'
 import { forwardedAddresses, isLocalRequest } from '#utils/local_address'
 
 export const LOCAL_ACCESS_SETTING_KEY = 'localAccess'
@@ -95,12 +96,7 @@ export class LocalAccessService {
       : await User.query().where('isAdmin', true).orderBy('createdAt', 'asc').first()
     if (!user) return false
 
-    // Same custom flow as API-key auth: there is no session login to go
-    // through, so the guard's read-only state is set directly.
-    const auth = ctx.auth as unknown as Record<string, unknown>
-    auth.user = user
-    auth.isAuthenticated = true
-    auth.authenticatedViaGuard = 'web'
+    await signInForRequest(ctx, user)
     this.#autoSignedIn.add(ctx)
     return true
   }
