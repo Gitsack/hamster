@@ -1,4 +1,5 @@
 import { test } from '@japa/runner'
+import { missingPathVerdict, PATH_MISS_GRACE_MS } from '#services/download_clients/download_manager'
 
 // Replicate private mapSabnzbdStatus from DownloadManager
 function mapSabnzbdStatus(
@@ -126,5 +127,22 @@ test.group('DownloadManager | parseTimeLeft', () => {
 
   test('handles large hour values', ({ assert }) => {
     assert.equal(parseTimeLeft('100:00:00'), 360000)
+  })
+})
+
+test.group('DownloadManager | missingPathVerdict', () => {
+  test('waits on the first miss and remembers when it started', ({ assert }) => {
+    const verdict = missingPathVerdict(undefined, 1_000)
+    assert.deepEqual(verdict, { firstMissAt: 1_000, fail: false })
+  })
+
+  test('keeps waiting inside the grace window', ({ assert }) => {
+    const verdict = missingPathVerdict(1_000, 1_000 + PATH_MISS_GRACE_MS - 1)
+    assert.isFalse(verdict.fail)
+    assert.equal(verdict.firstMissAt, 1_000)
+  })
+
+  test('fails once the grace window has passed', ({ assert }) => {
+    assert.isTrue(missingPathVerdict(1_000, 1_000 + PATH_MISS_GRACE_MS).fail)
   })
 })

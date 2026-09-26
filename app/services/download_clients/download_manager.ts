@@ -74,6 +74,23 @@ const MAX_GUID_FAILURES = 3
 // short enough that a genuinely lost grab is retried within one search cycle.
 const UNCONFIRMED_GRAB_TTL_MINUTES = 30
 
+// How long a completed job's folder may stay invisible before we call it
+// missing. SABnzbd reports "Completed" while the folder is still settling on a
+// network share, and one early look used to fail a finished download for good.
+export const PATH_MISS_GRACE_MS = 5 * 60 * 1000
+
+/**
+ * Decide what a failed path check means: still inside the grace window (wait
+ * and look again next poll) or past it (the path is genuinely wrong).
+ */
+export function missingPathVerdict(
+  firstMissAt: number | undefined,
+  now: number
+): { firstMissAt: number; fail: boolean } {
+  const since = firstMissAt ?? now
+  return { firstMissAt: since, fail: now - since >= PATH_MISS_GRACE_MS }
+}
+
 /**
  * The add request to the download client did not come back with an answer, so
  * whether the job is queued is unknown.
@@ -120,6 +137,9 @@ export class DownloadManager {
 
   // Track import attempt counts to prevent infinite retries
   private importAttempts = new Map<string, number>()
+
+  // When each completed download's path was first found missing, for the grace window
+  private pathMissSince = new Map<string, number>()
 
   private static MAX_IMPORT_ATTEMPTS = 3
 
@@ -1318,6 +1338,27 @@ export class DownloadManager {
                   }
                 }
 
+                // A folder that is not there yet is not a failure yet. Leave the
+                // download untouched and look again next poll, until the grace
+                // window runs out.
+                if (pathAccessible) {
+                  this.pathMissSince.delete(download.id)
+                } else {
+                  const verdict = missingPathVerdict(
+                    this.pathMissSince.get(download.id),
+                    Date.now()
+                  )
+                  if (!verdict.fail) {
+                    this.pathMissSince.set(download.id, verdict.firstMissAt)
+                    logger.warn(
+                      { title: download.title, pathError },
+                      'DownloadManager: Path not visible yet, checking again next poll'
+                    )
+                    continue
+                  }
+                  this.pathMissSince.delete(download.id)
+                }
+
                 // Mark as importing and save the output path
                 download.status = 'importing'
                 download.progress = 100
@@ -1364,7 +1405,7 @@ export class DownloadManager {
                     )
                   )
 
-                // If path is not accessible, fail immediately with a clear error
+                // Past the grace window: fail with a clear error
                 if (!pathAccessible) {
                   logger.error(
                     { title: download.title, pathError },
