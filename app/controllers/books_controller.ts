@@ -25,11 +25,17 @@ const bookValidator = vine.compile(
 export default class BooksController {
   async index({ request, response }: HttpContext) {
     const authorId = request.input('authorId')
+    // `library=1` is the Books library: requested or downloaded books only, not
+    // every work in the bibliographies of the authors we know.
+    const libraryOnly = ['1', 'true'].includes(String(request.input('library', '')))
 
     let query = Book.query().preload('author').preload('bookFile').orderBy('sortTitle', 'asc')
 
     if (authorId) {
       query = query.where('authorId', authorId)
+    }
+    if (libraryOnly) {
+      query = query.where((q) => q.where('requested', true).orWhere('hasFile', true))
     }
 
     const books = await query
@@ -46,6 +52,7 @@ export default class BooksController {
         hasFile: book.hasFile,
         seriesName: book.seriesName,
         seriesPosition: book.seriesPosition,
+        addedAt: book.addedAt?.toISO() ?? book.createdAt.toISO(),
       }))
     )
   }
@@ -85,11 +92,19 @@ export default class BooksController {
   async store({ request, response }: HttpContext) {
     const data = await request.validateUsing(bookValidator)
 
-    // Check if already exists
+    // The book may already be known from its author's bibliography. Requesting
+    // it then just flips the flag; only a book that is already requested or
+    // downloaded is a conflict.
     if (data.openlibraryId) {
       const existing = await Book.query().where('openlibraryId', data.openlibraryId).first()
       if (existing) {
-        return response.conflict({ error: 'Book already in library' })
+        if (existing.requested || existing.hasFile || data.requested === false) {
+          return response.conflict({ error: 'Book already in library', id: existing.id })
+        }
+        existing.merge({ requested: true, addedAt: existing.addedAt ?? DateTime.now() })
+        await existing.save()
+        this.searchInBackground(existing.id)
+        return response.json({ id: existing.id, title: existing.title })
       }
     }
 
@@ -121,7 +136,6 @@ export default class BooksController {
               imageUrl: openLibraryService.getAuthorPhotoUrl(olAuthor.photoId, 'L'),
               rootFolderId: data.rootFolderId,
               qualityProfileId: data.qualityProfileId,
-              requested: data.requested ?? true,
               monitored: false,
               addedAt: DateTime.now(),
             })
@@ -138,7 +152,6 @@ export default class BooksController {
             sortName: data.authorName.split(' ').reverse().join(', '),
             rootFolderId: data.rootFolderId,
             qualityProfileId: data.qualityProfileId,
-            requested: data.requested ?? true,
             monitored: false,
             addedAt: DateTime.now(),
           })
@@ -156,6 +169,7 @@ export default class BooksController {
       sortTitle: data.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
       requested: data.requested ?? true,
       hasFile: false,
+      addedAt: DateTime.now(),
     }
 
     if (data.openlibraryId) {
@@ -195,13 +209,8 @@ export default class BooksController {
 
     const book = await Book.create(bookData)
 
-    // Trigger immediate search if requested
     if (data.requested ?? true) {
-      import('#services/tasks/requested_search_task').then(({ requestedSearchTask }) => {
-        requestedSearchTask.searchSingleBook(book.id).catch((error) => {
-          console.error('Failed to trigger search for book:', error)
-        })
-      })
+      this.searchInBackground(book.id)
     }
 
     return response.created({
@@ -333,9 +342,8 @@ export default class BooksController {
     const { requested } = request.only(['requested'])
     const newStatus = requested ?? true
 
-    // If unrequesting (setting to false)
     if (!newStatus) {
-      // If book has a file, return error - frontend should show confirmation dialog
+      // A downloaded book is removed through DELETE, which asks about the file.
       if (book.hasFile) {
         return response.badRequest({
           error: 'Book has downloaded files',
@@ -344,35 +352,30 @@ export default class BooksController {
         })
       }
 
-      // Book has no file - delete it from library
-      const authorId = book.authorId
-      console.log(`[BooksController] Unrequesting book without file, deleting: ${book.title}`)
-      await book.delete()
-
-      // Check if author should be removed
-      await libraryCleanupService.removeAuthorIfEmpty(authorId)
-
-      return response.json({
-        id: book.id,
-        deleted: true,
-        message: 'Removed from library',
-      })
+      // Unrequesting keeps the book: it stays in the author's bibliography,
+      // ready to be requested again, and simply leaves the Books library.
+      book.requested = false
+      await book.save()
+      return response.json({ id: book.id, requested: false })
     }
 
-    // Requesting (setting to true)
     book.requested = true
+    book.addedAt = book.addedAt ?? DateTime.now()
     await book.save()
 
-    // Trigger immediate search if marking as requested
     if (!book.hasFile) {
-      import('#services/tasks/requested_search_task').then(({ requestedSearchTask }) => {
-        requestedSearchTask.searchSingleBook(book.id).catch((error) => {
-          console.error('Failed to trigger search for book:', error)
-        })
-      })
+      this.searchInBackground(book.id)
     }
 
     return response.json({ id: book.id, requested: book.requested })
+  }
+
+  private searchInBackground(bookId: string) {
+    import('#services/tasks/requested_search_task').then(({ requestedSearchTask }) => {
+      requestedSearchTask.searchSingleBook(bookId).catch((error) => {
+        console.error('Failed to trigger search for book:', error)
+      })
+    })
   }
 
   /**
@@ -436,7 +439,18 @@ export default class BooksController {
         ? await QualityProfile.find(book.author.qualityProfileId)
         : null
 
-      return response.json(sortAnnotated(await annotateReleases(results, 'books', profile)))
+      const { isBookRelease } = await import('#utils/release_match')
+      const releases = await annotateReleases(results, 'books', profile)
+      const annotated = releases.map((r) =>
+        isBookRelease(String(r.title), book.author?.name, book.title)
+          ? r
+          : {
+              ...r,
+              accepted: false,
+              rejections: ['Not this book (collection, box set or other title)', ...r.rejections],
+            }
+      )
+      return response.json(sortAnnotated(annotated))
     } catch (error) {
       return response.badRequest({
         error: error instanceof Error ? error.message : 'Failed to search releases',

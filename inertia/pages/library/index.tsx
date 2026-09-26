@@ -62,10 +62,12 @@ interface Artist {
   status: string
   artistType: string | null
   imageUrl: string | null
-  requested: boolean
+  /** Following new releases. An artist is never "requested"; its albums are. */
+  monitored: boolean
+  ownedAlbumCount: number
+  requestedAlbumCount: number
   albumCount: number
   qualityProfile: { id: number; name: string } | null
-  metadataProfile: { id: number; name: string } | null
 }
 
 interface Movie {
@@ -97,13 +99,18 @@ interface TvShow {
   downloadedEpisodeCount: number
 }
 
-interface Author {
+interface LibraryBook {
   id: number
-  name: string
-  overview: string | null
-  imageUrl: string | null
+  title: string
+  authorId: number
+  authorName: string | null
+  releaseDate: string | null
+  coverUrl: string | null
   requested: boolean
-  bookCount: number
+  hasFile: boolean
+  seriesName: string | null
+  seriesPosition: number | null
+  addedAt: string | null
 }
 
 interface QueueItem {
@@ -143,7 +150,7 @@ const MEDIA_TYPE_CONFIG: Record<
     countLabel: string
     /**
      * Artwork shape. Films, shows and books are 2:3 posters — the ratio TMDB serves and
-     * the one DESIGN.md specifies. Artists and authors are square portraits, which is
+     * the one DESIGN.md specifies. Artists are square portraits, which is
      * what their detail heroes already use via MediaHero's posterAspect.
      */
     artworkAspect: string
@@ -177,9 +184,9 @@ const MEDIA_TYPE_CONFIG: Record<
     label: 'Books',
     icon: Book01Icon,
     addUrl: '/search?mode=books',
-    itemLabel: 'author',
+    itemLabel: 'book',
     countLabel: 'books',
-    artworkAspect: 'aspect-square',
+    artworkAspect: 'aspect-[2/3]',
   },
   missing: {
     label: 'Missing',
@@ -196,7 +203,7 @@ export default function Library() {
   const [artists, setArtists] = useState<Artist[]>([])
   const [movies, setMovies] = useState<Movie[]>([])
   const [tvShows, setTvShows] = useState<TvShow[]>([])
-  const [authors, setAuthors] = useState<Author[]>([])
+  const [books, setBooks] = useState<LibraryBook[]>([])
   const [missingItems, setMissingItems] = useState<MissingItem[]>([])
   const [missingCounts, setMissingCounts] = useState({
     albums: 0,
@@ -320,8 +327,9 @@ export default function Library() {
           break
         }
         case 'books': {
-          const res = await fetch('/api/v1/authors')
-          if (res.ok) setAuthors(await res.json())
+          // Requested and downloaded books only — not every work of every author
+          const res = await fetch('/api/v1/books?library=1')
+          if (res.ok) setBooks(await res.json())
           break
         }
         case 'missing': {
@@ -420,7 +428,7 @@ export default function Library() {
         music: 'artists',
         movies: 'movies',
         tv: 'tvshows',
-        books: 'authors',
+        books: 'books',
       }
 
       const response = await fetch(
@@ -445,7 +453,7 @@ export default function Library() {
             setTvShows((prev) => prev.filter((t) => t.id !== itemToDelete.id))
             break
           case 'books':
-            setAuthors((prev) => prev.filter((a) => a.id !== itemToDelete.id))
+            setBooks((prev) => prev.filter((b) => b.id !== itemToDelete.id))
             break
         }
 
@@ -577,7 +585,7 @@ export default function Library() {
       music: 'artists',
       movies: 'movies',
       tv: 'tvshows',
-      books: 'authors',
+      books: 'books',
       missing: '',
     }
 
@@ -641,10 +649,7 @@ export default function Library() {
         case 'movies':
           return `/api/v1/movies/${id}/request`
         case 'books':
-          // For books, use books/:id/request, not authors/:id
           return `/api/v1/books/${id}/request`
-        case 'music':
-          return `/api/v1/artists/${id}`
         case 'tv':
           return `/api/v1/tvshows/${id}`
         default:
@@ -673,14 +678,11 @@ export default function Library() {
             case 'movies':
               setMovies((prev) => prev.filter((m) => m.id !== id))
               break
-            case 'music':
-              setArtists((prev) => prev.filter((a) => a.id !== id))
-              break
             case 'tv':
               setTvShows((prev) => prev.filter((t) => t.id !== id))
               break
             case 'books':
-              setAuthors((prev) => prev.filter((a) => a.id !== id))
+              setBooks((prev) => prev.filter((b) => b.id !== id))
               break
           }
         } else {
@@ -692,19 +694,14 @@ export default function Library() {
                 prev.map((m) => (m.id === id ? { ...m, requested: !currentlyRequested } : m))
               )
               break
-            case 'music':
-              setArtists((prev) =>
-                prev.map((a) => (a.id === id ? { ...a, requested: !currentlyRequested } : a))
-              )
-              break
             case 'tv':
               setTvShows((prev) =>
                 prev.map((t) => (t.id === id ? { ...t, requested: !currentlyRequested } : t))
               )
               break
             case 'books':
-              setAuthors((prev) =>
-                prev.map((a) => (a.id === id ? { ...a, requested: !currentlyRequested } : a))
+              setBooks((prev) =>
+                prev.map((b) => (b.id === id ? { ...b, requested: !currentlyRequested } : b))
               )
               break
           }
@@ -767,8 +764,7 @@ export default function Library() {
             setMovies((prev) => prev.filter((m) => m.id !== itemWithFile.id))
             break
           case 'books':
-            // For books, the author might have been deleted too - refresh the page
-            fetchData()
+            setBooks((prev) => prev.filter((b) => b.id !== itemWithFile.id))
             break
         }
         setFileConfirmDialogOpen(false)
@@ -870,18 +866,23 @@ export default function Library() {
       })
   }
 
-  const getFilteredAuthors = () => {
-    return authors
-      .filter((author) => author.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const getFilteredBooks = () => {
+    const query = searchQuery.toLowerCase()
+    return books
+      .filter(
+        (book) =>
+          book.title.toLowerCase().includes(query) ||
+          (book.authorName ?? '').toLowerCase().includes(query)
+      )
       .filter(matchesStatusFilter)
       .sort((a, b) => {
         switch (sortBy) {
           case 'recent':
-            return b.id - a.id
-          case 'count':
-            return Number(b.bookCount) - Number(a.bookCount)
+            return (b.addedAt ?? '').localeCompare(a.addedAt ?? '')
+          case 'year':
+            return (b.releaseDate ?? '').localeCompare(a.releaseDate ?? '')
           default:
-            return a.name.localeCompare(b.name)
+            return a.title.localeCompare(b.title)
         }
       })
   }
@@ -895,7 +896,7 @@ export default function Library() {
       case 'tv':
         return getFilteredTvShows()
       case 'books':
-        return getFilteredAuthors()
+        return getFilteredBooks()
     }
   }
 
@@ -908,7 +909,7 @@ export default function Library() {
       case 'tv':
         return tvShows.length
       case 'books':
-        return authors.length
+        return books.length
     }
   }
 
@@ -989,9 +990,10 @@ export default function Library() {
       }
     })
     const isDownloading = !!queueItem
-    // TV shows manage status at episode level, so never show as "not requested"
-    const isNotRequested =
-      item.mediaType !== 'tv' && !item.requested && !item.hasFile && !isDownloading
+    // Shows and artists are containers: status lives on episodes and albums, so
+    // the card itself is never "not requested"
+    const isContainer = item.mediaType === 'tv' || item.mediaType === 'music'
+    const isNotRequested = !isContainer && !item.requested && !item.hasFile && !isDownloading
     const isToggling = togglingItems.has(imageKey)
 
     // Get status info
@@ -1103,7 +1105,9 @@ export default function Library() {
                       ? 'Enriching…'
                       : item.mediaType === 'music'
                         ? 'Enrich from MusicBrainz'
-                        : 'Enrich from TMDB'}
+                        : item.mediaType === 'books'
+                          ? 'Enrich from OpenLibrary'
+                          : 'Enrich from TMDB'}
                   </DropdownMenuItem>
                 </>
               )}
@@ -1143,9 +1147,10 @@ export default function Library() {
       }
     })
     const isDownloading = !!queueItem
-    // TV shows manage status at episode level, so never show as "not requested"
-    const isNotRequested =
-      item.mediaType !== 'tv' && !item.requested && !item.hasFile && !isDownloading
+    // Shows and artists are containers: status lives on episodes and albums, so
+    // the card itself is never "not requested"
+    const isContainer = item.mediaType === 'tv' || item.mediaType === 'music'
+    const isNotRequested = !isContainer && !item.requested && !item.hasFile && !isDownloading
     const isToggling = togglingItems.has(imageKey)
 
     // Get status info
@@ -1229,7 +1234,9 @@ export default function Library() {
                         ? 'Enriching…'
                         : item.mediaType === 'music'
                           ? 'Enrich from MusicBrainz'
-                          : 'Enrich from TMDB'}
+                          : item.mediaType === 'books'
+                            ? 'Enrich from OpenLibrary'
+                            : 'Enrich from TMDB'}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -1245,21 +1252,30 @@ export default function Library() {
     const items = getFilteredArtists()
     if (items.length === 0) return renderEmptyState()
 
-    const gridItems = items.map((artist) => ({
-      id: artist.id,
-      name: artist.name,
-      imageUrl: artist.imageUrl,
-      subtitle: `${artist.albumCount} ${Number(artist.albumCount) === 1 ? 'album' : 'albums'}`,
-      detailUrl: `/artist/${artist.id}`,
-      requested: artist.requested,
-      mediaType: 'music' as MediaType,
-      externalId: artist.musicbrainzId,
-    }))
+    // Like a show's "N on disk": what the artist has, then what is still wanted.
+    const describe = (artist: Artist) => {
+      const parts = [
+        `${artist.ownedAlbumCount} ${artist.ownedAlbumCount === 1 ? 'album' : 'albums'}`,
+      ]
+      if (artist.requestedAlbumCount > 0) parts.push(`${artist.requestedAlbumCount} wanted`)
+      else if (artist.monitored && artist.ownedAlbumCount === 0) parts.push('following')
+      return parts.join(' • ')
+    }
 
     if (viewMode === 'grid') {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {gridItems.map((item) => renderGridItem(item))}
+          {items.map((artist) =>
+            renderGridItem({
+              id: artist.id,
+              name: artist.name,
+              imageUrl: artist.imageUrl,
+              subtitle: describe(artist),
+              detailUrl: `/artist/${artist.id}`,
+              mediaType: 'music',
+              externalId: artist.musicbrainzId,
+            })
+          )}
         </div>
       )
     }
@@ -1271,11 +1287,13 @@ export default function Library() {
             id: artist.id,
             name: artist.name,
             imageUrl: artist.imageUrl,
-            subtitle: `${artist.albumCount} ${Number(artist.albumCount) === 1 ? 'album' : 'albums'}${artist.artistType ? ` • ${artist.artistType}` : ''}`,
+            subtitle: `${describe(artist)}${artist.artistType ? ` • ${artist.artistType}` : ''}`,
             detailUrl: `/artist/${artist.id}`,
-            requested: artist.requested,
             mediaType: 'music',
-            badges: artist.qualityProfile ? [artist.qualityProfile.name] : [],
+            badges: [
+              ...(artist.monitored ? ['Following'] : []),
+              ...(artist.qualityProfile ? [artist.qualityProfile.name] : []),
+            ],
             externalId: artist.musicbrainzId,
           })
         )}
@@ -1375,38 +1393,46 @@ export default function Library() {
   }
 
   const renderBooksContent = () => {
-    const items = getFilteredAuthors()
+    const items = getFilteredBooks()
     if (items.length === 0) return renderEmptyState()
 
-    const gridItems = items.map((author) => ({
-      id: author.id,
-      name: author.name,
-      imageUrl: author.imageUrl,
-      subtitle: `${author.bookCount} ${Number(author.bookCount) === 1 ? 'book' : 'books'}`,
-      detailUrl: `/author/${author.id}`,
-      requested: author.requested,
-      mediaType: 'books' as MediaType,
-    }))
+    const describe = (book: LibraryBook) =>
+      [book.authorName, book.releaseDate?.slice(0, 4)].filter(Boolean).join(' • ') || undefined
 
     if (viewMode === 'grid') {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {gridItems.map((item) => renderGridItem(item))}
+          {items.map((book) =>
+            renderGridItem({
+              id: book.id,
+              name: book.title,
+              imageUrl: book.coverUrl,
+              subtitle: describe(book),
+              detailUrl: `/book/${book.id}`,
+              requested: book.requested,
+              hasFile: book.hasFile,
+              mediaType: 'books',
+            })
+          )}
         </div>
       )
     }
 
     return (
       <div className="space-y-2">
-        {items.map((author) =>
+        {items.map((book) =>
           renderListItem({
-            id: author.id,
-            name: author.name,
-            imageUrl: author.imageUrl,
-            subtitle: `${author.bookCount} ${Number(author.bookCount) === 1 ? 'book' : 'books'}`,
-            detailUrl: `/author/${author.id}`,
-            requested: author.requested,
+            id: book.id,
+            name: book.title,
+            imageUrl: book.coverUrl,
+            subtitle: describe(book),
+            detailUrl: `/book/${book.id}`,
+            requested: book.requested,
+            hasFile: book.hasFile,
             mediaType: 'books',
+            badges: book.seriesName
+              ? [`${book.seriesName}${book.seriesPosition ? ` #${book.seriesPosition}` : ''}`]
+              : [],
           })
         )}
       </div>
@@ -1664,7 +1690,7 @@ export default function Library() {
           { value: 'count', label: 'Episode Count' },
         ]
       case 'books':
-        return [...base, { value: 'count', label: 'Book Count' }]
+        return [...base, { value: 'year', label: 'Year' }]
       case 'missing':
         return base
       default:

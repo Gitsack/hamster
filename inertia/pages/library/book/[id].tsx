@@ -143,13 +143,9 @@ export default function BookDetail() {
       const data = await response.json()
 
       if (response.ok) {
-        if (data.deleted) {
-          // Book was deleted (no file, unrequested)
-          toast.success('Removed from library')
-          router.visit('/library?tab=books')
-        } else {
-          toast.success(wasRequested ? 'Book unrequested' : 'Book requested')
-        }
+        toast.success(
+          wasRequested ? 'Book unrequested' : 'Book requested — searching your indexers'
+        )
       } else if (data.hasFile) {
         // Book has a file - show confirmation dialog
         setBook({ ...book, requested: wasRequested }) // Revert

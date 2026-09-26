@@ -6,6 +6,7 @@ import { mediaInfoService } from './media_info_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
 import Download from '#models/download'
 import Album from '#models/album'
+import { isSameAlbumTitle } from '#utils/release_match'
 import Artist from '#models/artist'
 import Track from '#models/track'
 import TrackFile from '#models/track_file'
@@ -133,6 +134,7 @@ export class DownloadImportService {
 
       // Ensure album has tracks (fetch from MusicBrainz if needed)
       await this.ensureAlbumHasTracks(album)
+      const allowNewTracks = !(await this.albumHasTracklist(album))
 
       // Import each file
       for (let i = 0; i < audioFiles.length; i++) {
@@ -145,7 +147,13 @@ export class DownloadImportService {
         })
 
         try {
-          const importResult = await this.importAudioFile(filePath, album, artist, rootFolder)
+          const importResult = await this.importAudioFile(
+            filePath,
+            album,
+            artist,
+            rootFolder,
+            allowNewTracks
+          )
 
           if (importResult.success) {
             result.filesImported++
@@ -338,11 +346,18 @@ export class DownloadImportService {
 
       // Ensure album has tracks
       await this.ensureAlbumHasTracks(album)
+      const allowNewTracks = !(await this.albumHasTracklist(album))
 
       // Import each audio file
       for (const filePath of audioFiles) {
         try {
-          const importResult = await this.importAudioFile(filePath, album, artist, rootFolder)
+          const importResult = await this.importAudioFile(
+            filePath,
+            album,
+            artist,
+            rootFolder,
+            allowNewTracks
+          )
 
           if (importResult.success) {
             result.filesImported++
@@ -378,7 +393,9 @@ export class DownloadImportService {
     sourcePath: string,
     album: Album,
     artist: Artist,
-    rootFolder: RootFolder
+    rootFolder: RootFolder,
+    /** Whether files may add tracks — only when the album had no tracklist before this import. */
+    allowNewTracks: boolean
   ): Promise<{ success: boolean; error?: string; destinationPath?: string }> {
     // Get media info from file
     const mediaInfo = await mediaInfoService.getMediaInfo(sourcePath)
@@ -386,11 +403,23 @@ export class DownloadImportService {
       return { success: false, error: 'Could not read media info' }
     }
 
-    // Find matching track or create one
+    // A file tagged for another album is not ours, whatever its track number
+    // says: a pack that slipped past the release filter would otherwise land
+    // every album's "track 1" on this album's track 1.
+    if (mediaInfo.album && !isSameAlbumTitle(mediaInfo.album, album.title)) {
+      return { success: false, error: `Belongs to another album ("${mediaInfo.album}")` }
+    }
+
     let track = await this.findMatchingTrack(album, mediaInfo, sourcePath)
 
     if (!track) {
-      // Create a new track for this file
+      // When the album's tracklist is known, a file that fits none of it is an
+      // extra (bonus track, another album's song) and is left out. Only an
+      // album with no tracklist at all learns its tracks from the files.
+      if (!allowNewTracks) {
+        return { success: false, error: 'Does not match any track on this album' }
+      }
+
       track = await Track.create({
         albumId: album.id,
         title: mediaInfo.title || path.basename(sourcePath, path.extname(sourcePath)),
@@ -503,6 +532,11 @@ export class DownloadImportService {
     }
 
     return null
+  }
+
+  private async albumHasTracklist(album: Album): Promise<boolean> {
+    const result = await Track.query().where('albumId', album.id).count('* as total')
+    return Number((result[0].$extras as { total: string }).total) > 0
   }
 
   /**

@@ -400,11 +400,12 @@ test.group('AlbumsController', (group) => {
 
   // ---- store ----
 
-  test('store returns conflict for duplicate musicbrainzId', async ({ assert }) => {
+  test('store returns conflict for an album that is already requested', async ({ assert }) => {
     // First create an album with a known release group ID
     const existingAlbum = await AlbumFactory.create({
       artistId: artist.id,
       title: 'Albums Test Existing',
+      requested: true,
     })
     existingAlbum.musicbrainzReleaseGroupId = 'a0000000-0000-0000-0000-000000000099'
     await existingAlbum.save()
@@ -435,6 +436,43 @@ test.group('AlbumsController', (group) => {
 
     // Cleanup
     await existingAlbum.delete()
+  })
+
+  test('store requests an album already known from the discography', async ({ assert }) => {
+    const known = await AlbumFactory.create({
+      artistId: artist.id,
+      title: 'Albums Test Discography Entry',
+      requested: false,
+    })
+    known.musicbrainzReleaseGroupId = 'a0000000-0000-0000-0000-000000000098'
+    await known.save()
+
+    const controller = new AlbumsController()
+    let result: Record<string, unknown> = {}
+
+    await controller.store({
+      request: {
+        validateUsing: async () => ({
+          musicbrainzId: 'a0000000-0000-0000-0000-000000000098',
+          artistMusicbrainzId: 'a0000000-0000-0000-0000-000000000001',
+          qualityProfileId: '00000000-0000-0000-0000-000000000001',
+        }),
+      },
+      response: {
+        json(data: unknown) {
+          result = data as Record<string, unknown>
+        },
+        conflict() {},
+        notFound() {},
+      },
+    } as never)
+
+    assert.equal(result.id, known.id)
+    assert.isTrue(result.requested as boolean)
+    await known.refresh()
+    assert.isTrue(known.requested)
+
+    await known.delete()
   })
 
   // ---- searchReleases ----

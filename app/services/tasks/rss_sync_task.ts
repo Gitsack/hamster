@@ -1,4 +1,5 @@
 import Indexer from '#models/indexer'
+import { isAlbumRelease, isBookRelease } from '#utils/release_match'
 import Album from '#models/album'
 import Movie from '#models/movie'
 import Book from '#models/book'
@@ -248,7 +249,7 @@ class RssSyncTask {
 
     // Try matching albums
     for (const album of wantedAlbums) {
-      if (this.matchesAlbum(normalizedTitle, album)) {
+      if (isAlbumRelease(release.title, album.artistName, album.title)) {
         try {
           console.log(
             `[RssSync] Matched album: ${release.title} -> ${album.artistName} - ${album.title}`
@@ -271,7 +272,7 @@ class RssSyncTask {
 
     // Try matching books
     for (const book of wantedBooks) {
-      if (this.matchesBook(normalizedTitle, book)) {
+      if (isBookRelease(release.title, book.authorName, book.title)) {
         try {
           console.log(
             `[RssSync] Matched book: ${release.title} -> ${book.authorName} - ${book.title}`
@@ -331,18 +332,6 @@ class RssSyncTask {
     const episodeStr = String(episode.episode).padStart(2, '0')
     const pattern = `s${seasonStr}e${episodeStr}`
     return normalizedTitle.includes(pattern)
-  }
-
-  private matchesAlbum(normalizedTitle: string, album: WantedAlbum): boolean {
-    const artistNorm = normalizeTitle(album.artistName)
-    const albumNorm = normalizeTitle(album.title)
-    return normalizedTitle.includes(artistNorm) && normalizedTitle.includes(albumNorm)
-  }
-
-  private matchesBook(normalizedTitle: string, book: WantedBook): boolean {
-    const titleNorm = normalizeTitle(book.title)
-    const authorNorm = normalizeTitle(book.authorName)
-    return normalizedTitle.includes(titleNorm) && normalizedTitle.includes(authorNorm)
   }
 
   /**

@@ -60,7 +60,7 @@ export default function AddArtist() {
 
   // Add form state
   const [selectedQualityProfile, setSelectedQualityProfile] = useState<string>('')
-  const [monitored, setMonitored] = useState(true)
+  const [monitored, setMonitored] = useState(false)
   const [adding, setAdding] = useState(false)
 
   // Load options on mount
@@ -346,7 +346,7 @@ export default function AddArtist() {
                   onCheckedChange={(checked) => setMonitored(checked as boolean)}
                 />
                 <Label htmlFor="monitored" className="font-normal cursor-pointer">
-                  Automatically request new releases
+                  Follow new releases (never requests existing albums)
                 </Label>
               </div>
             </div>

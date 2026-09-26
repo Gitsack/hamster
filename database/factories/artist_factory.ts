@@ -10,7 +10,6 @@ export class ArtistFactory {
       musicbrainzId: string | null
       status: 'continuing' | 'ended' | 'unknown'
       monitored: boolean
-      requested: boolean
     }> = {}
   ) {
     counter++
@@ -19,8 +18,7 @@ export class ArtistFactory {
       sortName: overrides.sortName ?? `Test Artist ${counter}`,
       musicbrainzId: overrides.musicbrainzId ?? null,
       status: overrides.status ?? 'continuing',
-      monitored: overrides.monitored ?? true,
-      requested: overrides.requested ?? false,
+      monitored: overrides.monitored ?? false,
       needsReview: false,
     })
   }

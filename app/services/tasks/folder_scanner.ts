@@ -1007,7 +1007,6 @@ class FolderScanner {
         country: mbArtist?.country ?? null,
         status: 'continuing',
         monitored: false,
-        requested: false,
         needsReview: false,
       })
     } else if (!artist.musicbrainzId) {
@@ -1095,7 +1094,6 @@ class FolderScanner {
                 sortName: this.generateSortName(olAuthor.name),
                 openlibraryId: olAuthor.key,
                 imageUrl: openLibraryService.getAuthorPhotoUrl(olAuthor.photoId, 'L'),
-                requested: false,
                 needsReview: false,
                 rootFolderId: rootFolder.id,
                 addedAt: DateTime.now(),
@@ -1108,7 +1106,6 @@ class FolderScanner {
           author = await Author.create({
             name: olAuthorName,
             sortName: this.generateSortName(olAuthorName),
-            requested: false,
             needsReview: true,
             rootFolderId: rootFolder.id,
             addedAt: DateTime.now(),

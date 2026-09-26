@@ -40,14 +40,13 @@ import {
   CdIcon,
   Calendar01Icon,
   Location01Icon,
-  ViewIcon,
-  ViewOffIcon,
   Search01Icon,
   Add01Icon,
   CheckmarkCircle01Icon,
   Clock01Icon,
   Notification01Icon,
   NotificationOff01Icon,
+  Cancel01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
@@ -102,10 +101,10 @@ interface Artist {
   formedAt: string | null
   endedAt: string | null
   imageUrl: string | null
-  requested: boolean
+  /** Following new releases: albums released from `monitoredAt` on are requested automatically. */
   monitored: boolean
+  monitoredAt: string | null
   qualityProfile: { id: number; name: string } | null
-  metadataProfile: { id: number; name: string } | null
   rootFolder: { id: number; path: string } | null
   albums: LibraryAlbum[]
 }
@@ -249,34 +248,19 @@ export default function ArtistDetail() {
         body: JSON.stringify({ monitored: !wasMonitored }),
       })
       if (response.ok) {
-        toast.success(wasMonitored ? 'Monitoring disabled' : 'Monitoring enabled')
+        toast.success(
+          wasMonitored
+            ? `No longer following ${artist.name}`
+            : `Following ${artist.name} — new albums will be requested as they come out`
+        )
       } else {
         setArtist({ ...artist, monitored: wasMonitored })
-        toast.error('Failed to update monitoring')
+        toast.error('Could not change following — nothing changed.')
       }
     } catch (error) {
-      console.error('Failed to update monitoring:', error)
+      console.error('Failed to update following:', error)
       setArtist({ ...artist, monitored: wasMonitored })
-      toast.error('Failed to update monitoring')
-    }
-  }
-
-  const toggleRequested = async () => {
-    if (!artist) return
-
-    try {
-      const response = await fetch(`/api/v1/artists/${artistId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requested: !artist.requested }),
-      })
-      if (response.ok) {
-        setArtist({ ...artist, requested: !artist.requested })
-        toast.success(artist.requested ? 'Artist unrequested' : 'Artist requested')
-      }
-    } catch (error) {
-      console.error('Failed to update artist:', error)
-      toast.error('Failed to update artist')
+      toast.error('Could not reach the server — following is unchanged.')
     }
   }
 
@@ -302,8 +286,9 @@ export default function ArtistDetail() {
     }
   }
 
-  // Add album from discography to library
-  const addAlbum = async (album: DiscographyAlbum) => {
+  // Request one album from the discography. The server flips an album it
+  // already knows, or creates it, and searches straight away.
+  const requestAlbum = async (album: { musicbrainzId: string; title: string }) => {
     if (!artist) return
 
     setAddingAlbums((prev) => new Set(prev).add(album.musicbrainzId))
@@ -315,34 +300,54 @@ export default function ArtistDetail() {
         body: JSON.stringify({
           musicbrainzId: album.musicbrainzId,
           artistMusicbrainzId: artist.musicbrainzId,
-          rootFolderId: String(artist.rootFolder?.id),
+          rootFolderId: artist.rootFolder ? String(artist.rootFolder.id) : undefined,
           qualityProfileId: String(artist.qualityProfile?.id),
-          metadataProfileId: String(artist.metadataProfile?.id),
           requested: true,
           searchForAlbum: true,
         }),
       })
 
       if (response.ok) {
-        toast.success(`Added "${album.title}" to library`)
-        // Refresh both artist and discography
+        toast.success(`Requested "${album.title}" — searching your indexers`)
         fetchArtist()
         if (artist.musicbrainzId) {
           fetchDiscography(artist.musicbrainzId)
         }
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add album')
+        toast.error(error.error || `Could not request "${album.title}" — nothing changed.`)
       }
     } catch (error) {
-      console.error('Failed to add album:', error)
-      toast.error('Failed to add album')
+      console.error('Failed to request album:', error)
+      toast.error(`Could not reach the server — "${album.title}" was not requested.`)
     } finally {
       setAddingAlbums((prev) => {
         const next = new Set(prev)
         next.delete(album.musicbrainzId)
         return next
       })
+    }
+  }
+
+  // Stop searching for an album. Tracks already on disk stay.
+  const unrequestAlbum = async (album: { libraryId?: number; title: string }) => {
+    if (!album.libraryId) return
+    try {
+      const response = await fetch(`/api/v1/albums/${album.libraryId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requested: false }),
+      })
+      if (response.ok) {
+        toast.success(`"${album.title}" is no longer requested`)
+        fetchArtist()
+      } else {
+        const error = await response.json()
+        toast.error(error.error || `Could not unrequest "${album.title}" — nothing changed.`)
+      }
+    } catch (error) {
+      console.error('Failed to unrequest album:', error)
+      toast.error(`Could not reach the server — "${album.title}" is still requested.`)
     }
   }
 
@@ -394,7 +399,10 @@ export default function ArtistDetail() {
         title: d.title,
         releaseDate: d.releaseDate,
         type: d.type,
-        inLibrary: d.inLibrary || !!libraryAlbum,
+        // Known is not the same as in the library: the whole discography is
+        // stored so albums can be requested, but only a requested or
+        // downloaded album is actually in the library.
+        inLibrary: !!libraryAlbum && (libraryAlbum.requested || libraryAlbum.fileCount > 0),
         libraryId: libraryAlbum?.id,
         requested: libraryAlbum?.requested || false,
         trackCount: libraryAlbum?.trackCount || 0,
@@ -403,15 +411,19 @@ export default function ArtistDetail() {
       }
     })
 
-    // Add any library albums not in discography (edge case)
+    // Library albums the discography view leaves out (singles, compilations,
+    // albums scanned from disk): show the ones that are requested or on disk,
+    // or everything if MusicBrainz returned nothing.
     for (const album of artist?.albums || []) {
+      const inLibrary = album.requested || album.fileCount > 0
+      if (!inLibrary && discography.length > 0) continue
       if (!discography.find((d) => d.musicbrainzId === album.musicbrainzId)) {
         merged.push({
           musicbrainzId: album.musicbrainzId || '',
           title: album.title,
           releaseDate: album.releaseDate,
           type: album.albumType,
-          inLibrary: true,
+          inLibrary,
           libraryId: album.id,
           requested: album.requested,
           trackCount: album.trackCount,
@@ -436,9 +448,10 @@ export default function ArtistDetail() {
   )
   const notInLibraryAlbums = mergedAlbums.filter((a) => !a.inLibrary)
 
-  // Calculate statistics
-  const totalTracks = artist?.albums.reduce((sum, a) => sum + a.trackCount, 0) || 0
-  const totalFiles = artist?.albums.reduce((sum, a) => sum + a.fileCount, 0) || 0
+  // Completeness over what was actually asked for, not the whole discography
+  const libraryAlbums = artist?.albums.filter((a) => a.requested || a.fileCount > 0) ?? []
+  const totalTracks = libraryAlbums.reduce((sum, a) => sum + a.trackCount, 0)
+  const totalFiles = libraryAlbums.reduce((sum, a) => sum + a.fileCount, 0)
   const percentComplete = totalTracks > 0 ? Math.round((totalFiles / totalTracks) * 100) : 0
 
   if (loading) {
@@ -488,11 +501,15 @@ export default function ArtistDetail() {
                     className="h-4 w-4"
                   />
                   <span className="hidden md:inline">
-                    {artist.monitored ? 'Monitored' : 'Monitor'}
+                    {artist.monitored ? 'Following' : 'Follow new releases'}
                   </span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{artist.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
+              <TooltipContent className="max-w-xs">
+                {artist.monitored
+                  ? `Albums released since ${artist.monitoredAt?.slice(0, 10) ?? 'you started following'} are requested automatically. Nothing older is.`
+                  : 'Request new studio albums and EPs automatically as they come out. The back catalogue is never requested.'}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <DropdownMenu>
@@ -502,13 +519,6 @@ export default function ArtistDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={toggleRequested}>
-                <HugeiconsIcon
-                  icon={artist.requested ? ViewOffIcon : ViewIcon}
-                  className="h-4 w-4"
-                />
-                {artist.requested ? 'Unrequest' : 'Request'}
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={refreshMetadata} disabled={refreshing || enriching}>
                 <HugeiconsIcon
                   icon={RefreshIcon}
@@ -593,9 +603,8 @@ export default function ArtistDetail() {
           <MediaSpecs
             specs={[
               { label: 'Profile', value: artist.qualityProfile?.name },
-              { label: 'Metadata', value: artist.metadataProfile?.name },
               { label: 'Folder', value: artist.rootFolder?.path, mono: true },
-              { label: 'Albums', value: artist.albums.length || undefined, mono: true },
+              { label: 'Albums', value: libraryAlbums.length || undefined, mono: true },
             ]}
           />
         </MediaHero>
@@ -609,9 +618,7 @@ export default function ArtistDetail() {
             </TabsTrigger>
             <TabsTrigger value="downloaded">Downloaded ({downloadedAlbums.length})</TabsTrigger>
             <TabsTrigger value="requested">Requested ({requestedAlbums.length})</TabsTrigger>
-            {notInLibraryAlbums.length > 0 && (
-              <TabsTrigger value="available">Available ({notInLibraryAlbums.length})</TabsTrigger>
-            )}
+            <TabsTrigger value="available">Not requested ({notInLibraryAlbums.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all" className="space-y-4">
@@ -632,13 +639,8 @@ export default function ArtistDetail() {
                     key={album.musicbrainzId}
                     album={album}
                     isAdding={addingAlbums.has(album.musicbrainzId)}
-                    onAdd={() =>
-                      addAlbum({
-                        ...album,
-                        artistName: artist.name,
-                        artistMusicbrainzId: artist.musicbrainzId!,
-                      })
-                    }
+                    onAdd={() => requestAlbum(album)}
+                    onUnrequest={() => unrequestAlbum(album)}
                     onShowTracks={() => openAlbumDialog(album)}
                   />
                 ))}
@@ -660,7 +662,8 @@ export default function ArtistDetail() {
                     key={album.musicbrainzId}
                     album={album}
                     isAdding={false}
-                    onAdd={() => {}}
+                    onAdd={() => requestAlbum(album)}
+                    onUnrequest={() => unrequestAlbum(album)}
                     onShowTracks={() => openAlbumDialog(album)}
                   />
                 ))}
@@ -673,7 +676,7 @@ export default function ArtistDetail() {
               <EmptyState
                 icon={<HugeiconsIcon icon={CdIcon} />}
                 title="No requested albums"
-                message="Request an album from the discography and Hamster will keep searching your indexers for it."
+                message="Request albums one at a time from the discography. Hamster searches for exactly that album — never a discography or collection pack."
               />
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -682,7 +685,8 @@ export default function ArtistDetail() {
                     key={album.musicbrainzId}
                     album={album}
                     isAdding={false}
-                    onAdd={() => {}}
+                    onAdd={() => requestAlbum(album)}
+                    onUnrequest={() => unrequestAlbum(album)}
                     onShowTracks={() => openAlbumDialog(album)}
                   />
                 ))}
@@ -694,7 +698,7 @@ export default function ArtistDetail() {
             {notInLibraryAlbums.length === 0 ? (
               <EmptyState
                 icon={<HugeiconsIcon icon={CdIcon} />}
-                title="Every album is already in your library"
+                title="Every album is requested or downloaded"
                 message="MusicBrainz lists nothing further for this artist."
               />
             ) : (
@@ -704,13 +708,8 @@ export default function ArtistDetail() {
                     key={album.musicbrainzId}
                     album={album}
                     isAdding={addingAlbums.has(album.musicbrainzId)}
-                    onAdd={() =>
-                      addAlbum({
-                        ...album,
-                        artistName: artist.name,
-                        artistMusicbrainzId: artist.musicbrainzId!,
-                      })
-                    }
+                    onAdd={() => requestAlbum(album)}
+                    onUnrequest={() => unrequestAlbum(album)}
                     onShowTracks={() => openAlbumDialog(album)}
                   />
                 ))}
@@ -829,15 +828,7 @@ export default function ArtistDetail() {
             ) : selectedAlbum && !selectedAlbum.inLibrary ? (
               <Button
                 onClick={() => {
-                  addAlbum({
-                    musicbrainzId: selectedAlbum.musicbrainzId,
-                    title: selectedAlbum.title,
-                    releaseDate: selectedAlbum.releaseDate,
-                    type: selectedAlbum.type,
-                    inLibrary: false,
-                    artistName: artist!.name,
-                    artistMusicbrainzId: artist!.musicbrainzId!,
-                  })
+                  requestAlbum(selectedAlbum)
                   setAlbumDialogOpen(false)
                 }}
                 disabled={addingAlbums.has(selectedAlbum.musicbrainzId)}
@@ -845,12 +836,12 @@ export default function ArtistDetail() {
                 {addingAlbums.has(selectedAlbum.musicbrainzId) ? (
                   <>
                     <Spinner />
-                    Adding...
+                    Requesting…
                   </>
                 ) : (
                   <>
                     <HugeiconsIcon icon={Add01Icon} className="h-4 w-4" />
-                    Add to Library
+                    Request album
                   </>
                 )}
               </Button>
@@ -880,10 +871,17 @@ interface MergedAlbumCardProps {
   album: MergedAlbum
   isAdding: boolean
   onAdd: () => void
+  onUnrequest: () => void
   onShowTracks: () => void
 }
 
-function MergedAlbumCard({ album, isAdding, onAdd, onShowTracks }: MergedAlbumCardProps) {
+function MergedAlbumCard({
+  album,
+  isAdding,
+  onAdd,
+  onUnrequest,
+  onShowTracks,
+}: MergedAlbumCardProps) {
   const [downloading, setDownloading] = useState(false)
   const [imageError, setImageError] = useState(false)
 
@@ -924,6 +922,12 @@ function MergedAlbumCard({ album, isAdding, onAdd, onShowTracks }: MergedAlbumCa
     e.preventDefault()
     e.stopPropagation()
     onAdd()
+  }
+
+  const handleUnrequest = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onUnrequest()
   }
 
   const handleCardClick = () => {
@@ -993,22 +997,36 @@ function MergedAlbumCard({ album, isAdding, onAdd, onShowTracks }: MergedAlbumCa
                   ) : (
                     <HugeiconsIcon icon={Add01Icon} className="h-4 w-4" />
                   )}
-                  Add to Library
+                  Request
                 </Button>
               ) : album.libraryId ? (
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  className="h-12 w-12 rounded-full"
-                  onClick={handleDownload}
-                  disabled={downloading}
-                >
-                  {downloading ? (
-                    <Spinner className="h-6 w-6" />
-                  ) : (
-                    <HugeiconsIcon icon={Search01Icon} className="h-6 w-6" />
+                <div className="flex flex-col items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-1"
+                    onClick={handleDownload}
+                    disabled={downloading}
+                  >
+                    {downloading ? (
+                      <Spinner className="h-4 w-4" />
+                    ) : (
+                      <HugeiconsIcon icon={Search01Icon} className="h-4 w-4" />
+                    )}
+                    Search now
+                  </Button>
+                  {album.requested && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="gap-1"
+                      onClick={handleUnrequest}
+                    >
+                      <HugeiconsIcon icon={Cancel01Icon} className="h-4 w-4" />
+                      Unrequest
+                    </Button>
                   )}
-                </Button>
+                </div>
               ) : null}
             </div>
           )}

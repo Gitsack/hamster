@@ -80,10 +80,28 @@ export default class AlbumsController {
   async store({ request, response }: HttpContext) {
     const data = await request.validateUsing(addAlbumValidator)
 
-    // Check if album already exists
+    // The album may already be known from its artist's discography. Requesting
+    // it then just flips the flag; only an album already requested is a conflict.
     const existingAlbum = await Album.findBy('musicbrainzReleaseGroupId', data.musicbrainzId)
     if (existingAlbum) {
-      return response.conflict({ error: 'Album already exists in library' })
+      if (existingAlbum.requested || data.requested === false) {
+        return response.conflict({ error: 'Album already exists in library', id: existingAlbum.id })
+      }
+      existingAlbum.requested = true
+      await existingAlbum.save()
+      await existingAlbum.load('artist')
+      if (data.searchForAlbum) {
+        this.searchAndGrabAlbum(existingAlbum).catch((error) => {
+          console.error(`Failed to search for album ${existingAlbum.id}:`, error)
+        })
+      }
+      return response.json({
+        id: existingAlbum.id,
+        title: existingAlbum.title,
+        artistId: existingAlbum.artistId,
+        artistName: existingAlbum.artist.name,
+        requested: true,
+      })
     }
 
     // Find or create the artist
@@ -96,7 +114,7 @@ export default class AlbumsController {
         return response.notFound({ error: 'Artist not found on MusicBrainz' })
       }
 
-      // Create artist with requested=false so we don't auto-fetch all albums
+      // The artist is only a container for the album being added
       artist = await Artist.create({
         musicbrainzId: data.artistMusicbrainzId,
         name: mbArtist.name,
@@ -107,7 +125,6 @@ export default class AlbumsController {
         country: mbArtist.country || null,
         formedAt: mbArtist.beginDate ? DateTime.fromISO(mbArtist.beginDate) : null,
         endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
-        requested: false, // Artist not requested - only specific albums
         monitored: false, // Not monitoring artist - only specific albums were added
         qualityProfileId: data.qualityProfileId,
         rootFolderId: data.rootFolderId,
@@ -238,40 +255,10 @@ export default class AlbumsController {
    * Search indexers for an album and grab the best result
    */
   private async searchAndGrabAlbum(album: Album): Promise<void> {
-    await album.load('artist')
-
-    const { indexerManager } = await import('#services/indexers/indexer_manager')
-    const { downloadManager } = await import('#services/download_clients/download_manager')
-
-    const { results } = await indexerManager.search({
-      artist: album.artist?.name,
-      album: album.title,
-      year: album.releaseDate?.year,
-      limit: 25,
-    })
-
-    if (results.length === 0) {
-      console.log(`No releases found for album: ${album.title}`)
-      return
-    }
-
-    // Sort by size (prefer larger files, usually better quality) and grab the first
-    const sorted = results.sort((a, b) => b.size - a.size)
-    const bestResult = sorted[0]
-
-    try {
-      await downloadManager.grab({
-        title: bestResult.title,
-        downloadUrl: bestResult.downloadUrl,
-        size: bestResult.size,
-        albumId: album.id,
-        indexerId: bestResult.indexerId,
-        indexerName: bestResult.indexer,
-        guid: bestResult.id,
-      })
-      console.log(`Grabbed release for album ${album.title}: ${bestResult.title}`)
-    } catch (error) {
-      console.error(`Failed to grab release for album ${album.title}:`, error)
+    const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
+    const result = await requestedSearchTask.searchSingleAlbum(album.id)
+    if (!result.grabbed && result.error) {
+      console.log(`No release grabbed for album ${album.title}: ${result.error}`)
     }
   }
 
@@ -386,11 +373,21 @@ export default class AlbumsController {
     // and left it un-re-requestable until the artist's metadata was refreshed.
     // Removal has its own endpoint (destroy).
 
+    const newlyRequested = data.requested === true && !album.requested
+
     album.merge({
       requested: data.requested ?? album.requested,
       anyReleaseOk: data.anyReleaseOk ?? album.anyReleaseOk,
     })
     await album.save()
+
+    // Requesting searches straight away, like requesting a movie; the
+    // scheduled search would otherwise leave it waiting for the next run.
+    if (newlyRequested) {
+      this.searchAndGrabAlbum(album).catch((error) => {
+        console.error(`Failed to search for album ${album.id}:`, error)
+      })
+    }
 
     return response.json({
       id: album.id,
@@ -474,7 +471,23 @@ export default class AlbumsController {
     // return the raw {results, skippedIndexers} envelope, which the page read
     // as `searchResults.length` — always undefined, so manual album search
     // rendered nothing no matter what the indexers found.
-    return response.json(sortAnnotated(await annotateReleases(results.results, 'music', profile)))
+    // Everything is shown so a person can still override, but anything that is
+    // not this album alone is marked rejected and sorts below the real matches.
+    const { isAlbumRelease } = await import('#utils/release_match')
+    const releases = await annotateReleases(results.results, 'music', profile)
+    const annotated = releases.map((r) =>
+      isAlbumRelease(String(r.title), album.artist?.name, album.title)
+        ? r
+        : {
+            ...r,
+            accepted: false,
+            rejections: [
+              'Not this album (discography, collection or other title)',
+              ...r.rejections,
+            ],
+          }
+    )
+    return response.json(sortAnnotated(annotated))
   }
 
   /**
@@ -596,9 +609,25 @@ export default class AlbumsController {
         })
       }
 
-      // Sort by size (prefer larger files, usually better quality) and grab the first
-      const sorted = results.sort((a, b) => b.size - a.size)
-      const bestResult = sorted[0]
+      // The biggest result is usually a discography, so size is no measure. A
+      // full-album search keeps only releases of this album; a track search
+      // still refuses packs. Either way the artist's quality profile ranks.
+      const { requestedSearchTask } = await import('#services/tasks/requested_search_task')
+      const { isPackRelease } = await import('#utils/release_match')
+      const selection = trackId
+        ? await requestedSearchTask.selectBestReleaseForAlbum(
+            album,
+            results.filter((r) => !isPackRelease(r.title, album.title, 'music')),
+            { titleCheck: false }
+          )
+        : await requestedSearchTask.selectBestReleaseForAlbum(album, results)
+      const bestResult = selection.release
+
+      if (!bestResult) {
+        return response.notFound({
+          error: selection.reason ?? 'No release matched this album and its quality profile',
+        })
+      }
 
       const download = await downloadManager.grab({
         title: bestResult.title,

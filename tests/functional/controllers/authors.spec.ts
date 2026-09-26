@@ -21,14 +21,12 @@ test.group('AuthorsController', (group) => {
     author1 = await AuthorFactory.create({
       name: 'Authors Test Alice',
       openlibraryId: 'OL9999901A',
-      requested: true,
       monitored: true,
     })
 
     author2 = await AuthorFactory.create({
       name: 'Authors Test Bob',
       openlibraryId: 'OL9999902A',
-      requested: false,
       monitored: false,
     })
 
@@ -61,10 +59,11 @@ test.group('AuthorsController', (group) => {
       },
     } as never)
 
-    assert.isTrue(result.length >= 2)
+    // Alice has a requested book; Bob has nothing requested or downloaded and
+    // is not followed, so he is not in the library.
     const names = result.map((a: any) => a.name)
     assert.include(names, 'Authors Test Alice')
-    assert.include(names, 'Authors Test Bob')
+    assert.notInclude(names, 'Authors Test Bob')
   })
 
   test('index returns expected author shape', async ({ assert }) => {
@@ -82,8 +81,9 @@ test.group('AuthorsController', (group) => {
     const author = result.find((a: any) => a.id === author1.id) as Record<string, unknown>
     assert.isNotNull(author)
     assert.equal(author.name, 'Authors Test Alice')
-    assert.equal(author.requested, true)
+    assert.notProperty(author, 'requested')
     assert.equal(author.monitored, true)
+    assert.equal(author.requestedBookCount, 1)
     assert.property(author, 'bookCount')
     assert.property(author, 'addedAt')
   })
@@ -227,7 +227,7 @@ test.group('AuthorsController', (group) => {
     await controller.update({
       params: { id: author2.id },
       request: {
-        only: () => ({ requested: true, monitored: true }),
+        only: () => ({ monitored: true }),
       },
       response: {
         json(data: unknown) {
@@ -238,17 +238,17 @@ test.group('AuthorsController', (group) => {
     } as never)
 
     assert.equal(result.id, author2.id)
-    assert.equal(result.requested, true)
     assert.equal(result.monitored, true)
+    assert.isString(result.monitoredAt)
 
-    // Verify in database
+    // Verify in database: following starts now
     await author2.refresh()
-    assert.equal(author2.requested, true)
     assert.equal(author2.monitored, true)
+    assert.isNotNull(author2.monitoredAt)
 
     // Reset
-    author2.requested = false
     author2.monitored = false
+    author2.monitoredAt = null
     await author2.save()
   })
 

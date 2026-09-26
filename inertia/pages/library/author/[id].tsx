@@ -18,8 +18,6 @@ import {
   MoreVerticalIcon,
   Delete01Icon,
   Book01Icon,
-  ViewIcon,
-  ViewOffIcon,
   Add01Icon,
   RefreshIcon,
   Search01Icon,
@@ -33,7 +31,6 @@ import { MediaSpecs } from '@/components/library/media-specs'
 import { useState, useEffect, useMemo } from 'react'
 import { useShowMore } from '@/hooks/use_show_more'
 import { toast } from 'sonner'
-import { useOperationTrackerContext } from '@/hooks/use_operation_tracker'
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import { CardStatusBadge, type MediaItemStatus } from '@/components/library/media-status-badge'
 import { DeleteMediaDialog } from '@/components/library/delete-media-dialog'
@@ -69,8 +66,9 @@ interface Author {
   openlibraryId: string | null
   overview: string | null
   imageUrl: string | null
-  requested: boolean
+  /** Following new releases: books first published from `monitoredAt` on are requested automatically. */
   monitored: boolean
+  monitoredAt: string | null
   qualityProfile: { id: number; name: string } | null
   rootFolder: { id: number; path: string } | null
   books: LibraryBook[]
@@ -89,8 +87,6 @@ export default function AuthorDetail() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [togglingBooks, setTogglingBooks] = useState<Set<number>>(new Set())
   const [addingBooks, setAddingBooks] = useState<Set<string>>(new Set())
-  const [requestingAll, setRequestingAll] = useState(false)
-  const { runBulk } = useOperationTrackerContext()
   const { queue } = useActiveDownloads()
 
   const activeDownloads = useMemo(() => {
@@ -190,34 +186,19 @@ export default function AuthorDetail() {
         body: JSON.stringify({ monitored: !wasMonitored }),
       })
       if (response.ok) {
-        toast.success(wasMonitored ? 'Monitoring disabled' : 'Monitoring enabled')
+        toast.success(
+          wasMonitored
+            ? `No longer following ${author.name}`
+            : `Following ${author.name} — new books will be requested as they come out`
+        )
       } else {
         setAuthor({ ...author, monitored: wasMonitored })
-        toast.error('Failed to update monitoring')
+        toast.error('Could not change following — nothing changed.')
       }
     } catch (error) {
-      console.error('Failed to update monitoring:', error)
+      console.error('Failed to update following:', error)
       setAuthor({ ...author, monitored: wasMonitored })
-      toast.error('Failed to update monitoring')
-    }
-  }
-
-  const toggleWanted = async () => {
-    if (!author) return
-
-    try {
-      const response = await fetch(`/api/v1/authors/${authorId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requested: !author.requested }),
-      })
-      if (response.ok) {
-        setAuthor({ ...author, requested: !author.requested })
-        toast.success(author.requested ? 'Author unrequested' : 'Author requested')
-      }
-    } catch (error) {
-      console.error('Failed to update author:', error)
-      toast.error('Failed to update author')
+      toast.error('Could not reach the server — following is unchanged.')
     }
   }
 
@@ -247,8 +228,10 @@ export default function AuthorDetail() {
     setTogglingBooks((prev) => new Set(prev).add(bookId))
 
     try {
-      const response = await fetch(`/api/v1/books/${bookId}`, {
-        method: 'PUT',
+      // The request endpoint searches straight away and, on unrequest, keeps
+      // the book in the bibliography.
+      const response = await fetch(`/api/v1/books/${bookId}/request`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requested: !currentlyRequested }),
       })
@@ -306,7 +289,7 @@ export default function AuthorDetail() {
       })
 
       if (response.ok) {
-        toast.success(`Added "${book.title}" to library`)
+        toast.success(`Requested "${book.title}" — searching your indexers`)
         // Refresh both author and bibliography
         fetchAuthor()
         if (author.openlibraryId) {
@@ -314,75 +297,17 @@ export default function AuthorDetail() {
         }
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to add book')
+        toast.error(error.error || `Could not request "${book.title}" — nothing changed.`)
       }
     } catch (error) {
-      console.error('Failed to add book:', error)
-      toast.error('Failed to add book')
+      console.error('Failed to request book:', error)
+      toast.error(`Could not reach the server — "${book.title}" was not requested.`)
     } finally {
       setAddingBooks((prev) => {
         const next = new Set(prev)
         next.delete(book.openlibraryId)
         return next
       })
-    }
-  }
-
-  const requestAllBooks = async () => {
-    if (!author) return
-
-    const booksToRequest = author.books.filter((b) => !b.requested && !b.hasFile)
-    if (booksToRequest.length === 0) {
-      toast.info('All books are already requested or downloaded')
-      return
-    }
-
-    // Optimistically update UI
-    setAuthor({
-      ...author,
-      books: author.books.map((b) => ({
-        ...b,
-        requested: b.hasFile ? b.requested : true,
-      })),
-    })
-
-    setRequestingAll(true)
-
-    try {
-      const results = await runBulk(
-        `Requesting ${booksToRequest.length} books`,
-        booksToRequest.map((book) => ({
-          id: String(book.id),
-          label: book.title,
-          execute: async () => {
-            const res = await fetch(`/api/v1/books/${book.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ requested: true }),
-            })
-            if (!res.ok) throw new Error('Request failed')
-            return res.json()
-          },
-        }))
-      )
-
-      const failedCount = results.filter((r) => r.status === 'error').length
-      if (failedCount === 0) {
-        toast.success(`Requested ${booksToRequest.length} books`)
-      } else if (failedCount < booksToRequest.length) {
-        toast.warning(
-          `Requested ${booksToRequest.length - failedCount} books, ${failedCount} failed`
-        )
-      } else {
-        toast.error('Failed to request books')
-        fetchAuthor()
-      }
-    } catch (error) {
-      console.error('Failed to request all books:', error)
-      toast.error('Failed to request books')
-      fetchAuthor()
-    } finally {
-      setRequestingAll(false)
     }
   }
 
@@ -398,7 +323,8 @@ export default function AuthorDetail() {
         title: b.title,
         description: b.description,
         coverUrl: b.coverUrl || libraryBook?.coverUrl,
-        inLibrary: b.inLibrary,
+        // Known is not in the library: only a requested or downloaded book is.
+        inLibrary: b.requested || b.hasFile || !!libraryBook?.requested || !!libraryBook?.hasFile,
         libraryId: b.bookId,
         requested: b.requested || libraryBook?.requested || false,
         hasFile: b.hasFile || libraryBook?.hasFile || false,
@@ -407,15 +333,17 @@ export default function AuthorDetail() {
       }
     })
 
-    // Add any library books not in bibliography (edge case)
+    // Library books OpenLibrary no longer lists (or that were scanned from disk)
     for (const book of author?.books || []) {
       if (!bibliography.find((b) => b.bookId === book.id)) {
+        const inLibrary = book.requested || book.hasFile
+        if (!inLibrary && bibliography.length > 0) continue
         merged.push({
           openlibraryId: '',
           title: book.title,
           description: null,
           coverUrl: book.coverUrl,
-          inLibrary: true,
+          inLibrary,
           libraryId: book.id,
           requested: book.requested,
           hasFile: book.hasFile,
@@ -443,7 +371,7 @@ export default function AuthorDetail() {
   const availablePage = useShowMore(notInLibraryBooks)
 
   // Calculate statistics
-  const totalBooks = author?.books.length || 0
+  const totalBooks = author?.books.filter((b) => b.requested || b.hasFile).length || 0
   const downloadedBooks = author?.books.filter((b) => b.hasFile).length || 0
   const requestedBooks = author?.books.filter((b) => b.requested && !b.hasFile).length || 0
 
@@ -494,11 +422,15 @@ export default function AuthorDetail() {
                     className="h-4 w-4"
                   />
                   <span className="hidden md:inline">
-                    {author.monitored ? 'Monitored' : 'Monitor'}
+                    {author.monitored ? 'Following' : 'Follow new releases'}
                   </span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{author.monitored ? 'Monitored' : 'Monitor'}</TooltipContent>
+              <TooltipContent className="max-w-xs">
+                {author.monitored
+                  ? `Books first published since ${author.monitoredAt?.slice(0, 4) ?? 'you started following'} are requested automatically. Nothing older is.`
+                  : 'Request new books automatically as they are published. Existing books are never requested.'}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <DropdownMenu>
@@ -508,13 +440,6 @@ export default function AuthorDetail() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={toggleWanted}>
-                <HugeiconsIcon
-                  icon={author.requested ? ViewOffIcon : ViewIcon}
-                  className="h-4 w-4"
-                />
-                {author.requested ? 'Unrequest' : 'Request'}
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={refreshAuthor} disabled={refreshing}>
                 <HugeiconsIcon
                   icon={RefreshIcon}
@@ -596,30 +521,10 @@ export default function AuthorDetail() {
               <TabsTrigger value="requested">
                 Requested ({requestedBooksFiltered.length})
               </TabsTrigger>
-              {notInLibraryBooks.length > 0 && (
-                <TabsTrigger value="available">Available ({notInLibraryBooks.length})</TabsTrigger>
-              )}
+              <TabsTrigger value="available">
+                Not requested ({notInLibraryBooks.length})
+              </TabsTrigger>
             </TabsList>
-            {author.books.some((b) => !b.requested && !b.hasFile) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={requestAllBooks}
-                disabled={requestingAll}
-              >
-                {requestingAll ? (
-                  <>
-                    <Spinner />
-                    Requesting...
-                  </>
-                ) : (
-                  <>
-                    <HugeiconsIcon icon={Add01Icon} className="h-4 w-4" />
-                    Request All in Library
-                  </>
-                )}
-              </Button>
-            )}
           </div>
 
           <TabsContent value="all" className="space-y-4">
@@ -786,7 +691,7 @@ export default function AuthorDetail() {
             {notInLibraryBooks.length === 0 ? (
               <EmptyState
                 icon={<HugeiconsIcon icon={Book01Icon} />}
-                title="Every listed book is already in your library"
+                title="Every listed book is requested or downloaded"
                 message="OpenLibrary lists nothing further for this author."
               />
             ) : (
@@ -986,7 +891,7 @@ function MergedBookCard({
                   ) : (
                     <HugeiconsIcon icon={Add01Icon} className="h-4 w-4" />
                   )}
-                  Add to Library
+                  Request
                 </Button>
               ) : book.libraryId ? (
                 <Button

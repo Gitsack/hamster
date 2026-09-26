@@ -632,7 +632,6 @@ export default function SearchPage({
   const [requested, setWanted] = useState(true)
   const [addingArtist, setAddingArtist] = useState(false)
   const [addingAlbum, setAddingAlbum] = useState(false)
-  const [addBooks, setAddBooks] = useState(true)
 
   // Filtered quality profiles by media type
   const movieProfiles = useMemo(
@@ -1260,7 +1259,13 @@ export default function SearchPage({
   }
 
   // Add functions - with profile parameter for direct add, or uses state for dialog-based add
-  const addArtistWithProfile = async (artist: ArtistSearchResult, qualityProfileId: string) => {
+  // Adding an artist loads their discography and requests nothing: albums are
+  // picked one at a time on the artist page, which is where this lands.
+  const addArtistWithProfile = async (
+    artist: ArtistSearchResult,
+    qualityProfileId: string,
+    follow: boolean = false
+  ) => {
     setAddingArtist(true)
     try {
       const response = await fetch('/api/v1/artists', {
@@ -1269,24 +1274,20 @@ export default function SearchPage({
         body: JSON.stringify({
           musicbrainzId: artist.musicbrainzId,
           qualityProfileId,
-          requested,
+          monitored: follow,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${artist.name} added — searching for downloads`, {
-          action: {
-            label: 'View Queue',
-            onClick: () => router.visit('/activity'),
-          },
-        })
+        toast.success(`${artist.name} added — pick the albums you want`)
         setAddArtistDialogOpen(false)
         setArtistResults((prev) =>
           prev.map((r) =>
             r.musicbrainzId === artist.musicbrainzId ? { ...r, inLibrary: true } : r
           )
         )
+        router.visit(`/artist/${data.id}`)
       } else {
         const error = await response.json()
         toast.error(error.error || `Could not add ${artist.name}. Retry, or check System > Events.`)
@@ -1651,10 +1652,11 @@ export default function SearchPage({
     }
   }
 
+  // Like artists: adding an author loads the bibliography and requests nothing.
   const addAuthorWithProfile = async (
     author: AuthorSearchResult,
     qualityProfileId: string,
-    shouldAddBooks: boolean = true
+    follow: boolean = false
   ) => {
     const booksRootFolder = rootFolders.find((rf) => rf.mediaType === 'books')
     if (!booksRootFolder) {
@@ -1672,25 +1674,20 @@ export default function SearchPage({
           name: author.name,
           qualityProfileId,
           rootFolderId: booksRootFolder.id,
-          requested,
-          addBooks: shouldAddBooks,
+          monitored: follow,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        toast.success(`${author.name} added to library`, {
-          action: {
-            label: 'View Author',
-            onClick: () => router.visit(`/author/${data.id}`),
-          },
-        })
+        toast.success(`${author.name} added — pick the books you want`)
         setAddAuthorDialogOpen(false)
         setAuthorResults((prev) =>
           prev.map((r) =>
             r.openlibraryId === author.openlibraryId ? { ...r, inLibrary: true } : r
           )
         )
+        router.visit(`/author/${data.id}`)
       } else {
         const error = await response.json()
         toast.error(error.error || `Could not add ${author.name}. Retry, or check System > Events.`)
@@ -1705,7 +1702,7 @@ export default function SearchPage({
 
   const addAuthor = () => {
     if (!selectedAuthor || !selectedQualityProfile) return
-    addAuthorWithProfile(selectedAuthor, selectedQualityProfile, addBooks)
+    addAuthorWithProfile(selectedAuthor, selectedQualityProfile)
   }
 
   const addBookWithProfile = async (book: BookSearchResult, qualityProfileId: string) => {
@@ -3379,11 +3376,14 @@ export default function SearchPage({
           onOpenChange={setAddArtistDialogOpen}
           mediaType="artist"
           title={selectedArtist?.name || ''}
-          description="Configure how this artist will be added to your library."
+          description="Adds the artist and their discography. Nothing is downloaded until you request an album."
           qualityProfiles={musicProfiles}
           loading={loadingOptions}
           adding={addingArtist}
-          onAdd={(profileId) => selectedArtist && addArtistWithProfile(selectedArtist, profileId)}
+          onAdd={(profileId, options) =>
+            selectedArtist && addArtistWithProfile(selectedArtist, profileId, options?.follow)
+          }
+          showFollowOption
         />
 
         <AddMediaDialog
@@ -3451,15 +3451,14 @@ export default function SearchPage({
           onOpenChange={setAddAuthorDialogOpen}
           mediaType="author"
           title={selectedAuthor?.name || ''}
-          description="Configure how this author will be added to your library."
+          description="Adds the author and their bibliography. Nothing is downloaded until you request a book."
           qualityProfiles={bookProfiles}
           loading={loadingOptions}
           adding={addingAuthor}
           onAdd={(profileId, options) =>
-            selectedAuthor &&
-            addAuthorWithProfile(selectedAuthor, profileId, options?.addBooks ?? true)
+            selectedAuthor && addAuthorWithProfile(selectedAuthor, profileId, options?.follow)
           }
-          showAddBooksOption
+          showFollowOption
         />
 
         <AddMediaDialog

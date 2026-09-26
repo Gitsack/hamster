@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Movie from '#models/movie'
 import TvShow from '#models/tv_show'
 import Artist from '#models/artist'
+import Album from '#models/album'
 import Book from '#models/book'
 import vine from '@vinejs/vine'
 
@@ -127,12 +128,16 @@ export default class BulkController {
             await artist.delete()
             break
           case 'request':
-            artist.requested = true
-            await artist.save()
-            break
+            // An artist is not a request; albums are. Asking for "everything
+            // by this artist" is exactly how whole discographies got queued.
+            throw new Error(`${artist.name}: request albums individually`)
           case 'unrequest':
-            artist.requested = false
-            await artist.save()
+            // Drop every outstanding album request for the artist. Albums
+            // already on disk are unaffected.
+            await Album.query()
+              .where('artistId', artist.id)
+              .where('requested', true)
+              .update({ requested: false })
             break
           case 'updateQualityProfile':
             artist.qualityProfileId = qpId!

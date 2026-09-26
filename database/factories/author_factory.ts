@@ -10,7 +10,6 @@ export class AuthorFactory {
       goodreadsId: string | null
       openlibraryId: string | null
       overview: string | null
-      requested: boolean
       monitored: boolean
       qualityProfileId: string | null
       rootFolderId: string | null
@@ -23,8 +22,7 @@ export class AuthorFactory {
       goodreadsId: overrides.goodreadsId ?? null,
       openlibraryId: overrides.openlibraryId ?? null,
       overview: overrides.overview ?? null,
-      requested: overrides.requested ?? false,
-      monitored: overrides.monitored ?? true,
+      monitored: overrides.monitored ?? false,
       needsReview: false,
       qualityProfileId: overrides.qualityProfileId ?? null,
       rootFolderId: overrides.rootFolderId ?? null,

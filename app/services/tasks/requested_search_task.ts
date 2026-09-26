@@ -15,6 +15,7 @@ import {
 } from '#services/quality/quality_scorer'
 import type { MediaType } from '#services/quality/quality_parser'
 import { DateTime } from 'luxon'
+import { isAlbumRelease, isBookRelease } from '#utils/release_match'
 
 /**
  * Guard conditions grab() raises to decline a release.
@@ -197,6 +198,25 @@ function filterMovieResultsByTitle(
   return results.filter((result) =>
     titles.some((title) => doesMovieReleaseTitleMatch(result.title, title))
   )
+}
+
+/**
+ * Keep only releases that are this album and nothing more. The indexer query is
+ * "artist + album", and its biggest, best-quality hit is routinely the artist's
+ * whole discography — grabbing that imports the catalogue into one album.
+ */
+function filterAlbumResults(results: UnifiedSearchResult[], album: Album): UnifiedSearchResult[] {
+  return results.filter((r) => isAlbumRelease(r.title, album.artist?.name, album.title))
+}
+
+/** The book equivalent: no box sets, omnibus editions or series packs. */
+function filterBookResults(results: UnifiedSearchResult[], book: Book): UnifiedSearchResult[] {
+  return results.filter((r) => isBookRelease(r.title, book.author?.name, book.title))
+}
+
+/** Why nothing was grabbed when the title filter emptied the list. */
+function noMatchingReleaseReason(total: number, kind: 'album' | 'book'): string {
+  return `${total} results found, but none were this ${kind} alone (discographies, collections and other titles are skipped)`
 }
 
 export interface RedownloadOptions {
@@ -486,16 +506,19 @@ class RequestedSearchTask {
           artist: album.artist?.name,
           album: album.title,
           year: album.releaseDate?.year,
-          limit: 10,
+          limit: 25,
         })
 
-        // Filter out blacklisted releases
-        const availableResults = await blacklistService.filterBlacklisted(searchResults)
+        // Only this album — never a discography or collection pack — and
+        // nothing blacklisted.
+        const availableResults = await blacklistService.filterBlacklisted(
+          filterAlbumResults(searchResults, album)
+        )
 
         if (availableResults.length === 0) {
           logger.debug(
-            { artist: album.artist?.name, album: album.title },
-            'RequestedSearch: No results for album'
+            { artist: album.artist?.name, album: album.title, totalResults: searchResults.length },
+            'RequestedSearch: No matching results for album'
           )
           continue
         }
@@ -725,16 +748,17 @@ class RequestedSearchTask {
         const searchResults = await indexerManager.searchBooks({
           title: book.title,
           author: book.author?.name,
-          limit: 10,
+          limit: 25,
         })
 
-        // Filter out blacklisted releases
-        const availableResults = await blacklistService.filterBlacklisted(searchResults)
+        const availableResults = await blacklistService.filterBlacklisted(
+          filterBookResults(searchResults, book)
+        )
 
         if (availableResults.length === 0) {
           logger.debug(
-            { book: book.title, author: book.author?.name },
-            'RequestedSearch: No results for book'
+            { book: book.title, author: book.author?.name, totalResults: searchResults.length },
+            'RequestedSearch: No matching results for book'
           )
           continue
         }
@@ -1050,11 +1074,19 @@ class RequestedSearchTask {
         artist: album.artist?.name,
         album: album.title,
         year: album.releaseDate?.year,
-        limit: 10,
+        limit: 25,
       })
 
-      // Filter out blacklisted releases
-      const availableResults = await blacklistService.filterBlacklisted(searchResults)
+      const matchingResults = filterAlbumResults(searchResults, album)
+      if (searchResults.length > 0 && matchingResults.length === 0) {
+        return {
+          found: false,
+          grabbed: false,
+          error: noMatchingReleaseReason(searchResults.length, 'album'),
+        }
+      }
+
+      const availableResults = await blacklistService.filterBlacklisted(matchingResults)
 
       if (availableResults.length === 0) {
         const indexerNames = [...new Set(searchResults.map((r) => r.indexer))]
@@ -1063,7 +1095,7 @@ class RequestedSearchTask {
           grabbed: false,
           error:
             searchResults.length > 0
-              ? `Found ${searchResults.length} results from ${indexerNames.join(', ')} but all were blacklisted`
+              ? `Found ${matchingResults.length} results from ${indexerNames.join(', ')} but all were blacklisted`
               : undefined,
         }
       }
@@ -1392,11 +1424,19 @@ class RequestedSearchTask {
       const searchResults = await indexerManager.searchBooks({
         title: book.title,
         author: book.author?.name,
-        limit: 10,
+        limit: 25,
       })
 
-      // Filter out blacklisted releases
-      const availableResults = await blacklistService.filterBlacklisted(searchResults)
+      const matchingResults = filterBookResults(searchResults, book)
+      if (searchResults.length > 0 && matchingResults.length === 0) {
+        return {
+          found: false,
+          grabbed: false,
+          error: noMatchingReleaseReason(searchResults.length, 'book'),
+        }
+      }
+
+      const availableResults = await blacklistService.filterBlacklisted(matchingResults)
 
       if (availableResults.length === 0) {
         return { found: false, grabbed: false }
@@ -1646,8 +1686,38 @@ class RequestedSearchTask {
     book: Book,
     results: UnifiedSearchResult[]
   ): Promise<ReleaseSelection> {
+    const matching = filterBookResults(results, book)
+    if (results.length > 0 && matching.length === 0) {
+      return {
+        release: null,
+        reason: noMatchingReleaseReason(results.length, 'book'),
+        rejected: results.length,
+      }
+    }
     const profile = await loadQualityProfile(book.author?.qualityProfileId ?? null)
-    return selectRelease(results, 'books', profile)
+    return selectRelease(matching, 'books', profile)
+  }
+
+  /**
+   * Select the best release for an album: this album only, ranked by the
+   * artist's quality profile. `album.artist` must be preloaded.
+   */
+  async selectBestReleaseForAlbum(
+    album: Album,
+    results: UnifiedSearchResult[],
+    /** Off for a single-track search, whose releases are named after the track. */
+    options: { titleCheck?: boolean } = {}
+  ): Promise<ReleaseSelection> {
+    const matching = options.titleCheck === false ? results : filterAlbumResults(results, album)
+    if (results.length > 0 && matching.length === 0) {
+      return {
+        release: null,
+        reason: noMatchingReleaseReason(results.length, 'album'),
+        rejected: results.length,
+      }
+    }
+    const profile = await loadQualityProfile(album.artist?.qualityProfileId ?? null)
+    return selectRelease(matching, 'music', profile)
   }
 
   /**

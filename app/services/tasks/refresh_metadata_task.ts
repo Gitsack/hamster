@@ -4,7 +4,6 @@ import Episode from '#models/episode'
 import Artist from '#models/artist'
 import Album from '#models/album'
 import Author from '#models/author'
-import Book from '#models/book'
 import Movie from '#models/movie'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import { musicBrainzService } from '#services/metadata/musicbrainz_service'
@@ -12,6 +11,8 @@ import { coverArtService } from '#services/metadata/cover_art_service'
 import { openLibraryService } from '#services/metadata/openlibrary_service'
 import { type AlbumType } from '#models/album'
 import { DateTime } from 'luxon'
+import { shouldRequestNewAlbum } from '#services/library/release_follow'
+import { addAuthorWorks } from '#services/library/author_works'
 
 const LOG_PREFIX = '[RefreshMetadata]'
 
@@ -294,15 +295,19 @@ class RefreshMetadataTask {
           } else {
             const albumType = this.mapAlbumType(mbAlbum.primaryType)
             const coverUrl = coverArtService.getFrontCoverUrl(mbAlbum.id, '500')
+            const releaseDate = mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null
+            const secondaryTypes = mbAlbum.secondaryTypes || []
+            // A followed artist's new album is wanted by default, like a
+            // monitored show's new season. The back catalogue never is.
             await Album.create({
               artistId: artist.id,
               musicbrainzReleaseGroupId: mbAlbum.id,
               title: mbAlbum.title,
               albumType,
-              secondaryTypes: mbAlbum.secondaryTypes || [],
-              releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
+              secondaryTypes,
+              releaseDate,
               imageUrl: coverUrl,
-              requested: false,
+              requested: shouldRequestNewAlbum(artist, { releaseDate, albumType, secondaryTypes }),
               anyReleaseOk: true,
             })
           }
@@ -362,27 +367,7 @@ class RefreshMetadataTask {
           await author.save()
         }
 
-        const works = await openLibraryService.getAuthorWorks(author.openlibraryId!, 100)
-        const existingBooks = await Book.query()
-          .where('authorId', author.id)
-          .select('openlibraryId')
-        const existingKeys = new Set(existingBooks.map((b) => b.openlibraryId))
-
-        for (const work of works) {
-          if (!existingKeys.has(work.key)) {
-            await Book.create({
-              authorId: author.id,
-              openlibraryId: work.key,
-              title: work.title,
-              sortTitle: work.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
-              overview: work.description,
-              coverUrl: openLibraryService.getCoverUrl(work.coverId, 'L'),
-              genres: work.subjects || [],
-              requested: false,
-              hasFile: false,
-            })
-          }
-        }
+        await addAuthorWorks(author)
 
         console.log(`${LOG_PREFIX} Refreshed author: ${author.name}`)
         await delay(1000)

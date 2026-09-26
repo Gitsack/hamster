@@ -14,7 +14,6 @@ test.group('BooksController', (group) => {
     author = await Author.create({
       name: 'Books Test Author',
       sortName: 'Test Author, Books',
-      requested: true,
       monitored: false,
       needsReview: false,
       addedAt: DateTime.now(),
@@ -397,7 +396,7 @@ test.group('BooksController', (group) => {
     await wantedBook.delete()
   })
 
-  test('setWanted deletes unrequested book without file', async ({ assert }) => {
+  test('setWanted unrequests a book without file but keeps it', async ({ assert }) => {
     const unwantedBook = await BookFactory.create({
       authorId: author.id,
       title: 'Books Test Unwanted',
@@ -423,10 +422,12 @@ test.group('BooksController', (group) => {
       },
     } as never)
 
-    assert.equal(result.deleted, true)
+    assert.equal(result.requested, false)
 
-    const deleted = await Book.find(bookId)
-    assert.isNull(deleted)
+    // Still in the author's bibliography, ready to be requested again
+    const kept = await Book.findOrFail(bookId)
+    assert.isFalse(kept.requested)
+    await kept.delete()
   })
 
   test('setWanted returns badRequest when unrequesting book with file', async ({ assert }) => {

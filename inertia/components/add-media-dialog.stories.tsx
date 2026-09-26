@@ -67,7 +67,7 @@ export const AuthorWithBooks: Story = {
     mediaType: 'author',
     title: 'Frank Herbert',
     description: 'Add this author to your library.',
-    showAddBooksOption: true,
+    showFollowOption: true,
   },
 }
 

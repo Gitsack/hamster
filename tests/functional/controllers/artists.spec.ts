@@ -13,7 +13,6 @@ test.group('ArtistsController', (group) => {
       sortName: 'Artists Test Alpha',
       musicbrainzId: '00000000-0000-0000-0000-000000000001',
       status: 'continuing',
-      requested: true,
       monitored: true,
     })
     artist2 = await ArtistFactory.create({
@@ -21,7 +20,6 @@ test.group('ArtistsController', (group) => {
       sortName: 'Artists Test Beta',
       musicbrainzId: '00000000-0000-0000-0000-000000000002',
       status: 'ended',
-      requested: false,
       monitored: false,
     })
   })
@@ -45,10 +43,11 @@ test.group('ArtistsController', (group) => {
       },
     } as never)
 
-    assert.isTrue(result.length >= 2)
+    // Alpha is followed, so it is in the library. Beta has nothing requested,
+    // nothing downloaded and is not followed: browsing an artist is not adding it.
     const names = result.map((a: any) => a.name)
     assert.include(names, 'Artists Test Alpha')
-    assert.include(names, 'Artists Test Beta')
+    assert.notInclude(names, 'Artists Test Beta')
   })
 
   test('index returns expected artist shape', async ({ assert }) => {
@@ -68,8 +67,10 @@ test.group('ArtistsController', (group) => {
     assert.equal(artist.name, 'Artists Test Alpha')
     assert.equal(artist.musicbrainzId, '00000000-0000-0000-0000-000000000001')
     assert.equal(artist.status, 'continuing')
-    assert.equal(artist.requested, true)
+    assert.notProperty(artist, 'requested')
     assert.equal(artist.monitored, true)
+    assert.equal(artist.requestedAlbumCount, 0)
+    assert.equal(artist.ownedAlbumCount, 0)
   })
 
   // ---- show ----
@@ -121,7 +122,6 @@ test.group('ArtistsController', (group) => {
       params: { id: artist2.id },
       request: {
         validateUsing: async () => ({
-          requested: true,
           monitored: true,
         }),
       },
@@ -134,17 +134,17 @@ test.group('ArtistsController', (group) => {
     } as never)
 
     assert.equal(result.id, artist2.id)
-    assert.equal(result.requested, true)
     assert.equal(result.monitored, true)
+    assert.isString(result.monitoredAt)
 
-    // Verify in database
+    // Verify in database: following starts now
     await artist2.refresh()
-    assert.equal(artist2.requested, true)
     assert.equal(artist2.monitored, true)
+    assert.isNotNull(artist2.monitoredAt)
 
     // Reset
-    artist2.requested = false
     artist2.monitored = false
+    artist2.monitoredAt = null
     await artist2.save()
   })
 
@@ -156,7 +156,7 @@ test.group('ArtistsController', (group) => {
       params: { id: '00000000-0000-0000-0000-000000000000' },
       request: {
         validateUsing: async () => ({
-          requested: true,
+          monitored: true,
         }),
       },
       response: {

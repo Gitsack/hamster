@@ -95,7 +95,7 @@ function setupFetchMock(
     movies?: any[]
     artists?: any[]
     tvShows?: any[]
-    authors?: any[]
+    books?: any[]
     queue?: any[]
   } = {}
 ) {
@@ -104,7 +104,7 @@ function setupFetchMock(
     movies = [],
     artists = [],
     tvShows = [],
-    authors = [],
+    books = [],
     queue = [],
   } = options
 
@@ -114,7 +114,7 @@ function setupFetchMock(
     if (url === '/api/v1/movies') return Promise.resolve(moviesResponse(movies))
     if (url === '/api/v1/artists') return Promise.resolve(moviesResponse(artists))
     if (url === '/api/v1/tvshows') return Promise.resolve(moviesResponse(tvShows))
-    if (url === '/api/v1/authors') return Promise.resolve(moviesResponse(authors))
+    if (url === '/api/v1/books?library=1') return Promise.resolve(moviesResponse(books))
     return Promise.resolve(emptyOkResponse())
   })
   global.fetch = fetchMock

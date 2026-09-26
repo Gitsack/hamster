@@ -12,7 +12,8 @@ import TrackFile from '#models/track_file'
 /**
  * Service for handling cascade removal logic when items are removed from library.
  *
- * Core principle: "In library" = "requested OR hasFile"
+ * Core principle: "In library" = "requested OR hasFile" (or, for an artist or
+ * author, followed for new releases)
  * - When the last child is removed (unrequested and no file), the parent should be removed too
  */
 class LibraryCleanupService {
@@ -23,6 +24,10 @@ class LibraryCleanupService {
   async removeArtistIfEmpty(artistId: string): Promise<boolean> {
     const artist = await Artist.find(artistId)
     if (!artist) return false
+
+    // A followed artist stays: following is a reason to be in the library on
+    // its own, like a monitored show with nothing aired yet.
+    if (artist.monitored) return false
 
     // Check if any albums are requested
     const requestedAlbums = await Album.query()
@@ -65,6 +70,8 @@ class LibraryCleanupService {
   async removeAuthorIfEmpty(authorId: string): Promise<boolean> {
     const author = await Author.find(authorId)
     if (!author) return false
+
+    if (author.monitored) return false
 
     // Check if any books are requested
     const requestedBooks = await Book.query()

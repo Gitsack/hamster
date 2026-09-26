@@ -449,7 +449,6 @@ export class BookScannerService {
       sortName: this.generateSortName(olAuthor.name),
       openlibraryId: olAuthor.key,
       imageUrl: openLibraryService.getAuthorPhotoUrl(olAuthor.photoId, 'L'),
-      requested: false,
       needsReview: false,
       rootFolderId,
       addedAt: DateTime.now(),
@@ -463,7 +462,6 @@ export class BookScannerService {
     return Author.create({
       name,
       sortName: this.generateSortName(name),
-      requested: false,
       needsReview: true,
       rootFolderId,
       addedAt: DateTime.now(),

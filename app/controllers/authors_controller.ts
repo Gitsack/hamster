@@ -4,6 +4,7 @@ import Book from '#models/book'
 import vine from '@vinejs/vine'
 import { DateTime } from 'luxon'
 import { openLibraryService } from '#services/metadata/openlibrary_service'
+import { addAuthorWorks } from '#services/library/author_works'
 
 const authorValidator = vine.compile(
   vine.object({
@@ -11,33 +12,51 @@ const authorValidator = vine.compile(
     name: vine.string().minLength(1),
     qualityProfileId: vine.string().optional(),
     rootFolderId: vine.string(),
-    requested: vine.boolean().optional(),
+    /** Follow new releases. Adding an author never requests their existing books. */
     monitored: vine.boolean().optional(),
-    addBooks: vine.boolean().optional(),
   })
 )
 
 export default class AuthorsController {
+  /**
+   * Authors in the library: those with a requested or downloaded book, or
+   * followed for new releases.
+   */
   async index({ response }: HttpContext) {
     const authors = await Author.query()
+      .where((query) => {
+        query.where('monitored', true).orWhereHas('books', (books) => {
+          books.where('requested', true).orWhere('hasFile', true)
+        })
+      })
       .preload('qualityProfile')
       .preload('rootFolder')
-      .withCount('books')
+      .withCount('books', (query) => {
+        query.where('hasFile', true).as('owned_books_count')
+      })
+      .withCount('books', (query) => {
+        query.where('requested', true).where('hasFile', false).as('requested_books_count')
+      })
       .orderBy('sortName', 'asc')
 
     return response.json(
-      authors.map((author) => ({
-        id: author.id,
-        name: author.name,
-        overview: author.overview,
-        imageUrl: author.imageUrl,
-        requested: author.requested,
-        monitored: author.monitored,
-        bookCount: author.$extras.books_count,
-        qualityProfile: author.qualityProfile?.name,
-        rootFolder: author.rootFolder?.path,
-        addedAt: author.addedAt?.toISO(),
-      }))
+      authors.map((author) => {
+        const ownedBookCount = Number(author.$extras.owned_books_count) || 0
+        const requestedBookCount = Number(author.$extras.requested_books_count) || 0
+        return {
+          id: author.id,
+          name: author.name,
+          overview: author.overview,
+          imageUrl: author.imageUrl,
+          monitored: author.monitored,
+          ownedBookCount,
+          requestedBookCount,
+          bookCount: ownedBookCount + requestedBookCount,
+          qualityProfile: author.qualityProfile?.name,
+          rootFolder: author.rootFolder?.path,
+          addedAt: author.addedAt?.toISO(),
+        }
+      })
     )
   }
 
@@ -84,8 +103,8 @@ export default class AuthorsController {
     let authorData: any = {
       name: data.name,
       sortName: data.name.split(' ').reverse().join(', '),
-      requested: data.requested ?? true,
-      monitored: data.monitored ?? true,
+      monitored: data.monitored ?? false,
+      monitoredAt: data.monitored ? DateTime.now() : null,
       qualityProfileId: data.qualityProfileId,
       rootFolderId: data.rootFolderId,
       addedAt: DateTime.now(),
@@ -117,28 +136,12 @@ export default class AuthorsController {
       return response.internalServerError({ error: 'Failed to add author' })
     }
 
-    // Fetch and add books if requested
-    if (data.addBooks && data.openlibraryId) {
-      try {
-        const works = await openLibraryService.getAuthorWorks(data.openlibraryId)
-
-        for (const work of works.slice(0, 50)) {
-          // Limit to 50 books
-          await Book.create({
-            authorId: author.id,
-            openlibraryId: work.key,
-            title: work.title,
-            sortTitle: work.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
-            overview: work.description,
-            coverUrl: openLibraryService.getCoverUrl(work.coverId, 'L'),
-            genres: work.subjects || [],
-            requested: data.requested ?? true,
-            hasFile: false,
-          })
-        }
-      } catch (error) {
-        console.error('Failed to fetch books:', error)
-      }
+    // Load the bibliography so books can be requested one at a time. Nothing
+    // already published is requested here.
+    try {
+      await addAuthorWorks(author)
+    } catch (error) {
+      console.error('Failed to fetch books:', error)
     }
 
     return response.created({
@@ -167,8 +170,8 @@ export default class AuthorsController {
       name: author.name,
       overview: author.overview,
       imageUrl: author.imageUrl,
-      requested: author.requested,
       monitored: author.monitored,
+      monitoredAt: author.monitoredAt?.toISO() ?? null,
       qualityProfile: author.qualityProfile,
       rootFolder: author.rootFolder,
       books: author.books.map((b) => ({
@@ -191,15 +194,17 @@ export default class AuthorsController {
       return response.notFound({ error: 'Author not found' })
     }
 
-    const { requested, monitored, qualityProfileId, rootFolderId } = request.only([
-      'requested',
+    const { monitored, qualityProfileId, rootFolderId } = request.only([
       'monitored',
       'qualityProfileId',
       'rootFolderId',
     ])
 
-    if (requested !== undefined) author.requested = requested
-    if (monitored !== undefined) author.monitored = monitored
+    // Following starts now and never reaches back into the bibliography.
+    if (typeof monitored === 'boolean' && monitored !== author.monitored) {
+      author.monitored = monitored
+      author.monitoredAt = monitored ? DateTime.now() : null
+    }
     if (qualityProfileId !== undefined) author.qualityProfileId = qualityProfileId
     if (rootFolderId !== undefined) author.rootFolderId = rootFolderId
 
@@ -208,8 +213,8 @@ export default class AuthorsController {
     return response.json({
       id: author.id,
       name: author.name,
-      requested: author.requested,
       monitored: author.monitored,
+      monitoredAt: author.monitoredAt?.toISO() ?? null,
     })
   }
 
@@ -293,34 +298,13 @@ export default class AuthorsController {
         await author.save()
       }
 
-      // Fetch and add new works
-      const works = await openLibraryService.getAuthorWorks(author.openlibraryId, 100)
-      const existingBooks = await Book.query().where('authorId', author.id).select('openlibraryId')
-      const existingKeys = new Set(existingBooks.map((b) => b.openlibraryId))
-
-      let addedCount = 0
-      for (const work of works) {
-        if (!existingKeys.has(work.key)) {
-          await Book.create({
-            authorId: author.id,
-            openlibraryId: work.key,
-            title: work.title,
-            sortTitle: work.title.toLowerCase().replace(/^(the|a|an)\s+/i, ''),
-            overview: work.description,
-            coverUrl: openLibraryService.getCoverUrl(work.coverId, 'L'),
-            genres: work.subjects || [],
-            requested: author.monitored, // Auto-request if author is monitored
-            hasFile: false,
-          })
-          addedCount++
-        }
-      }
+      const added = await addAuthorWorks(author)
 
       return response.json({
         id: author.id,
         name: author.name,
         refreshed: true,
-        booksAdded: addedCount,
+        booksAdded: added.length,
       })
     } catch (error) {
       console.error(`Failed to refresh author ${author.id}:`, error)

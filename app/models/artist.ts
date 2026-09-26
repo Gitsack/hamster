@@ -44,11 +44,16 @@ export default class Artist extends BaseModel {
   @column()
   declare imageUrl: string | null
 
+  /**
+   * Follow new releases: albums/books that come out after `monitoredAt` are
+   * requested automatically. Never the back catalogue — that is requested one
+   * item at a time.
+   */
   @column()
   declare monitored: boolean
 
-  @column()
-  declare requested: boolean
+  @column.dateTime()
+  declare monitoredAt: DateTime | null
 
   @column()
   declare needsReview: boolean

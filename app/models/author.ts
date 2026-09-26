@@ -31,11 +31,17 @@ export default class Author extends BaseModel {
   declare imageUrl: string | null
 
   // Library status
-  @column()
-  declare requested: boolean
 
+  /**
+   * Follow new releases: albums/books that come out after `monitoredAt` are
+   * requested automatically. Never the back catalogue — that is requested one
+   * item at a time.
+   */
   @column()
   declare monitored: boolean
+
+  @column.dateTime()
+  declare monitoredAt: DateTime | null
 
   @column()
   declare needsReview: boolean

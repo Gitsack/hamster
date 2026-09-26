@@ -33,12 +33,12 @@ export interface AddMediaDialogProps {
   qualityProfiles: QualityProfile[]
   loading?: boolean
   adding?: boolean
-  onAdd: (qualityProfileId: string, options?: { addBooks?: boolean }) => void
+  onAdd: (qualityProfileId: string, options?: { follow?: boolean }) => void
   // TV show specific
   episodeSelectionSummary?: React.ReactNode
   onChangeEpisodeSelection?: () => void
-  // Author specific
-  showAddBooksOption?: boolean
+  // Artist / author: opt in to requesting new releases automatically
+  showFollowOption?: boolean
 }
 
 const mediaTypeLabels: Record<MediaType, string> = {
@@ -62,10 +62,10 @@ export function AddMediaDialog({
   onAdd,
   episodeSelectionSummary,
   onChangeEpisodeSelection,
-  showAddBooksOption = false,
+  showFollowOption = false,
 }: AddMediaDialogProps) {
   const [selectedQualityProfile, setSelectedQualityProfile] = useState<string>('')
-  const [addBooks, setAddBooks] = useState(true)
+  const [follow, setFollow] = useState(false)
 
   // Set default profile when dialog opens
   useEffect(() => {
@@ -76,7 +76,7 @@ export function AddMediaDialog({
 
   const handleAdd = () => {
     if (!selectedQualityProfile) return
-    onAdd(selectedQualityProfile, { addBooks })
+    onAdd(selectedQualityProfile, { follow })
   }
 
   return (
@@ -129,16 +129,23 @@ export function AddMediaDialog({
                 )}
               </div>
             )}
-            {showAddBooksOption && (
-              <div className="flex items-center gap-2">
+            {showFollowOption && (
+              <div className="flex items-start gap-2">
                 <Checkbox
-                  id="addBooks"
-                  checked={addBooks}
-                  onCheckedChange={(c) => setAddBooks(c as boolean)}
+                  id="follow"
+                  checked={follow}
+                  onCheckedChange={(c) => setFollow(c as boolean)}
+                  className="mt-0.5"
                 />
-                <Label htmlFor="addBooks" className="font-normal cursor-pointer">
-                  Also add author's books
-                </Label>
+                <div className="space-y-0.5">
+                  <Label htmlFor="follow" className="font-normal cursor-pointer">
+                    Follow new releases
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Requests new {mediaType === 'author' ? 'books' : 'albums'} as they come out.
+                    Nothing already released is requested — pick those yourself.
+                  </p>
+                </div>
               </div>
             )}
           </div>

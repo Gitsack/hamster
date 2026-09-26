@@ -6,20 +6,20 @@ import vine from '@vinejs/vine'
 import { musicBrainzService } from '#services/metadata/musicbrainz_service'
 import { coverArtService } from '#services/metadata/cover_art_service'
 import { DateTime } from 'luxon'
+import { shouldRequestNewAlbum } from '#services/library/release_follow'
 
 const addArtistValidator = vine.compile(
   vine.object({
     musicbrainzId: vine.string(),
     rootFolderId: vine.string().optional(),
     qualityProfileId: vine.string(),
-    requested: vine.boolean().optional(),
+    /** Follow new releases. Nothing already released is ever requested by adding an artist. */
     monitored: vine.boolean().optional(),
   })
 )
 
 const updateArtistValidator = vine.compile(
   vine.object({
-    requested: vine.boolean().optional(),
     monitored: vine.boolean().optional(),
     qualityProfileId: vine.string().optional(),
     rootFolderId: vine.string().optional(),
@@ -28,39 +28,62 @@ const updateArtistValidator = vine.compile(
 
 export default class ArtistsController {
   /**
-   * List all artists in the library
+   * List the artists in the library.
+   *
+   * An artist is a container, like a show: it is in the library when at least
+   * one of its albums is requested or on disk, or when it is followed for new
+   * releases. An artist whose discography was merely browsed is not.
    */
   async index({ response }: HttpContext) {
     const artists = await Artist.query()
+      .where((query) => {
+        query.where('monitored', true).orWhereHas('albums', (albums) => {
+          albums.where('requested', true).orWhereHas('trackFiles', () => {})
+        })
+      })
       .preload('qualityProfile')
       .preload('rootFolder')
       .preload('albums', (query) => {
         query.whereNotNull('imageUrl').orderBy('releaseDate', 'desc').limit(1)
       })
-      .withCount('albums')
+      .withCount('albums', (query) => {
+        query.whereHas('trackFiles', () => {}).as('owned_albums_count')
+      })
+      .withCount('albums', (query) => {
+        query.where('requested', true).as('requested_albums_count')
+      })
       .orderBy('sortName', 'asc')
 
     return response.json(
-      artists.map((artist) => ({
-        id: artist.id,
-        name: artist.name,
-        sortName: artist.sortName,
-        musicbrainzId: artist.musicbrainzId,
-        status: artist.status,
-        artistType: artist.artistType,
-        country: artist.country,
-        // Use artist image if available, otherwise use first album cover
-        imageUrl: artist.imageUrl || artist.albums[0]?.imageUrl || null,
-        requested: artist.requested,
-        monitored: artist.monitored,
-        albumCount: (artist.$extras as { albums_count?: string }).albums_count || 0,
-        qualityProfile: artist.qualityProfile
-          ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
-          : null,
-        rootFolder: artist.rootFolder
-          ? { id: artist.rootFolder.id, path: artist.rootFolder.path }
-          : null,
-      }))
+      artists.map((artist) => {
+        const extras = artist.$extras as {
+          owned_albums_count?: string | number
+          requested_albums_count?: string | number
+        }
+        const ownedAlbumCount = Number(extras.owned_albums_count) || 0
+        const requestedAlbumCount = Number(extras.requested_albums_count) || 0
+        return {
+          id: artist.id,
+          name: artist.name,
+          sortName: artist.sortName,
+          musicbrainzId: artist.musicbrainzId,
+          status: artist.status,
+          artistType: artist.artistType,
+          country: artist.country,
+          // Use artist image if available, otherwise use first album cover
+          imageUrl: artist.imageUrl || artist.albums[0]?.imageUrl || null,
+          monitored: artist.monitored,
+          ownedAlbumCount,
+          requestedAlbumCount,
+          albumCount: ownedAlbumCount + requestedAlbumCount,
+          qualityProfile: artist.qualityProfile
+            ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
+            : null,
+          rootFolder: artist.rootFolder
+            ? { id: artist.rootFolder.id, path: artist.rootFolder.path }
+            : null,
+        }
+      })
     )
   }
 
@@ -96,6 +119,7 @@ export default class ArtistsController {
           musicbrainzId: album.musicbrainzReleaseGroupId, // Use release group ID for matching with discography
           releaseDate: album.releaseDate?.toISODate(),
           albumType: album.albumType,
+          secondaryTypes: album.secondaryTypes,
           imageUrl: album.imageUrl,
           requested: album.requested,
           trackCount: Number((trackCount[0].$extras as { total: string }).total) || 0,
@@ -117,8 +141,8 @@ export default class ArtistsController {
       formedAt: artist.formedAt?.toISODate(),
       endedAt: artist.endedAt?.toISODate(),
       imageUrl: artist.imageUrl,
-      requested: artist.requested,
       monitored: artist.monitored,
+      monitoredAt: artist.monitoredAt?.toISO() ?? null,
       qualityProfile: artist.qualityProfile
         ? { id: artist.qualityProfile.id, name: artist.qualityProfile.name }
         : null,
@@ -130,7 +154,8 @@ export default class ArtistsController {
   }
 
   /**
-   * Add a new artist from MusicBrainz
+   * Add an artist from MusicBrainz. This loads the discography so albums can be
+   * requested one by one; it requests nothing itself.
    */
   async store({ request, response }: HttpContext) {
     const data = await request.validateUsing(addArtistValidator)
@@ -158,8 +183,8 @@ export default class ArtistsController {
       country: mbArtist.country || null,
       formedAt: mbArtist.beginDate ? DateTime.fromISO(mbArtist.beginDate) : null,
       endedAt: mbArtist.endDate ? DateTime.fromISO(mbArtist.endDate) : null,
-      requested: data.requested ?? true,
-      monitored: data.monitored ?? true,
+      monitored: data.monitored ?? false,
+      monitoredAt: data.monitored ? DateTime.now() : null,
       qualityProfileId: data.qualityProfileId,
       rootFolderId: data.rootFolderId,
       addedAt: DateTime.now(),
@@ -188,9 +213,14 @@ export default class ArtistsController {
 
     const data = await request.validateUsing(updateArtistValidator)
 
+    // Following starts now: switching it on never reaches back into the
+    // catalogue, and switching it off forgets the start date.
+    if (data.monitored !== undefined && data.monitored !== artist.monitored) {
+      artist.monitored = data.monitored
+      artist.monitoredAt = data.monitored ? DateTime.now() : null
+    }
+
     artist.merge({
-      requested: data.requested ?? artist.requested,
-      monitored: data.monitored ?? artist.monitored,
       qualityProfileId: data.qualityProfileId ?? artist.qualityProfileId,
       rootFolderId: data.rootFolderId ?? artist.rootFolderId,
     })
@@ -199,8 +229,8 @@ export default class ArtistsController {
     return response.json({
       id: artist.id,
       name: artist.name,
-      requested: artist.requested,
       monitored: artist.monitored,
+      monitoredAt: artist.monitoredAt?.toISO() ?? null,
     })
   }
 
@@ -560,16 +590,19 @@ export default class ArtistsController {
             `[Enrich] Existing unmatched albums: ${unmatchedExisting.map((a) => `"${a.title}" (normalized: "${this.normalizeTitle(a.title)}")`).join(', ')}`
           )
         }
-        // Create new album
+        // Create new album. It is requested only when the artist is followed
+        // and it came out after following started.
+        const releaseDate = mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null
+        const secondaryTypes = mbAlbum.secondaryTypes || []
         await Album.create({
           artistId: artist.id,
           musicbrainzReleaseGroupId: mbAlbum.id,
           title: mbAlbum.title,
           albumType,
-          secondaryTypes: mbAlbum.secondaryTypes || [],
-          releaseDate: mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null,
+          secondaryTypes,
+          releaseDate,
           imageUrl: coverUrl,
-          requested: false,
+          requested: shouldRequestNewAlbum(artist, { releaseDate, albumType, secondaryTypes }),
           anyReleaseOk: true,
         })
       }

@@ -135,6 +135,28 @@ export class OpenLibraryService {
     }
   }
 
+  /**
+   * First publication year of each of an author's works, keyed by work key
+   * ("/works/OL…W"). The works endpoint does not carry dates; the search index
+   * does. Used to tell a new book from an old one newly catalogued.
+   */
+  async getAuthorWorkYears(authorKey: string, limit = 200): Promise<Map<string, number>> {
+    const cleanKey = authorKey.replace(/^\/authors\//, '')
+    const url = `${OPENLIBRARY_API}/search.json?author_key=${encodeURIComponent(cleanKey)}&fields=key,first_publish_year&limit=${limit}`
+    try {
+      const data = await this.fetch(url)
+      const years = new Map<string, number>()
+      for (const doc of data.docs ?? []) {
+        if (doc.key && typeof doc.first_publish_year === 'number') {
+          years.set(doc.key, doc.first_publish_year)
+        }
+      }
+      return years
+    } catch {
+      return new Map()
+    }
+  }
+
   async getBook(key: string): Promise<OpenLibraryBook | null> {
     const cacheKey = `ol:book:${key}`
     const cached = cache.get<OpenLibraryBook | null>(cacheKey)
