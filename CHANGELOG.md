@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.2](https://github.com/Gitsack/hamster/compare/hamster-v1.35.1...hamster-v1.35.2) (2026-09-26)
+
+
+### Bug Fixes
+
+* **search:** grab TV releases that carry the show's year ([7145697](https://github.com/Gitsack/hamster/commit/71456972ad68cdc8edc1dcb3579fe7867e246c40))
+
 ## [1.35.1](https://github.com/Gitsack/hamster/compare/hamster-v1.35.0...hamster-v1.35.1) (2026-09-26)
 
 
