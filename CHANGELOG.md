@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.1](https://github.com/Gitsack/hamster/compare/hamster-v1.36.0...hamster-v1.36.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **downloads:** wait for a completed job's folder before failing it ([f248874](https://github.com/Gitsack/hamster/commit/f248874da92c67008bf149e33e49001523e2de4b))
+
 ## [1.36.0](https://github.com/Gitsack/hamster/compare/hamster-v1.35.2...hamster-v1.36.0) (2026-09-26)
 
 
