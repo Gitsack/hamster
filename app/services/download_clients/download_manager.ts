@@ -79,6 +79,17 @@ const UNCONFIRMED_GRAB_TTL_MINUTES = 30
 // network share, and one early look used to fail a finished download for good.
 export const PATH_MISS_GRACE_MS = 5 * 60 * 1000
 
+// How long an import may run before we treat its promise as hung and allow a
+// fresh attempt. Imports remux multi-GB files onto a network share, so this is
+// a backstop for real hangs, not a timeout: an import that is merely slow must
+// never be run twice, because both attempts write the same output file.
+export const IMPORT_HUNG_MS = 3 * 60 * 60 * 1000
+
+/** Whether an import that started at `startedAt` has run past the hang backstop. */
+export function isImportHung(startedAt: number | undefined, now: number): boolean {
+  return startedAt !== undefined && now - startedAt >= IMPORT_HUNG_MS
+}
+
 /**
  * Decide what a failed path check means: still inside the grace window (wait
  * and look again next poll) or past it (the path is genuinely wrong).
@@ -132,8 +143,9 @@ export class DownloadManager {
   // How long to wait for an indexer to hand us the NZB before giving up.
   private readonly NZB_FETCH_TIMEOUT = 30000
 
-  // Track downloads currently being imported to prevent parallel imports
-  private importsInFlight = new Set<string>()
+  // Track downloads currently being imported, with when each import started,
+  // to prevent parallel imports
+  private importsInFlight = new Map<string, number>()
 
   // Track import attempt counts to prevent infinite retries
   private importAttempts = new Map<string, number>()
@@ -1253,7 +1265,7 @@ export class DownloadManager {
                 const attempts = this.importAttempts.get(download.id) || 0
                 const maxRetriesExceeded = attempts >= DownloadManager.MAX_IMPORT_ATTEMPTS
 
-                if (maxRetriesExceeded && download.status === 'importing') {
+                if (maxRetriesExceeded && download.status === 'importing' && !isInFlight) {
                   logger.error(
                     { title: download.title, attempts },
                     'DownloadManager: Max import retries exceeded, marking as failed'
@@ -1266,13 +1278,14 @@ export class DownloadManager {
                   continue
                 }
 
-                // If stuck for > 2 minutes and still marked as in-flight, the import
-                // promise likely hung (e.g. unresponsive file I/O). Clear the stale
-                // flag so the retry can proceed.
-                if (isStuck && isInFlight) {
+                // An import still in flight is left alone, however long it takes: a
+                // retry would start a second remux writing the same output file. Only
+                // past the hang backstop do we assume the promise is lost and let a
+                // fresh attempt run.
+                if (isInFlight && isImportHung(this.importsInFlight.get(download.id), Date.now())) {
                   logger.warn(
                     { title: download.title, attempts },
-                    'DownloadManager: Clearing stale in-flight flag for stuck import'
+                    'DownloadManager: Clearing in-flight flag for an import that looks hung'
                   )
                   this.importsInFlight.delete(download.id)
                   isInFlight = false
@@ -1280,9 +1293,9 @@ export class DownloadManager {
 
                 // Trigger import if:
                 // - outputPath not yet set (first detection), OR
-                // - import is stuck (status='importing' for >2 min), OR
+                // - import is stuck (status='importing' for >2 min) with nothing running, OR
                 // - status is 'importing' but no import is running (e.g. after server restart)
-                // ...and no import is currently in-flight
+                // ...and never while an import is in flight
                 const needsImport =
                   !download.outputPath ||
                   isStuck ||
@@ -1435,7 +1448,7 @@ export class DownloadManager {
                 if (shouldTriggerImport) {
                   const attempt = (this.importAttempts.get(download.id) || 0) + 1
                   this.importAttempts.set(download.id, attempt)
-                  this.importsInFlight.add(download.id)
+                  this.importsInFlight.set(download.id, Date.now())
 
                   logger.info(
                     { title: download.title, retry: isStuck, attempt },
@@ -2048,7 +2061,7 @@ export class DownloadManager {
       return
     }
     this.importAttempts.set(download.id, attempt)
-    this.importsInFlight.add(download.id)
+    this.importsInFlight.set(download.id, Date.now())
     try {
       await this.triggerImport(download)
     } finally {

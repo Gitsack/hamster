@@ -1,5 +1,10 @@
 import { test } from '@japa/runner'
-import { missingPathVerdict, PATH_MISS_GRACE_MS } from '#services/download_clients/download_manager'
+import {
+  IMPORT_HUNG_MS,
+  isImportHung,
+  missingPathVerdict,
+  PATH_MISS_GRACE_MS,
+} from '#services/download_clients/download_manager'
 
 // Replicate private mapSabnzbdStatus from DownloadManager
 function mapSabnzbdStatus(
@@ -144,5 +149,20 @@ test.group('DownloadManager | missingPathVerdict', () => {
 
   test('fails once the grace window has passed', ({ assert }) => {
     assert.isTrue(missingPathVerdict(1_000, 1_000 + PATH_MISS_GRACE_MS).fail)
+  })
+})
+
+test.group('DownloadManager | isImportHung', () => {
+  test('a slow import is not hung', ({ assert }) => {
+    // A 10 GB remux onto a network share takes many minutes; that is not a hang
+    assert.isFalse(isImportHung(0, 30 * 60 * 1000))
+  })
+
+  test('an import past the backstop is hung', ({ assert }) => {
+    assert.isTrue(isImportHung(0, IMPORT_HUNG_MS))
+  })
+
+  test('nothing in flight is never hung', ({ assert }) => {
+    assert.isFalse(isImportHung(undefined, IMPORT_HUNG_MS * 2))
   })
 })
