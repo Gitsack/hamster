@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.0](https://github.com/Gitsack/hamster/compare/hamster-v1.35.2...hamster-v1.36.0) (2026-09-26)
+
+
+### Features
+
+* **tvshow:** cap the downloads panel and tidy episode file rows ([7c7e37b](https://github.com/Gitsack/hamster/commit/7c7e37b7d2c40f85fc4c81a4e0774ee6edf6d981))
+
 ## [1.35.2](https://github.com/Gitsack/hamster/compare/hamster-v1.35.1...hamster-v1.35.2) (2026-09-26)
 
 
