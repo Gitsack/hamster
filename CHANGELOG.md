@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.34.0](https://github.com/Gitsack/hamster/compare/hamster-v1.33.2...hamster-v1.34.0) (2026-09-26)
+
+
+### Features
+
+* **auth:** choose the local-access account, sign in over it ([96cb6fa](https://github.com/Gitsack/hamster/commit/96cb6faf59654e1c0d93e1244daebbe77108db65))
+* **auth:** optional login-free access from the local network ([46458cd](https://github.com/Gitsack/hamster/commit/46458cdfaddb3aacb24ff92d515f01e3a406ecab))
+
+
+### Bug Fixes
+
+* **settings:** drop the local/not-local hint from the sign-in card ([78d8232](https://github.com/Gitsack/hamster/commit/78d8232efd23298e8cb6e35a02e00596b733598a))
+
 ## [1.33.2](https://github.com/Gitsack/hamster/compare/hamster-v1.33.1...hamster-v1.33.2) (2026-09-25)
 
 
