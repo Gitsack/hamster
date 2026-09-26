@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.0](https://github.com/Gitsack/hamster/compare/hamster-v1.34.0...hamster-v1.35.0) (2026-09-26)
+
+
+### Features
+
+* **library:** request albums and books one at a time ([ae5a039](https://github.com/Gitsack/hamster/commit/ae5a039bee8bee4dbeadfced722d1e3997c728fd))
+
 ## [1.34.0](https://github.com/Gitsack/hamster/compare/hamster-v1.33.2...hamster-v1.34.0) (2026-09-26)
 
 
