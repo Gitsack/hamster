@@ -211,7 +211,7 @@ export default function UsersSettings() {
       <Head title="User Management" />
 
       <div className="space-y-6">
-        <LocalAccessCard />
+        <LocalAccessCard users={users} />
 
         <Card>
           <CardHeader>

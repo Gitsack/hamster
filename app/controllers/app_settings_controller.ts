@@ -18,7 +18,8 @@ import {
 } from '#services/media/subtitle_sidecar_service'
 import { checkFfmpegAvailable, type SubtitlePruningOptions } from '#utils/ffmpeg_utils'
 import { isKnownLanguage } from '#services/quality/language_parser'
-import { localAccessService } from '#services/auth/local_access_service'
+import { localAccessService, type LocalAccessOptions } from '#services/auth/local_access_service'
+import User from '#models/user'
 
 function ensureArray<T>(value: T[] | string | undefined, defaultValue: T[]): T[] {
   if (Array.isArray(value)) {
@@ -438,17 +439,21 @@ export default class AppSettingsController {
   }
 
   /**
-   * Turn login-free local access on or off.
+   * Turn login-free local access on or off, and pick the account it uses.
    */
   async updateLocalAccess({ request, response }: HttpContext) {
-    const { enabled } = request.only(['enabled'])
+    const { enabled, userId = null } = request.only(['enabled', 'userId'])
 
     if (typeof enabled !== 'boolean') {
       return response.badRequest({ error: 'enabled must be a boolean' })
     }
+    if (userId !== null && (typeof userId !== 'string' || !(await User.find(userId)))) {
+      return response.badRequest({ error: 'userId must be an existing account' })
+    }
 
-    await localAccessService.setOptions({ enabled })
+    const options: LocalAccessOptions = { enabled, userId }
+    await localAccessService.setOptions(options)
 
-    return response.json({ options: { enabled } })
+    return response.json({ options })
   }
 }

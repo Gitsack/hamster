@@ -3,16 +3,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Spinner } from '@/components/ui/spinner'
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
 export interface LocalAccessOptions {
   enabled: boolean
+  /** null means the first administrator account. */
+  userId: string | null
 }
 
+export interface LocalAccessAccount {
+  id: string
+  fullName: string | null
+  email: string
+  isAdmin: boolean
+}
+
+/** Select items cannot carry null, so the default choice gets a stand-in value. */
+const FIRST_ADMIN = 'first-admin'
+
 /**
- * Whether the local network gets in without a login.
+ * Whether the local network gets in without a login, and as whom.
+ *
+ * The account list comes from the page, which already loads it, so the choice
+ * stays in step when accounts are added or removed there.
  */
-export function LocalAccessCard() {
+export function LocalAccessCard({ users }: { users: LocalAccessAccount[] }) {
   const [options, setOptions] = useState<LocalAccessOptions | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -26,7 +43,7 @@ export function LocalAccessCard() {
       const response = await fetch('/api/v1/settings/local-access')
       if (response.ok) {
         const data = await response.json()
-        setOptions(data.options)
+        setOptions({ userId: null, ...data.options })
       }
     } catch {
       toast.error('Sign-in settings could not be loaded — Hamster is unreachable.')
@@ -71,6 +88,12 @@ export function LocalAccessCard() {
 
   if (!options) return null
 
+  const accountName = (id: string) => {
+    if (id === FIRST_ADMIN) return 'First administrator'
+    const user = users.find((u) => u.id === id)
+    return user ? user.fullName || user.email : 'Deleted account'
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -81,22 +104,55 @@ export function LocalAccessCard() {
         </CardDescription>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <Label htmlFor="local-access-enabled">No login from the local network</Label>
             <p className="text-muted-foreground text-xs">
-              Local visitors act as the first administrator account. Behind a reverse proxy, it must
-              pass the visitor&apos;s address on in X-Forwarded-For — most do by default.
+              Behind a reverse proxy, it must pass the visitor&apos;s address on in X-Forwarded-For
+              — most do by default.
             </p>
           </div>
           <Switch
             id="local-access-enabled"
             checked={options.enabled}
             disabled={saving}
-            onCheckedChange={(enabled) => save({ enabled })}
+            onCheckedChange={(enabled) => save({ ...options, enabled })}
           />
         </div>
+
+        {users.length > 1 && (
+          <div
+            className={cn('space-y-2', !options.enabled && 'pointer-events-none opacity-50')}
+            aria-hidden={!options.enabled}
+          >
+            <Label htmlFor="local-access-user">Local visitors use</Label>
+            <Select
+              value={options.userId ?? FIRST_ADMIN}
+              onValueChange={(value) =>
+                save({ ...options, userId: value === FIRST_ADMIN ? null : (value as string) })
+              }
+              disabled={saving || !options.enabled}
+            >
+              <SelectTrigger id="local-access-user" className="w-64">
+                <SelectValue>{(value: string) => accountName(value)}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value={FIRST_ADMIN}>First administrator</SelectItem>
+                {users.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.fullName || user.email}
+                    {user.isAdmin ? ' (admin)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+            <p className="text-muted-foreground text-xs">
+              Pick an account without admin rights to keep the settings out of reach; an admin can
+              still sign in from the account menu.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

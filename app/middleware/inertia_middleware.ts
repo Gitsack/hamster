@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import { readFileSync } from 'node:fs'
+import { localAccessService } from '#services/auth/local_access_service'
 
 const packageJson = JSON.parse(
   readFileSync(new URL('../../package.json', import.meta.url), 'utf-8')
@@ -22,6 +23,9 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
           fullName: user.fullName,
           email: user.email,
           isAdmin: user.isAdmin,
+          // Signed in by local access rather than a login, so the UI offers
+          // "Sign in" where it would otherwise offer "Log out".
+          autoSignedIn: localAccessService.isAutoSignedIn(ctx),
         }
       },
       flash: () => ({
@@ -45,7 +49,13 @@ declare module '@adonisjs/inertia/types' {
   export interface SharedProps {
     version: string
     errors: Record<string, string> | { [errorBag: string]: Record<string, string> }
-    user?: { id: string; fullName: string | null; email: string; isAdmin: boolean }
+    user?: {
+      id: string
+      fullName: string | null
+      email: string
+      isAdmin: boolean
+      autoSignedIn: boolean
+    }
     flash: { error?: string; success?: string }
   }
 }

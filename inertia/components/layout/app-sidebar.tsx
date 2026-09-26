@@ -7,6 +7,7 @@ import {
   Search01Icon,
   Folder01Icon,
   LogoutSquare01Icon,
+  Login01Icon,
   UserIcon,
   Globe02Icon,
   Video01Icon,
@@ -135,7 +136,7 @@ const systemNavItems: NavItem[] = [
 
 export function AppSidebar() {
   const { url, props } = usePage<{
-    user?: { fullName?: string; email: string; isAdmin?: boolean }
+    user?: { fullName?: string; email: string; isAdmin?: boolean; autoSignedIn?: boolean }
     version: string
   }>()
   const { user, version } = props
@@ -282,10 +283,19 @@ export function AppSidebar() {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href="/logout" method="post" as="button" className="w-full">
-                      <HugeiconsIcon icon={LogoutSquare01Icon} className="size-4" />
-                      Log out
-                    </Link>
+                    {user?.autoSignedIn ? (
+                      // Let in by local access: there is no session to end,
+                      // but someone may want to sign in as another account.
+                      <Link href="/login">
+                        <HugeiconsIcon icon={Login01Icon} className="size-4" />
+                        Sign in
+                      </Link>
+                    ) : (
+                      <Link href="/logout" method="post" as="button" className="w-full">
+                        <HugeiconsIcon icon={LogoutSquare01Icon} className="size-4" />
+                        Log out
+                      </Link>
+                    )}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
