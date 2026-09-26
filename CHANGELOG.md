@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.3](https://github.com/Gitsack/hamster/compare/hamster-v1.36.2...hamster-v1.36.3) (2026-09-26)
+
+
+### Bug Fixes
+
+* **downloads:** never run a second import while one is in flight ([fb89fe8](https://github.com/Gitsack/hamster/commit/fb89fe80edb03c8470c3e16990d1fd29baa49ff8))
+
 ## [1.36.2](https://github.com/Gitsack/hamster/compare/hamster-v1.36.1...hamster-v1.36.2) (2026-09-26)
 
 
