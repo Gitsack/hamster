@@ -1190,163 +1190,177 @@ export default function TvShowDetail() {
                               />
                             ) : (
                               <div className="divide-y divide-border">
-                                {getVisibleEpisodes(season.seasonNumber).map((episode) => (
-                                  <div
-                                    key={episode.id}
-                                    role="group"
-                                    aria-label={`Episode ${episode.episodeNumber}: ${episode.title}`}
-                                    className="flex flex-col gap-2 py-3 transition-colors duration-150 hover:bg-accent sm:flex-row sm:items-center sm:gap-4"
-                                  >
-                                    <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
-                                      <div className="readout w-6 sm:w-8 shrink-0 text-right text-xs text-muted-foreground">
+                                {getVisibleEpisodes(season.seasonNumber).map((episode) => {
+                                  const { status, progress } = getEpisodeStatus(episode)
+                                  const file = status === 'downloaded' ? episode.episodeFile : null
+                                  const code = `S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')}`
+                                  // Quality leads, size sits beside it, and the stream details get their own
+                                  // line — one run-on string made the operator count dots to find the codec.
+                                  const [fileQuality, ...fileDetails] = file
+                                    ? fileFacts([file.quality, file.summary])
+                                    : []
+                                  const shortfall =
+                                    file &&
+                                    episode.qualityAssessment &&
+                                    !episode.qualityAssessment.meetsProfile
+                                      ? episode.qualityAssessment
+                                      : null
+
+                                  return (
+                                    <div
+                                      key={episode.id}
+                                      role="group"
+                                      aria-label={`Episode ${episode.episodeNumber}: ${episode.title}`}
+                                      className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 py-3 transition-colors duration-150 hover:bg-accent/50 sm:grid-cols-[2rem_5rem_minmax(0,1fr)_minmax(0,14rem)_auto] sm:gap-x-4 lg:grid-cols-[2rem_5rem_minmax(0,1fr)_minmax(0,18rem)_auto]"
+                                    >
+                                      <div className="readout self-start pt-0.5 text-right text-xs text-muted-foreground sm:self-center sm:pt-0">
                                         {episode.episodeNumber}
                                       </div>
                                       {episode.stillUrl ? (
                                         <img
                                           src={episode.stillUrl}
-                                          alt={episode.title}
-                                          className="h-12 w-20 shrink-0 rounded-lg object-cover hidden sm:block"
+                                          alt=""
+                                          loading="lazy"
+                                          className="hidden aspect-video w-20 rounded-md object-cover sm:block"
                                         />
                                       ) : (
-                                        <div className="h-12 w-20 shrink-0 rounded-lg bg-muted hidden sm:block" />
+                                        <div className="hidden aspect-video w-20 rounded-md bg-muted sm:block" />
                                       )}
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">
+
+                                      <div className="min-w-0">
+                                        <p
+                                          className="truncate text-sm font-medium"
+                                          title={episode.title}
+                                        >
                                           {episode.title}
                                         </p>
                                         <p className="readout text-xs text-muted-foreground">
                                           {episode.airDate || 'TBA'}
-                                          {episode.runtime && ` • ${episode.runtime}m`}
+                                          {episode.runtime ? ` · ${episode.runtime}m` : ''}
                                         </p>
-                                        {episode.episodeFile && (
-                                          <>
-                                            <FileFacts
-                                              facts={fileFacts([
-                                                episode.episodeFile.quality,
-                                                formatFileSize(episode.episodeFile.size),
-                                                episode.episodeFile.summary,
-                                              ])}
-                                            />
-                                            {episode.qualityAssessment &&
-                                              !episode.qualityAssessment.meetsProfile && (
-                                                <p
-                                                  className="flex items-center gap-1 text-xs text-status-failed-ink"
-                                                  title={episode.qualityAssessment.issues
-                                                    .map((issue) => issue.message)
-                                                    .join('\n')}
-                                                >
-                                                  <HugeiconsIcon
-                                                    icon={Alert01Icon}
-                                                    className="h-3.5 w-3.5 shrink-0"
-                                                  />
-                                                  {episode.qualityAssessment.issues[0]?.message ??
-                                                    'Below the quality profile'}
-                                                </p>
+                                      </div>
+
+                                      {/* File column: on a phone it drops under the title, spanning past the
+                                        actions, so nothing is squeezed into the narrow middle track. */}
+                                      <div className="col-start-2 col-end-4 row-start-2 min-w-0 sm:col-start-4 sm:col-end-5 sm:row-start-1">
+                                        {file && (
+                                          <div className="min-w-0 text-xs">
+                                            <p className="flex items-center gap-2">
+                                              <span
+                                                className="size-1.5 shrink-0 rounded-full bg-status-complete"
+                                                aria-hidden="true"
+                                              />
+                                              <span className="sr-only">Downloaded:</span>
+                                              {fileQuality && (
+                                                <span className="readout font-medium text-foreground">
+                                                  {fileQuality}
+                                                </span>
                                               )}
-                                          </>
+                                              <span className="readout text-muted-foreground">
+                                                {formatFileSize(file.size)}
+                                              </span>
+                                            </p>
+                                            {fileDetails.length > 0 && (
+                                              <FileFacts
+                                                facts={fileDetails}
+                                                className="mt-0.5 pl-3.5"
+                                              />
+                                            )}
+                                            {shortfall && (
+                                              <p
+                                                className="mt-0.5 flex items-center gap-1 pl-3.5 text-status-failed-ink"
+                                                title={shortfall.issues
+                                                  .map((issue) => issue.message)
+                                                  .join('\n')}
+                                              >
+                                                <HugeiconsIcon
+                                                  icon={Alert01Icon}
+                                                  className="h-3.5 w-3.5 shrink-0"
+                                                />
+                                                <span className="truncate">
+                                                  {shortfall.issues[0]?.message ??
+                                                    'Below the quality profile'}
+                                                </span>
+                                              </p>
+                                            )}
+                                          </div>
                                         )}
                                       </div>
-                                    </div>
-                                    <div className="flex shrink-0 items-center justify-end gap-1 pl-9 sm:gap-2 sm:pl-0">
-                                      {(() => {
-                                        const { status, progress } = getEpisodeStatus(episode)
 
-                                        // Downloaded: Show status badge + file action buttons
-                                        if (status === 'downloaded') {
-                                          return (
-                                            <>
-                                              <MediaStatusBadge status="downloaded" size="sm" />
-                                              {episode.episodeFile && (
-                                                <>
-                                                  <Button
-                                                    variant="default"
-                                                    size="icon-sm"
-                                                    aria-label={`Play episode ${episode.episodeNumber}`}
-                                                    onClick={() => {
-                                                      audioPlayer.pause()
-                                                      setPlayingEpisode({
-                                                        id: episode.id,
-                                                        fileId: episode.episodeFile!.id,
-                                                        title: `S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} - ${episode.title}`,
-                                                      })
-                                                      setVideoPlayerOpen(true)
-                                                    }}
-                                                  >
-                                                    <HugeiconsIcon
-                                                      icon={PlayIcon}
-                                                      className="h-4 w-4"
-                                                    />
-                                                  </Button>
-                                                  <Button
-                                                    variant="outline"
-                                                    size="icon-sm"
-                                                    asChild
-                                                    aria-label={`Download episode ${episode.episodeNumber}`}
-                                                  >
-                                                    <a
-                                                      href={episode.episodeFile.downloadUrl}
-                                                      download
-                                                    >
-                                                      <HugeiconsIcon
-                                                        icon={FileDownloadIcon}
-                                                        className="h-4 w-4"
-                                                      />
-                                                    </a>
-                                                  </Button>
-                                                </>
-                                              )}
-                                              <Button
-                                                variant="outline"
-                                                size="icon-sm"
-                                                aria-label={`Replace file for episode ${episode.episodeNumber}`}
-                                                title="Replace with a better release"
-                                                onClick={() =>
-                                                  setReplaceTarget({
-                                                    scope: 'episode',
-                                                    id: episode.id,
-                                                    seasonNumber: season.seasonNumber,
-                                                    subject: `S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} — ${episode.title}`,
-                                                    currentSummary: [
-                                                      episode.episodeFile?.quality,
-                                                      episode.episodeFile?.summary,
-                                                    ]
-                                                      .filter(Boolean)
-                                                      .join(' · '),
-                                                  })
-                                                }
-                                              >
-                                                <HugeiconsIcon
-                                                  icon={Refresh01Icon}
-                                                  className="h-4 w-4"
-                                                />
-                                              </Button>
-                                              <Button
-                                                variant="outline"
-                                                size="icon-sm"
-                                                className="text-destructive hover:text-destructive"
-                                                aria-label={`Delete file for episode ${episode.episodeNumber}`}
-                                                onClick={() => {
-                                                  const epId = episode.id
-                                                  const epSeasonNumber = season.seasonNumber
-                                                  setSelectedEpisodeForDelete({
-                                                    id: epId,
-                                                    title: episode.title,
-                                                    seasonNumber: epSeasonNumber,
-                                                  })
-                                                  setDeleteFileDialogOpen(true)
-                                                }}
-                                              >
-                                                <HugeiconsIcon
-                                                  icon={Delete01Icon}
-                                                  className="h-4 w-4"
-                                                />
-                                              </Button>
-                                            </>
-                                          )
-                                        }
-
-                                        // All other statuses: Use unified MediaStatusBadge + manual search
-                                        return (
+                                      <div className="col-start-3 row-start-1 flex items-center justify-end gap-1.5 sm:col-start-5">
+                                        {file ? (
+                                          <>
+                                            <Button
+                                              variant="default"
+                                              size="icon-sm"
+                                              aria-label={`Play episode ${episode.episodeNumber}`}
+                                              onClick={() => {
+                                                audioPlayer.pause()
+                                                setPlayingEpisode({
+                                                  id: episode.id,
+                                                  fileId: file.id,
+                                                  title: `${code} - ${episode.title}`,
+                                                })
+                                                setVideoPlayerOpen(true)
+                                              }}
+                                            >
+                                              <HugeiconsIcon icon={PlayIcon} className="h-4 w-4" />
+                                            </Button>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="icon-sm"
+                                                  aria-label={`File actions for episode ${episode.episodeNumber}`}
+                                                >
+                                                  <HugeiconsIcon
+                                                    icon={MoreVerticalIcon}
+                                                    className="h-4 w-4"
+                                                  />
+                                                </Button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end">
+                                                <DropdownMenuItem asChild>
+                                                  <a href={file.downloadUrl} download>
+                                                    <HugeiconsIcon icon={FileDownloadIcon} />
+                                                    Download file
+                                                  </a>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                  onClick={() =>
+                                                    setReplaceTarget({
+                                                      scope: 'episode',
+                                                      id: episode.id,
+                                                      seasonNumber: season.seasonNumber,
+                                                      subject: `${code} — ${episode.title}`,
+                                                      currentSummary: [file.quality, file.summary]
+                                                        .filter(Boolean)
+                                                        .join(' · '),
+                                                    })
+                                                  }
+                                                >
+                                                  <HugeiconsIcon icon={Refresh01Icon} />
+                                                  Replace with a better release
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                  variant="destructive"
+                                                  onClick={() => {
+                                                    setSelectedEpisodeForDelete({
+                                                      id: episode.id,
+                                                      title: episode.title,
+                                                      seasonNumber: season.seasonNumber,
+                                                    })
+                                                    setDeleteFileDialogOpen(true)
+                                                  }}
+                                                >
+                                                  <HugeiconsIcon icon={Delete01Icon} />
+                                                  Delete file
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </>
+                                        ) : (
                                           <>
                                             {(status === 'requested' || status === 'none') && (
                                               <Button
@@ -1356,7 +1370,7 @@ export default function TvShowDetail() {
                                                 onClick={() =>
                                                   searchEpisodeReleases(
                                                     episode.id,
-                                                    `${show.title} - S${season.seasonNumber.toString().padStart(2, '0')}E${episode.episodeNumber.toString().padStart(2, '0')} - ${episode.title}`
+                                                    `${show.title} - ${code} - ${episode.title}`
                                                   )
                                                 }
                                               >
@@ -1379,11 +1393,11 @@ export default function TvShowDetail() {
                                               }
                                             />
                                           </>
-                                        )
-                                      })()}
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  )
+                                })}
                                 {hasMoreEpisodes(season.seasonNumber) && (
                                   <div className="flex justify-center py-3">
                                     <Button
