@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.2](https://github.com/Gitsack/hamster/compare/hamster-v1.33.1...hamster-v1.33.2) (2026-09-25)
+
+
+### Bug Fixes
+
+* **import:** move subtitles out of the container, not copy them ([d739a97](https://github.com/Gitsack/hamster/commit/d739a97885723e4847ca89b17e11df1e5cb6eb10))
+
 ## [1.33.1](https://github.com/Gitsack/hamster/compare/hamster-v1.33.0...hamster-v1.33.1) (2026-09-22)
 
 
