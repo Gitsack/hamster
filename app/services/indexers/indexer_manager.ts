@@ -647,7 +647,16 @@ export class IndexerManager {
    * Newznab tvsearch with external IDs for direct indexers.
    */
   async searchTvShows(options: TvSearchOptions): Promise<UnifiedSearchResult[]> {
-    const allTitles = [options.title, ...(options.alternateTitles || [])]
+    // An alternate title that sanitizes to nothing (e.g. "老练律师") would search
+    // for just "2024 S01E08" — and repeat the ID search on every indexer too.
+    const seenQueries = new Set([sanitizeSearchQuery(options.title).toLowerCase()])
+    const alternates = (options.alternateTitles || []).filter((title) => {
+      const query = sanitizeSearchQuery(title).toLowerCase()
+      if (!query || seenQueries.has(query)) return false
+      seenQueries.add(query)
+      return true
+    })
+    const allTitles = [options.title, ...alternates]
     const allResults: UnifiedSearchResult[] = []
 
     console.log('[IndexerManager] searchTvShows called:', {

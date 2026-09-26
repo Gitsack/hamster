@@ -1,11 +1,11 @@
 import { test } from '@japa/runner'
-import { isExpectedSkip } from '#services/tasks/requested_search_task'
+import { doesTvReleaseTitleMatch, isExpectedSkip } from '#services/tasks/requested_search_task'
 
 /**
  * Tests for the pure helper functions in requested_search_task.ts.
  *
- * The functions normalizeTitle, doesTvReleaseTitleMatch, and doesMovieReleaseTitleMatch
- * are module-level functions (not exported). We need to test them through the module's
+ * doesTvReleaseTitleMatch is exported and tested directly. normalizeTitle and
+ * doesMovieReleaseTitleMatch are module-level functions (not exported). We need to test them through the module's
  * public API or replicate their logic here for unit testing.
  *
  * Since these functions are not exported, we replicate the logic for testing.
@@ -15,31 +15,6 @@ import { isExpectedSkip } from '#services/tasks/requested_search_task'
 // Replicate normalizeTitle for testing
 function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[._-]/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
-// Replicate doesTvReleaseTitleMatch for testing
-function doesTvReleaseTitleMatch(releaseTitle: string, expectedTitle: string): boolean {
-  const normalizedRelease = normalizeTitle(releaseTitle)
-  const normalizedExpected = normalizeTitle(expectedTitle)
-  const expectedWords = normalizedExpected.split(' ')
-  const releaseWords = normalizedRelease.split(' ')
-
-  if (releaseWords.length < expectedWords.length) {
-    return false
-  }
-
-  const releasePrefix = releaseWords.slice(0, expectedWords.length).join(' ')
-  if (releasePrefix !== normalizedExpected) {
-    return false
-  }
-
-  const afterTitle = releaseWords.slice(expectedWords.length).join(' ')
-  const seasonPattern = /^s\d+|^season\s*\d+/i
-  if (!seasonPattern.test(afterTitle)) {
-    return false
-  }
-
-  return true
 }
 
 // Replicate doesMovieReleaseTitleMatch for testing
@@ -112,8 +87,26 @@ test.group('doesTvReleaseTitleMatch', () => {
     assert.isTrue(doesTvReleaseTitleMatch('Breaking.Bad.S01E01.720p', 'Breaking Bad'))
   })
 
-  test('matches title with year before season pattern', ({ assert }) => {
+  test('matches title followed by episode name', ({ assert }) => {
     assert.isTrue(doesTvReleaseTitleMatch('Friends S01E01 The Pilot', 'Friends'))
+  })
+
+  test('matches title with year before season pattern', ({ assert }) => {
+    assert.isTrue(
+      doesTvReleaseTitleMatch(
+        'Matlock.2024.S01E08.No.No.Monsters.1080p.AMZN.WEB-DL.DDP5.1.H.264-FLUX',
+        'Matlock'
+      )
+    )
+    assert.isTrue(doesTvReleaseTitleMatch('Doctor Who 2005 Season 1', 'Doctor Who'))
+  })
+
+  test('rejects a year followed by something other than a season', ({ assert }) => {
+    assert.isFalse(doesTvReleaseTitleMatch('Matlock 2024 1080p WEB-DL', 'Matlock'))
+  })
+
+  test('never matches an alternate title that normalizes to nothing', ({ assert }) => {
+    assert.isFalse(doesTvReleaseTitleMatch('Matlock.2024.S01E08.1080p', '老练律师'))
   })
 
   test('prevents "Friends with Benefits" matching "Friends"', ({ assert }) => {

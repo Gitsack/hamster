@@ -605,7 +605,13 @@ export default class TvShowsController {
             }
           : null,
         qualityAssessment: e.episodeFile
-          ? assessFile(e.episodeFile.mediaInfo, e.episodeFile.quality, profile, 'tv')
+          ? assessFile(
+              e.episodeFile.mediaInfo,
+              e.episodeFile.quality,
+              profile,
+              'tv',
+              show?.originalLanguage
+            )
           : null,
       })),
     })

@@ -17,6 +17,7 @@ import {
   evaluateFileQuality,
   normalizeProbedAudioCodec,
   normalizeRequirements,
+  resolveOriginalLanguage,
   type FileQualityFacts,
   type FileQualityIssue,
 } from './quality_requirements.js'
@@ -168,13 +169,18 @@ export function assessFile(
   mediaInfo: VideoMediaInfo | null,
   storedQuality: string | null,
   profile: QualityProfile | null,
-  mediaType: MediaType
+  mediaType: MediaType,
+  /** The title's own language, for a profile that asks for the original. */
+  originalLanguage?: string | null
 ): FileQualityAssessment {
   if (!profile) {
     return { meetsProfile: true, issues: [], belowCutoff: false, mediaInfo }
   }
 
-  const requirements = normalizeRequirements(profile.requirements)
+  const requirements = resolveOriginalLanguage(
+    normalizeRequirements(profile.requirements),
+    originalLanguage
+  )
   const facts = factsFromMediaInfo(mediaInfo)
   const issues = evaluateFileQuality(facts, requirements, {
     minHeight: minHeightForProfile(profile.items ?? []),

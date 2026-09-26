@@ -407,7 +407,8 @@ export default class MoviesController {
             movie.movieFile.mediaInfo,
             movie.movieFile.quality,
             movie.qualityProfile ?? null,
-            'movies'
+            'movies',
+            movie.originalLanguage
           )
         : null,
       addedAt: movie.addedAt?.toISO(),

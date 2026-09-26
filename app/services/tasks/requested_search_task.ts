@@ -66,7 +66,7 @@ function normalizeTitle(title: string): string {
  * - "Friends with Benefits S01E01" for show "Friends" (different show!)
  * - "My Friends S01E01" for show "Friends"
  */
-function doesTvReleaseTitleMatch(
+export function doesTvReleaseTitleMatch(
   releaseTitle: string,
   expectedTitle: string,
   seriesType: 'standard' | 'daily' | 'anime' = 'standard'
@@ -92,8 +92,9 @@ function doesTvReleaseTitleMatch(
   // This prevents "friends with benefits" from matching "friends"
   const afterTitle = releaseWords.slice(expectedWords.length).join(' ')
 
-  // The next part should start with a season pattern like "s01" or "s01e01" or "season 1"
-  const seasonPattern = /^s\d+|^season\s*\d+/i
+  // The next part should start with a season pattern like "s01" or "s01e01" or "season 1",
+  // optionally after the year that tells reboots apart ("Matlock 2024 S01E08")
+  const seasonPattern = /^(?:(?:19|20)\d{2}\s+)?(?:s\d+|season\s*\d+)/i
   // Date pattern for daily shows: "2024 01 15" or "2024 1 15"
   // Can appear anywhere in the afterTitle (e.g., "starring jimmy fallon 2025 12 18")
   const datePattern = /\d{4}\s+\d{1,2}\s+\d{1,2}/
@@ -947,7 +948,7 @@ class RequestedSearchTask {
         const availableResults = await blacklistService.filterBlacklisted(matchingResults)
 
         if (availableResults.length === 0) {
-          logger.debug(
+          logger.info(
             {
               show: tvShow.title,
               season: episode.seasonNumber,
@@ -972,11 +973,12 @@ class RequestedSearchTask {
         const bestResult = selection.release
 
         if (!bestResult) {
-          logger.debug(
+          logger.info(
             {
               show: tvShow.title,
               season: episode.seasonNumber,
               episode: episode.episodeNumber,
+              reason: selection.reason,
             },
             'RequestedSearch: No acceptable quality results for episode'
           )
