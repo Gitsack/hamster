@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.2](https://github.com/Gitsack/hamster/compare/hamster-v1.36.1...hamster-v1.36.2) (2026-09-26)
+
+
+### Bug Fixes
+
+* **downloads:** record path failures in history ([bb7042c](https://github.com/Gitsack/hamster/commit/bb7042cf74fa1aae4cd735cea48f05d529c368ae))
+
 ## [1.36.1](https://github.com/Gitsack/hamster/compare/hamster-v1.36.0...hamster-v1.36.1) (2026-09-26)
 
 
