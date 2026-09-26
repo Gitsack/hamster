@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.1](https://github.com/Gitsack/hamster/compare/hamster-v1.35.0...hamster-v1.35.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **auth:** sign in local-access and API-key requests without crashing ([b07e25a](https://github.com/Gitsack/hamster/commit/b07e25a018460b625e8d24e85e75b4951d9340d9))
+
 ## [1.35.0](https://github.com/Gitsack/hamster/compare/hamster-v1.34.0...hamster-v1.35.0) (2026-09-26)
 
 
