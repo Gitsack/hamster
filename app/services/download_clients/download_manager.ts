@@ -1414,6 +1414,20 @@ export class DownloadManager {
                   download.status = 'failed'
                   download.errorMessage = pathError
                   await download.save()
+                  // Not failDownload: the release is fine and may well be on disk,
+                  // so no blacklist and no alternative search. But say so in
+                  // History — the folder scanner deletes this row when it retries,
+                  // and without an entry the failure leaves no trace at all.
+                  await historyService
+                    .recordForDownload(download, 'import_failed', {
+                      data: { error: pathError },
+                    })
+                    .catch((err: unknown) =>
+                      logger.warn(
+                        { err, title: download.title },
+                        'DownloadManager: Failed to record path failure in history'
+                      )
+                    )
                   continue
                 }
 
