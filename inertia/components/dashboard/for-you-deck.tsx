@@ -14,6 +14,7 @@ import {
   StarIcon,
   PlayIcon,
   LinkSquare02Icon,
+  Bookmark01Icon,
 } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import {
@@ -180,7 +181,8 @@ function saveTypes(types: DeckMediaType[]) {
   }).catch(() => {})
 }
 
-type Verdict = 'request' | 'skip'
+/** Save: wanted, but not from here — usually because it streams elsewhere. */
+type Verdict = 'request' | 'skip' | 'save'
 
 const TYPE_META: Record<
   DeckMediaType,
@@ -287,13 +289,15 @@ async function requestCard(
   return { ok: true, href: `/${card.mediaType}/${card.externalId}` }
 }
 
-function recordFeedback(card: ForYouCard, action: 'requested' | 'skipped') {
+function recordFeedback(card: ForYouCard, action: 'requested' | 'skipped' | 'interested') {
   return postJson('/api/v1/for-you/feedback', 'POST', {
     mediaType: card.mediaType,
     externalId: card.externalId,
     action,
     title: card.title,
     genres: card.genres.slice(0, 20),
+    posterUrl: card.posterUrl,
+    year: card.year,
   })
 }
 
@@ -385,10 +389,18 @@ export function ForYouDeck() {
       if (!data) return
       remove(card.key)
 
-      if (verdict === 'skip') {
-        setAnnounce(`Skipped ${card.title}`)
-        recordFeedback(card, 'skipped').catch(() => {})
-        toast(`Skipped ${card.title}`, {
+      // Skipping a title after opening it on a streaming service is not a
+      // "not for me": it is wanted, just not from here.
+      const saved = verdict === 'save' || (verdict === 'skip' && streamingOpened.has(card.key))
+      if (saved || verdict === 'skip') {
+        const said = saved ? `Saved ${card.title}` : `Skipped ${card.title}`
+        setAnnounce(said)
+        recordFeedback(card, saved ? 'interested' : 'skipped').catch(() => {})
+        toast(said, {
+          description:
+            saved && verdict === 'skip'
+              ? 'You opened it on a streaming service, so it counts as interested.'
+              : undefined,
           duration: 4000,
           action: {
             label: 'Undo',
@@ -439,6 +451,15 @@ export function ForYouDeck() {
           <SignalLine data={data} />
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <Button variant="ghost" size="icon-sm" asChild>
+            <Link
+              href="/for-you/saved"
+              aria-label="Saved and skipped titles"
+              title="Saved and skipped titles"
+            >
+              <HugeiconsIcon icon={Bookmark01Icon} />
+            </Link>
+          </Button>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -651,6 +672,9 @@ function Stack({
   const skipFxRef = useRef<HTMLDivElement>(null)
   const requestStampRef = useRef<HTMLDivElement>(null)
   const skipStampRef = useRef<HTMLDivElement>(null)
+  const saveStampRef = useRef<HTMLDivElement>(null)
+  const stampFor = (verdict: Verdict) =>
+    ({ request: requestStampRef, skip: skipStampRef, save: saveStampRef })[verdict].current
   const drag = useRef<{
     id: number
     x0: number
@@ -674,18 +698,16 @@ function Stack({
   const thresholdFor = (width: number) => Math.min(140, width * 0.3)
 
   /**
-   * One verdict's overlay: the wash and the stamp follow the drag, and the
-   * stamp fills solid ("armed") once letting go would commit.
-   */
-  /**
    * One verdict's feedback: the wash on the card follows the drag, and the
    * stamp above the stack scales in and fills solid ("armed") once letting go
    * would commit. The stamp lives outside the card, so it stays whole and on
    * screen however far the card slides.
    */
   const paintFx = (verdict: Verdict, p: number, armed: boolean, animate: boolean) => {
-    const wash = verdict === 'request' ? requestFxRef.current : skipFxRef.current
-    const stamp = verdict === 'request' ? requestStampRef.current : skipStampRef.current
+    // Save has no drag, so no wash: only its stamp, from a button or a key.
+    const wash =
+      verdict === 'request' ? requestFxRef.current : verdict === 'skip' ? skipFxRef.current : null
+    const stamp = stampFor(verdict)
     const ease = 'cubic-bezier(0.22, 1, 0.36, 1)'
     // Readable well before the commit point, not only at the end of the drag.
     const opacity = String(Math.min(1, p * 1.6))
@@ -694,7 +716,7 @@ function Stack({
       wash.style.opacity = opacity
     }
     if (stamp) {
-      const dir = verdict === 'request' ? -1 : 1
+      const dir = verdict === 'request' ? -1 : verdict === 'skip' ? 1 : 0
       stamp.style.transition = animate ? `opacity 200ms ${ease}, transform 200ms ${ease}` : 'none'
       stamp.style.opacity = opacity
       stamp.dataset.armed = String(armed)
@@ -726,6 +748,12 @@ function Stack({
       }
       const width = el.offsetWidth
       const dir = verdict === 'request' ? 1 : -1
+      // Saved cards go up and away, to be found again later; the others fly
+      // off to their side.
+      const away =
+        verdict === 'save'
+          ? `translateY(${-el.offsetHeight * 0.5}px) scale(0.92)`
+          : `translateX(${dir * width * 1.15}px) rotate(${dir * MAX_TILT * 1.5}deg)`
       // A button or arrow key gets the same stamp a swipe earns, held for a
       // beat before the card leaves; a swipe already shows it.
       const fromDrag = el.style.transform !== ''
@@ -733,9 +761,9 @@ function Stack({
       const flyOut = () => {
         el.style.transition =
           'transform 200ms cubic-bezier(0.4, 0, 1, 1), opacity 200ms cubic-bezier(0.4, 0, 1, 1)'
-        el.style.transform = `translateX(${dir * width * 1.15}px) rotate(${dir * MAX_TILT * 1.5}deg)`
+        el.style.transform = away
         el.style.opacity = '0'
-        const stamp = verdict === 'request' ? requestStampRef.current : skipStampRef.current
+        const stamp = stampFor(verdict)
         if (stamp) {
           stamp.style.transition = 'opacity 200ms ease-in'
           stamp.style.opacity = '0'
@@ -765,6 +793,9 @@ function Stack({
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault()
         commit('skip')
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        commit('save')
       }
     }
     window.addEventListener('keydown', onKey)
@@ -924,10 +955,25 @@ function Stack({
             <span className="hidden group-data-[armed=true]/stamp:inline">Release to skip</span>
           </span>
         </div>
+        <div
+          ref={saveStampRef}
+          aria-hidden="true"
+          data-armed="false"
+          style={{ opacity: 0, transform: 'translate(-50%, -50%) scale(0.72)' }}
+          className="pointer-events-none absolute top-[74%] left-1/2 z-20 flex [backface-visibility:hidden] will-change-transform items-center gap-2 rounded-2xl border-[3px] border-foreground bg-foreground py-2 pr-4 pl-2 sm:gap-3 sm:py-2.5 sm:pr-5 sm:pl-2.5 text-background shadow-xl"
+        >
+          <span className="flex size-8 items-center justify-center rounded-full sm:size-10 bg-background text-foreground">
+            <HugeiconsIcon icon={Bookmark01Icon} className="size-5 sm:size-6" strokeWidth={2.5} />
+          </span>
+          <span className="text-base leading-6 font-bold whitespace-nowrap sm:text-xl sm:leading-7">
+            Saved
+          </span>
+        </div>
       </div>
 
-      {/* Thumb-reach actions. The same verdicts as a swipe or an arrow key. */}
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:flex sm:items-center">
+      {/* Thumb-reach actions. The same verdicts as a swipe or an arrow key;
+          save has no swipe — up is the page's scroll. */}
+      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] gap-3 sm:flex sm:items-center">
         <Button
           variant="outline"
           size="lg"
@@ -942,6 +988,20 @@ function Stack({
           </kbd>
         </Button>
         <Button
+          variant="outline"
+          size="lg"
+          className="h-12 sm:h-10"
+          onClick={() => commit('save')}
+          disabled={!!leaving}
+          title="Interested, but not requesting it — say it streams elsewhere"
+        >
+          <HugeiconsIcon icon={Bookmark01Icon} />
+          Save
+          <kbd className="ml-1 hidden rounded border border-border px-1 text-xs leading-4 text-muted-foreground pointer-fine:inline">
+            ↑
+          </kbd>
+        </Button>
+        <Button
           size="lg"
           className="h-12 sm:h-10"
           onClick={() => commit('request')}
@@ -953,7 +1013,7 @@ function Stack({
             →
           </kbd>
         </Button>
-        <p className="readout col-span-2 text-center text-xs text-muted-foreground sm:ml-auto sm:text-right">
+        <p className="readout col-span-3 text-center text-xs text-muted-foreground sm:ml-auto sm:text-right">
           {remaining} left
         </p>
       </div>
@@ -1035,6 +1095,9 @@ interface StreamingLink extends StreamingProvider {
 
 const linkCache = new Map<string, Promise<StreamingLink[]>>()
 
+/** Cards whose title the user opened on a streaming service this visit. */
+const streamingOpened = new Set<string>()
+
 /** Where to open the title on each of those services. */
 function fetchLinks(card: ForYouCard): Promise<StreamingLink[]> {
   let pending = linkCache.get(card.key)
@@ -1057,7 +1120,7 @@ function fetchLinks(card: ForYouCard): Promise<StreamingLink[]> {
  * Streaming logos on the poster, as on the Search posters: three, then "+N".
  * One service opens it there; several offer a menu of them.
  */
-function ProviderBadges({ card }: { card: ForYouCard }) {
+export function ProviderBadges({ card }: { card: ForYouCard }) {
   const [providers, setProviders] = useState<StreamingProvider[]>([])
   const [links, setLinks] = useState<StreamingLink[] | null>(null)
   useEffect(() => {
@@ -1099,6 +1162,8 @@ function ProviderBadges({ card }: { card: ForYouCard }) {
   const stackClass =
     'streaming-fade-in absolute bottom-2 left-2 z-10 flex items-center -space-x-1 rounded-md outline-none transition-transform hover:scale-105 focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none'
 
+  const opened = () => streamingOpened.add(card.key)
+
   // Until the links arrive, and if they never do, the stack is only a picture.
   if (!links || links.length === 0) {
     return (
@@ -1115,6 +1180,7 @@ function ProviderBadges({ card }: { card: ForYouCard }) {
         target="_blank"
         rel="noopener noreferrer"
         draggable={false}
+        onClick={opened}
         className={stackClass}
         aria-label={`Watch on ${links[0].name}`}
         title={`Watch on ${links[0].name}`}
@@ -1131,7 +1197,7 @@ function ProviderBadges({ card }: { card: ForYouCard }) {
       </DropdownMenuTrigger>
       <DropdownMenuPopup side="bottom" align="start" className="min-w-44">
         {links.map((l) => (
-          <DropdownMenuItem key={l.id} asChild>
+          <DropdownMenuItem key={l.id} asChild onClick={opened}>
             <a href={l.url} target="_blank" rel="noopener noreferrer">
               <img src={l.logoUrl} alt="" className="size-5 rounded-sm ring-1 ring-border" />
               <span className="flex-1">{l.name}</span>
@@ -1467,7 +1533,8 @@ function StartStage({ cards, onStart }: { cards: ForYouCard[]; onStart: () => vo
             Start matching
           </Button>
           <p className="hidden text-xs text-muted-foreground pointer-fine:block">
-            Then <kbd className="readout rounded border border-border px-1">←</kbd> skips and{' '}
+            Then <kbd className="readout rounded border border-border px-1">←</kbd> skips,{' '}
+            <kbd className="readout rounded border border-border px-1">↑</kbd> saves and{' '}
             <kbd className="readout rounded border border-border px-1">→</kbd> requests.
           </p>
         </div>

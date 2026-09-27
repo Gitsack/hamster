@@ -14,6 +14,7 @@ import {
   Notification01Icon,
   Link01Icon,
   Calendar03Icon,
+  Bookmark01Icon,
   Settings02Icon,
   UserMultipleIcon,
   DashboardSquare01Icon,
@@ -57,6 +58,11 @@ const mainNavItems: NavItem[] = [
     title: 'Library',
     url: '/library',
     icon: MusicNote01Icon,
+  },
+  {
+    title: 'Watchlist',
+    url: '/for-you/saved',
+    icon: Bookmark01Icon,
   },
   {
     title: 'Calendar',

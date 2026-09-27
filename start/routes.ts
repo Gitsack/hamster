@@ -133,6 +133,9 @@ router
       response.redirect('/library?tab=missing')
     )
 
+    // For you: saved and skipped titles
+    router.on('/for-you/saved').renderInertia('for-you/saved', {}).as('for-you.saved')
+
     // Calendar
     router.on('/calendar').renderInertia('calendar/index', {}).as('calendar')
 
@@ -397,6 +400,8 @@ router
     router.post('/for-you/feedback', [ForYouController, 'feedback'])
     router.put('/for-you/preferences', [ForYouController, 'savePreferences'])
     router.delete('/for-you/feedback/:mediaType/:externalId', [ForYouController, 'undo'])
+    router.get('/for-you/lists/:list', [ForYouController, 'list'])
+    router.delete('/for-you/lists/:list', [ForYouController, 'clear'])
     router
       .get('/for-you/extras/:mediaType/:tmdbId', [ForYouController, 'extras'])
       .where('mediaType', /^(movie|tv)$/)

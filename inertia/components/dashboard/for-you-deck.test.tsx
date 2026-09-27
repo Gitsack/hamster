@@ -180,6 +180,35 @@ describe('ForYouDeck', () => {
     })
   })
 
+  it('saves a card with the up arrow, without requesting it', async () => {
+    mockFetch([card({}), card({ key: 'movie:2', externalId: '2', title: 'Ronin' })])
+    render(<ForYouDeck />)
+    await start()
+    await screen.findByText('Heat')
+    fireEvent.keyDown(window, { key: 'ArrowUp' })
+    expect(await screen.findByText('Ronin')).toBeInTheDocument()
+    await waitFor(() => expect(calls('/api/v1/for-you/feedback')).toHaveLength(1))
+    expect(JSON.parse(calls('/api/v1/for-you/feedback')[0][1].body)).toMatchObject({
+      externalId: '1',
+      action: 'interested',
+    })
+    expect(calls('/api/v1/movies')).toHaveLength(0)
+  })
+
+  it('counts a skip as interested once the title was opened on a streaming service', async () => {
+    mockFetch([card({ key: 'movie:opened' })])
+    render(<ForYouDeck />)
+    await start()
+    const link = await screen.findByRole('link', { name: 'Watch on Netflix' })
+    link.addEventListener('click', (e) => e.preventDefault())
+    await userEvent.click(link)
+    await userEvent.click(screen.getByRole('button', { name: /Skip/ }))
+    await waitFor(() => expect(calls('/api/v1/for-you/feedback')).toHaveLength(1))
+    expect(JSON.parse(calls('/api/v1/for-you/feedback')[0][1].body)).toMatchObject({
+      action: 'interested',
+    })
+  })
+
   it('requests a movie with the default profile when the right arrow is pressed', async () => {
     mockFetch([card({})])
     render(<ForYouDeck />)

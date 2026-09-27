@@ -5,6 +5,7 @@ import {
   isClassicDate,
   weightedRating,
   isWorthSuggestingBook,
+  drawDeck,
 } from '#services/recommendations/for_you_service'
 
 test.group('for_you_service book filter', () => {
@@ -98,5 +99,52 @@ test.group('for_you_service modes', () => {
     assert.isTrue(isClassicDate('2005-03-24', 'tv', now))
     assert.isFalse(isClassicDate('2010-01-01', 'book', now))
     assert.isFalse(isClassicDate(null, 'album', now))
+  })
+})
+
+test.group('for_you_service drawDeck', () => {
+  /** A small seeded generator, so the draws are the same every run. */
+  const seeded = (seed: number) => () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296
+    return seed / 4294967296
+  }
+  const cards = (n: number, score: (i: number) => number, untried = (_i: number) => false) =>
+    Array.from({ length: n }, (_, i) => ({ id: i, score: score(i), untried: untried(i) }))
+
+  test('higher scores are drawn more often, but not only them', ({ assert }) => {
+    const pool = cards(100, (i) => (i < 20 ? 2 : 0))
+    const random = seeded(1)
+    let favourites = 0
+    let others = 0
+    for (let run = 0; run < 50; run++) {
+      for (const c of drawDeck(pool, 20, { random })) c.id < 20 ? favourites++ : others++
+    }
+    assert.isAbove(favourites, others)
+    assert.isAbove(others, 0)
+  })
+
+  test('keeps a share of the deck for untried genres', ({ assert }) => {
+    const pool = cards(
+      100,
+      (i) => (i < 50 ? 3 : 0),
+      (i) => i >= 50
+    )
+    const deck = drawDeck(pool, 20, {
+      random: seeded(2),
+      exploreShare: 0.15,
+      isUntried: (c) => c.untried,
+    })
+    assert.lengthOf(deck, 20)
+    assert.isAtLeast(deck.filter((c) => c.untried).length, 3)
+    assert.lengthOf(new Set(deck.map((c) => c.id)), 20)
+  })
+
+  test('draws everything when there are fewer cards than slots', ({ assert }) => {
+    const deck = drawDeck(
+      cards(5, (i) => i),
+      20,
+      { random: seeded(3) }
+    )
+    assert.lengthOf(deck, 5)
   })
 })

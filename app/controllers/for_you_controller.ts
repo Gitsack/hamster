@@ -13,11 +13,17 @@ const feedbackValidator = vine.compile(
   vine.object({
     mediaType: vine.enum(['movie', 'tv', 'album', 'book'] as const),
     externalId: vine.string().trim().maxLength(64),
-    action: vine.enum(['requested', 'skipped'] as const),
+    action: vine.enum(['requested', 'skipped', 'interested'] as const),
     title: vine.string().trim().maxLength(255).optional(),
     genres: vine.array(vine.string().trim().maxLength(64)).maxLength(20).optional(),
+    posterUrl: vine.string().trim().maxLength(512).nullable().optional(),
+    year: vine.number().withoutDecimals().nullable().optional(),
   })
 )
+
+/** The lists a user can review: saved for later, and turned down. */
+const LISTS = { watchlist: 'interested', skipped: 'skipped' } as const
+type ListName = keyof typeof LISTS
 
 const preferencesValidator = vine.compile(
   vine.object({
@@ -91,24 +97,67 @@ export default class ForYouController {
 
     await RecommendationFeedback.updateOrCreate(
       { userId, mediaType: data.mediaType, externalId: data.externalId },
-      { action: data.action, title: data.title ?? null, genres: data.genres ?? [] }
+      {
+        action: data.action,
+        title: data.title ?? null,
+        genres: data.genres ?? [],
+        posterUrl: data.posterUrl ?? null,
+        year: data.year ?? null,
+      }
     )
 
-    // A request is a new seed; rebuild on the next load rather than serving
-    // the neighbourhood of titles from before it.
-    if (data.action === 'requested') forYouService.invalidate(userId)
+    // A request or an "interested" is a new seed; rebuild on the next load
+    // rather than serving the neighbourhood of titles from before it.
+    if (data.action !== 'skipped') forYouService.invalidate(userId)
 
     return response.noContent()
   }
 
-  /** Undo a skip. */
+  /** The user's watchlist or skipped titles, newest first. */
+  async list({ auth, params, response }: HttpContext) {
+    const action = LISTS[params.list as ListName]
+    if (!action) return response.notFound({ error: 'No such list' })
+    const rows = await RecommendationFeedback.query()
+      .where('userId', auth.user!.id)
+      .where('action', action)
+      .orderBy('createdAt', 'desc')
+      .limit(1000)
+    return response.json({
+      items: rows.map((r) => ({
+        key: `${r.mediaType}:${r.externalId}`,
+        mediaType: r.mediaType,
+        externalId: r.externalId,
+        title: r.title,
+        year: r.year,
+        posterUrl: r.posterUrl,
+        genres: r.genres,
+        createdAt: r.createdAt.toISO(),
+      })),
+    })
+  }
+
+  /** Forget a whole list: every skip, say, once taste has moved on. */
+  async clear({ auth, params, response }: HttpContext) {
+    const action = LISTS[params.list as ListName]
+    if (!action) return response.notFound({ error: 'No such list' })
+    await RecommendationFeedback.query()
+      .where('userId', auth.user!.id)
+      .where('action', action)
+      .delete()
+    forYouService.invalidate(auth.user!.id)
+    return response.noContent()
+  }
+
+  /** Undo a skip or an "interested"; a request is undone in the library. */
   async undo({ auth, params, response }: HttpContext) {
     await RecommendationFeedback.query()
       .where('userId', auth.user!.id)
       .where('mediaType', params.mediaType)
       .where('externalId', params.externalId)
-      .where('action', 'skipped')
+      .whereIn('action', ['skipped', 'interested'])
       .delete()
+    // A saved title's genres counted towards the deck; rebuild without them.
+    forYouService.invalidate(auth.user!.id)
     return response.noContent()
   }
 

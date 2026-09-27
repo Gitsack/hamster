@@ -2,7 +2,7 @@ import { DateTime } from 'luxon'
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 
 export type FeedbackMediaType = 'movie' | 'tv' | 'album' | 'book'
-export type FeedbackAction = 'requested' | 'skipped'
+export type FeedbackAction = 'requested' | 'skipped' | 'interested'
 
 export default class RecommendationFeedback extends BaseModel {
   static table = 'recommendation_feedback'
@@ -28,6 +28,12 @@ export default class RecommendationFeedback extends BaseModel {
 
   @column()
   declare genres: string[]
+
+  @column()
+  declare posterUrl: string | null
+
+  @column()
+  declare year: number | null
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

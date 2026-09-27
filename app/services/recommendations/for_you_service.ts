@@ -82,7 +82,7 @@ interface Candidate {
 interface TasteProfile {
   movieSeeds: Seed[]
   tvSeeds: Seed[]
-  /** Genre slug → affinity in [-1, 1]. */
+  /** Genre slug → affinity in [-1, 1]; only ratings go below zero. */
   genres: Map<string, number>
   exclude: { movie: Set<string>; tv: Set<string> }
   /** Titles providers suggest outright — a watchlist, say. */
@@ -93,6 +93,10 @@ interface TasteProfile {
 
 const DECK_TTL = 30 * 60 * 1000
 const DECK_SIZE = 48
+/** Share of each deck kept for cards whose genres have no signal yet. */
+const EXPLORE_SHARE = 0.15
+/** Below this either way, a card's genres say nothing about the user yet. */
+const UNTRIED_AFFINITY = 0.05
 const SEEDS_PER_TYPE = 8
 const RECS_PER_SEED = 20
 /** Obscure titles with a handful of votes are mostly noise in TMDB's graph. */
@@ -259,6 +263,52 @@ export function isClassicDate(
  * rating IMDb uses for its Top 250). A 9.0 from twelve votes lands near the
  * middle; an 8.6 from twenty thousand stays high.
  */
+/**
+ * Draws a deck of `n` from ranked cards instead of taking the top `n`. A
+ * card's chance grows with its score — exp(score / temperature) — so the
+ * user's genres come up most, yet anything can. A share of the slots goes to
+ * cards `isUntried` marks (genres with no signal yet), drawn evenly, so an
+ * untried genre still gets its turn now and then. Returns cards in draw order,
+ * which puts the likeliest first. `random` is for tests.
+ */
+export function drawDeck<T extends { score: number }>(
+  cards: T[],
+  n: number,
+  opts: {
+    isUntried?: (card: T) => boolean
+    exploreShare?: number
+    temperature?: number
+    random?: () => number
+  } = {}
+): T[] {
+  const { isUntried, exploreShare = 0, temperature = 0.5, random = Math.random } = opts
+  if (cards.length <= n && !isUntried) return [...cards].sort((a, b) => b.score - a.score)
+  const top = Math.max(...cards.map((c) => c.score))
+  // Weighted sampling without replacement: each card waits an exponential
+  // time with rate = its weight; the first n to arrive are drawn.
+  const arrival = (weight: number) => -Math.log(1 - random()) / weight
+  const byArrival = (list: T[], weigh: (c: T) => number) =>
+    list
+      .map((card) => ({ card, t: arrival(weigh(card)) }))
+      .sort((a, b) => a.t - b.t)
+      .map((x) => x.card)
+
+  const untried = isUntried ? cards.filter(isUntried) : []
+  const explore = byArrival(untried, () => 1).slice(0, Math.round(n * exploreShare))
+  const taken = new Set(explore)
+  const main = byArrival(
+    cards.filter((c) => !taken.has(c)),
+    (c) => Math.exp((c.score - top) / temperature)
+  ).slice(0, n - explore.length)
+
+  // Spread the explorers through the deck rather than bunching them at the end.
+  const out = [...main]
+  for (const card of explore) {
+    out.splice(Math.floor(random() * (out.length + 1)), 0, card)
+  }
+  return out
+}
+
 export function weightedRating(average: number, votes: number, minVotes: number, typical = 6.8) {
   if (!votes || votes <= 0) return typical
   return (votes / (votes + minVotes)) * average + (minVotes / (votes + minVotes)) * typical
@@ -371,17 +421,20 @@ class ForYouService {
       .limit(500)
     let requestCount = 0
     for (const f of feedback) {
-      if (f.action === 'skipped') {
-        bump(f.genres, -0.35)
-        continue
-      }
-      requestCount++
-      bump(f.genres, 0.6)
+      // A skip only hides its title. Titles get skipped for being bad, old or
+      // simply not tonight far more often than for their genre, so only what
+      // the user wanted teaches the deck about genres.
+      if (f.action === 'skipped') continue
+      // Interested — wanted, but watched elsewhere — is a lighter taste
+      // signal than a request: nothing was fetched for it.
+      const interested = f.action === 'interested'
+      if (!interested) requestCount++
+      bump(f.genres, interested ? 0.3 : 0.6)
       const seed = {
         tmdbId: Number(f.externalId),
         title: f.title ?? 'a title',
-        weight: 0.7,
-        reason: `Because you requested ${f.title}`,
+        weight: interested ? 0.5 : 0.7,
+        reason: interested ? `Because you saved ${f.title}` : `Because you requested ${f.title}`,
       }
       if (f.mediaType === 'movie') movieSeeds.push(seed)
       if (f.mediaType === 'tv') tvSeeds.push(seed)
@@ -455,6 +508,15 @@ class ForYouService {
     const rest = all.filter((s) => s.weight < 0.7)
     const picked = sample(strong, Math.ceil(SEEDS_PER_TYPE * 0.6))
     return [...picked, ...sample(rest, SEEDS_PER_TYPE - picked.length)]
+  }
+
+  /** The deck's share of these cards, drawn by score with room to explore. */
+  private draw(cards: ForYouCard[], taste: TasteProfile): ForYouCard[] {
+    return drawDeck(cards, DECK_SIZE, {
+      exploreShare: EXPLORE_SHARE,
+      isUntried: (c) =>
+        c.genres.length > 0 && Math.abs(this.genreAffinity(c.genres, taste)) < UNTRIED_AFFINITY,
+    })
   }
 
   private genreAffinity(genres: string[], taste: TasteProfile): number {
@@ -737,11 +799,11 @@ class ForYouService {
       })
     }
 
-    // Genre scores below this mean "you keep skipping these".
-    return cards
-      .filter((card) => this.genreAffinity(card.genres, taste) > -0.6)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, DECK_SIZE)
+    // Genres the user keeps rating low stay out.
+    return this.draw(
+      cards.filter((card) => this.genreAffinity(card.genres, taste) > -0.6),
+      taste
+    )
   }
 
   // ---------------------------------------------------------------------------
@@ -820,7 +882,7 @@ class ForYouService {
         })
     }
 
-    return candidateRows
+    const cards = candidateRows
       .filter((r) => !NOT_A_STUDIO_ALBUM.test(r.title))
       .map((r) => {
         const n = Number(r.n)
@@ -856,8 +918,8 @@ class ForYouService {
           isNew: fresh.isNew,
         }
       })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, DECK_SIZE)
+    // No genres here to explore by: the artists are the user's own.
+    return drawDeck(cards, DECK_SIZE)
   }
 
   private async bookCards(
@@ -937,51 +999,49 @@ class ForYouService {
       if (!prev || year(r) > year(prev)) byTitle.set(key, r)
     }
 
-    return [...byTitle.values()]
-      .map((r) => {
-        const n = Number(r.n)
-        const date = r.release_date ? new Date(r.release_date) : null
-        const fresh = freshness(date, 'book')
-        const genres = cleanSubjects(r.genres)
-        // Subjects learn from swipes the way film genres do: requested books
-        // pull theirs up, skipped ones push theirs down.
-        const affinity = this.genreAffinity(genres, taste)
-        const rated =
-          mode === 'top-rated'
-            ? weightedRating(Number(r.rating ?? 0) * 2, Number(r.ratings_count ?? 0), 20)
-            : 6.8
-        const score =
-          Math.log2(1 + Math.min(n, AFFINITY_CAP)) * 0.5 +
-          fresh.boost * (mode === 'new' ? 2 : 1) +
-          (rated - 6.8) * 1.2 +
-          affinity * 0.5 +
-          (r.cover_url ? 0.1 : -0.3) +
-          Math.random() * 0.3
-        const series = r.series_name
-          ? ` · ${r.series_name}${r.series_position ? ` #${r.series_position}` : ''}`
-          : ''
-        return {
-          key: `book:${r.id}`,
-          mediaType: 'book' as const,
-          externalId: String(r.id),
-          title: r.title,
-          year: date ? date.getFullYear() : null,
-          subtitle: `${r.author_name}${series}`,
-          overview: r.overview ?? null,
-          posterUrl: r.cover_url ?? null,
-          backdropUrl: null,
-          rating: r.rating ? Number(r.rating) * 2 : null,
-          genres,
-          reason:
-            n === 1
-              ? `You have a book by ${r.author_name}`
-              : `You have ${n} books by ${r.author_name}`,
-          score,
-          isNew: fresh.isNew,
-        }
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, DECK_SIZE)
+    const cards = [...byTitle.values()].map((r) => {
+      const n = Number(r.n)
+      const date = r.release_date ? new Date(r.release_date) : null
+      const fresh = freshness(date, 'book')
+      const genres = cleanSubjects(r.genres)
+      // Subjects learn from swipes the way film genres do: requested books
+      // pull theirs up, skipped ones push theirs down.
+      const affinity = this.genreAffinity(genres, taste)
+      const rated =
+        mode === 'top-rated'
+          ? weightedRating(Number(r.rating ?? 0) * 2, Number(r.ratings_count ?? 0), 20)
+          : 6.8
+      const score =
+        Math.log2(1 + Math.min(n, AFFINITY_CAP)) * 0.5 +
+        fresh.boost * (mode === 'new' ? 2 : 1) +
+        (rated - 6.8) * 1.2 +
+        affinity * 0.5 +
+        (r.cover_url ? 0.1 : -0.3) +
+        Math.random() * 0.3
+      const series = r.series_name
+        ? ` · ${r.series_name}${r.series_position ? ` #${r.series_position}` : ''}`
+        : ''
+      return {
+        key: `book:${r.id}`,
+        mediaType: 'book' as const,
+        externalId: String(r.id),
+        title: r.title,
+        year: date ? date.getFullYear() : null,
+        subtitle: `${r.author_name}${series}`,
+        overview: r.overview ?? null,
+        posterUrl: r.cover_url ?? null,
+        backdropUrl: null,
+        rating: r.rating ? Number(r.rating) * 2 : null,
+        genres,
+        reason:
+          n === 1
+            ? `You have a book by ${r.author_name}`
+            : `You have ${n} books by ${r.author_name}`,
+        score,
+        isNew: fresh.isNew,
+      }
+    })
+    return this.draw(cards, taste)
   }
 
   /**
