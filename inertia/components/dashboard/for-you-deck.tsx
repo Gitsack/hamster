@@ -15,6 +15,7 @@ import {
   PlayIcon,
   LinkSquare02Icon,
   Bookmark01Icon,
+  Undo02Icon,
 } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import {
@@ -26,6 +27,7 @@ import {
 import { Select, SelectItem, SelectPopup, SelectTrigger } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMediaPreview } from '@/contexts/media_preview_context'
+import { SkippedSheet } from '@/components/dashboard/skipped-sheet'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -380,6 +382,17 @@ export function ForYouDeck() {
   const current = visible[0] ?? null
   const next = visible[1] ?? null
 
+  // Titles brought back from the skipped list return with the next load.
+  const [skippedOpen, setSkippedOpen] = useState(false)
+  const skipsChanged = useRef(false)
+  const onSkippedOpenChange = (open: boolean) => {
+    setSkippedOpen(open)
+    if (!open && skipsChanged.current) {
+      skipsChanged.current = false
+      load(false, mode ?? undefined)
+    }
+  }
+
   const remove = (key: string) => setCards((prev) => prev.filter((c) => c.key !== key))
   const restore = (card: ForYouCard) =>
     setCards((prev) => (prev.some((c) => c.key === card.key) ? prev : [card, ...prev]))
@@ -451,12 +464,17 @@ export function ForYouDeck() {
           <SignalLine data={data} />
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setSkippedOpen(true)}
+            aria-label="Skipped titles"
+            title="Skipped titles"
+          >
+            <HugeiconsIcon icon={Undo02Icon} />
+          </Button>
           <Button variant="ghost" size="icon-sm" asChild>
-            <Link
-              href="/for-you/saved"
-              aria-label="Saved and skipped titles"
-              title="Saved and skipped titles"
-            >
+            <Link href="/watchlist" aria-label="Watchlist" title="Watchlist">
               <HugeiconsIcon icon={Bookmark01Icon} />
             </Link>
           </Button>
@@ -577,6 +595,12 @@ export function ForYouDeck() {
       <p className="sr-only" aria-live="polite">
         {announce}
       </p>
+
+      <SkippedSheet
+        open={skippedOpen}
+        onOpenChange={onSkippedOpenChange}
+        onChanged={() => (skipsChanged.current = true)}
+      />
     </section>
   )
 }
@@ -1494,7 +1518,6 @@ function StartStage({ cards, onStart }: { cards: ForYouCard[]; onStart: () => vo
     .map((t) => MIX_WORDS[t])
   const listed = mix.length > 1 ? `${mix.slice(0, -1).join(', ')} and ${mix.at(-1)}` : mix[0]
   const opening = listed ? listed[0].toUpperCase() + listed.slice(1) : 'Picks'
-  const hasTrailers = types.has('movie') || types.has('tv')
 
   return (
     <div className="rounded-xl border border-border bg-card px-4 py-6 sm:px-8 sm:py-8">
@@ -1524,18 +1547,15 @@ function StartStage({ cards, onStart }: { cards: ForYouCard[]; onStart: () => vo
             <span className="readout">{cards.length}</span> {cards.length === 1 ? 'pick' : 'picks'}{' '}
             ready
           </h3>
-          <p className="max-w-[46ch] text-sm leading-relaxed text-muted-foreground">
-            {opening}, one at a time{hasTrailers ? ' — films and shows with their trailer' : ''}.
-            Request what you want, skip what you don’t: every choice sharpens the next picks.
-          </p>
+          <p className="text-sm text-muted-foreground">{opening}, one at a time.</p>
           <Button size="lg" className="mt-2 h-12 px-6 sm:h-10" onClick={onStart}>
             <HugeiconsIcon icon={PlayIcon} />
             Start matching
           </Button>
           <p className="hidden text-xs text-muted-foreground pointer-fine:block">
-            Then <kbd className="readout rounded border border-border px-1">←</kbd> skips,{' '}
-            <kbd className="readout rounded border border-border px-1">↑</kbd> saves and{' '}
-            <kbd className="readout rounded border border-border px-1">→</kbd> requests.
+            <kbd className="readout rounded border border-border px-1">←</kbd> skip ·{' '}
+            <kbd className="readout rounded border border-border px-1">↑</kbd> save ·{' '}
+            <kbd className="readout rounded border border-border px-1">→</kbd> request
           </p>
         </div>
       </div>

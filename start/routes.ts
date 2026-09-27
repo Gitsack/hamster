@@ -42,6 +42,7 @@ const ScheduledTasksController = () => import('#controllers/scheduled_tasks_cont
 const CalendarController = () => import('#controllers/calendar_controller')
 const RecommendationsController = () => import('#controllers/recommendations_controller')
 const ForYouController = () => import('#controllers/for_you_controller')
+const WatchlistController = () => import('#controllers/watchlist_controller')
 const JustWatchController = () => import('#controllers/justwatch_controller')
 const ApiKeysController = () => import('#controllers/api_keys_controller')
 const UserController = () => import('#controllers/user_controller')
@@ -133,8 +134,9 @@ router
       response.redirect('/library?tab=missing')
     )
 
-    // For you: saved and skipped titles
-    router.on('/for-you/saved').renderInertia('for-you/saved', {}).as('for-you.saved')
+    // Watchlist
+    router.on('/watchlist').renderInertia('watchlist/index', {}).as('watchlist')
+    router.get('/for-you/saved', async ({ response }) => response.redirect('/watchlist'))
 
     // Calendar
     router.on('/calendar').renderInertia('calendar/index', {}).as('calendar')
@@ -400,6 +402,10 @@ router
     router.post('/for-you/feedback', [ForYouController, 'feedback'])
     router.put('/for-you/preferences', [ForYouController, 'savePreferences'])
     router.delete('/for-you/feedback/:mediaType/:externalId', [ForYouController, 'undo'])
+    router.get('/watchlist', [WatchlistController, 'index'])
+    router.get('/watchlist/:mediaType/:externalId', [WatchlistController, 'show'])
+    router.put('/watchlist/:mediaType/:externalId', [WatchlistController, 'save'])
+    router.delete('/watchlist/:mediaType/:externalId', [WatchlistController, 'destroy'])
     router.get('/for-you/lists/:list', [ForYouController, 'list'])
     router.delete('/for-you/lists/:list', [ForYouController, 'clear'])
     router

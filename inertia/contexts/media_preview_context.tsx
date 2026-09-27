@@ -34,6 +34,7 @@ import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import type { StreamingOffer } from '@/components/library/streaming-offers'
 import { CastLane, type CastMember } from '@/components/library/cast-lane'
 import { SimilarLane } from '@/components/library/similar-lane'
+import { WatchlistButton } from '@/components/watchlist/watchlist-button'
 
 interface MovieDetails {
   tmdbId: string
@@ -741,6 +742,16 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
               </SheetBody>
 
               <SheetFooter>
+                <WatchlistButton
+                  item={{
+                    mediaType: 'movie',
+                    tmdbId: movieDetails.tmdbId,
+                    title: movieDetails.title,
+                    year: movieDetails.year,
+                    posterUrl: movieDetails.posterUrl,
+                    genres: movieDetails.genres,
+                  }}
+                />
                 {movieDetails.inLibrary ? (
                   <Button
                     onClick={() => {
@@ -912,6 +923,16 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
               </SheetBody>
 
               <SheetFooter>
+                <WatchlistButton
+                  item={{
+                    mediaType: 'tv',
+                    tmdbId: tvShowDetails.tmdbId,
+                    title: tvShowDetails.title,
+                    year: tvShowDetails.year,
+                    posterUrl: tvShowDetails.posterUrl,
+                    genres: tvShowDetails.genres,
+                  }}
+                />
                 {tvShowDetails.inLibrary ? (
                   <Button
                     onClick={() => {

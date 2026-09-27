@@ -61,7 +61,7 @@ const mainNavItems: NavItem[] = [
   },
   {
     title: 'Watchlist',
-    url: '/for-you/saved',
+    url: '/watchlist',
     icon: Bookmark01Icon,
   },
   {

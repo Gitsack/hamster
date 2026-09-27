@@ -170,7 +170,7 @@ describe('ForYouDeck', () => {
     render(<ForYouDeck />)
     await start()
     await screen.findByText('Heat')
-    await userEvent.click(screen.getByRole('button', { name: /Skip/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Skip(?!ped)/ }))
     expect(await screen.findByText('Ronin')).toBeInTheDocument()
     const [, init] = calls('/api/v1/for-you/feedback')[0]
     expect(JSON.parse(init.body)).toMatchObject({
@@ -202,7 +202,7 @@ describe('ForYouDeck', () => {
     const link = await screen.findByRole('link', { name: 'Watch on Netflix' })
     link.addEventListener('click', (e) => e.preventDefault())
     await userEvent.click(link)
-    await userEvent.click(screen.getByRole('button', { name: /Skip/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Skip(?!ped)/ }))
     await waitFor(() => expect(calls('/api/v1/for-you/feedback')).toHaveLength(1))
     expect(JSON.parse(calls('/api/v1/for-you/feedback')[0][1].body)).toMatchObject({
       action: 'interested',

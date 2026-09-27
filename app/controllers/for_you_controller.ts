@@ -21,8 +21,8 @@ const feedbackValidator = vine.compile(
   })
 )
 
-/** The lists a user can review: saved for later, and turned down. */
-const LISTS = { watchlist: 'interested', skipped: 'skipped' } as const
+/** The deck's lists a user can review; the watchlist has its own controller. */
+const LISTS = { skipped: 'skipped' } as const
 type ListName = keyof typeof LISTS
 
 const preferencesValidator = vine.compile(
@@ -113,7 +113,7 @@ export default class ForYouController {
     return response.noContent()
   }
 
-  /** The user's watchlist or skipped titles, newest first. */
+  /** The user's skipped titles, newest first. */
   async list({ auth, params, response }: HttpContext) {
     const action = LISTS[params.list as ListName]
     if (!action) return response.notFound({ error: 'No such list' })

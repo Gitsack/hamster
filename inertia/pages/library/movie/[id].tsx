@@ -1,6 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
+import { WatchlistButton } from '@/components/watchlist/watchlist-button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -493,6 +494,19 @@ export default function MovieDetail() {
               {searching ? 'Searching...' : 'Browse releases'}
             </span>
           </Button>
+          {movie.tmdbId && (
+            <WatchlistButton
+              compact
+              item={{
+                mediaType: 'movie',
+                tmdbId: movie.tmdbId,
+                title: movie.title,
+                year: movie.year,
+                posterUrl: movie.posterUrl,
+                genres: movie.genres,
+              }}
+            />
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" aria-label="More actions">
