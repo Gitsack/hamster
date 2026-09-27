@@ -8,6 +8,7 @@ import type { FeedbackMediaType } from '#models/recommendation_feedback'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import type { TmdbMovie, TmdbTvShow } from '#services/metadata/tmdb_service'
 import { tasteProviders } from '#services/taste/registry'
+import { bookLanguages } from '#services/library/book_languages'
 import type { TastePick, TasteProviderStatus, TasteSeed } from '#services/taste/types'
 import { recommendationService } from '#services/metadata/recommendation_service'
 import { cache } from '#services/cache/cache_service'
@@ -605,7 +606,7 @@ class ForYouService {
       ),
       ranked AS (
         SELECT b.id, b.title, b.release_date, b.cover_url, b.overview, b.rating, b.genres,
-               b.series_name, b.series_position,
+               b.series_name, b.series_position, b.language, b.openlibrary_id,
                au.name AS author_name, owned.n, owned.titles AS owned_titles,
                ROW_NUMBER() OVER (PARTITION BY b.author_id ORDER BY random()) AS pick
         FROM books b
@@ -625,15 +626,24 @@ class ForYouService {
       [userId]
     )
 
+    // Only books in a language the user reads: the languages of what they have
+    // on disk or requested. Looked up (once, then stored) only for the
+    // candidates that would otherwise make the deck, two per author.
+    const readable = await bookLanguages.owned()
     const perAuthor = new Map<string, number>()
-    return (rows as any[])
-      .filter((r) => {
-        if (!isWorthSuggestingBook(r.title, r.owned_titles ?? [])) return false
-        const taken = perAuthor.get(r.author_name) ?? 0
-        if (taken >= 2) return false
-        perAuthor.set(r.author_name, taken + 1)
-        return true
-      })
+    const chosen: any[] = []
+    for (const r of rows as any[]) {
+      if (!isWorthSuggestingBook(r.title, r.owned_titles ?? [])) continue
+      if ((perAuthor.get(r.author_name) ?? 0) >= 2) continue
+      if (readable.size > 0) {
+        const language = await bookLanguages.of(r)
+        if (language && !readable.has(language)) continue
+      }
+      perAuthor.set(r.author_name, (perAuthor.get(r.author_name) ?? 0) + 1)
+      chosen.push(r)
+    }
+
+    return chosen
       .map((r) => {
         const n = Number(r.n)
         const date = r.release_date ? new Date(r.release_date) : null

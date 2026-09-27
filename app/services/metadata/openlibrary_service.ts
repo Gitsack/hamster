@@ -183,6 +183,22 @@ export class OpenLibraryService {
     }
   }
 
+  /**
+   * Titles and languages of a work's editions (MARC codes, "/languages/eng").
+   * Throws on a network or API error, so callers can tell "no answer" from
+   * "no languages recorded".
+   */
+  async getWorkEditions(workKey: string): Promise<{ title: string; languages: string[] }[]> {
+    const cleanKey = workKey.startsWith('/works/') ? workKey : `/works/${workKey}`
+    const data = await this.fetch(
+      `${OPENLIBRARY_API}${cleanKey}/editions.json?limit=50&fields=title,languages`
+    )
+    return (data.entries ?? []).map((e: any) => ({
+      title: String(e.title ?? ''),
+      languages: (e.languages ?? []).map((l: { key: string }) => l.key),
+    }))
+  }
+
   async getBookEditions(workKey: string, limit = 20): Promise<any[]> {
     try {
       const cleanKey = workKey.startsWith('/works/') ? workKey : `/works/${workKey}`
