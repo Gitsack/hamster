@@ -59,7 +59,7 @@ export function MediaImage({
       {!loaded && (
         <div
           aria-hidden="true"
-          className="absolute inset-0 animate-pulse bg-muted motion-reduce:animate-none"
+          className="cover-loading absolute inset-0"
         />
       )}
       <img

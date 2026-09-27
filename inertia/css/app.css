@@ -227,6 +227,24 @@
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum' 1;
   }
+
+  /* A cover still on its way: the tile breathes between two greys, so a slow
+     image reads as loading rather than missing. (An opacity pulse on a grey
+     box over the same grey showed nothing.) */
+  .cover-loading {
+    background-color: var(--muted);
+    animation: cover-breathe 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes cover-breathe {
+  0%,
+  100% {
+    background-color: var(--muted);
+  }
+  50% {
+    background-color: color-mix(in oklch, var(--muted), var(--foreground) 9%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
