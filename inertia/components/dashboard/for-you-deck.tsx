@@ -1153,9 +1153,9 @@ function mayAutoplay(): boolean {
 }
 
 /**
- * Set once a browser refuses a trailer with sound (iOS Safari always does,
- * whatever the page gesture): later cards go straight to muted instead of
- * waiting out the same refusal each time.
+ * Set once the player reports that the browser blocked a trailer with sound
+ * (iOS Safari always does, whatever the page gesture): later cards start
+ * muted instead of being refused one by one.
  */
 let soundRefusedThisVisit = false
 
@@ -1173,9 +1173,9 @@ function TrailerStrip({ card, soundUnlocked }: { card: ForYouCard; soundUnlocked
   // is, with YouTube's own play button.
   const [stalled, setStalled] = useState(false)
   // Autoplay with sound is attempted only after the start stage's click, and
-  // only until a browser has said no.
-  const [soundRefused, setSoundRefused] = useState(soundRefusedThisVisit)
-  const withSound = soundUnlocked && !soundRefused
+  // only until a browser has said no. Fixed for the card's life: a refusal is
+  // answered by muting the running player, not by reloading it.
+  const [withSound] = useState(() => soundUnlocked && !soundRefusedThisVisit)
   const stripRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
 
@@ -1188,7 +1188,10 @@ function TrailerStrip({ card, soundUnlocked }: { card: ForYouCard; soundUnlocked
   }, [card])
 
   const command = useCallback(
-    (func: 'playVideo' | 'pauseVideo' | 'unloadModule', args: unknown[] = []) => {
+    (
+      func: 'playVideo' | 'pauseVideo' | 'mute' | 'unloadModule' | 'addEventListener',
+      args: unknown[] = []
+    ) => {
       frameRef.current?.contentWindow?.postMessage(
         JSON.stringify({ event: 'command', func, args }),
         '*'
@@ -1200,6 +1203,8 @@ function TrailerStrip({ card, soundUnlocked }: { card: ForYouCard; soundUnlocked
   // The player's last reported state, so scrolling back resumes a trailer
   // only if it was playing when it scrolled away — never one the user paused.
   const playerState = useRef<number | null>(null)
+  // The player has answered at all; until then its silence says nothing.
+  const playerReady = useRef(false)
   const resumeOnReturn = useRef(false)
   const captionsCleared = useRef(false)
 
@@ -1256,8 +1261,23 @@ function TrailerStrip({ card, soundUnlocked }: { card: ForYouCard; soundUnlocked
           command('unloadModule', ['cc'])
         }
       }
-      if (msg.event === 'onReady' || msg.event === 'initialDelivery') tries = 31
+      if (msg.event === 'onReady' || msg.event === 'initialDelivery') {
+        if (!playerReady.current) command('addEventListener', ['onAutoplayBlocked'])
+        playerReady.current = true
+        tries = 31
+      }
+      // The browser won't play it with sound: play it muted, and start the
+      // rest of the visit's trailers that way. YouTube's volume control is
+      // still there to turn it up.
+      if (msg.event === 'onAutoplayBlocked') {
+        soundRefusedThisVisit = true
+        playMuted()
+      }
       if (msg.event === 'onError') setFailed(true)
+    }
+    const playMuted = () => {
+      command('mute')
+      command('playVideo')
     }
     window.addEventListener('message', onMessage)
     // Ask the player to report its state back. It ignores the request until it
@@ -1274,7 +1294,7 @@ function TrailerStrip({ card, soundUnlocked }: { card: ForYouCard; soundUnlocked
       window.clearInterval(listen)
       window.removeEventListener('message', onMessage)
     }
-  }, [loaded])
+  }, [loaded, command])
 
   useEffect(() => {
     if (!videoKey || !playing || started) return
@@ -1282,20 +1302,25 @@ function TrailerStrip({ card, soundUnlocked }: { card: ForYouCard; soundUnlocked
     return () => window.clearTimeout(t)
   }, [videoKey, playing, started, withSound])
 
-  // A browser that blocks sound simply never starts the video. Once the player
-  // has loaded, give it four seconds; then reload the same trailer muted — it
-  // plays, and YouTube's own volume control takes it from there.
+  // The block can be reported before the player has taken our subscription.
+  // As a fallback, a player that has answered but sits unstarted for four
+  // visible seconds is taken as blocked too — this trailer only. Buffering is
+  // the player trying, and a trailer that won't embed or was paused out of
+  // sight isn't the browser's doing.
   useEffect(() => {
-    if (!loaded || started || !withSound) return
-    const t = window.setTimeout(() => {
-      soundRefusedThisVisit = true
-      setSoundRefused(true)
-      captionsCleared.current = false
-      setLoaded(false)
-      setStalled(false)
-    }, 4000)
-    return () => window.clearTimeout(t)
-  }, [loaded, started, withSound])
+    if (!loaded || started || failed || !withSound) return
+    let unstarted = 0
+    const t = window.setInterval(() => {
+      const state = playerState.current
+      const idle = state === null || state === -1 || state === 5
+      if (!playerReady.current || !idle || document.hidden) return
+      if (++unstarted < 4) return
+      window.clearInterval(t)
+      command('mute')
+      command('playVideo')
+    }, 1000)
+    return () => window.clearInterval(t)
+  }, [loaded, started, failed, withSound, command])
 
   // A click on YouTube's controls moves keyboard focus into the player, where
   // the deck's arrow keys would never arrive. Hand focus back to the page
