@@ -15,7 +15,7 @@ import {
   PlayIcon,
   LinkSquare02Icon,
   Bookmark01Icon,
-  Undo02Icon,
+  ViewOffSlashIcon,
 } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import {
@@ -466,12 +466,13 @@ export function ForYouDeck() {
         <div className="flex shrink-0 items-center gap-1">
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="sm"
             onClick={() => setSkippedOpen(true)}
             aria-label="Skipped titles"
             title="Skipped titles"
           >
-            <HugeiconsIcon icon={Undo02Icon} />
+            <HugeiconsIcon icon={ViewOffSlashIcon} />
+            <span className="hidden sm:inline">Skipped</span>
           </Button>
           <Button variant="ghost" size="icon-sm" asChild>
             <Link href="/watchlist" aria-label="Watchlist" title="Watchlist">
