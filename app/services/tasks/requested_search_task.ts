@@ -836,11 +836,15 @@ class RequestedSearchTask {
     // Least-recently-searched first, never-searched before that. Without an
     // explicit order the database returned the same rows every run, so with a
     // per-run cap the tail of the wanted list was never searched at all.
+    // Among equals, a show's episodes go in watching order — S01E01 before
+    // S01E02, specials last — so the download client receives (and, working
+    // its queue first in, first out, downloads) a season from the start.
     const requestedEpisodes = await Episode.query()
       .where('requested', true)
       .where('hasFile', false)
       .orderByRaw('last_search_at asc nulls first')
-      .orderBy('airDate', 'desc')
+      .orderBy('tvShowId')
+      .orderByRaw('season_number = 0, season_number asc, episode_number asc')
       .preload('tvShow')
       .limit(MAX_EPISODES_PER_RUN * 3) // Fetch a few more in case some are skipped
 
@@ -1540,10 +1544,14 @@ class RequestedSearchTask {
     const result = { searched: 0, found: 0, grabbed: 0, errors: [] as string[] }
 
     try {
+      // Watching order, specials last: grabs reach the download client — and
+      // its first-in, first-out queue — as S01E01, S01E02, … instead of
+      // whatever order the database happened to return.
       const episodes = await Episode.query()
         .where('tvShowId', tvShowId)
         .where('requested', true)
         .where('hasFile', false)
+        .orderByRaw('season_number = 0, season_number asc, episode_number asc')
         .preload('tvShow')
 
       // Get episodes with active downloads
