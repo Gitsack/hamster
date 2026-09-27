@@ -10,6 +10,8 @@ import type { TmdbMovie, TmdbTvShow } from '#services/metadata/tmdb_service'
 import { tasteProviders } from '#services/taste/registry'
 import { bookLanguages, titleSpeaks } from '#services/library/book_languages'
 import { openLibraryService } from '#services/metadata/openlibrary_service'
+import { listenBrainz, coverUrl } from '#services/music/listenbrainz_client'
+import type { ArtistGenre } from '#services/music/listenbrainz_client'
 import type { TastePick, TasteProviderStatus, TasteSeed } from '#services/taste/types'
 import { recommendationService } from '#services/metadata/recommendation_service'
 import { cache } from '#services/cache/cache_service'
@@ -46,6 +48,11 @@ export interface ForYouCard {
   score: number
   /** Released recently: boosted in the deck and tagged on the card. */
   isNew: boolean
+  /**
+   * An album by an artist not yet in the library: requesting it adds the
+   * artist (as a container, not followed) and this one album.
+   */
+  albumRef?: { artistMbid: string; releaseGroupMbid: string }
 }
 
 export interface ForYouDeck {
@@ -205,6 +212,22 @@ export function cleanSubjects(subjects: string[] | null | undefined): string[] {
   return out
 }
 
+/** a1, b1, a2, b2, … — both lists stay represented near the top. */
+function alternate<T>(a: T[], b: T[]): T[] {
+  const out: T[] = []
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (i < a.length) out.push(a[i])
+    if (i < b.length) out.push(b[i])
+  }
+  return out
+}
+
+/** Albums that are really compilations, live records or reissues. */
+const NOT_A_STUDIO_ALBUM =
+  /\b(live|remix(es)?|remaster(ed)?|greatest|best of|collection|anthology|essential|hits|deluxe|edition|sessions?)\b/i
+
+const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase())
+
 function isMovie(item: TmdbMovie | TmdbTvShow): item is TmdbMovie {
   return 'title' in item
 }
@@ -246,7 +269,12 @@ class ForYouService {
     const [movies, shows, albums, books] = await Promise.all([
       enabled.has('movies') ? this.movieCards(taste) : [],
       enabled.has('tv') ? this.tvCards(taste) : [],
-      enabled.has('music') ? this.albumCards(userId) : [],
+      enabled.has('music')
+        ? Promise.all([
+            this.albumCards(userId),
+            this.newArtistCards(userId, taste).catch(() => [] as ForYouCard[]),
+          ]).then(([owned, discovered]) => alternate(owned, discovered))
+        : [],
       enabled.has('books') ? this.bookCards(userId, taste) : [],
     ])
 
@@ -757,6 +785,153 @@ class ForYouService {
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, DECK_SIZE)
+  }
+
+  /**
+   * Albums by artists who are not in the library yet. Listeners of the
+   * artists the user owns — weighted by how much of each they own — also play
+   * these (ListenBrainz similarity); artists whose genres match the library's
+   * rise, and so do those the user's swipes favour. Each is offered through
+   * its most played album, or a recent one that is getting real plays.
+   */
+  private async newArtistCards(userId: string, taste: TasteProfile): Promise<ForYouCard[]> {
+    const { rows: ownedRows } = await db.rawQuery(`
+      SELECT ar.musicbrainz_id AS mbid, ar.name, COUNT(DISTINCT a.id)::int AS n
+      FROM artists ar JOIN albums a ON a.artist_id = ar.id
+      WHERE ar.musicbrainz_id IS NOT NULL
+        AND EXISTS (SELECT 1 FROM track_files tf WHERE tf.album_id = a.id)
+      GROUP BY ar.musicbrainz_id, ar.name
+    `)
+    const owned = (ownedRows as { mbid: string; name: string; n: number }[]).map((r) => ({
+      ...r,
+      weight: Math.log2(1 + Math.min(Number(r.n), AFFINITY_CAP)) / Math.log2(1 + AFFINITY_CAP),
+    }))
+    if (owned.length === 0) return []
+
+    const inLibrary = new Set(
+      (
+        (await db.from('artists').whereNotNull('musicbrainz_id').select('musicbrainz_id')) as {
+          musicbrainz_id: string
+        }[]
+      ).map((r) => r.musicbrainz_id)
+    )
+    const acted = new Set(
+      (
+        (await db
+          .from('recommendation_feedback')
+          .where('user_id', userId)
+          .where('media_type', 'album')
+          .whereLike('external_id', 'new:%')
+          .select('external_id')) as { external_id: string }[]
+      ).map((r) => r.external_id.slice(4))
+    )
+
+    // The strongest shelves every time, plus a few others so the deck moves.
+    const byWeight = [...owned].sort((a, b) => b.weight - a.weight)
+    const seeds = [...byWeight.slice(0, 6), ...sample(byWeight.slice(6), 4)]
+    const lists = await Promise.allSettled(seeds.map((s) => listenBrainz.similarArtists(s.mbid)))
+
+    const found = new Map<
+      string,
+      { name: string; score: number; best: string; bestC: number; seeds: number }
+    >()
+    lists.forEach((result, i) => {
+      if (result.status !== 'fulfilled' || result.value.length === 0) return
+      const seed = seeds[i]
+      const top = result.value[0].score || 1
+      for (const artist of result.value) {
+        if (inLibrary.has(artist.mbid) || acted.has(artist.mbid)) continue
+        const c = seed.weight * (artist.score / top)
+        const entry = found.get(artist.mbid)
+        if (entry) {
+          entry.score += c
+          entry.seeds++
+          if (c > entry.bestC) Object.assign(entry, { best: seed.name, bestC: c })
+        } else {
+          found.set(artist.mbid, {
+            name: artist.name,
+            score: c,
+            best: seed.name,
+            bestC: c,
+            seeds: 1,
+          })
+        }
+      }
+    })
+    if (found.size === 0) return []
+
+    // Genre fit: the candidate's genres against the library's, weighted by
+    // how much of each artist the user owns.
+    const shortlist = [...found.entries()].sort((a, b) => b[1].score - a[1].score).slice(0, 30)
+    const genres = await listenBrainz
+      .artistGenres([...owned.map((o) => o.mbid), ...shortlist.map(([mbid]) => mbid)])
+      .catch(() => new Map<string, ArtistGenre[]>())
+    const profile = new Map<string, number>()
+    for (const o of owned) {
+      const list = genres.get(o.mbid) ?? []
+      const max = list[0]?.count || 1
+      for (const g of list.slice(0, 8)) {
+        profile.set(g.genre, (profile.get(g.genre) ?? 0) + o.weight * (g.count / max))
+      }
+    }
+    const profileMax = Math.max(1e-9, ...profile.values())
+
+    const ranked = shortlist
+      .map(([mbid, f]) => {
+        const own = (genres.get(mbid) ?? []).slice(0, 5)
+        const fit = own.length
+          ? own.reduce((sum, g) => sum + (profile.get(g.genre) ?? 0) / profileMax, 0) / own.length
+          : 0
+        const labels = own.slice(0, 3).map((g) => titleCase(g.genre))
+        const swipes = this.genreAffinity(labels, taste)
+        return {
+          mbid,
+          ...f,
+          labels,
+          rank: f.score + Math.log2(f.seeds) * 0.2 + fit * 0.6 + swipes * 0.4,
+        }
+      })
+      .sort((a, b) => b.rank - a.rank)
+      .slice(0, 14)
+
+    const albums = await Promise.allSettled(ranked.map((r) => listenBrainz.topAlbums(r.mbid)))
+    const cards: ForYouCard[] = []
+    ranked.forEach((r, i) => {
+      const result = albums[i]
+      if (result.status !== 'fulfilled') return
+      const studio = result.value.filter(
+        (a) => a.type === 'Album' && a.name && !NOT_A_STUDIO_ALBUM.test(a.name)
+      )
+      const top = studio[0]
+      if (!top) return
+      // A new album that people are actually playing beats the classic.
+      const recent = studio.find(
+        (a) => freshness(a.date, 'album').boost > 0 && a.listens >= top.listens * 0.05
+      )
+      const pick = recent ?? top
+      const fresh = freshness(pick.date, 'album')
+      cards.push({
+        key: `album:new:${r.mbid}`,
+        mediaType: 'album',
+        externalId: `new:${r.mbid}`,
+        title: pick.name,
+        year: pick.date ? new Date(pick.date).getFullYear() : null,
+        subtitle: r.name,
+        overview: null,
+        posterUrl: coverUrl(pick.coverReleaseMbid),
+        backdropUrl: null,
+        rating: null,
+        genres: r.labels,
+        reason:
+          r.seeds >= 3
+            ? `Similar to ${r.best} and ${r.seeds - 1} more you have`
+            : `Similar to ${r.best}`,
+        score: r.rank + fresh.boost + Math.random() * 0.1,
+        isNew: fresh.isNew,
+        albumRef: { artistMbid: r.mbid, releaseGroupMbid: pick.releaseGroupMbid },
+      })
+    })
+    return cards.sort((a, b) => b.score - a.score)
   }
 
   /**

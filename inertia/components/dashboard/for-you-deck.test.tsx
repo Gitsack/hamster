@@ -52,12 +52,22 @@ const deck = (cards: ForYouCard[], types: string[] | null = null) => ({
   requestDefaults: {
     movie: { qualityProfileId: 'qp', rootFolderId: 'rf' },
     tv: { qualityProfileId: 'qp2', rootFolderId: 'rf2' },
+    album: { qualityProfileId: 'qp3', rootFolderId: 'rf3' },
   },
 })
 
 let fetchMock: ReturnType<typeof vi.fn>
 function mockFetch(cards: ForYouCard[], types: string[] | null = null) {
   fetchMock = vi.fn((url: string) => {
+    if (url === '/api/v1/watch-providers/batch')
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            providers: { '1': [{ id: 8, name: 'Netflix', logoUrl: '/netflix.png' }] },
+          }),
+      })
     if (url.startsWith('/api/v1/for-you/extras/'))
       return Promise.resolve({
         ok: true,
@@ -221,6 +231,36 @@ describe('ForYouDeck', () => {
     expect(
       container.querySelector('[aria-roledescription="recommendation"] svg[aria-hidden="true"]')
     ).not.toBeNull()
+  })
+
+  it('requests an album by a new artist through the add-album endpoint', async () => {
+    mockFetch([
+      card({
+        key: 'album:new:ar1',
+        mediaType: 'album',
+        externalId: 'new:ar1',
+        title: 'Discovery',
+        albumRef: { artistMbid: 'ar1', releaseGroupMbid: 'rg1' },
+      }),
+    ])
+    render(<ForYouDeck />)
+    await start()
+    await userEvent.click(await screen.findByRole('button', { name: /^Request/ }))
+    await waitFor(() => expect(calls('/api/v1/albums')).toHaveLength(1))
+    expect(JSON.parse(calls('/api/v1/albums')[0][1].body)).toMatchObject({
+      musicbrainzId: 'rg1',
+      artistMusicbrainzId: 'ar1',
+      qualityProfileId: 'qp3',
+      rootFolderId: 'rf3',
+      requested: true,
+    })
+  })
+
+  it('shows where a film streams on its poster', async () => {
+    mockFetch([card({})])
+    render(<ForYouDeck />)
+    await start()
+    expect(await screen.findByAltText('Netflix')).toBeInTheDocument()
   })
 
   it('says when the deck is used up', async () => {

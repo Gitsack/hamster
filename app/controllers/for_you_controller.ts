@@ -40,7 +40,7 @@ export default class ForYouController {
       UserSetting.findBy('userId', userId),
     ])
 
-    const defaultsFor = (mediaType: 'movies' | 'tv') => {
+    const defaultsFor = (mediaType: 'movies' | 'tv' | 'music') => {
       const preferred = profiles.find(
         (p) => p.id === userSetting?.defaultQualityProfileId && p.mediaType === mediaType
       )
@@ -51,7 +51,11 @@ export default class ForYouController {
 
     return response.json({
       ...deck,
-      requestDefaults: { movie: defaultsFor('movies'), tv: defaultsFor('tv') },
+      requestDefaults: {
+        movie: defaultsFor('movies'),
+        tv: defaultsFor('tv'),
+        album: defaultsFor('music'),
+      },
       preferences: { types: userSetting?.forYouTypes ?? null },
     })
   }

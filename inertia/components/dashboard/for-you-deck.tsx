@@ -41,6 +41,8 @@ export interface ForYouCard {
   score: number
   /** Released recently; the deck already favours it, the card says so. */
   isNew?: boolean
+  /** An album by an artist not yet in the library. */
+  albumRef?: { artistMbid: string; releaseGroupMbid: string }
 }
 
 interface RequestDefaults {
@@ -61,7 +63,11 @@ interface DeckResponse {
     requests: number
     library: number
   }
-  requestDefaults: { movie: RequestDefaults | null; tv: RequestDefaults | null }
+  requestDefaults: {
+    movie: RequestDefaults | null
+    tv: RequestDefaults | null
+    album?: RequestDefaults | null
+  }
   /** The types the user last chose to see; null means all. */
   preferences?: { types: DeckMediaType[] | null }
 }
@@ -210,6 +216,32 @@ async function requestCard(
     const data = await res.json().catch(() => ({}))
     const base = card.mediaType === 'movie' ? '/movie' : '/tvshow'
     return { ok: true, href: data.id ? `${base}/${data.id}` : null }
+  }
+
+  // An album by a new artist: add the artist (not followed) and this album.
+  if (card.albumRef) {
+    const d = defaults.album
+    if (!d) {
+      return {
+        ok: false,
+        error:
+          'No quality profile or root folder for music. Add one in Settings → Media Management.',
+      }
+    }
+    const res = await postJson('/api/v1/albums', 'POST', {
+      musicbrainzId: card.albumRef.releaseGroupMbid,
+      artistMusicbrainzId: card.albumRef.artistMbid,
+      qualityProfileId: d.qualityProfileId,
+      rootFolderId: d.rootFolderId,
+      requested: true,
+      searchForAlbum: true,
+    })
+    if (!res.ok && res.status !== 409) {
+      const body = await res.json().catch(() => ({}))
+      return { ok: false, error: body.error || `The server rejected ${card.title}.` }
+    }
+    const data = await res.json().catch(() => ({}))
+    return { ok: true, href: data.id ? `/album/${data.id}` : null }
   }
 
   const res =
@@ -557,7 +589,10 @@ function Stack({
 
   // Look the next trailer up while this one plays, so it is ready on the swipe.
   useEffect(() => {
-    if (next) fetchTrailerKey(next)
+    if (next) {
+      fetchTrailerKey(next)
+      fetchProviders(next)
+    }
   }, [next])
 
   /** How far a drag must travel before letting go commits it. */
@@ -872,6 +907,75 @@ function fetchExtras(card: ForYouCard): Promise<CardExtras> {
 }
 
 const fetchTrailerKey = (card: ForYouCard) => fetchExtras(card).then((e) => e.key)
+
+interface StreamingProvider {
+  id: number
+  name: string
+  logoUrl: string
+}
+
+const providerCache = new Map<string, Promise<StreamingProvider[]>>()
+
+/**
+ * Where a film or show streams, on the services the user picked in settings —
+ * the same check the Search posters make.
+ */
+function fetchProviders(card: ForYouCard): Promise<StreamingProvider[]> {
+  if (card.mediaType !== 'movie' && card.mediaType !== 'tv') return Promise.resolve([])
+  let pending = providerCache.get(card.key)
+  if (!pending) {
+    pending = fetch('/api/v1/watch-providers/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tmdbIds: [card.externalId], type: card.mediaType }),
+    })
+      .then((res) => (res.ok ? res.json() : { providers: {} }))
+      .then(
+        (body: { providers?: Record<string, StreamingProvider[]> }) =>
+          body.providers?.[card.externalId] ?? []
+      )
+      .catch(() => [])
+    providerCache.set(card.key, pending)
+  }
+  return pending
+}
+
+/** Streaming logos on the poster, as on the Search posters: three, then "+N". */
+function ProviderBadges({ card }: { card: ForYouCard }) {
+  const [providers, setProviders] = useState<StreamingProvider[]>([])
+  useEffect(() => {
+    let live = true
+    fetchProviders(card).then((p) => live && setProviders(p))
+    return () => {
+      live = false
+    }
+  }, [card])
+  if (providers.length === 0) return null
+  const shown = providers.slice(0, 3)
+  const extra = providers.length - shown.length
+  return (
+    <div
+      className="streaming-fade-in absolute bottom-2 left-2 z-10 flex items-center -space-x-1"
+      aria-label={`Streams on ${providers.map((p) => p.name).join(', ')}`}
+    >
+      {shown.map((p) => (
+        <img
+          key={p.id}
+          src={p.logoUrl}
+          alt={p.name}
+          title={p.name}
+          draggable={false}
+          className="size-5 rounded-sm ring-1 ring-black/40 sm:size-6"
+        />
+      ))}
+      {extra > 0 && (
+        <span className="readout ml-0.5 rounded-sm bg-black/60 px-1 py-0.5 text-xs leading-4 text-white ring-1 ring-black/40">
+          +{extra}
+        </span>
+      )}
+    </div>
+  )
+}
 
 /** Reduced motion or a data-saver connection get a play button, not autoplay. */
 function mayAutoplay(): boolean {
@@ -1195,11 +1299,12 @@ function CardBody({ card }: { card: ForYouCard }) {
     <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 p-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-x-5 sm:p-4 lg:grid-cols-[10rem_minmax(0,1fr)]">
       <div
         className={cn(
-          'overflow-hidden rounded-lg bg-muted shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)]',
+          'relative overflow-hidden rounded-lg bg-muted shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)]',
           square ? 'aspect-square self-start' : 'aspect-[2/3]'
         )}
       >
         <DeckCover card={card} iconClassName="size-12 sm:size-14" />
+        <ProviderBadges card={card} />
       </div>
 
       <div className="flex min-w-0 flex-col gap-2 sm:gap-3">
