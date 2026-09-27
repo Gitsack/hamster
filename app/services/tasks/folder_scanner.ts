@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { libraryItemHasFile } from '#services/library/library_item_has_file'
 import path from 'node:path'
 import DownloadClient from '#models/download_client'
 import Movie from '#models/movie'
@@ -500,7 +501,7 @@ class FolderScanner {
           const normalizedName = folder.name.toLowerCase().replace(/[^a-z0-9]/g, '')
           const candidates = await Download.query()
             .whereIn('status', ['completed', 'importing', 'failed'])
-            .select('id', 'title', 'status', 'updated_at')
+            .select('id', 'title', 'status', 'updated_at', 'external_id')
           existingDownload =
             candidates.find(
               (d) => d.title.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedName
@@ -513,7 +514,18 @@ class FolderScanner {
             onProgress?.('cleaned', `Cleaned up "${folder.name}" (already completed)`)
             continue
           }
-          if (existingDownload.status === 'failed') {
+          if (existingDownload.status === 'failed' && existingDownload.externalId) {
+            // A failed record tied to a download-client job belongs to the
+            // completed-downloads scanner: it is what stops that scanner adopting
+            // the same client history entry again. Deleting it here made the two
+            // scanners recreate and re-fail one release every pass — a new
+            // "failed" history event every ten minutes, forever. Keep the record
+            // and just deal with the folder itself below (import it if it holds
+            // media, clean it up if it does not).
+            console.log(
+              `[FolderScanner] "${folder.name}" failed as a download-client job; handling the folder without retrying that job`
+            )
+          } else if (existingDownload.status === 'failed') {
             // Cooldown: don't retry rows updated in the last 5 minutes — avoids
             // tight loops when the failure is genuinely terminal (e.g. wrong
             // permissions). Outside the cooldown, delete the row so the normal
@@ -1526,26 +1538,7 @@ class FolderScanner {
    * Check if a library item already has files
    */
   private async checkIfAlreadyHasFile(match: { type: string; id: string }): Promise<boolean> {
-    switch (match.type) {
-      case 'movie': {
-        const movie = await Movie.find(match.id)
-        return movie?.hasFile ?? false
-      }
-      case 'episode': {
-        const episode = await Episode.find(match.id)
-        return episode?.hasFile ?? false
-      }
-      case 'album': {
-        const album = await Album.query().where('id', match.id).preload('trackFiles').first()
-        return (album?.trackFiles?.length ?? 0) > 0
-      }
-      case 'book': {
-        const book = await Book.find(match.id)
-        return book?.hasFile ?? false
-      }
-      default:
-        return false
-    }
+    return libraryItemHasFile(match)
   }
 
   /**

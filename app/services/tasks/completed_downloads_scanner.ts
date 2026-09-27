@@ -24,6 +24,7 @@ import type { ProgressCallback } from '#services/tasks/folder_scanner'
 import { deriveMediaType } from '#utils/media_type'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { historyService } from '#services/history/history_service'
+import { libraryItemHasFile } from '#services/library/library_item_has_file'
 
 /**
  * Service that scans download client completed folders for orphaned downloads
@@ -294,6 +295,15 @@ class CompletedDownloadsScanner {
     let outputPath = slot.storage
     if (client.settings?.remotePath && client.settings?.localPath) {
       outputPath = outputPath.replace(client.settings.remotePath, client.settings.localPath)
+    }
+
+    // The client still lists the job as completed, its files are gone, and the
+    // title is already on disk: it was imported earlier and the files moved.
+    // That is not a failure — adopting it produced a "download failed" event
+    // on every scan for as long as the client kept the history entry.
+    const outputCheck = await this.isPathAccessible(outputPath)
+    if (!outputCheck.accessible && (await libraryItemHasFile(match))) {
+      return { imported: false }
     }
 
     // Create a download record
