@@ -7,30 +7,13 @@ import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ProviderBadges, type ForYouCard } from '@/components/dashboard/for-you-deck'
+import { StreamingBadges } from '@/components/library/streaming-badges'
 import {
   TitleMeta,
   TitleName,
   TitlePoster,
   type TitleItem,
 } from '@/components/watchlist/title-list'
-
-/** What ProviderBadges needs of a card; the rest of a deck card doesn't apply here. */
-const asCard = (item: TitleItem): ForYouCard => ({
-  key: item.key,
-  mediaType: item.mediaType,
-  externalId: item.externalId,
-  title: item.title ?? '',
-  year: item.year,
-  subtitle: null,
-  overview: null,
-  posterUrl: item.posterUrl,
-  backdropUrl: null,
-  rating: null,
-  genres: item.genres,
-  reason: '',
-  score: 0,
-})
 
 export default function WatchlistPage() {
   const [items, setItems] = useState<TitleItem[] | null>(null)
@@ -92,7 +75,12 @@ export default function WatchlistPage() {
             <li key={item.key} className="flex min-w-0 flex-col gap-2">
               <div className="relative">
                 <TitlePoster item={item} />
-                <ProviderBadges card={asCard(item)} />
+                <StreamingBadges
+                  mediaType={item.mediaType}
+                  tmdbId={item.externalId}
+                  title={item.title ?? ''}
+                  className="absolute bottom-2 left-2 z-10"
+                />
               </div>
               <div className="flex items-start gap-1">
                 <div className="min-w-0 flex-1 space-y-0.5">

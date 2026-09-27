@@ -54,6 +54,7 @@ import { MediaHero } from '@/components/media-hero'
 import { SimilarLane } from '@/components/library/similar-lane'
 import { CastLane, type CastMember } from '@/components/library/cast-lane'
 import { StreamingOffers, type StreamingOffer } from '@/components/library/streaming-offers'
+import { StreamingBadges } from '@/components/library/streaming-badges'
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
 import { useActiveDownloads, type ActiveDownloadInfo } from '@/hooks/use_active_downloads'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
@@ -867,6 +868,9 @@ export default function TvShowDetail() {
               {searching ? 'Searching...' : 'Browse releases'}
             </span>
           </Button>
+          {show.tmdbId && (
+            <StreamingBadges size="large" mediaType="tv" tmdbId={show.tmdbId} title={show.title} />
+          )}
           {show.tmdbId && (
             <WatchlistButton
               compact

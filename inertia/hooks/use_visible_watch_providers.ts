@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import type { StreamingProviderInfo } from '@/components/library/media-teaser'
+import { primeProviders } from '@/components/library/streaming-badges'
 
 type ProviderMap = Record<string, StreamingProviderInfo[]>
 
@@ -38,6 +39,7 @@ export function useVisibleWatchProviders(type: 'movie' | 'tv') {
         const data = await response.json()
         if (data.providers && Object.keys(data.providers).length > 0) {
           setProviders((prev) => ({ ...prev, ...data.providers }))
+          primeProviders(type, data.providers)
         }
       }
     } catch {

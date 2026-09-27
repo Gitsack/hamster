@@ -32,6 +32,7 @@ import { AddMediaDialog, type QualityProfile } from '@/components/add-media-dial
 import { SeasonPickerDialog, type SeasonEpisodeSelection } from '@/components/season-picker-dialog'
 import { useActiveDownloads } from '@/hooks/use_active_downloads'
 import type { StreamingOffer } from '@/components/library/streaming-offers'
+import { StreamingBadges } from '@/components/library/streaming-badges'
 import { CastLane, type CastMember } from '@/components/library/cast-lane'
 import { SimilarLane } from '@/components/library/similar-lane'
 import { WatchlistButton } from '@/components/watchlist/watchlist-button'
@@ -742,6 +743,12 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
               </SheetBody>
 
               <SheetFooter>
+                <StreamingBadges
+                  size="large"
+                  mediaType="movie"
+                  tmdbId={movieDetails.tmdbId}
+                  title={movieDetails.title}
+                />
                 <WatchlistButton
                   item={{
                     mediaType: 'movie',
@@ -765,7 +772,6 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                 ) : (
                   <>
                     <AddDestination
-                      profiles={movieProfiles}
                       rootFolders={rootFolders}
                       mediaType="movies"
                       configLoaded={configLoaded}
@@ -923,6 +929,12 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
               </SheetBody>
 
               <SheetFooter>
+                <StreamingBadges
+                  size="large"
+                  mediaType="tv"
+                  tmdbId={tvShowDetails.tmdbId}
+                  title={tvShowDetails.title}
+                />
                 <WatchlistButton
                   item={{
                     mediaType: 'tv',
@@ -946,7 +958,6 @@ export function MediaPreviewProvider({ children }: { children: ReactNode }) {
                 ) : (
                   <>
                     <AddDestination
-                      profiles={tvProfiles}
                       rootFolders={rootFolders}
                       mediaType="tv"
                       configLoaded={configLoaded}
@@ -1034,23 +1045,18 @@ function ExternalLinks({
 }
 
 /**
- * States where an Add will actually land before it is committed. The operator running two
- * root folders should never have to guess which one a single tap chose for them.
+ * Warns before an Add when there is no root folder for it to land in.
  */
 function AddDestination({
-  profiles,
   rootFolders,
   mediaType,
   configLoaded,
 }: {
-  profiles: QualityProfile[]
   rootFolders: { id: string; path: string; mediaType: string }[]
   mediaType: 'movies' | 'tv'
   configLoaded: boolean
 }) {
-  if (!configLoaded) {
-    return <p className="text-muted-foreground text-xs">Checking destination…</p>
-  }
+  if (!configLoaded) return null
 
   const folder = rootFolders.find((rf) => rf.mediaType === mediaType)
   if (!folder) {
@@ -1062,14 +1068,5 @@ function AddDestination({
     )
   }
 
-  return (
-    <p className="text-muted-foreground text-xs">
-      Adds to{' '}
-      <span className="readout text-foreground">
-        {profiles.length === 1 ? profiles[0].name : 'a profile you pick next'}
-      </span>{' '}
-      in <span className="readout text-foreground">{folder.path}</span>, and searches indexers
-      immediately.
-    </p>
-  )
+  return null
 }
