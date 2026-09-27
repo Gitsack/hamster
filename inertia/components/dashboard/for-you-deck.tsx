@@ -15,6 +15,7 @@ import {
   PlayIcon,
 } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
+import { Select, SelectItem, SelectPopup, SelectTrigger } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMediaPreview } from '@/contexts/media_preview_context'
 import { cn } from '@/lib/utils'
@@ -69,10 +70,25 @@ interface DeckResponse {
     album?: RequestDefaults | null
   }
   /** The types the user last chose to see; null means all. */
-  preferences?: { types: DeckMediaType[] | null }
+  preferences?: { types: DeckMediaType[] | null; mode?: DeckMode }
+  mode?: DeckMode
 }
 
 const ALL_TYPES = ['movie', 'tv', 'album', 'book'] as const
+
+type DeckMode = 'for-you' | 'new' | 'classics' | 'top-rated'
+
+/** What the deck is about. Taste orders the cards within every mode. */
+const MODES: { value: DeckMode; label: string; hint: string }[] = [
+  { value: 'for-you', label: 'Your taste', hint: 'Picked from what you like' },
+  { value: 'new', label: 'New', hint: 'Released recently' },
+  { value: 'classics', label: 'Classics', hint: 'Decades old and still loved' },
+  {
+    value: 'top-rated',
+    label: 'Top rated',
+    hint: 'Weighted by how many rated it · music by plays',
+  },
+]
 
 /**
  * A faint tint per kind of media for covers that are missing. Hues sit between
@@ -137,6 +153,15 @@ function DeckCover({ card, iconClassName }: { card: ForYouCard; iconClassName: s
       />
     </div>
   )
+}
+
+/** Remember what the deck is about, like the type selection. */
+function saveMode(mode: DeckMode) {
+  fetch('/api/v1/for-you/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  }).catch(() => {})
 }
 
 /** Remember the user's type selection on the server, so it follows them. */
@@ -283,15 +308,22 @@ export function ForYouDeck() {
   // may play with sound; until then the deck is a preview.
   const [session, setSession] = useState<{ sound: boolean } | null>(null)
 
-  const load = useCallback(async (refresh = false) => {
+  // What the deck is about; the server remembers the user's last choice.
+  const [mode, setMode] = useState<DeckMode | null>(null)
+
+  const load = useCallback(async (refresh = false, asMode?: DeckMode) => {
     setLoading(true)
     setFailed(false)
     try {
-      const res = await fetch(`/api/v1/for-you${refresh ? '?refresh=1' : ''}`)
+      const qs = new URLSearchParams()
+      if (refresh) qs.set('refresh', '1')
+      if (asMode) qs.set('mode', asMode)
+      const res = await fetch(`/api/v1/for-you${qs.size ? `?${qs}` : ''}`)
       if (!res.ok) throw new Error(String(res.status))
       const body: DeckResponse = await res.json()
       setData(body)
       setCards(body.cards)
+      if (body.mode) setMode(body.mode)
       if (!restoredPrefs.current) {
         restoredPrefs.current = true
         setSelected(body.preferences?.types ?? [])
@@ -403,7 +435,7 @@ export function ForYouDeck() {
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={() => load(true)}
+            onClick={() => load(true, mode ?? undefined)}
             disabled={loading}
             aria-label="Build a fresh deck"
             title="Build a fresh deck"
@@ -413,28 +445,64 @@ export function ForYouDeck() {
         </div>
       </div>
 
-      {available.length > 1 && (
+      {/* Types on the left, scrolling sideways when they do not fit; what the
+          deck is about on the right, always in reach. */}
+      <div className="mb-3 flex items-center gap-2">
         <div
           role="group"
           aria-label="Show these types"
           data-deck-filters
-          className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:px-0"
+          className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pr-4 pb-0.5 [scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)] [&::-webkit-scrollbar]:hidden"
         >
-          <FilterChip active={shown.length === 0} onClick={showAll} count={cards.length}>
-            All
-          </FilterChip>
-          {available.map((t) => (
-            <FilterChip
-              key={t}
-              active={shown.includes(t)}
-              onClick={() => toggleType(t)}
-              count={cards.filter((c) => c.mediaType === t).length}
-            >
-              {TYPE_META[t].plural}
-            </FilterChip>
-          ))}
+          {available.length > 1 && (
+            <>
+              <FilterChip active={shown.length === 0} onClick={showAll} count={cards.length}>
+                All
+              </FilterChip>
+              {available.map((t) => (
+                <FilterChip
+                  key={t}
+                  active={shown.includes(t)}
+                  onClick={() => toggleType(t)}
+                  count={cards.filter((c) => c.mediaType === t).length}
+                >
+                  {TYPE_META[t].plural}
+                </FilterChip>
+              ))}
+            </>
+          )}
         </div>
-      )}
+        <div className="shrink-0">
+          <Select
+            value={mode ?? 'for-you'}
+            onValueChange={(value) => {
+              const next = value as DeckMode
+              if (next === mode) return
+              setMode(next)
+              saveMode(next)
+              load(false, next)
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              className="h-8 w-auto gap-1 rounded-full px-3 text-xs"
+              aria-label="What to show"
+            >
+              <span>{MODES.find((m) => m.value === (mode ?? 'for-you'))?.label}</span>
+            </SelectTrigger>
+            <SelectPopup>
+              {MODES.map((m) => (
+                <SelectItem key={m.value} value={m.value}>
+                  <span className="flex flex-col">
+                    <span>{m.label}</span>
+                    <span className="text-xs text-muted-foreground">{m.hint}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </div>
+      </div>
 
       {loading && !data ? (
         <DeckSkeleton />
@@ -443,7 +511,7 @@ export function ForYouDeck() {
           title="Couldn't build your deck"
           body="The recommendation sources didn't answer. TMDB may be rate-limiting, or Hamster lost its connection."
           action={
-            <Button variant="outline" size="sm" onClick={() => load(true)}>
+            <Button variant="outline" size="sm" onClick={() => load(true, mode ?? undefined)}>
               Try again
             </Button>
           }
@@ -470,7 +538,7 @@ export function ForYouDeck() {
           title="You're through the deck"
           body="Everything here has been requested or skipped. A fresh deck walks out from what you just picked."
           action={
-            <Button variant="outline" size="sm" onClick={() => load(true)}>
+            <Button variant="outline" size="sm" onClick={() => load(true, mode ?? undefined)}>
               <HugeiconsIcon icon={Refresh01Icon} />
               Build a fresh deck
             </Button>

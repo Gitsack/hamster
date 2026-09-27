@@ -263,6 +263,20 @@ describe('ForYouDeck', () => {
     expect(await screen.findByAltText('Netflix')).toBeInTheDocument()
   })
 
+  it('switches what the deck is about and remembers it', async () => {
+    mockFetch([card({})])
+    render(<ForYouDeck />)
+    await start()
+    await userEvent.click(screen.getByRole('combobox', { name: 'What to show' }))
+    await userEvent.click(await screen.findByRole('option', { name: /Classics/ }))
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([u]) => u === '/api/v1/for-you?mode=classics')).toBe(true)
+    )
+    expect(JSON.parse(calls('/api/v1/for-you/preferences').at(-1)![1].body)).toEqual({
+      mode: 'classics',
+    })
+  })
+
   it('says when the deck is used up', async () => {
     mockFetch([])
     render(<ForYouDeck />)

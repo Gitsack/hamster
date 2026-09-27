@@ -33,6 +33,10 @@ export default class UserSetting extends BaseModel {
   @column()
   declare forYouTypes: string[] | null
 
+  /** What the deck is about: for-you, new, classics or top-rated; null = for-you. */
+  @column()
+  declare forYouMode: string | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

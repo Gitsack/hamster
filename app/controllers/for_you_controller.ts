@@ -4,7 +4,8 @@ import QualityProfile from '#models/quality_profile'
 import RootFolder from '#models/root_folder'
 import UserSetting from '#models/user_setting'
 import RecommendationFeedback from '#models/recommendation_feedback'
-import { forYouService } from '#services/recommendations/for_you_service'
+import { forYouService, DECK_MODES } from '#services/recommendations/for_you_service'
+import type { DeckMode } from '#services/recommendations/for_you_service'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import { cache, CACHE_TTL } from '#services/cache/cache_service'
 
@@ -23,7 +24,9 @@ const preferencesValidator = vine.compile(
     types: vine
       .array(vine.enum(['movie', 'tv', 'album', 'book'] as const))
       .maxLength(4)
-      .nullable(),
+      .nullable()
+      .optional(),
+    mode: vine.enum(DECK_MODES).optional(),
   })
 )
 
@@ -33,11 +36,18 @@ export default class ForYouController {
     const userId = auth.user!.id
     const refresh = request.qs().refresh === '1'
 
-    const [deck, profiles, folders, userSetting] = await Promise.all([
-      forYouService.getDeck(userId, { refresh }),
+    const userSetting = await UserSetting.findBy('userId', userId)
+    const asked = request.qs().mode as DeckMode | undefined
+    const mode: DeckMode = DECK_MODES.includes(asked as DeckMode)
+      ? (asked as DeckMode)
+      : DECK_MODES.includes(userSetting?.forYouMode as DeckMode)
+        ? (userSetting!.forYouMode as DeckMode)
+        : 'for-you'
+
+    const [deck, profiles, folders] = await Promise.all([
+      forYouService.getDeck(userId, { refresh, mode }),
       QualityProfile.query().orderBy('createdAt', 'asc').select('id', 'mediaType'),
       RootFolder.query().select('id', 'mediaType'),
-      UserSetting.findBy('userId', userId),
     ])
 
     const defaultsFor = (mediaType: 'movies' | 'tv' | 'music') => {
@@ -56,16 +66,21 @@ export default class ForYouController {
         tv: defaultsFor('tv'),
         album: defaultsFor('music'),
       },
-      preferences: { types: userSetting?.forYouTypes ?? null },
+      mode,
+      preferences: { types: userSetting?.forYouTypes ?? null, mode },
     })
   }
 
   /** Remember which media types the user's deck shows. */
   async savePreferences({ auth, request, response }: HttpContext) {
-    const { types } = await request.validateUsing(preferencesValidator)
+    const { types, mode } = await request.validateUsing(preferencesValidator)
     const setting = await UserSetting.firstOrNew({ userId: auth.user!.id })
     // Nothing selected, or everything, both mean "all": store null.
-    setting.forYouTypes = types && types.length > 0 && types.length < 4 ? [...new Set(types)] : null
+    if (types !== undefined) {
+      setting.forYouTypes =
+        types && types.length > 0 && types.length < 4 ? [...new Set(types)] : null
+    }
+    if (mode !== undefined) setting.forYouMode = mode === 'for-you' ? null : mode
     await setting.save()
     return response.noContent()
   }

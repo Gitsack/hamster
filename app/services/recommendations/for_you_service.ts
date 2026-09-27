@@ -224,21 +224,57 @@ function alternate<T>(a: T[], b: T[]): T[] {
 
 /** Albums that are really compilations, live records or reissues. */
 const NOT_A_STUDIO_ALBUM =
-  /\b(live|remix(es)?|remaster(ed)?|greatest|best of|collection|anthology|essential|hits|deluxe|edition|sessions?)\b/i
+  /\b(live|remix(es)?|remaster(ed)?|masters|hi-res|greatest|best of|collection|anthology|essential|hits|deluxe|edition|sessions?|tracks|songs|classics|gold|platinum|number ones)\b/i
 
 const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase())
+
+/**
+ * What the deck is about. "For you" is the taste walk; the others narrow it to
+ * new releases, established classics, or the best rated — still ordered by
+ * the user's taste within that.
+ */
+export type DeckMode = 'for-you' | 'new' | 'classics' | 'top-rated'
+export const DECK_MODES: DeckMode[] = ['for-you', 'new', 'classics', 'top-rated']
+
+const YEAR_MS = 365.25 * 86_400_000
+const isoDaysAgo = (days: number) =>
+  new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
+
+/** Old enough to be a classic: films 20 years, shows 15, albums 20, books 25. */
+const CLASSIC_YEARS: Record<FeedbackMediaType, number> = { movie: 20, tv: 15, album: 20, book: 25 }
+
+export function isClassicDate(
+  released: string | Date | null | undefined,
+  mediaType: FeedbackMediaType,
+  now = Date.now()
+): boolean {
+  if (!released) return false
+  const time = new Date(released).getTime()
+  return !Number.isNaN(time) && now - time >= CLASSIC_YEARS[mediaType] * YEAR_MS
+}
+
+/**
+ * A rating that means something with few votes: the average pulled towards
+ * the typical score in proportion to how few votes back it (the weighted
+ * rating IMDb uses for its Top 250). A 9.0 from twelve votes lands near the
+ * middle; an 8.6 from twenty thousand stays high.
+ */
+export function weightedRating(average: number, votes: number, minVotes: number, typical = 6.8) {
+  if (!votes || votes <= 0) return typical
+  return (votes / (votes + minVotes)) * average + (minVotes / (votes + minVotes)) * typical
+}
 
 function isMovie(item: TmdbMovie | TmdbTvShow): item is TmdbMovie {
   return 'title' in item
 }
 
 class ForYouService {
-  deckCacheKey(userId: string) {
-    return `for-you:${userId}`
+  deckCacheKey(userId: string, mode: DeckMode = 'for-you') {
+    return `for-you:${userId}:${mode}`
   }
 
   invalidate(userId: string) {
-    cache.delete(this.deckCacheKey(userId))
+    cache.deleteByPrefix(`for-you:${userId}:`)
   }
 
   /** After a settings change that affects every user's taste profile. */
@@ -246,10 +282,13 @@ class ForYouService {
     cache.deleteByPrefix('for-you:')
   }
 
-  async getDeck(userId: string, { refresh = false } = {}): Promise<ForYouDeck> {
-    if (refresh) this.invalidate(userId)
-    const deck = await cache.getOrSet(this.deckCacheKey(userId), DECK_TTL, () =>
-      this.buildDeck(userId)
+  async getDeck(
+    userId: string,
+    { refresh = false, mode = 'for-you' as DeckMode } = {}
+  ): Promise<ForYouDeck> {
+    if (refresh) cache.delete(this.deckCacheKey(userId, mode))
+    const deck = await cache.getOrSet(this.deckCacheKey(userId, mode), DECK_TTL, () =>
+      this.buildDeck(userId, mode)
     )
 
     // The deck is cached, swipes are not: drop anything acted on since.
@@ -260,22 +299,22 @@ class ForYouService {
     return { ...deck, cards: deck.cards.filter((c) => !seen.has(c.key)) }
   }
 
-  private async buildDeck(userId: string): Promise<ForYouDeck> {
+  private async buildDeck(userId: string, mode: DeckMode): Promise<ForYouDeck> {
     const enabled = new Set(
       (await AppSetting.get<MediaType[]>('enabledMediaTypes', ['movies'])) ?? ['movies']
     )
     const taste = await this.buildTasteProfile(userId)
 
     const [movies, shows, albums, books] = await Promise.all([
-      enabled.has('movies') ? this.movieCards(taste) : [],
-      enabled.has('tv') ? this.tvCards(taste) : [],
+      enabled.has('movies') ? this.movieCards(taste, mode) : [],
+      enabled.has('tv') ? this.tvCards(taste, mode) : [],
       enabled.has('music')
         ? Promise.all([
-            this.albumCards(userId),
-            this.newArtistCards(userId, taste).catch(() => [] as ForYouCard[]),
+            this.albumCards(userId, mode),
+            this.newArtistCards(userId, taste, mode).catch(() => [] as ForYouCard[]),
           ]).then(([owned, discovered]) => alternate(owned, discovered))
         : [],
-      enabled.has('books') ? this.bookCards(userId, taste) : [],
+      enabled.has('books') ? this.bookCards(userId, taste, mode) : [],
     ])
 
     return {
@@ -428,26 +467,94 @@ class ForYouService {
   // Movies and shows
   // ---------------------------------------------------------------------------
 
-  private async movieCards(taste: TasteProfile): Promise<ForYouCard[]> {
+  private async movieCards(taste: TasteProfile, mode: DeckMode): Promise<ForYouCard[]> {
     const candidates = await this.walk(taste.movieSeeds, taste.exclude.movie, (id) =>
       tmdbService.getMovieRecommendations(id)
     )
     await this.addPicks(candidates, taste.exclude.movie, taste.picks.movie, (id) =>
       tmdbService.getMovie(id)
     )
-    await this.addPopular(candidates, taste.exclude.movie, 'movie')
-    return this.rank(candidates, taste, 'movie')
+    if (mode === 'for-you') await this.addPopular(candidates, taste.exclude.movie, 'movie')
+    else await this.addModePool(candidates, taste.exclude.movie, 'movie', mode)
+    return this.rank(candidates, taste, 'movie', mode)
   }
 
-  private async tvCards(taste: TasteProfile): Promise<ForYouCard[]> {
+  private async tvCards(taste: TasteProfile, mode: DeckMode): Promise<ForYouCard[]> {
     const candidates = await this.walk(taste.tvSeeds, taste.exclude.tv, (id) =>
       tmdbService.getTvShowRecommendations(id)
     )
     await this.addPicks(candidates, taste.exclude.tv, taste.picks.tv, (id) =>
       tmdbService.getTvShow(id)
     )
-    await this.addPopular(candidates, taste.exclude.tv, 'tv')
-    return this.rank(candidates, taste, 'tv')
+    if (mode === 'for-you') await this.addPopular(candidates, taste.exclude.tv, 'tv')
+    else await this.addModePool(candidates, taste.exclude.tv, 'tv', mode)
+    return this.rank(candidates, taste, 'tv', mode)
+  }
+
+  /**
+   * The titles a mode is about, straight from TMDB, so a mode is never limited
+   * to what the taste walk happened to find: popular recent releases, highly
+   * rated old titles with plenty of votes, or the best rated with enough votes
+   * to mean it. The walk's own finds still count, and rank higher.
+   */
+  private async addModePool(
+    candidates: Map<number, Candidate>,
+    exclude: Set<string>,
+    kind: 'movie' | 'tv',
+    mode: Exclude<DeckMode, 'for-you'>
+  ) {
+    const date = kind === 'movie' ? 'primary_release_date' : 'first_air_date'
+    const today = isoDaysAgo(0)
+    const params: Record<string, string | number> =
+      mode === 'new'
+        ? {
+            [`${date}.gte`]: isoDaysAgo(kind === 'movie' ? 180 : 365),
+            [`${date}.lte`]: today,
+            'sort_by': 'popularity.desc',
+            'vote_count.gte': 20,
+          }
+        : mode === 'classics'
+          ? {
+              [`${date}.lte`]: isoDaysAgo(CLASSIC_YEARS[kind] * 365),
+              'sort_by': 'vote_average.desc',
+              'vote_count.gte': kind === 'movie' ? 3000 : 800,
+            }
+          : {
+              'sort_by': 'vote_average.desc',
+              'vote_count.gte': kind === 'movie' ? 1500 : 500,
+            }
+    const reason =
+      mode === 'new'
+        ? 'New and popular'
+        : mode === 'classics'
+          ? 'A classic'
+          : 'Among the best rated'
+
+    const pages = await Promise.allSettled(
+      [1, 2, 3].map((page) =>
+        kind === 'movie'
+          ? tmdbService.discoverMovies({ ...params, page })
+          : tmdbService.discoverTvShows({ ...params, page })
+      )
+    )
+    const items: (TmdbMovie | TmdbTvShow)[] = pages.flatMap((p) =>
+      p.status === 'fulfilled' ? (p.value as (TmdbMovie | TmdbTvShow)[]) : []
+    )
+    items.forEach((item, rank) => {
+      if (exclude.has(String(item.id))) return
+      const contribution = 0.3 * (1 - rank / (items.length * 1.5))
+      const existing = candidates.get(item.id)
+      if (existing) {
+        existing.score += contribution
+        return
+      }
+      candidates.set(item.id, {
+        item,
+        score: contribution,
+        best: { contribution, reason },
+        seedCount: 1,
+      })
+    })
   }
 
   private async walk(
@@ -564,8 +671,13 @@ class ForYouService {
   private rank(
     candidates: Map<number, Candidate>,
     taste: TasteProfile,
-    mediaType: 'movie' | 'tv'
+    mediaType: 'movie' | 'tv',
+    mode: DeckMode = 'for-you'
   ): ForYouCard[] {
+    // Votes needed before a title's own average counts for much. Fan-heavy
+    // shows rate high on few votes, so shows need more than their numbers
+    // suggest.
+    const minVotes = mediaType === 'movie' ? 1500 : 1000
     const today = new Date().toISOString().slice(0, 10)
     const cards: ForYouCard[] = []
 
@@ -580,12 +692,31 @@ class ForYouService {
       const quality = ((item.voteAverage ?? 6) - 6.5) * 0.06
       const agreement = Math.log2(c.seedCount) * 0.25
       const fresh = freshness(released, mediaType)
+      const rated = weightedRating(item.voteAverage ?? 0, item.voteCount ?? 0, minVotes)
+
+      // Each mode keeps only what it is about, then lets taste order it.
+      if (mode === 'new' && fresh.boost === 0) continue
+      if (mode === 'classics' && !isClassicDate(released, mediaType)) continue
+      if (mode === 'top-rated' && (item.voteCount ?? 0) < minVotes / 2) continue
+
+      const jitter = Math.random() * 0.08
       const score =
-        c.score + agreement + affinity * 0.45 + quality + fresh.boost + Math.random() * 0.08
+        mode === 'new'
+          ? c.score * 0.5 + affinity * 0.6 + fresh.boost * 2 + quality + jitter
+          : mode === 'classics'
+            ? c.score * 0.5 + affinity * 0.6 + (rated - 6.8) * 0.4 + jitter
+            : mode === 'top-rated'
+              ? (rated - 6.8) * 1.2 + affinity * 0.5 + c.score * 0.3 + jitter
+              : c.score + agreement + affinity * 0.45 + quality + fresh.boost + jitter
 
       // Several seeds agreeing is the better explanation than any one of them.
-      const reason =
+      let reason =
         c.seedCount >= 3 ? `${c.best.reason} and ${c.seedCount - 1} more you liked` : c.best.reason
+      if (mode === 'top-rated' && !reason.startsWith('Because')) {
+        reason = `Rated ${(item.voteAverage ?? 0).toFixed(1)} by ${(item.voteCount ?? 0).toLocaleString('en')} people`
+      }
+      if (mode === 'classics' && reason === 'A classic' && item.year)
+        reason = `A classic from ${item.year}`
 
       const title = isMovie(item) ? item.title : (item as TmdbTvShow).name
       cards.push({
@@ -617,7 +748,15 @@ class ForYouService {
   // Albums and books — from artists and authors already in the library
   // ---------------------------------------------------------------------------
 
-  private async albumCards(userId: string): Promise<ForYouCard[]> {
+  private async albumCards(userId: string, mode: DeckMode = 'for-you'): Promise<ForYouCard[]> {
+    const modeFilter =
+      mode === 'new'
+        ? `AND a.release_date >= now() - interval '730 days'`
+        : mode === 'classics'
+          ? `AND a.release_date <= now() - interval '${CLASSIC_YEARS.album} years'`
+          : ''
+    // "Top rated" for music is most played: more per artist to choose from.
+    const perArtist = mode === 'top-rated' ? 8 : 2
     const { rows } = await db.rawQuery(
       `
       WITH owned AS (
@@ -628,6 +767,7 @@ class ForYouService {
       ),
       ranked AS (
         SELECT a.id, a.title, a.album_type, a.release_date, a.image_url, a.overview,
+               a.musicbrainz_release_group_id AS rg, ar.musicbrainz_id AS artist_mbid,
                ar.name AS artist_name, owned.n,
                ROW_NUMBER() OVER (PARTITION BY a.artist_id ORDER BY random()) AS pick
         FROM albums a
@@ -644,20 +784,53 @@ class ForYouService {
             SELECT 1 FROM recommendation_feedback f
             WHERE f.user_id = ? AND f.media_type = 'album' AND f.external_id = a.id::text
           )
+          ${modeFilter}
       )
-      SELECT * FROM ranked WHERE pick <= 2
+      SELECT * FROM ranked WHERE pick <= ${perArtist}
       `,
       [userId]
     )
 
-    return (rows as any[])
+    // Most played: ListenBrainz play counts, matched by release group; the two
+    // most played unowned albums per artist.
+    let plays = new Map<string, number>()
+    let candidateRows = rows as any[]
+    if (mode === 'top-rated') {
+      const artists = [...new Set(candidateRows.map((r) => r.artist_mbid).filter(Boolean))].slice(
+        0,
+        30
+      )
+      const tops = await Promise.allSettled(artists.map((m) => listenBrainz.topAlbums(m)))
+      plays = new Map(
+        tops.flatMap((t) =>
+          t.status === 'fulfilled'
+            ? t.value.map((a) => [a.releaseGroupMbid, a.listens] as const)
+            : []
+        )
+      )
+      const perArtistKept = new Map<string, number>()
+      candidateRows = candidateRows
+        .filter((r) => r.rg && (plays.get(r.rg) ?? 0) > 0)
+        .sort((a, b) => (plays.get(b.rg) ?? 0) - (plays.get(a.rg) ?? 0))
+        .filter((r) => {
+          const kept = perArtistKept.get(r.artist_mbid) ?? 0
+          if (kept >= 2) return false
+          perArtistKept.set(r.artist_mbid, kept + 1)
+          return true
+        })
+    }
+
+    return candidateRows
+      .filter((r) => !NOT_A_STUDIO_ALBUM.test(r.title))
       .map((r) => {
         const n = Number(r.n)
         const date = r.release_date ? new Date(r.release_date) : null
         const fresh = freshness(date, 'album')
+        const listens = plays.get(r.rg) ?? 0
         const score =
           Math.log2(1 + Math.min(n, AFFINITY_CAP)) * 0.5 +
-          fresh.boost +
+          (mode === 'top-rated' ? Math.log10(1 + listens) * 0.4 : 0) +
+          fresh.boost * (mode === 'new' ? 2 : 1) +
           (r.album_type === 'album' ? 0.2 : 0) +
           (r.image_url ? 0.1 : -0.3) +
           Math.random() * 0.3
@@ -674,9 +847,11 @@ class ForYouService {
           rating: null,
           genres: [],
           reason:
-            n === 1
-              ? `You have an album by ${r.artist_name}`
-              : `You have ${n} albums by ${r.artist_name}`,
+            mode === 'top-rated'
+              ? `One of ${r.artist_name}'s most played albums`
+              : n === 1
+                ? `You have an album by ${r.artist_name}`
+                : `You have ${n} albums by ${r.artist_name}`,
           score,
           isNew: fresh.isNew,
         }
@@ -685,7 +860,11 @@ class ForYouService {
       .slice(0, DECK_SIZE)
   }
 
-  private async bookCards(userId: string, taste: TasteProfile): Promise<ForYouCard[]> {
+  private async bookCards(
+    userId: string,
+    taste: TasteProfile,
+    mode: DeckMode = 'for-you'
+  ): Promise<ForYouCard[]> {
     const { rows } = await db.rawQuery(
       `
       WITH owned AS (
@@ -693,7 +872,7 @@ class ForYouService {
         FROM books WHERE has_file = true GROUP BY author_id
       ),
       ranked AS (
-        SELECT b.id, b.title, b.release_date, b.cover_url, b.overview, b.rating, b.genres,
+        SELECT b.id, b.title, b.release_date, b.cover_url, b.overview, b.rating, b.ratings_count, b.genres,
                b.series_name, b.series_position, b.language, b.openlibrary_id,
                au.name AS author_name, owned.n, owned.titles AS owned_titles,
                ROW_NUMBER() OVER (PARTITION BY b.author_id ORDER BY random()) AS pick
@@ -717,11 +896,24 @@ class ForYouService {
     // Only books in a language the user reads: the languages of what they have
     // on disk or requested. Looked up (once, then stored) only for the
     // candidates that would otherwise make the deck, two per author.
+    // New and classics are about dates, which suggestions often lack: fetch
+    // them for the whole pool first (a request per forty books).
+    if (mode === 'new' || mode === 'classics') await this.fillPublishYears(rows as any[])
+    const currentYear = new Date().getFullYear()
+    const fitsMode = (r: any) => {
+      const year = r.release_date ? new Date(r.release_date).getFullYear() : null
+      if (mode === 'new') return year !== null && year >= currentYear - 2
+      if (mode === 'classics') return isClassicDate(r.release_date, 'book')
+      if (mode === 'top-rated') return Number(r.ratings_count ?? 0) >= 5
+      return true
+    }
+
     const readable = await bookLanguages.owned()
     const perAuthor = new Map<string, number>()
     const chosen: any[] = []
     for (const r of rows as any[]) {
       if (!isWorthSuggestingBook(r.title, r.owned_titles ?? [])) continue
+      if (!fitsMode(r)) continue
       if ((perAuthor.get(r.author_name) ?? 0) >= 2) continue
       if (readable.size > 0) {
         const language = await bookLanguages.of(r)
@@ -754,9 +946,14 @@ class ForYouService {
         // Subjects learn from swipes the way film genres do: requested books
         // pull theirs up, skipped ones push theirs down.
         const affinity = this.genreAffinity(genres, taste)
+        const rated =
+          mode === 'top-rated'
+            ? weightedRating(Number(r.rating ?? 0) * 2, Number(r.ratings_count ?? 0), 20)
+            : 6.8
         const score =
           Math.log2(1 + Math.min(n, AFFINITY_CAP)) * 0.5 +
-          fresh.boost +
+          fresh.boost * (mode === 'new' ? 2 : 1) +
+          (rated - 6.8) * 1.2 +
           affinity * 0.5 +
           (r.cover_url ? 0.1 : -0.3) +
           Math.random() * 0.3
@@ -794,7 +991,11 @@ class ForYouService {
    * rise, and so do those the user's swipes favour. Each is offered through
    * its most played album, or a recent one that is getting real plays.
    */
-  private async newArtistCards(userId: string, taste: TasteProfile): Promise<ForYouCard[]> {
+  private async newArtistCards(
+    userId: string,
+    taste: TasteProfile,
+    mode: DeckMode = 'for-you'
+  ): Promise<ForYouCard[]> {
     const { rows: ownedRows } = await db.rawQuery(`
       SELECT ar.musicbrainz_id AS mbid, ar.name, COUNT(DISTINCT a.id)::int AS n
       FROM artists ar JOIN albums a ON a.artist_id = ar.id
@@ -908,7 +1109,16 @@ class ForYouService {
       const recent = studio.find(
         (a) => freshness(a.date, 'album').boost > 0 && a.listens >= top.listens * 0.05
       )
-      const pick = recent ?? top
+      // Each mode picks the album it is about, or passes on the artist.
+      const pick =
+        mode === 'new'
+          ? recent
+          : mode === 'classics'
+            ? studio.find((a) => isClassicDate(a.date, 'album'))
+            : mode === 'top-rated'
+              ? top
+              : (recent ?? top)
+      if (!pick) return
       const fresh = freshness(pick.date, 'album')
       cards.push({
         key: `album:new:${r.mbid}`,
@@ -926,7 +1136,11 @@ class ForYouService {
           r.seeds >= 3
             ? `Similar to ${r.best} and ${r.seeds - 1} more you have`
             : `Similar to ${r.best}`,
-        score: r.rank + fresh.boost + Math.random() * 0.1,
+        score:
+          r.rank +
+          fresh.boost * (mode === 'new' ? 2 : 1) +
+          (mode === 'top-rated' ? Math.log10(1 + pick.listens) * 0.3 : 0) +
+          Math.random() * 0.1,
         isNew: fresh.isNew,
         albumRef: { artistMbid: r.mbid, releaseGroupMbid: pick.releaseGroupMbid },
       })

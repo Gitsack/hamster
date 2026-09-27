@@ -2,6 +2,8 @@ import { test } from '@japa/runner'
 import {
   cleanSubjects,
   freshness,
+  isClassicDate,
+  weightedRating,
   isWorthSuggestingBook,
 } from '#services/recommendations/for_you_service'
 
@@ -76,5 +78,25 @@ test.group('for_you_service subjects', () => {
       ['Fiction', 'Science fiction']
     )
     assert.deepEqual(cleanSubjects(null), [])
+  })
+})
+
+test.group('for_you_service modes', () => {
+  test('a high average on few votes does not beat a solid one on many', ({ assert }) => {
+    const fewVotes = weightedRating(9.0, 12, 1500)
+    const manyVotes = weightedRating(8.6, 20000, 1500)
+    assert.isBelow(fewVotes, 7)
+    assert.isAbove(manyVotes, 8.4)
+    assert.isAbove(manyVotes, fewVotes)
+    assert.equal(weightedRating(9, 0, 1500), 6.8)
+  })
+
+  test('classics are old enough for their kind', ({ assert }) => {
+    const now = new Date('2026-09-27').getTime()
+    assert.isTrue(isClassicDate('1994-09-23', 'movie', now))
+    assert.isFalse(isClassicDate('2012-01-01', 'movie', now))
+    assert.isTrue(isClassicDate('2005-03-24', 'tv', now))
+    assert.isFalse(isClassicDate('2010-01-01', 'book', now))
+    assert.isFalse(isClassicDate(null, 'album', now))
   })
 })
