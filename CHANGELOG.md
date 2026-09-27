@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.38.0](https://github.com/Gitsack/hamster/compare/hamster-v1.37.0...hamster-v1.38.0) (2026-09-27)
+
+
+### Features
+
+* **preview:** streaming services beside the actions ([3b439cd](https://github.com/Gitsack/hamster/commit/3b439cdd479eee91114fa7d2d6d5a2d6f6ffd479))
+
 ## [1.37.0](https://github.com/Gitsack/hamster/compare/hamster-v1.36.3...hamster-v1.37.0) (2026-09-27)
 
 
