@@ -1,5 +1,9 @@
 import { test } from '@japa/runner'
-import { isWorthSuggestingBook } from '#services/recommendations/for_you_service'
+import {
+  cleanSubjects,
+  freshness,
+  isWorthSuggestingBook,
+} from '#services/recommendations/for_you_service'
 
 test.group('for_you_service book filter', () => {
   const owned = ['The Subtle Art of Not Giving a F*ck', 'Everything Is F*cked']
@@ -30,5 +34,47 @@ test.group('for_you_service book filter', () => {
 
   test('keeps foreign-language titles when that is what the user reads', ({ assert }) => {
     assert.isTrue(isWorthSuggestingBook('Der Prozess', ['Die Verwandlung']))
+  })
+})
+
+test.group('for_you_service freshness', () => {
+  const now = new Date('2026-09-27T12:00:00Z').getTime()
+
+  test('boosts recent releases, most when newest, and tags them new early on', ({ assert }) => {
+    const lastWeek = freshness('2026-09-20', 'movie', now)
+    const tenMonths = freshness('2025-11-27', 'movie', now)
+    assert.isTrue(lastWeek.isNew)
+    assert.isFalse(tenMonths.isNew)
+    assert.isAbove(lastWeek.boost, tenMonths.boost)
+    assert.isAbove(tenMonths.boost, 0)
+  })
+
+  test('gives nothing to old, unreleased or undated titles', ({ assert }) => {
+    assert.deepEqual(freshness('2019-05-01', 'movie', now), { boost: 0, isNew: false })
+    assert.deepEqual(freshness('2027-01-01', 'movie', now), { boost: 0, isNew: false })
+    assert.deepEqual(freshness(null, 'book', now), { boost: 0, isNew: false })
+  })
+
+  test('albums count as new for longer than films', ({ assert }) => {
+    assert.equal(freshness('2025-06-01', 'movie', now).boost, 0)
+    assert.isAbove(freshness('2025-06-01', 'album', now).boost, 0)
+  })
+})
+
+test.group('for_you_service subjects', () => {
+  test('keeps short readable subjects and drops machine tags and noise', ({ assert }) => {
+    assert.deepEqual(
+      cleanSubjects([
+        'nyt:combined-print-and-e-book-fiction=2020-10-18',
+        'New York Times bestseller',
+        'Fiction',
+        'fiction',
+        'Science fiction',
+        'Popular works',
+        'Fiction, science fiction, general and other very long subject lines',
+      ]),
+      ['Fiction', 'Science fiction']
+    )
+    assert.deepEqual(cleanSubjects(null), [])
   })
 })

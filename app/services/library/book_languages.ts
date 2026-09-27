@@ -94,6 +94,22 @@ export function guessLanguage(text: string): string | null {
   return best[0]
 }
 
+/**
+ * For a book whose language nobody knows: does its title use a common word of
+ * one of these languages? "Good Food For Bad Days" does ("for"); a Turkish
+ * title in plain ASCII does not. Two-letter words are too ambiguous across
+ * languages to count.
+ */
+export function titleSpeaks(title: string, languages: Set<string>): boolean {
+  const words = new Set(title.toLowerCase().match(/\p{L}+/gu) ?? [])
+  for (const lang of languages) {
+    for (const word of STOPWORDS[lang] ?? []) {
+      if (word.length >= 3 && words.has(word)) return true
+    }
+  }
+  return false
+}
+
 const htmlToText = (html: string) =>
   html
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')

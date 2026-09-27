@@ -4,6 +4,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import zlib from 'node:zlib'
 import {
+  titleSpeaks,
   guessLanguage,
   normalizeLanguage,
   readEpubLanguage,
@@ -110,5 +111,13 @@ test.group('book languages', () => {
     await fs.writeFile(file, zip(epub('nl', english.repeat(10)), true))
     assert.equal(await readEpubLanguage(file), 'en')
     await fs.rm(dir, { recursive: true })
+  })
+
+  test('lets a title decide when the language is unknown', ({ assert }) => {
+    const readable = new Set(['en', 'de'])
+    assert.isTrue(titleSpeaks('Good Food For Bad Days', readable))
+    assert.isTrue(titleSpeaks('Der Hund und die Katze', readable))
+    assert.isFalse(titleSpeaks('Olu Babalar Kulubu', readable))
+    assert.isFalse(titleSpeaks('Raons per seguir vivint', readable))
   })
 })

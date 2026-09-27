@@ -39,6 +39,8 @@ export interface ForYouCard {
   genres: string[]
   reason: string
   score: number
+  /** Released recently; the deck already favours it, the card says so. */
+  isNew?: boolean
 }
 
 interface RequestDefaults {
@@ -97,12 +99,7 @@ function DeckCover({ card, iconClassName }: { card: ForYouCard; iconClassName: s
     return (
       <div className="relative size-full">
         {/* Covers can take a while; the tile breathes until one arrives. */}
-        {!loaded && (
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 animate-pulse bg-muted motion-reduce:animate-none"
-          />
-        )}
+        {!loaded && <div aria-hidden="true" className="cover-loading absolute inset-0" />}
         <img
           ref={imgRef}
           src={card.posterUrl}
@@ -1210,6 +1207,11 @@ function CardBody({ card }: { card: ForYouCard }) {
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <HugeiconsIcon icon={meta.icon} className="size-3.5 shrink-0" />
             <span>{meta.label}</span>
+            {card.isNew && (
+              <span className="rounded-full border border-border px-1.5 text-xs leading-4 font-medium text-foreground">
+                New
+              </span>
+            )}
             {card.year && (
               <>
                 <span aria-hidden="true">·</span>

@@ -8,7 +8,8 @@ import type { FeedbackMediaType } from '#models/recommendation_feedback'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import type { TmdbMovie, TmdbTvShow } from '#services/metadata/tmdb_service'
 import { tasteProviders } from '#services/taste/registry'
-import { bookLanguages } from '#services/library/book_languages'
+import { bookLanguages, titleSpeaks } from '#services/library/book_languages'
+import { openLibraryService } from '#services/metadata/openlibrary_service'
 import type { TastePick, TasteProviderStatus, TasteSeed } from '#services/taste/types'
 import { recommendationService } from '#services/metadata/recommendation_service'
 import { cache } from '#services/cache/cache_service'
@@ -43,6 +44,8 @@ export interface ForYouCard {
   genres: string[]
   reason: string
   score: number
+  /** Released recently: boosted in the deck and tagged on the card. */
+  isNew: boolean
 }
 
 export interface ForYouDeck {
@@ -151,6 +154,57 @@ export function isWorthSuggestingBook(title: string, owned: string[]): boolean {
   })
 }
 
+/**
+ * How long something counts as new, per kind of media. Albums and books reach
+ * people more slowly than films and shows.
+ */
+const NEW_WINDOW_DAYS: Record<FeedbackMediaType, number> = {
+  movie: 365,
+  tv: 365,
+  album: 730,
+  book: 540,
+}
+
+/**
+ * New releases rise in the deck without taking it over: a boost that fades
+ * over the window, on top of everything else that decides a card's place —
+ * not a lane of their own. Tagged "new" in the first half of the window.
+ */
+export function freshness(
+  released: string | Date | null | undefined,
+  mediaType: FeedbackMediaType,
+  now = Date.now()
+): { boost: number; isNew: boolean } {
+  if (!released) return { boost: 0, isNew: false }
+  const time = new Date(released).getTime()
+  if (Number.isNaN(time)) return { boost: 0, isNew: false }
+  const age = (now - time) / 86_400_000
+  const window = NEW_WINDOW_DAYS[mediaType]
+  if (age < 0 || age > window) return { boost: 0, isNew: false }
+  return { boost: 0.1 + 0.4 * (1 - age / window), isNew: age <= window / 2 }
+}
+
+/**
+ * OpenLibrary subjects are free text in any language, with machine tags mixed
+ * in ("nyt:combined-print-and-e-book-fiction=2020-10-18"). Keep a few short,
+ * readable ones — for the card and for learning what the user skips.
+ */
+export function cleanSubjects(subjects: string[] | null | undefined): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of subjects ?? []) {
+    const subject = raw.trim()
+    if (!subject || /[:=]/.test(subject) || subject.length > 28) continue
+    if (/bestseller|reviewed|popular works|accessible book|protected daisy/i.test(subject)) continue
+    const key = subject.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(subject)
+    if (out.length === 6) break
+  }
+  return out
+}
+
 function isMovie(item: TmdbMovie | TmdbTvShow): item is TmdbMovie {
   return 'title' in item
 }
@@ -193,7 +247,7 @@ class ForYouService {
       enabled.has('movies') ? this.movieCards(taste) : [],
       enabled.has('tv') ? this.tvCards(taste) : [],
       enabled.has('music') ? this.albumCards(userId) : [],
-      enabled.has('books') ? this.bookCards(userId) : [],
+      enabled.has('books') ? this.bookCards(userId, taste) : [],
     ])
 
     return {
@@ -497,7 +551,9 @@ class ForYouService {
       const affinity = this.genreAffinity(item.genres ?? [], taste)
       const quality = ((item.voteAverage ?? 6) - 6.5) * 0.06
       const agreement = Math.log2(c.seedCount) * 0.25
-      const score = c.score + agreement + affinity * 0.45 + quality + Math.random() * 0.08
+      const fresh = freshness(released, mediaType)
+      const score =
+        c.score + agreement + affinity * 0.45 + quality + fresh.boost + Math.random() * 0.08
 
       // Several seeds agreeing is the better explanation than any one of them.
       const reason =
@@ -518,6 +574,7 @@ class ForYouService {
         genres: item.genres ?? [],
         reason,
         score,
+        isNew: fresh.isNew,
       })
     }
 
@@ -569,8 +626,10 @@ class ForYouService {
       .map((r) => {
         const n = Number(r.n)
         const date = r.release_date ? new Date(r.release_date) : null
+        const fresh = freshness(date, 'album')
         const score =
           Math.log2(1 + Math.min(n, AFFINITY_CAP)) * 0.5 +
+          fresh.boost +
           (r.album_type === 'album' ? 0.2 : 0) +
           (r.image_url ? 0.1 : -0.3) +
           Math.random() * 0.3
@@ -591,13 +650,14 @@ class ForYouService {
               ? `You have an album by ${r.artist_name}`
               : `You have ${n} albums by ${r.artist_name}`,
           score,
+          isNew: fresh.isNew,
         }
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, DECK_SIZE)
   }
 
-  private async bookCards(userId: string): Promise<ForYouCard[]> {
+  private async bookCards(userId: string, taste: TasteProfile): Promise<ForYouCard[]> {
     const { rows } = await db.rawQuery(
       `
       WITH owned AS (
@@ -638,17 +698,38 @@ class ForYouService {
       if (readable.size > 0) {
         const language = await bookLanguages.of(r)
         if (language && !readable.has(language)) continue
+        // Language unknown even to OpenLibrary: let the title decide.
+        if (!language && !titleSpeaks(r.title, readable)) continue
       }
       perAuthor.set(r.author_name, (perAuthor.get(r.author_name) ?? 0) + 1)
       chosen.push(r)
     }
 
-    return chosen
+    await this.fillPublishYears(chosen)
+
+    // OpenLibrary sometimes holds the same book as two works ("Gut" twice, one
+    // dated 1676). One card per author and title, the latest-dated one.
+    const byTitle = new Map<string, any>()
+    for (const r of chosen) {
+      const key = `${r.author_name}|${normalizeTitle(r.title)}`
+      const prev = byTitle.get(key)
+      const year = (x: any) => (x?.release_date ? new Date(x.release_date).getFullYear() : 0)
+      if (!prev || year(r) > year(prev)) byTitle.set(key, r)
+    }
+
+    return [...byTitle.values()]
       .map((r) => {
         const n = Number(r.n)
         const date = r.release_date ? new Date(r.release_date) : null
+        const fresh = freshness(date, 'book')
+        const genres = cleanSubjects(r.genres)
+        // Subjects learn from swipes the way film genres do: requested books
+        // pull theirs up, skipped ones push theirs down.
+        const affinity = this.genreAffinity(genres, taste)
         const score =
           Math.log2(1 + Math.min(n, AFFINITY_CAP)) * 0.5 +
+          fresh.boost +
+          affinity * 0.5 +
           (r.cover_url ? 0.1 : -0.3) +
           Math.random() * 0.3
         const series = r.series_name
@@ -665,16 +746,40 @@ class ForYouService {
           posterUrl: r.cover_url ?? null,
           backdropUrl: null,
           rating: r.rating ? Number(r.rating) * 2 : null,
-          genres: r.genres ?? [],
+          genres,
           reason:
             n === 1
               ? `You have a book by ${r.author_name}`
               : `You have ${n} books by ${r.author_name}`,
           score,
+          isNew: fresh.isNew,
         }
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, DECK_SIZE)
+  }
+
+  /**
+   * Suggested books usually arrive from an author's OpenLibrary bibliography
+   * without a date. Look the first publication year up for the ones about to
+   * be shown — one request for all of them — and keep it, stored the way the
+   * rest of the app stores book years (1 January of that year).
+   */
+  private async fillPublishYears(rows: any[]) {
+    const missing = rows.filter((r) => !r.release_date && r.openlibrary_id)
+    if (missing.length === 0) return
+    const years = await openLibraryService
+      .getFirstPublishYears(missing.map((r) => r.openlibrary_id))
+      .catch(() => new Map<string, number>())
+    for (const r of missing) {
+      const key = r.openlibrary_id.startsWith('/works/')
+        ? r.openlibrary_id
+        : `/works/${r.openlibrary_id}`
+      const year = years.get(key)
+      if (!year) continue
+      r.release_date = `${year}-01-01`
+      await db.from('books').where('id', r.id).update({ release_date: r.release_date })
+    }
   }
 
   // ---------------------------------------------------------------------------

@@ -184,6 +184,27 @@ export class OpenLibraryService {
   }
 
   /**
+   * First publication years for many works in one search request
+   * ("OL123W" or "/works/OL123W" → year). Works OpenLibrary has no year for
+   * are simply absent from the map.
+   */
+  async getFirstPublishYears(workKeys: string[]): Promise<Map<string, number>> {
+    const years = new Map<string, number>()
+    const keys = [...new Set(workKeys.map((k) => (k.startsWith('/works/') ? k : `/works/${k}`)))]
+    for (let i = 0; i < keys.length; i += 40) {
+      const batch = keys.slice(i, i + 40)
+      const q = `key:(${batch.map((k) => `"${k}"`).join(' OR ')})`
+      const data = await this.fetch(
+        `${OPENLIBRARY_API}/search.json?q=${encodeURIComponent(q)}&fields=key,first_publish_year&limit=${batch.length}`
+      )
+      for (const doc of data.docs ?? []) {
+        if (doc.key && doc.first_publish_year) years.set(doc.key, doc.first_publish_year)
+      }
+    }
+    return years
+  }
+
+  /**
    * Titles and languages of a work's editions (MARC codes, "/languages/eng").
    * Throws on a network or API error, so callers can tell "no answer" from
    * "no languages recorded".
