@@ -764,6 +764,19 @@ function Stack({
     return () => window.removeEventListener('keydown', onKey)
   }, [commit])
 
+  // Once the card is moving, keep Safari from turning the rest of the touch
+  // into a page scroll (it would cancel the drag mid-swipe). Needs a
+  // non-passive listener; React's touch handlers are passive.
+  useEffect(() => {
+    const el = cardRef.current
+    if (!el) return
+    const onTouchMove = (e: TouchEvent) => {
+      if (drag.current?.active && e.cancelable) e.preventDefault()
+    }
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => el.removeEventListener('touchmove', onTouchMove)
+  }, [])
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (leaving || (e.pointerType === 'mouse' && e.button !== 0)) return
     drag.current = {
@@ -782,12 +795,11 @@ function Stack({
     const dx = e.clientX - d.x0
     const dy = e.clientY - d.y0
     if (!d.active) {
-      // Vertical intent belongs to the page scroll.
-      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
-        drag.current = null
-        return
-      }
-      if (Math.abs(dx) < 8) return
+      // The card follows once the movement is mostly sideways. No early
+      // verdict the other way: a thumb's arc often starts a little vertical,
+      // and giving up on it then threw away the whole swipe. A real vertical
+      // scroll is the browser's anyway — it cancels the pointer.
+      if (Math.abs(dx) < 10 || Math.abs(dx) <= Math.abs(dy)) return
       d.active = true
       suppressClick.current = true
       cardRef.current?.setPointerCapture(e.pointerId)
