@@ -6,7 +6,7 @@ test.group('AppSettingsController', (group) => {
   const testKeys = [
     'enabledMediaTypes',
     'tmdbApiKey',
-    'traktClientId',
+    'simklClientId',
     'recommendationSettings',
     'justwatchEnabled',
     'justwatchLocale',
@@ -36,14 +36,15 @@ test.group('AppSettingsController', (group) => {
     assert.property(result, 'enabledMediaTypes')
     assert.property(result, 'tmdbApiKey')
     assert.property(result, 'hasTmdbApiKey')
-    assert.property(result, 'hasTraktClientId')
+    assert.property(result, 'simklClientId')
+    assert.property(result, 'accounts')
     assert.property(result, 'recommendationSettings')
     assert.property(result, 'justwatchEnabled')
     assert.property(result, 'justwatchLocale')
     assert.property(result, 'selectedStreamingProviders')
     assert.isArray(result.enabledMediaTypes)
     assert.isBoolean(result.hasTmdbApiKey)
-    assert.isBoolean(result.hasTraktClientId)
+    assert.isArray(result.accounts)
   })
 
   test('index masks tmdbApiKey when set', async ({ assert }) => {
@@ -96,7 +97,7 @@ test.group('AppSettingsController', (group) => {
         only: () => ({
           enabledMediaTypes: ['movies', 'music'],
           tmdbApiKey: undefined,
-          traktClientId: undefined,
+          simklClientId: undefined,
           recommendationSettings: undefined,
           justwatchEnabled: undefined,
           justwatchLocale: undefined,
@@ -125,7 +126,7 @@ test.group('AppSettingsController', (group) => {
         only: () => ({
           enabledMediaTypes: undefined,
           tmdbApiKey: '********',
-          traktClientId: undefined,
+          simklClientId: undefined,
           recommendationSettings: undefined,
           justwatchEnabled: undefined,
           justwatchLocale: undefined,
@@ -160,7 +161,7 @@ test.group('AppSettingsController', (group) => {
         only: () => ({
           enabledMediaTypes: undefined,
           tmdbApiKey: undefined,
-          traktClientId: undefined,
+          simklClientId: undefined,
           recommendationSettings: undefined,
           justwatchEnabled: true,
           justwatchLocale: undefined,
@@ -186,7 +187,7 @@ test.group('AppSettingsController', (group) => {
         only: () => ({
           enabledMediaTypes: undefined,
           tmdbApiKey: undefined,
-          traktClientId: undefined,
+          simklClientId: undefined,
           recommendationSettings: undefined,
           justwatchEnabled: undefined,
           justwatchLocale: undefined,

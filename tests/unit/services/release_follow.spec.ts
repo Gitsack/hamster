@@ -1,6 +1,10 @@
 import { test } from '@japa/runner'
 import { DateTime } from 'luxon'
-import { shouldRequestNewAlbum, shouldRequestNewBook } from '#services/library/release_follow'
+import {
+  belongsInDiscography,
+  shouldRequestNewAlbum,
+  shouldRequestNewBook,
+} from '#services/library/release_follow'
 
 const followedSince = DateTime.fromISO('2026-06-15T12:00:00Z')
 const followed = { monitored: true, monitoredAt: followedSince }
@@ -31,5 +35,15 @@ test.group('release_follow', () => {
     assert.isFalse(shouldRequestNewBook(followed, 2025))
     assert.isFalse(shouldRequestNewBook(followed, undefined))
     assert.isFalse(shouldRequestNewBook(notFollowed, 2027))
+  })
+
+  test('stores studio releases in the discography, not compilations or live records', ({
+    assert,
+  }) => {
+    assert.isTrue(belongsInDiscography({ secondaryTypes: [] }))
+    assert.isTrue(belongsInDiscography({}))
+    assert.isFalse(belongsInDiscography({ secondaryTypes: ['Compilation'] }))
+    assert.isFalse(belongsInDiscography({ secondaryTypes: ['Live'] }))
+    assert.isFalse(belongsInDiscography({ secondaryTypes: ['Soundtrack', 'Remix'] }))
   })
 })

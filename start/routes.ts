@@ -29,6 +29,7 @@ const HistoryController = () => import('#controllers/history_controller')
 const PlaybackController = () => import('#controllers/playback_controller')
 const PlaybackSettingsController = () => import('#controllers/playback_settings_controller')
 const AppSettingsController = () => import('#controllers/app_settings_controller')
+const AccountsController = () => import('#controllers/accounts_controller')
 const FilesystemController = () => import('#controllers/filesystem_controller')
 const FilesController = () => import('#controllers/files_controller')
 const UnmatchedFilesController = () => import('#controllers/unmatched_files_controller')
@@ -40,6 +41,7 @@ const BackupController = () => import('#controllers/backup_controller')
 const ScheduledTasksController = () => import('#controllers/scheduled_tasks_controller')
 const CalendarController = () => import('#controllers/calendar_controller')
 const RecommendationsController = () => import('#controllers/recommendations_controller')
+const ForYouController = () => import('#controllers/for_you_controller')
 const JustWatchController = () => import('#controllers/justwatch_controller')
 const ApiKeysController = () => import('#controllers/api_keys_controller')
 const UserController = () => import('#controllers/user_controller')
@@ -390,6 +392,12 @@ router
     // Recommendations
     router.get('/recommendations/movies', [RecommendationsController, 'movies'])
     router.get('/recommendations/tv', [RecommendationsController, 'tv'])
+    router.get('/for-you', [ForYouController, 'index'])
+    router.post('/for-you/feedback', [ForYouController, 'feedback'])
+    router.delete('/for-you/feedback/:mediaType/:externalId', [ForYouController, 'undo'])
+    router
+      .get('/for-you/extras/:mediaType/:tmdbId', [ForYouController, 'extras'])
+      .where('mediaType', /^(movie|tv)$/)
 
     // JustWatch
     router.get('/justwatch/streaming', [JustWatchController, 'streamingAvailability'])
@@ -491,6 +499,9 @@ router
         // App Settings
         router.get('/settings', [AppSettingsController, 'index'])
         router.put('/settings', [AppSettingsController, 'update'])
+        router.post('/settings/accounts/:provider/device', [AccountsController, 'startDevice'])
+        router.post('/settings/accounts/:provider/device/poll', [AccountsController, 'pollDevice'])
+        router.delete('/settings/accounts/:provider', [AccountsController, 'disconnect'])
         router.post('/settings/media-type', [AppSettingsController, 'toggleMediaType'])
         router.get('/settings/naming-patterns', [AppSettingsController, 'getNamingPatterns'])
         router.put('/settings/naming-patterns', [AppSettingsController, 'updateNamingPatterns'])

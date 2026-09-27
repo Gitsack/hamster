@@ -99,14 +99,14 @@ test.group('RecommendationsController', (group) => {
 
     await controller.movies({
       request: {
-        qs: () => ({ source: 'trakt' }),
+        qs: () => ({ source: 'simkl' }),
       },
       response: {
         json() {},
       },
     } as never)
 
-    assert.equal(capturedSource, 'trakt')
+    assert.equal(capturedSource, 'simkl')
   })
 
   test('movies returns empty lanes when no recommendations', async ({ assert }) => {
@@ -134,13 +134,13 @@ test.group('RecommendationsController', (group) => {
   test('movies returns multiple lanes from different sources', async ({ assert }) => {
     const mockLanes: RecommendationLane[] = [
       {
-        key: 'trakt-trending',
-        label: 'Trending on Trakt',
-        source: 'trakt',
+        key: 'simkl-week-movies',
+        label: 'Trending on Simkl',
+        source: 'simkl',
         items: [
           {
             tmdbId: 99999903,
-            title: 'Trakt Movie',
+            title: 'Simkl Movie',
             year: 2024,
             overview: '',
             posterUrl: null,
@@ -185,7 +185,7 @@ test.group('RecommendationsController', (group) => {
 
     const lanes = result.lanes as any[]
     assert.equal(lanes.length, 2)
-    assert.equal(lanes[0].source, 'trakt')
+    assert.equal(lanes[0].source, 'simkl')
     assert.equal(lanes[1].source, 'justwatch')
   })
 

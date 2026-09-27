@@ -223,4 +223,15 @@ test.group('CacheService | CACHE_TTL constants', () => {
   test('VERY_SHORT is 30 seconds in milliseconds', ({ assert }) => {
     assert.equal(CACHE_TTL.VERY_SHORT, 30_000)
   })
+
+  test('deleteByPrefix removes only matching keys', ({ assert }) => {
+    const c = new CacheService()
+    c.set('for-you:a', 1, 60_000)
+    c.set('for-you:b', 2, 60_000)
+    c.set('tmdb:movie:1', 3, 60_000)
+    c.deleteByPrefix('for-you:')
+    assert.isFalse(c.has('for-you:a'))
+    assert.isFalse(c.has('for-you:b'))
+    assert.isTrue(c.has('tmdb:movie:1'))
+  })
 })

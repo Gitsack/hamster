@@ -1,9 +1,9 @@
 import ImportList from '#models/import_list'
 import Movie from '#models/movie'
 import TvShow from '#models/tv_show'
-import AppSetting from '#models/app_setting'
 import { DateTime } from 'luxon'
-import { traktListProvider, type ImportListItem } from './trakt_list_provider.js'
+import { simklWatchlistProvider } from './simkl_watchlist_provider.js'
+import type { ImportListItem } from './types.js'
 import { imdbListProvider } from './imdb_list_provider.js'
 
 interface SyncResult {
@@ -30,16 +30,6 @@ export class ImportListSyncService {
     }
 
     try {
-      // Initialize Trakt client ID if needed
-      if (list.type === 'trakt_watchlist' || list.type === 'trakt_list') {
-        const traktClientId = await AppSetting.get<string>('traktClientId', '')
-        if (!traktClientId) {
-          result.errors.push('Trakt client ID not configured')
-          return result
-        }
-        traktListProvider.setClientId(traktClientId)
-      }
-
       // Fetch items from the list provider
       const items = await this.fetchItems(list)
       result.itemsFound = items.length
@@ -97,11 +87,8 @@ export class ImportListSyncService {
     const mediaType = list.mediaType === 'movies' ? 'movies' : 'tv'
 
     switch (list.type) {
-      case 'trakt_watchlist':
-        return traktListProvider.fetchWatchlist(list.settings, mediaType)
-
-      case 'trakt_list':
-        return traktListProvider.fetchList(list.settings, mediaType)
+      case 'simkl_watchlist':
+        return simklWatchlistProvider.fetchWatchlist(mediaType)
 
       case 'imdb_list':
         return imdbListProvider.fetchList(list.settings)

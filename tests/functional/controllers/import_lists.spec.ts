@@ -7,10 +7,10 @@ test.group('ImportListsController', (group) => {
   let list1: ImportList
   group.setup(async () => {
     list1 = await ImportList.create({
-      name: 'ImportListTest Trakt Watchlist',
-      type: 'trakt_watchlist',
+      name: 'ImportListTest Simkl Watchlist',
+      type: 'simkl_watchlist',
       enabled: true,
-      settings: { traktUsername: 'testuser' },
+      settings: {},
       mediaType: 'movies',
       qualityProfileId: null,
       rootFolderId: null,
@@ -51,11 +51,11 @@ test.group('ImportListsController', (group) => {
 
     assert.isTrue(result.length >= 2)
     const names = result.map((l: any) => l.name)
-    assert.include(names, 'ImportListTest Trakt Watchlist')
+    assert.include(names, 'ImportListTest Simkl Watchlist')
     assert.include(names, 'ImportListTest IMDb List')
 
     // Verify shape
-    const list = result.find((l: any) => l.name === 'ImportListTest Trakt Watchlist') as Record<
+    const list = result.find((l: any) => l.name === 'ImportListTest Simkl Watchlist') as Record<
       string,
       unknown
     >
@@ -67,7 +67,7 @@ test.group('ImportListsController', (group) => {
     assert.property(list, 'mediaType')
     assert.property(list, 'autoAdd')
     assert.property(list, 'syncIntervalMinutes')
-    assert.equal(list.type, 'trakt_watchlist')
+    assert.equal(list.type, 'simkl_watchlist')
     assert.equal(list.enabled, true)
     assert.equal(list.mediaType, 'movies')
   })
@@ -123,9 +123,9 @@ test.group('ImportListsController', (group) => {
       request: {
         validateUsing: async () => ({
           name: 'ImportListTest Custom Options',
-          type: 'trakt_list' as const,
+          type: 'imdb_list' as const,
           enabled: false,
-          settings: { traktListSlug: 'my-list', traktUsername: 'user1' },
+          settings: { imdbListId: 'ls012345678' },
           mediaType: 'tv' as const,
           autoAdd: true,
           syncIntervalMinutes: 60,
@@ -167,8 +167,8 @@ test.group('ImportListsController', (group) => {
       },
     } as never)
 
-    assert.equal(result.name, 'ImportListTest Trakt Watchlist')
-    assert.equal(result.type, 'trakt_watchlist')
+    assert.equal(result.name, 'ImportListTest Simkl Watchlist')
+    assert.equal(result.type, 'simkl_watchlist')
     assert.equal(result.enabled, true)
     assert.equal(result.mediaType, 'movies')
     assert.property(result, 'qualityProfile')
@@ -197,7 +197,7 @@ test.group('ImportListsController', (group) => {
   test('update modifies import list', async ({ assert }) => {
     const toUpdate = await ImportList.create({
       name: 'ImportListTest Update Me',
-      type: 'trakt_watchlist',
+      type: 'simkl_watchlist',
       enabled: true,
       settings: {},
       mediaType: 'movies',

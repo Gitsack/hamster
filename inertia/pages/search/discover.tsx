@@ -55,9 +55,8 @@ const CATEGORY_LABELS: Record<string, Record<string, string>> = {
     'popular': 'Popular Movies',
     'now_playing': 'Now in Cinemas',
     'trending': 'Trending Movies',
-    'trakt-trending': 'Trending on Trakt',
-    'trakt-anticipated': 'Most Anticipated',
-    'trakt-recommended': 'Community Recommended',
+    'simkl-week': 'Trending on Simkl',
+    'simkl-month': 'Popular this month',
     'justwatch-popular': 'Popular Streaming Movies',
   },
   tv: {
@@ -65,9 +64,8 @@ const CATEGORY_LABELS: Record<string, Record<string, string>> = {
     'on_the_air': 'Currently Airing',
     'top_rated': 'Top Rated Shows',
     'trending': 'Trending Shows',
-    'trakt-trending': 'Trending on Trakt',
-    'trakt-anticipated': 'Most Anticipated',
-    'trakt-recommended': 'Community Recommended',
+    'simkl-week': 'Trending on Simkl',
+    'simkl-month': 'Popular this month',
     'justwatch-popular': 'Popular Streaming Shows',
   },
 }
@@ -115,24 +113,21 @@ const TV_GENRE_NAMES: Record<string, string> = {
 
 // Map recommendation lane keys to API source params
 const RECOMMENDATION_SOURCES: Record<string, string> = {
-  'trakt-trending': 'trakt',
-  'trakt-anticipated': 'trakt',
-  'trakt-recommended': 'trakt',
+  'simkl-week': 'simkl',
+  'simkl-month': 'simkl',
   'justwatch-popular': 'justwatch',
 }
 
 // Map recommendation lane keys to their specific lane key in the API response
 const RECOMMENDATION_LANE_KEYS: Record<string, Record<string, string>> = {
   movies: {
-    'trakt-trending': 'trakt-trending-movies',
-    'trakt-anticipated': 'trakt-anticipated-movies',
-    'trakt-recommended': 'trakt-recommended-movies',
+    'simkl-week': 'simkl-week-movies',
+    'simkl-month': 'simkl-month-movies',
     'justwatch-popular': 'justwatch-popular-movies',
   },
   tv: {
-    'trakt-trending': 'trakt-trending-shows',
-    'trakt-anticipated': 'trakt-anticipated-shows',
-    'trakt-recommended': 'trakt-recommended-shows',
+    'simkl-week': 'simkl-week-shows',
+    'simkl-month': 'simkl-month-shows',
     'justwatch-popular': 'justwatch-popular-shows',
   },
 }

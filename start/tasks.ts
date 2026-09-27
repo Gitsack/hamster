@@ -23,7 +23,6 @@ import { historyService } from '#services/history/history_service'
 import { taskScheduler } from '#services/tasks/task_scheduler'
 import AppSetting from '#models/app_setting'
 import { tmdbService } from '#services/metadata/tmdb_service'
-import { traktService } from '#services/metadata/trakt_service'
 import { justwatchService } from '#services/metadata/justwatch_service'
 
 // Initialize API keys from database on startup
@@ -33,12 +32,6 @@ setTimeout(async () => {
     if (tmdbApiKey) {
       tmdbService.setApiKey(tmdbApiKey)
       console.log('[Startup] TMDB API key loaded from database')
-    }
-
-    const traktClientId = await AppSetting.get<string>('traktClientId', '')
-    if (traktClientId) {
-      traktService.setClientId(traktClientId)
-      console.log('[Startup] Trakt client ID loaded from database')
     }
 
     const justwatchLocale = await AppSetting.get<string>('justwatchLocale', 'en_US')

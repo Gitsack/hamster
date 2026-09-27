@@ -6,12 +6,10 @@ import { importListSyncService } from '#services/import_lists/import_list_sync'
 const importListValidator = vine.compile(
   vine.object({
     name: vine.string().minLength(1).maxLength(255),
-    type: vine.enum(['trakt_watchlist', 'trakt_list', 'imdb_list']),
+    type: vine.enum(['simkl_watchlist', 'imdb_list']),
     enabled: vine.boolean().optional(),
     settings: vine
       .object({
-        traktListSlug: vine.string().optional(),
-        traktUsername: vine.string().optional(),
         imdbListId: vine.string().optional(),
       })
       .optional(),

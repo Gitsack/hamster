@@ -4,13 +4,10 @@ import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import QualityProfile from './quality_profile.js'
 import RootFolder from './root_folder.js'
 
-export type ImportListType = 'trakt_watchlist' | 'trakt_list' | 'imdb_list'
+export type ImportListType = 'simkl_watchlist' | 'imdb_list'
 export type ImportListMediaType = 'movies' | 'tv' | 'music' | 'books'
 
 export interface ImportListSettings {
-  // Trakt settings
-  traktListSlug?: string
-  traktUsername?: string
   // IMDb settings
   imdbListId?: string
 }

@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react'
+import { Head, Link } from '@inertiajs/react'
 import { useEffect, useState } from 'react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
@@ -44,9 +44,11 @@ import {
   Globe02Icon,
   StarIcon,
   Refresh01Icon,
+  UserIcon,
 } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
 import { FolderBrowser } from '@/components/folder-browser'
+import { AccountConnect, type ConnectedAccount } from '@/components/settings/account-connect'
 import { cn } from '@/lib/utils'
 
 /**
@@ -114,7 +116,7 @@ interface RootFolder {
 }
 
 interface RecommendationSettings {
-  traktEnabled: boolean
+  simklEnabled: boolean
   personalizedEnabled: boolean
   maxPersonalizedLanes: number
   justwatchEnabled: boolean
@@ -129,7 +131,8 @@ interface StreamingProvider {
 interface AppSettings {
   enabledMediaTypes: MediaType[]
   hasTmdbApiKey: boolean
-  hasTraktClientId: boolean
+  simklClientId: string
+  accounts: { id: string; label: string; configured: boolean; account: ConnectedAccount | null }[]
   recommendationSettings: RecommendationSettings
   justwatchEnabled: boolean
   justwatchLocale: string
@@ -295,9 +298,10 @@ export default function MediaManagement() {
   const [settings, setSettings] = useState<AppSettings>({
     enabledMediaTypes: ['movies'],
     hasTmdbApiKey: false,
-    hasTraktClientId: false,
+    simklClientId: '',
+    accounts: [],
     recommendationSettings: {
-      traktEnabled: false,
+      simklEnabled: false,
       personalizedEnabled: false,
       maxPersonalizedLanes: 3,
       justwatchEnabled: false,
@@ -336,11 +340,8 @@ export default function MediaManagement() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [savingApiKey, setSavingApiKey] = useState(false)
 
-  // Trakt Client ID dialog state
-  const [traktDialogOpen, setTraktDialogOpen] = useState(false)
-  const [traktClientId, setTraktClientId] = useState('')
-  const [showTraktKey, setShowTraktKey] = useState(false)
-  const [savingTraktKey, setSavingTraktKey] = useState(false)
+  const [simklClientIdDraft, setSimklClientIdDraft] = useState<string | null>(null)
+  const [savingSimklClientId, setSavingSimklClientId] = useState(false)
 
   // Quality profile state
   const [qualityProfiles, setQualityProfiles] = useState<QualityProfile[]>([])
@@ -681,39 +682,39 @@ export default function MediaManagement() {
     }
   }
 
-  const handleSaveTraktKey = async () => {
-    if (!traktClientId.trim()) {
-      toast.error('Paste the Trakt client ID before saving.')
-      return
-    }
-
-    setSavingTraktKey(true)
+  const handleSaveSimklClientId = async () => {
+    if (simklClientIdDraft === null) return
+    setSavingSimklClientId(true)
     try {
       const response = await fetch('/api/v1/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ traktClientId }),
+        body: JSON.stringify({ simklClientId: simklClientIdDraft.trim() }),
       })
-
       if (response.ok) {
         const data = await response.json()
-        setSettings((prev) => ({ ...prev, hasTraktClientId: data.hasTraktClientId }))
-        toast.success('Trakt client ID saved')
-        setTraktDialogOpen(false)
-        setTraktClientId('')
+        setSettings((prev) => ({
+          ...prev,
+          simklClientId: data.simklClientId ?? '',
+          accounts: data.accounts ?? prev.accounts,
+        }))
+        setSimklClientIdDraft(null)
+        toast.success(data.simklClientId ? 'Simkl client ID saved' : 'Simkl client ID cleared')
       } else {
-        toast.error(
-          'Trakt client ID not saved — the server rejected it. Check you copied it in full.'
-        )
+        toast.error('Simkl client ID not saved — the server rejected it.')
       }
-    } catch (error) {
-      toast.error(
-        'Trakt client ID not saved — Hamster is unreachable. Check the server and try again.'
-      )
+    } catch {
+      toast.error('Simkl client ID not saved — Hamster is unreachable. Try again.')
     } finally {
-      setSavingTraktKey(false)
+      setSavingSimklClientId(false)
     }
   }
+
+  const setAccount = (id: string, account: ConnectedAccount | null) =>
+    setSettings((prev) => ({
+      ...prev,
+      accounts: prev.accounts.map((a) => (a.id === id ? { ...a, account } : a)),
+    }))
 
   const handleSaveRecommendationSettings = async (updated: RecommendationSettings) => {
     setSettings((prev) => ({ ...prev, recommendationSettings: updated }))
@@ -1049,35 +1050,100 @@ export default function MediaManagement() {
             <div className="divide-y divide-border border-y border-border">
               <SettingRow
                 icon={Globe02Icon}
-                title="Trakt.tv"
+                title="Simkl trending"
+                description="Lanes of what is most watched on Simkl this week and this month. Needs no account."
+              >
+                <Switch
+                  checked={settings.recommendationSettings.simklEnabled}
+                  aria-label="Show Simkl trending lanes"
+                  onCheckedChange={(checked) =>
+                    handleSaveRecommendationSettings({
+                      ...settings.recommendationSettings,
+                      simklEnabled: checked,
+                    })
+                  }
+                />
+              </SettingRow>
+
+              <SettingRow
+                icon={Key01Icon}
+                title="Simkl client ID"
                 description={
                   <>
-                    Community trending, anticipated and recommended lists. Needs its own client ID.{' '}
+                    Needed to connect an account. Register a free app at{' '}
                     <a
-                      href="https://trakt.tv/oauth/applications"
+                      href="https://simkl.com/settings/developer/"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary hover:underline"
                     >
-                      Get one free
-                    </a>
+                      simkl.com/settings/developer
+                    </a>{' '}
+                    as <em>TV, devices &amp; command line</em> — no redirect URL or secret needed.
                   </>
                 }
               >
-                <CredentialBadge present={settings.hasTraktClientId} noun="Client ID" />
-                <Switch
-                  checked={settings.recommendationSettings.traktEnabled}
-                  aria-label="Show Trakt lanes"
-                  onCheckedChange={(checked) =>
-                    handleSaveRecommendationSettings({
-                      ...settings.recommendationSettings,
-                      traktEnabled: checked,
-                    })
+                <form
+                  className="flex items-center gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleSaveSimklClientId()
+                  }}
+                >
+                  <Input
+                    value={simklClientIdDraft ?? settings.simklClientId}
+                    onChange={(e) => setSimklClientIdDraft(e.target.value)}
+                    placeholder="Client ID"
+                    aria-label="Simkl client ID"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="readout w-56"
+                  />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      savingSimklClientId ||
+                      simklClientIdDraft === null ||
+                      simklClientIdDraft.trim() === settings.simklClientId
+                    }
+                  >
+                    {savingSimklClientId ? 'Saving…' : 'Save'}
+                  </Button>
+                </form>
+              </SettingRow>
+
+              {settings.accounts.map((a) => (
+                <SettingRow
+                  key={a.id}
+                  icon={UserIcon}
+                  title={`${a.label} account`}
+                  description={
+                    a.account
+                      ? `Your ${a.label} ratings and watch history shape the For you deck, and your watchlist is suggested there directly.`
+                      : a.configured
+                        ? `Connect your account so your ${a.label} ratings, history and watchlist shape the For you deck.`
+                        : `Add the ${a.label} client ID above to connect an account.`
                   }
-                  disabled={!settings.hasTraktClientId}
-                />
-                <Button variant="outline" size="sm" onClick={() => setTraktDialogOpen(true)}>
-                  {settings.hasTraktClientId ? 'Replace ID' : 'Set client ID'}
+                >
+                  <AccountConnect
+                    provider={a.id}
+                    label={a.label}
+                    account={a.account}
+                    canConnect={a.configured}
+                    onChange={(account) => setAccount(a.id, account)}
+                  />
+                </SettingRow>
+              ))}
+
+              <SettingRow
+                icon={Video01Icon}
+                title="Jellyfin / Emby watch history"
+                description="Favourites, rewatches and what administrators have watched on a connected Jellyfin or Emby server shape the For you deck. Nothing to switch on — it follows the media servers you have configured."
+              >
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/settings/webhooks">Media servers</Link>
                 </Button>
               </SettingRow>
 
@@ -1712,62 +1778,6 @@ export default function MediaManagement() {
             </Button>
             <Button onClick={handleSaveApiKey} disabled={savingApiKey || !tmdbApiKey.trim()}>
               {savingApiKey ? 'Saving…' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Trakt Client ID Dialog */}
-      <Dialog open={traktDialogOpen} onOpenChange={setTraktDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Trakt Client ID</DialogTitle>
-            <DialogDescription>
-              Unlocks the Trakt lanes on the Search page. Register an application — any name will do
-              — at{' '}
-              <a
-                href="https://trakt.tv/oauth/applications"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                trakt.tv
-              </a>
-              .
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="traktClientId">Client ID</Label>
-              <div className="relative">
-                <Input
-                  id="traktClientId"
-                  type={showTraktKey ? 'text' : 'password'}
-                  placeholder="Paste the client ID"
-                  value={traktClientId}
-                  onChange={(e) => setTraktClientId(e.target.value)}
-                  className="readout pr-10"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={showTraktKey ? 'Hide client ID' : 'Show client ID'}
-                  className="absolute right-1 top-1/2 -translate-y-1/2"
-                  onClick={() => setShowTraktKey(!showTraktKey)}
-                >
-                  <HugeiconsIcon icon={showTraktKey ? ViewOffIcon : EyeIcon} className="size-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">The client ID, not the client secret.</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setTraktDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveTraktKey} disabled={savingTraktKey || !traktClientId.trim()}>
-              {savingTraktKey ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>

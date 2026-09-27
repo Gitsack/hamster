@@ -43,9 +43,8 @@ export default class AppSettingsController {
     ])
     const enabledMediaTypes = ensureArray(rawMediaTypes, ['movies'])
     const tmdbApiKey = await AppSetting.get<string>('tmdbApiKey', '')
-    const traktClientId = await AppSetting.get<string>('traktClientId', '')
     const recommendationSettings = await AppSetting.get('recommendationSettings', {
-      traktEnabled: false,
+      simklEnabled: false,
       personalizedEnabled: false,
       maxPersonalizedLanes: 3,
       justwatchEnabled: false,
@@ -61,7 +60,7 @@ export default class AppSettingsController {
       enabledMediaTypes,
       tmdbApiKey: tmdbApiKey ? '********' : '', // Don't expose full key
       hasTmdbApiKey: !!tmdbApiKey,
-      hasTraktClientId: !!traktClientId,
+      ...(await this.externalAccounts()),
       recommendationSettings,
       justwatchEnabled,
       justwatchLocale,
@@ -73,7 +72,7 @@ export default class AppSettingsController {
     const {
       enabledMediaTypes,
       tmdbApiKey,
-      traktClientId,
+      simklClientId,
       recommendationSettings,
       justwatchEnabled,
       justwatchLocale,
@@ -81,7 +80,7 @@ export default class AppSettingsController {
     } = request.only([
       'enabledMediaTypes',
       'tmdbApiKey',
-      'traktClientId',
+      'simklClientId',
       'recommendationSettings',
       'justwatchEnabled',
       'justwatchLocale',
@@ -99,11 +98,14 @@ export default class AppSettingsController {
       tmdbService.setApiKey(tmdbApiKey)
     }
 
-    if (traktClientId !== undefined && traktClientId !== '********') {
-      await AppSetting.set('traktClientId', traktClientId)
-      // Update the Trakt service with the new client ID
-      const { traktService } = await import('#services/metadata/trakt_service')
-      traktService.setClientId(traktClientId)
+    if (typeof simklClientId === 'string') {
+      const previous = (await AppSetting.get<string>('simklClientId', '')) || ''
+      if (simklClientId.trim() !== previous) {
+        await AppSetting.set('simklClientId', simklClientId.trim())
+        // A connection belongs to the Simkl app that issued it.
+        const { simklAccount } = await import('#services/simkl/simkl_account')
+        await simklAccount.forget()
+      }
     }
 
     if (recommendationSettings !== undefined) {
@@ -131,9 +133,8 @@ export default class AppSettingsController {
       'movies',
     ])
     const storedTmdbKey = await AppSetting.get<string>('tmdbApiKey', '')
-    const storedTraktId = await AppSetting.get<string>('traktClientId', '')
     const storedRecommendationSettings = await AppSetting.get('recommendationSettings', {
-      traktEnabled: false,
+      simklEnabled: false,
       personalizedEnabled: false,
       maxPersonalizedLanes: 3,
       justwatchEnabled: false,
@@ -149,7 +150,7 @@ export default class AppSettingsController {
       enabledMediaTypes: ensureArray(rawMediaTypes, ['movies']),
       tmdbApiKey: storedTmdbKey ? '********' : '',
       hasTmdbApiKey: !!storedTmdbKey,
-      hasTraktClientId: !!storedTraktId,
+      ...(await this.externalAccounts()),
       recommendationSettings: storedRecommendationSettings,
       justwatchEnabled: storedJustwatchEnabled,
       justwatchLocale: storedJustwatchLocale,
@@ -455,5 +456,16 @@ export default class AppSettingsController {
     await localAccessService.setOptions(options)
 
     return response.json({ options })
+  }
+
+  /** Simkl's client ID (not secret) and every connectable account's state. */
+  private async externalAccounts() {
+    const { connectableAccounts } = await import('#services/accounts/registry')
+    return {
+      simklClientId: (await AppSetting.get<string>('simklClientId', '')) || '',
+      accounts: await Promise.all(
+        connectableAccounts.map(async (a) => ({ id: a.id, label: a.label, ...(await a.status()) }))
+      ),
+    }
   }
 }

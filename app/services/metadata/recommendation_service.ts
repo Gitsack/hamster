@@ -1,5 +1,5 @@
 import { tmdbService } from '#services/metadata/tmdb_service'
-import { traktService } from '#services/metadata/trakt_service'
+import { simklTrending } from '#services/simkl/simkl_client'
 import { justwatchService } from '#services/metadata/justwatch_service'
 import AppSetting from '#models/app_setting'
 import Movie from '#models/movie'
@@ -18,19 +18,19 @@ export interface RecommendationItem {
 export interface RecommendationLane {
   key: string
   label: string
-  source: 'tmdb' | 'trakt' | 'justwatch'
+  source: 'tmdb' | 'simkl' | 'justwatch'
   items: RecommendationItem[]
 }
 
 export interface RecommendationSettings {
-  traktEnabled: boolean
+  simklEnabled: boolean
   personalizedEnabled: boolean
   maxPersonalizedLanes: number
   justwatchEnabled: boolean
 }
 
 const DEFAULT_SETTINGS: RecommendationSettings = {
-  traktEnabled: false,
+  simklEnabled: false,
   personalizedEnabled: false,
   maxPersonalizedLanes: 3,
   justwatchEnabled: false,
@@ -90,10 +90,9 @@ class RecommendationService {
     const settings = await this.getSettings()
     const lanePromises: Promise<RecommendationLane | null>[] = []
 
-    if ((!source || source === 'trakt') && settings.traktEnabled) {
-      lanePromises.push(this.getTraktTrendingMovies())
-      lanePromises.push(this.getTraktAnticipatedMovies())
-      lanePromises.push(this.getTraktRecommendedMovies())
+    if ((!source || source === 'simkl') && settings.simklEnabled) {
+      lanePromises.push(this.getSimklLane('movie', 'week'))
+      lanePromises.push(this.getSimklLane('movie', 'month'))
     }
 
     if ((!source || source === 'justwatch') && settings.justwatchEnabled) {
@@ -130,10 +129,9 @@ class RecommendationService {
     const settings = await this.getSettings()
     const lanePromises: Promise<RecommendationLane | null>[] = []
 
-    if ((!source || source === 'trakt') && settings.traktEnabled) {
-      lanePromises.push(this.getTraktTrendingShows())
-      lanePromises.push(this.getTraktAnticipatedShows())
-      lanePromises.push(this.getTraktRecommendedShows())
+    if ((!source || source === 'simkl') && settings.simklEnabled) {
+      lanePromises.push(this.getSimklLane('tv', 'week'))
+      lanePromises.push(this.getSimklLane('tv', 'month'))
     }
 
     if ((!source || source === 'justwatch') && settings.justwatchEnabled) {
@@ -213,36 +211,22 @@ class RecommendationService {
     }
   }
 
-  // Trakt movie lanes
+  // Simkl lanes — the Most Watched lists, hydrated from TMDB for posters
 
-  private async getTraktTrendingMovies(): Promise<RecommendationLane | null> {
+  private async getSimklLane(
+    kind: 'movie' | 'tv',
+    window: 'week' | 'month'
+  ): Promise<RecommendationLane | null> {
     try {
-      const trending = await traktService.getTrendingMovies()
-      const items = await this.hydrateTraktMovies(trending.map((t) => t.movie.ids.tmdb))
-      return { key: 'trakt-trending-movies', label: 'Trending on Trakt', source: 'trakt', items }
-    } catch {
-      return null
-    }
-  }
-
-  private async getTraktAnticipatedMovies(): Promise<RecommendationLane | null> {
-    try {
-      const anticipated = await traktService.getAnticipatedMovies()
-      const items = await this.hydrateTraktMovies(anticipated.map((a) => a.movie.ids.tmdb))
-      return { key: 'trakt-anticipated-movies', label: 'Most Anticipated', source: 'trakt', items }
-    } catch {
-      return null
-    }
-  }
-
-  private async getTraktRecommendedMovies(): Promise<RecommendationLane | null> {
-    try {
-      const recommended = await traktService.getRecommendedMovies('weekly')
-      const items = await this.hydrateTraktMovies(recommended.map((r) => r.movie.ids.tmdb))
+      const rows = await simklTrending(kind === 'movie' ? 'movies' : 'tv', window)
+      // The month list mostly repeats the week's; the lanes are de-duplicated
+      // against each other, so the month lane draws from a deeper pool.
+      const ids = rows.slice(0, window === 'week' ? 20 : 50).map((r) => r.tmdbId)
+      const items = kind === 'movie' ? await this.hydrateMovies(ids) : await this.hydrateShows(ids)
       return {
-        key: 'trakt-recommended-movies',
-        label: 'Community Recommended',
-        source: 'trakt',
+        key: `simkl-${window}-${kind === 'movie' ? 'movies' : 'shows'}`,
+        label: window === 'week' ? 'Trending on Simkl' : 'Popular this month',
+        source: 'simkl',
         items,
       }
     } catch {
@@ -250,46 +234,9 @@ class RecommendationService {
     }
   }
 
-  // Trakt TV lanes
+  // Hydrate TMDB ids into lane items with posters
 
-  private async getTraktTrendingShows(): Promise<RecommendationLane | null> {
-    try {
-      const trending = await traktService.getTrendingShows()
-      const items = await this.hydrateTraktShows(trending.map((t) => t.show.ids.tmdb))
-      return { key: 'trakt-trending-shows', label: 'Trending on Trakt', source: 'trakt', items }
-    } catch {
-      return null
-    }
-  }
-
-  private async getTraktAnticipatedShows(): Promise<RecommendationLane | null> {
-    try {
-      const anticipated = await traktService.getAnticipatedShows()
-      const items = await this.hydrateTraktShows(anticipated.map((a) => a.show.ids.tmdb))
-      return { key: 'trakt-anticipated-shows', label: 'Most Anticipated', source: 'trakt', items }
-    } catch {
-      return null
-    }
-  }
-
-  private async getTraktRecommendedShows(): Promise<RecommendationLane | null> {
-    try {
-      const recommended = await traktService.getRecommendedShows('weekly')
-      const items = await this.hydrateTraktShows(recommended.map((r) => r.show.ids.tmdb))
-      return {
-        key: 'trakt-recommended-shows',
-        label: 'Community Recommended',
-        source: 'trakt',
-        items,
-      }
-    } catch {
-      return null
-    }
-  }
-
-  // Hydrate Trakt results with TMDB data for poster URLs
-
-  private async hydrateTraktMovies(tmdbIds: (number | null)[]): Promise<RecommendationItem[]> {
+  private async hydrateMovies(tmdbIds: (number | null)[]): Promise<RecommendationItem[]> {
     const validIds = tmdbIds.filter((id): id is number => id !== null)
     const results = await Promise.allSettled(validIds.map((id) => tmdbService.getMovie(id)))
 
@@ -306,7 +253,7 @@ class RecommendationService {
       }))
   }
 
-  private async hydrateTraktShows(tmdbIds: (number | null)[]): Promise<RecommendationItem[]> {
+  private async hydrateShows(tmdbIds: (number | null)[]): Promise<RecommendationItem[]> {
     const validIds = tmdbIds.filter((id): id is number => id !== null)
     const results = await Promise.allSettled(validIds.map((id) => tmdbService.getTvShow(id)))
 

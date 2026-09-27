@@ -11,7 +11,7 @@ import { coverArtService } from '#services/metadata/cover_art_service'
 import { openLibraryService } from '#services/metadata/openlibrary_service'
 import { type AlbumType } from '#models/album'
 import { DateTime } from 'luxon'
-import { shouldRequestNewAlbum } from '#services/library/release_follow'
+import { belongsInDiscography, shouldRequestNewAlbum } from '#services/library/release_follow'
 import { addAuthorWorks } from '#services/library/author_works'
 
 const LOG_PREFIX = '[RefreshMetadata]'
@@ -292,7 +292,7 @@ class RefreshMetadataTask {
               imageUrl: coverUrl || titleMatch.imageUrl,
             })
             await titleMatch.save()
-          } else {
+          } else if (belongsInDiscography(mbAlbum)) {
             const albumType = this.mapAlbumType(mbAlbum.primaryType)
             const coverUrl = coverArtService.getFrontCoverUrl(mbAlbum.id, '500')
             const releaseDate = mbAlbum.releaseDate ? DateTime.fromISO(mbAlbum.releaseDate) : null

@@ -35,3 +35,14 @@ export function shouldRequestNewBook(
   if (!author.monitored || !author.monitoredAt || !firstPublishYear) return false
   return firstPublishYear >= author.monitoredAt.year
 }
+
+/**
+ * Whether a MusicBrainz release group belongs in an artist's stored
+ * discography. Compilations, live records, remixes, soundtracks and the like
+ * are left out: for a catalogue artist they outnumber the real records ten to
+ * one (Sinatra alone has over a thousand) and bury the albums worth
+ * requesting. They can still be added one at a time from search.
+ */
+export function belongsInDiscography(releaseGroup: { secondaryTypes?: string[] | null }): boolean {
+  return (releaseGroup.secondaryTypes ?? []).length === 0
+}

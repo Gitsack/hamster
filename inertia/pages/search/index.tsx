@@ -274,7 +274,7 @@ interface QualityProfile {
 interface RecommendationLane {
   key: string
   label: string
-  source: 'tmdb' | 'trakt' | 'justwatch'
+  source: 'tmdb' | 'simkl' | 'justwatch'
   items: (MovieSearchResult | TvShowSearchResult)[]
 }
 
@@ -361,7 +361,7 @@ const DiscoverLane = memo(
     title: string
     items: (MovieSearchResult | TvShowSearchResult)[]
     type: 'movie' | 'tv'
-    source?: 'tmdb' | 'trakt' | 'justwatch'
+    source?: 'tmdb' | 'simkl' | 'justwatch'
     moreHref?: string
     onItemClick: (item: MovieSearchResult | TvShowSearchResult) => void
     onAdd: (item: MovieSearchResult | TvShowSearchResult) => void
@@ -393,7 +393,7 @@ const DiscoverLane = memo(
               {title}
               {source && (
                 <Badge variant="outline" className="ml-2 align-middle">
-                  {source === 'trakt' ? 'Trakt' : source === 'justwatch' ? 'JustWatch' : 'For You'}
+                  {source === 'simkl' ? 'Simkl' : source === 'justwatch' ? 'JustWatch' : 'For You'}
                 </Badge>
               )}
             </h3>
@@ -1046,7 +1046,7 @@ export default function SearchPage({
   // Fetch movie recommendation lanes (per-source for incremental rendering)
   const fetchMovieRecommendations = useCallback(async () => {
     setLoadingMovieRecs(true)
-    const sources = ['justwatch', 'trakt', 'tmdb']
+    const sources = ['justwatch', 'simkl', 'tmdb']
     let remaining = sources.length
     sources.forEach(async (source) => {
       try {
@@ -1069,7 +1069,7 @@ export default function SearchPage({
   // Fetch TV recommendation lanes (per-source for incremental rendering)
   const fetchTvRecommendations = useCallback(async () => {
     setLoadingTvRecs(true)
-    const sources = ['justwatch', 'trakt', 'tmdb']
+    const sources = ['justwatch', 'simkl', 'tmdb']
     let remaining = sources.length
     sources.forEach(async (source) => {
       try {
@@ -2414,7 +2414,7 @@ export default function SearchPage({
 
     // Show discover lanes when no search has been performed
     const externalMovieLanes = movieRecommendationLanes.filter(
-      (l) => l.source === 'trakt' || l.source === 'justwatch'
+      (l) => l.source === 'simkl' || l.source === 'justwatch'
     )
     const personalizedMovieLanes = movieRecommendationLanes.filter((l) => l.source === 'tmdb')
 
@@ -2555,7 +2555,7 @@ export default function SearchPage({
 
     // Show discover lanes when no search has been performed
     const externalTvLanes = tvRecommendationLanes.filter(
-      (l) => l.source === 'trakt' || l.source === 'justwatch'
+      (l) => l.source === 'simkl' || l.source === 'justwatch'
     )
     const personalizedTvLanes = tvRecommendationLanes.filter((l) => l.source === 'tmdb')
 

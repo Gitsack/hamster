@@ -6,7 +6,7 @@ import vine from '@vinejs/vine'
 import { musicBrainzService } from '#services/metadata/musicbrainz_service'
 import { coverArtService } from '#services/metadata/cover_art_service'
 import { DateTime } from 'luxon'
-import { shouldRequestNewAlbum } from '#services/library/release_follow'
+import { belongsInDiscography, shouldRequestNewAlbum } from '#services/library/release_follow'
 
 const addArtistValidator = vine.compile(
   vine.object({
@@ -579,7 +579,7 @@ export default class ArtistsController {
 
         // Also match tracks for this album
         await this.matchAlbumTracks(existingByTitle)
-      } else {
+      } else if (belongsInDiscography(mbAlbum)) {
         // Log unmatched albums to help debug
         const unmatchedExisting = existingAlbums.filter((a) => !a.musicbrainzReleaseGroupId)
         if (unmatchedExisting.length > 0) {

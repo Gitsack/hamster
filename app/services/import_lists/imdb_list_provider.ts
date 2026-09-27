@@ -1,5 +1,5 @@
 import type { ImportListSettings } from '#models/import_list'
-import type { ImportListItem } from './trakt_list_provider.js'
+import type { ImportListItem } from './types.js'
 
 export class ImdbListProvider {
   /**
