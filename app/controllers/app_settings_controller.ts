@@ -243,6 +243,71 @@ export default class AppSettingsController {
   }
 
   /**
+   * Where to open one title on each of the user's streaming services: the
+   * JustWatch deep link when there is one, else TMDB's watch page for the title.
+   */
+  async watchProviderLinks({ request, response }: HttpContext) {
+    const { tmdbId, type, title } = request.only(['tmdbId', 'type', 'title'])
+    const id = Number(tmdbId)
+
+    if (!Number.isInteger(id) || id <= 0 || !['movie', 'tv'].includes(type)) {
+      return response.badRequest({ error: 'tmdbId and type (movie|tv) are required' })
+    }
+
+    const selectedProviders =
+      (await AppSetting.get<number[]>('selectedStreamingProviders', [])) ?? []
+    if (selectedProviders.length === 0) {
+      return response.json({ links: [] })
+    }
+
+    const locale = (await AppSetting.get<string>('justwatchLocale', 'en_US')) ?? 'en_US'
+    const region = locale.split('_')[1] || 'US'
+    const fallbackUrl = `https://www.themoviedb.org/${type}/${id}/watch?locale=${region}`
+
+    try {
+      const { tmdbService } = await import('#services/metadata/tmdb_service')
+      const available = await tmdbService.getWatchProviders(type, id, region)
+      const providers = available.filter((p) => selectedProviders.includes(p.id))
+      if (providers.length === 0) {
+        return response.json({ links: [] })
+      }
+
+      // JustWatch package ids are the ids TMDB reports for providers.
+      const offerUrls = new Map<number, string>()
+      const justwatchEnabled = await AppSetting.get<boolean>('justwatchEnabled', false)
+      if (justwatchEnabled && typeof title === 'string' && title.trim()) {
+        const { justwatchService } = await import('#services/metadata/justwatch_service')
+        const offers = await justwatchService
+          .getOffersForTmdbTitle(id, title, type === 'movie' ? 'movie' : 'show')
+          .catch(() => [])
+        // A subscription is the reason the user picked the service; prefer it
+        // over the same service's rent or buy page.
+        const rank = { flatrate: 0, free: 1, ads: 2, rent: 3, buy: 4 }
+        for (const offer of [...offers].sort(
+          (a, b) => rank[a.monetizationType] - rank[b.monetizationType]
+        )) {
+          if (offer.url && !offerUrls.has(offer.providerId)) {
+            offerUrls.set(offer.providerId, offer.url)
+          }
+        }
+      }
+
+      return response.json({
+        links: providers.map((p) => ({
+          id: p.id,
+          name: p.name,
+          logoUrl: p.logoPath,
+          url: offerUrls.get(p.id) ?? fallbackUrl,
+          direct: offerUrls.has(p.id),
+        })),
+      })
+    } catch (error) {
+      console.error('Failed to fetch watch provider links:', error)
+      return response.json({ links: [] })
+    }
+  }
+
+  /**
    * Get naming patterns for all media types
    */
   async getNamingPatterns({ response }: HttpContext) {

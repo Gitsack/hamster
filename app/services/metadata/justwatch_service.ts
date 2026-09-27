@@ -1,4 +1,5 @@
 import PQueue from 'p-queue'
+import { cache, CACHE_TTL } from '#services/cache/cache_service'
 
 const JUSTWATCH_GRAPHQL = 'https://apis.justwatch.com/graphql'
 const JUSTWATCH_IMAGE_BASE = 'https://images.justwatch.com'
@@ -335,6 +336,22 @@ export class JustWatchService {
       console.warn('[JustWatch] getStreamingAvailability failed:', error)
       return []
     }
+  }
+
+  /**
+   * Offers for one TMDB title, matched on its TMDB id rather than the title
+   * alone, so remakes and namesakes don't lend it their links.
+   */
+  async getOffersForTmdbTitle(
+    tmdbId: number,
+    title: string,
+    contentType: 'movie' | 'show'
+  ): Promise<JustWatchOffer[]> {
+    const cacheKey = `justwatch:${this.locale}:${contentType}:${tmdbId}:offers`
+    return cache.getOrSet(cacheKey, CACHE_TTL.METADATA, async () => {
+      const results = await this.search(title, contentType)
+      return results.find((r) => r.tmdbId === tmdbId)?.offers ?? []
+    })
   }
 
   // Popular content

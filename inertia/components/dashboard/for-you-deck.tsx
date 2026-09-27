@@ -13,8 +13,15 @@ import {
   SparklesIcon,
   StarIcon,
   PlayIcon,
+  LinkSquare02Icon,
 } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuPopup,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Select, SelectItem, SelectPopup, SelectTrigger } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMediaPreview } from '@/contexts/media_preview_context'
@@ -748,7 +755,7 @@ function Stack({
       const target = e.target instanceof Element ? e.target : null
       if (
         target?.closest(
-          'input, textarea, select, [contenteditable], [role="dialog"], [role="slider"], [data-deck-filters]'
+          'input, textarea, select, [contenteditable], [role="dialog"], [role="slider"], [role="menu"], [data-deck-filters]'
         )
       )
         return
@@ -1020,12 +1027,49 @@ function fetchProviders(card: ForYouCard): Promise<StreamingProvider[]> {
   return pending
 }
 
-/** Streaming logos on the poster, as on the Search posters: three, then "+N". */
+interface StreamingLink extends StreamingProvider {
+  url: string
+  /** A deep link into the service; otherwise TMDB's watch page for the title. */
+  direct: boolean
+}
+
+const linkCache = new Map<string, Promise<StreamingLink[]>>()
+
+/** Where to open the title on each of those services. */
+function fetchLinks(card: ForYouCard): Promise<StreamingLink[]> {
+  let pending = linkCache.get(card.key)
+  if (!pending) {
+    const params = new URLSearchParams({
+      type: card.mediaType,
+      tmdbId: card.externalId,
+      title: card.title,
+    })
+    pending = fetch(`/api/v1/watch-providers/links?${params}`)
+      .then((res) => (res.ok ? res.json() : { links: [] }))
+      .then((body: { links?: StreamingLink[] }) => body.links ?? [])
+      .catch(() => [])
+    linkCache.set(card.key, pending)
+  }
+  return pending
+}
+
+/**
+ * Streaming logos on the poster, as on the Search posters: three, then "+N".
+ * One service opens it there; several offer a menu of them.
+ */
 function ProviderBadges({ card }: { card: ForYouCard }) {
   const [providers, setProviders] = useState<StreamingProvider[]>([])
+  const [links, setLinks] = useState<StreamingLink[] | null>(null)
   useEffect(() => {
     let live = true
-    fetchProviders(card).then((p) => live && setProviders(p))
+    setLinks(null)
+    fetchProviders(card).then((p) => {
+      if (!live) return
+      setProviders(p)
+      // Fetched ahead of the click, so a single service opens as a plain link
+      // rather than a window the browser would block after an await.
+      if (p.length > 0) fetchLinks(card).then((l) => live && setLinks(l))
+    })
     return () => {
       live = false
     }
@@ -1033,17 +1077,14 @@ function ProviderBadges({ card }: { card: ForYouCard }) {
   if (providers.length === 0) return null
   const shown = providers.slice(0, 3)
   const extra = providers.length - shown.length
-  return (
-    <div
-      className="streaming-fade-in absolute bottom-2 left-2 z-10 flex items-center -space-x-1"
-      aria-label={`Streams on ${providers.map((p) => p.name).join(', ')}`}
-    >
+  const label = `Watch on ${providers.map((p) => p.name).join(', ')}`
+  const stack = (
+    <>
       {shown.map((p) => (
         <img
           key={p.id}
           src={p.logoUrl}
           alt={p.name}
-          title={p.name}
           draggable={false}
           className="size-5 rounded-sm ring-1 ring-black/40 sm:size-6"
         />
@@ -1053,7 +1094,53 @@ function ProviderBadges({ card }: { card: ForYouCard }) {
           +{extra}
         </span>
       )}
-    </div>
+    </>
+  )
+  const stackClass =
+    'streaming-fade-in absolute bottom-2 left-2 z-10 flex items-center -space-x-1 rounded-md outline-none transition-transform hover:scale-105 focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none'
+
+  // Until the links arrive, and if they never do, the stack is only a picture.
+  if (!links || links.length === 0) {
+    return (
+      <div className={cn(stackClass, 'hover:scale-100')} aria-label={label} title={label}>
+        {stack}
+      </div>
+    )
+  }
+
+  if (links.length === 1) {
+    return (
+      <a
+        href={links[0].url}
+        target="_blank"
+        rel="noopener noreferrer"
+        draggable={false}
+        className={stackClass}
+        aria-label={`Watch on ${links[0].name}`}
+        title={`Watch on ${links[0].name}`}
+      >
+        {stack}
+      </a>
+    )
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className={stackClass} aria-label={label} title={label}>
+        {stack}
+      </DropdownMenuTrigger>
+      <DropdownMenuPopup side="bottom" align="start" className="min-w-44">
+        {links.map((l) => (
+          <DropdownMenuItem key={l.id} asChild>
+            <a href={l.url} target="_blank" rel="noopener noreferrer">
+              <img src={l.logoUrl} alt="" className="size-5 rounded-sm ring-1 ring-border" />
+              <span className="flex-1">{l.name}</span>
+              <HugeiconsIcon icon={LinkSquare02Icon} className="size-3.5" />
+            </a>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuPopup>
+    </DropdownMenu>
   )
 }
 

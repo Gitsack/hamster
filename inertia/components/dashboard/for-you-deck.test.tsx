@@ -65,9 +65,46 @@ function mockFetch(cards: ForYouCard[], types: string[] | null = null) {
         status: 200,
         json: () =>
           Promise.resolve({
-            providers: { '1': [{ id: 8, name: 'Netflix', logoUrl: '/netflix.png' }] },
+            providers: {
+              '1': [{ id: 8, name: 'Netflix', logoUrl: '/netflix.png' }],
+              '2': [
+                { id: 8, name: 'Netflix', logoUrl: '/netflix.png' },
+                { id: 337, name: 'Disney Plus', logoUrl: '/disney.png' },
+              ],
+            },
           }),
       })
+    if (url.startsWith('/api/v1/watch-providers/links?')) {
+      const id = new URLSearchParams(url.split('?')[1]).get('tmdbId')
+      const links =
+        id === '1'
+          ? [
+              {
+                id: 8,
+                name: 'Netflix',
+                logoUrl: '/netflix.png',
+                url: 'https://www.netflix.com/title/1',
+                direct: true,
+              },
+            ]
+          : [
+              {
+                id: 8,
+                name: 'Netflix',
+                logoUrl: '/netflix.png',
+                url: 'https://www.netflix.com/title/2',
+                direct: true,
+              },
+              {
+                id: 337,
+                name: 'Disney Plus',
+                logoUrl: '/disney.png',
+                url: 'https://www.themoviedb.org/movie/2/watch',
+                direct: false,
+              },
+            ]
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ links }) })
+    }
     if (url.startsWith('/api/v1/for-you/extras/'))
       return Promise.resolve({
         ok: true,
@@ -261,6 +298,32 @@ describe('ForYouDeck', () => {
     render(<ForYouDeck />)
     await start()
     expect(await screen.findByAltText('Netflix')).toBeInTheDocument()
+  })
+
+  it('opens the title on its one streaming service', async () => {
+    mockFetch([card({})])
+    render(<ForYouDeck />)
+    await start()
+    const link = await screen.findByRole('link', { name: 'Watch on Netflix' })
+    expect(link).toHaveAttribute('href', 'https://www.netflix.com/title/1')
+    expect(link).toHaveAttribute('target', '_blank')
+  })
+
+  it('offers a menu when the title streams on several services', async () => {
+    mockFetch([card({ key: 'movie:2', externalId: '2' })])
+    render(<ForYouDeck />)
+    await start()
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Watch on Netflix, Disney Plus' })
+    )
+    expect(await screen.findByRole('menuitem', { name: /Disney Plus/ })).toHaveAttribute(
+      'href',
+      'https://www.themoviedb.org/movie/2/watch'
+    )
+    expect(screen.getByRole('menuitem', { name: /Netflix/ })).toHaveAttribute(
+      'href',
+      'https://www.netflix.com/title/2'
+    )
   })
 
   it('switches what the deck is about and remembers it', async () => {

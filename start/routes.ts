@@ -388,6 +388,7 @@ router
 
     // Watch providers (batch fetch for streaming badges)
     router.post('/watch-providers/batch', [AppSettingsController, 'batchWatchProviders'])
+    router.get('/watch-providers/links', [AppSettingsController, 'watchProviderLinks'])
 
     // Recommendations
     router.get('/recommendations/movies', [RecommendationsController, 'movies'])
