@@ -148,9 +148,16 @@ describe('ForYouDeck', () => {
     mockFetch([card({ key: 'tv:9', mediaType: 'tv', externalId: '9', title: 'The Wire' })])
     render(<ForYouDeck />)
     await start()
-    await userEvent.click(await screen.findByRole('button', { name: /Request S1/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Request/ }))
     await waitFor(() => expect(calls('/api/v1/tvshows')).toHaveLength(1))
     expect(JSON.parse(calls('/api/v1/tvshows')[0][1].body).selectedSeasons).toEqual([1])
+    // The button just says Request; the confirmation says what was queued.
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringContaining('season 1 requested'),
+        expect.anything()
+      )
+    )
   })
 
   it('requests an album by flipping its existing row', async () => {

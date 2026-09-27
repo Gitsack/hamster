@@ -12,8 +12,6 @@ import {
   Refresh01Icon,
   SparklesIcon,
   StarIcon,
-  VolumeHighIcon,
-  VolumeOffIcon,
   PlayIcon,
 } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
@@ -81,11 +79,6 @@ const TYPE_META: Record<
   tv: { label: 'Series', plural: 'TV', icon: Tv01Icon, imageType: 'tv' },
   album: { label: 'Album', plural: 'Music', icon: CdIcon, imageType: 'album' },
   book: { label: 'Book', plural: 'Books', icon: Book01Icon, imageType: 'books' },
-}
-
-/** What a right swipe asks for, said on the button so it is never a surprise. */
-function requestLabel(card: ForYouCard) {
-  return card.mediaType === 'tv' ? 'Request S1' : 'Request'
 }
 
 function prefersReducedMotion() {
@@ -411,7 +404,15 @@ function SignalLine({ data }: { data: DeckResponse | null }) {
 // The card stack: drag, fling, or press
 // ---------------------------------------------------------------------------
 
-const FLING_VELOCITY = 0.6 // px per ms
+/**
+ * A flick commits short of the full drag distance only when it is clearly
+ * meant: fast over the last ~100 ms (not one jittery pointer sample), still
+ * heading the way it travelled, and at least half-way to the commit point.
+ */
+const FLING_VELOCITY = 1 // px per ms
+const FLING_WINDOW_MS = 100
+const FLING_MIN_SHARE = 0.5
+const FLING_MIN_PX = 80
 const MAX_TILT = 6 // degrees
 
 function Stack({
@@ -436,9 +437,8 @@ function Stack({
     id: number
     x0: number
     y0: number
-    lastX: number
-    lastT: number
-    v: number
+    /** Recent positions, for the velocity over the last FLING_WINDOW_MS. */
+    samples: { x: number; t: number }[]
     active: boolean
   } | null>(null)
   const suppressClick = useRef(false)
@@ -556,9 +556,7 @@ function Stack({
       id: e.pointerId,
       x0: e.clientX,
       y0: e.clientY,
-      lastX: e.clientX,
-      lastT: e.timeStamp,
-      v: 0,
+      samples: [{ x: e.clientX, t: e.timeStamp }],
       active: false,
     }
     suppressClick.current = false
@@ -580,10 +578,10 @@ function Stack({
       suppressClick.current = true
       cardRef.current?.setPointerCapture(e.pointerId)
     }
-    const dt = Math.max(1, e.timeStamp - d.lastT)
-    d.v = (e.clientX - d.lastX) / dt
-    d.lastX = e.clientX
-    d.lastT = e.timeStamp
+    d.samples.push({ x: e.clientX, t: e.timeStamp })
+    while (d.samples.length > 2 && e.timeStamp - d.samples[0].t > FLING_WINDOW_MS) {
+      d.samples.shift()
+    }
     paint(dx, false)
   }
 
@@ -594,8 +592,15 @@ function Stack({
     const dx = e.clientX - d.x0
     const width = cardRef.current?.offsetWidth ?? 300
     const threshold = thresholdFor(width)
-    if (dx > threshold || (d.v > FLING_VELOCITY && dx > 40)) commit('request')
-    else if (dx < -threshold || (d.v < -FLING_VELOCITY && dx < -40)) commit('skip')
+
+    const first = d.samples[0]
+    const span = e.timeStamp - first.t
+    const v = span > 0 ? (e.clientX - first.x) / span : 0
+    const flingReach = Math.max(FLING_MIN_PX, threshold * FLING_MIN_SHARE)
+    const flung = (dir: 1 | -1) => dir * v > FLING_VELOCITY && dir * dx > flingReach
+
+    if (dx > threshold || flung(1)) commit('request')
+    else if (dx < -threshold || flung(-1)) commit('skip')
     else paint(0, true)
   }
 
@@ -663,7 +668,7 @@ function Stack({
             <HugeiconsIcon icon={Add01Icon} className="size-5 sm:size-6" strokeWidth={2.5} />
           </span>
           <span className="text-base leading-6 font-bold whitespace-nowrap sm:text-xl sm:leading-7">
-            <span className="group-data-[armed=true]/stamp:hidden">{requestLabel(card)}</span>
+            <span className="group-data-[armed=true]/stamp:hidden">Request</span>
             <span className="hidden group-data-[armed=true]/stamp:inline">Release to request</span>
           </span>
         </div>
@@ -706,7 +711,7 @@ function Stack({
           disabled={!!leaving}
         >
           <HugeiconsIcon icon={Add01Icon} />
-          {requestLabel(card)}
+          Request
           <kbd className="ml-1 hidden rounded border border-primary-foreground/40 px-1 text-xs leading-4 pointer-fine:inline">
             →
           </kbd>
@@ -778,25 +783,13 @@ function TrailerStrip({ card, soundUnlocked }: { card: ForYouCard; soundUnlocked
   const [started, setStarted] = useState(false)
   const [failed, setFailed] = useState(false)
   // Autoplay can be refused without a word (iOS Low Power Mode, some
-  // blockers); after a few seconds without playback, offer a real button.
+  // blockers). After a few seconds without playback the player is shown as it
+  // is, with YouTube's own play button.
   const [stalled, setStalled] = useState(false)
-  // After that button, the frame is YouTube's to control directly.
-  const [handedOver, setHandedOver] = useState(false)
-  // iPadOS and iOS only unmute (or otherwise control) an embedded video on a
-  // tap inside the video frame itself; commands sent from the page are
-  // ignored. So on touch screens the player loads with YouTube's own controls,
-  // and the sound button hands the frame over for the user to tap. Decided
-  // once per card: changing the controls later would reload the video.
-  const [touch] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
-  )
-  const [showTapHint, setShowTapHint] = useState(false)
-  // Trailers always start with sound; the button mutes one card at a time.
-  const [muted, setMuted] = useState(false)
   // Autoplay with sound is attempted only after the start stage's click, and
   // only until a browser has said no.
   const [soundRefused, setSoundRefused] = useState(soundRefusedThisVisit)
-  const withSound = soundUnlocked && !muted && !soundRefused
+  const withSound = soundUnlocked && !soundRefused
   const stripRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
 
@@ -808,19 +801,36 @@ function TrailerStrip({ card, soundUnlocked }: { card: ForYouCard; soundUnlocked
     }
   }, [card])
 
-  const command = useCallback((func: 'mute' | 'unMute' | 'playVideo' | 'pauseVideo') => {
-    frameRef.current?.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func, args: [] }),
-      '*'
-    )
-  }, [])
+  const command = useCallback(
+    (func: 'playVideo' | 'pauseVideo' | 'unloadModule', args: unknown[] = []) => {
+      frameRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event: 'command', func, args }),
+        '*'
+      )
+    },
+    []
+  )
+
+  // The player's last reported state, so scrolling back resumes a trailer
+  // only if it was playing when it scrolled away — never one the user paused.
+  const playerState = useRef<number | null>(null)
+  const resumeOnReturn = useRef(false)
+  const captionsCleared = useRef(false)
 
   // Scrolled away or tab hidden: pause, rather than play on to nobody.
   useEffect(() => {
     const el = stripRef.current
     if (!el || !loaded || typeof IntersectionObserver === 'undefined') return
     let visible = true
-    const sync = () => command(visible && !document.hidden ? 'playVideo' : 'pauseVideo')
+    const sync = () => {
+      if (visible && !document.hidden) {
+        if (resumeOnReturn.current) command('playVideo')
+        resumeOnReturn.current = false
+      } else if (playerState.current === 1) {
+        resumeOnReturn.current = true
+        command('pauseVideo')
+      }
+    }
     const observer = new IntersectionObserver(([entry]) => {
       visible = entry.isIntersecting
       sync()
@@ -849,7 +859,17 @@ function TrailerStrip({ card, soundUnlocked }: { card: ForYouCard; soundUnlocked
           : msg.event === 'infoDelivery'
             ? (msg.info as { playerState?: number } | null)?.playerState
             : undefined
-      if (state === 1) setStarted(true)
+      if (typeof state === 'number') playerState.current = state
+      if (state === 1) {
+        setStarted(true)
+        // Captions follow the viewer's YouTube settings or a language
+        // mismatch; start without them. The CC button still turns them on.
+        if (!captionsCleared.current) {
+          captionsCleared.current = true
+          command('unloadModule', ['captions'])
+          command('unloadModule', ['cc'])
+        }
+      }
       if (msg.event === 'onReady' || msg.event === 'initialDelivery') tries = 31
       if (msg.event === 'onError') setFailed(true)
     }
@@ -878,134 +898,103 @@ function TrailerStrip({ card, soundUnlocked }: { card: ForYouCard; soundUnlocked
 
   // A browser that blocks sound simply never starts the video. Once the player
   // has loaded, give it four seconds; then reload the same trailer muted — it
-  // plays, and the sound button or YouTube's own controls take it from there.
+  // plays, and YouTube's own volume control takes it from there.
   useEffect(() => {
     if (!loaded || started || !withSound) return
     const t = window.setTimeout(() => {
       soundRefusedThisVisit = true
       setSoundRefused(true)
-      setMuted(true)
+      captionsCleared.current = false
       setLoaded(false)
       setStalled(false)
     }, 4000)
     return () => window.clearTimeout(t)
   }, [loaded, started, withSound])
 
+  // A click on YouTube's controls moves keyboard focus into the player, where
+  // the deck's arrow keys would never arrive. Hand focus back to the page
+  // once the click has landed; the controls keep working with the mouse.
+  useEffect(() => {
+    const onBlur = () => {
+      window.setTimeout(() => {
+        if (document.activeElement === frameRef.current) frameRef.current?.blur()
+      }, 150)
+    }
+    window.addEventListener('blur', onBlur)
+    return () => window.removeEventListener('blur', onBlur)
+  }, [])
+
   const backdrop = card.backdropUrl?.replace('/original/', '/w780/') ?? null
   if (!hasVideo || (videoKey === null && !backdrop)) return null
 
-  const onLoad = () => {
-    setLoaded(true)
-    // The player takes a moment to accept commands after the frame loads.
-    if (!muted && !withSound) window.setTimeout(() => command('unMute'), 700)
-  }
-
-  const toggleSound = () => {
-    const next = !muted
-    setMuted(next)
-    command(next ? 'mute' : 'unMute')
-  }
-
-  const handOverForSound = () => {
-    setHandedOver(true)
-    // Enough on Android; iOS ignores it and needs the tap inside the player.
-    command('unMute')
-    setShowTapHint(true)
-    window.setTimeout(() => setShowTapHint(false), 5000)
-  }
+  const onLoad = () => setLoaded(true)
 
   const src =
     videoKey &&
-    `https://www.youtube.com/embed/${videoKey}?autoplay=1&mute=${withSound ? 0 : 1}&controls=${touch ? 1 : 0}&playsinline=1&loop=1&playlist=${videoKey}&rel=0&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`
+    `https://www.youtube.com/embed/${videoKey}?autoplay=1&mute=${withSound ? 0 : 1}&controls=1&cc_load_policy=0&playsinline=1&loop=1&playlist=${videoKey}&rel=0&iv_load_policy=3&disablekb=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`
 
   return (
-    <>
-      <div
-        ref={stripRef}
-        className="relative flex aspect-video max-h-[clamp(12rem,38svh,22rem)] w-full justify-center overflow-hidden border-b border-border bg-black"
-      >
-        {/* The stage is always the player's own 16:9 at the strip's full height,
+    <div
+      ref={stripRef}
+      // The trailer is YouTube's to control — pause, seek, volume, fullscreen
+      // — so a drag that starts here never swipes the card; the details
+      // below are the swipe area.
+      onPointerDown={(e) => e.stopPropagation()}
+      className="relative flex aspect-video max-h-[clamp(12rem,38svh,22rem)] w-full justify-center overflow-hidden border-b border-border bg-black"
+    >
+      {/* The stage is always the player's own 16:9 at the strip's full height,
           centred: nothing is cropped. A wide card that caps the height gets
           black side bars; YouTube letterboxes scope trailers inside it. */}
-        <div className="relative aspect-video h-full max-w-full">
-          {backdrop && (
-            <img
-              src={backdrop}
-              alt=""
-              draggable={false}
-              className={cn(
-                'absolute inset-0 size-full object-contain transition-opacity duration-500',
-                (started || handedOver) && !failed ? 'opacity-0' : 'opacity-100'
-              )}
-            />
-          )}
-
-          {/* The frame never takes pointer events, so a swipe or a scroll that
-          starts on it still reaches the card and the page. */}
-          {src && playing && !failed && (
-            <iframe
-              key={src}
-              ref={frameRef}
-              src={src}
-              title={`${card.title} trailer`}
-              tabIndex={-1}
-              allow="autoplay; encrypted-media; picture-in-picture"
-              referrerPolicy="strict-origin-when-cross-origin"
-              onLoad={onLoad}
-              className={cn(
-                'absolute inset-0 size-full border-0 transition-opacity duration-500',
-                handedOver ? 'pointer-events-auto' : 'pointer-events-none',
-                started || handedOver ? 'opacity-100' : 'opacity-0'
-              )}
-            />
-          )}
-
-          {videoKey === undefined && !backdrop && (
-            <Skeleton className="absolute inset-0 rounded-none" />
-          )}
-        </div>
-
-        {src && ((!playing && !failed) || (stalled && !started && !failed && !handedOver)) && (
-          <button
-            type="button"
-            onClick={() => {
-              if (!playing) return setPlaying(true)
-              setHandedOver(true)
-              command('playVideo')
-            }}
-            className="group absolute inset-0 flex items-center justify-center outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
-            aria-label={`Play ${card.title} trailer`}
-          >
-            <span className="flex h-10 items-center gap-2 rounded-full bg-black/70 pr-4 pl-3 text-sm font-medium text-white transition-colors group-hover:bg-black/85">
-              <HugeiconsIcon icon={PlayIcon} className="size-5" />
-              Play trailer
-            </span>
-          </button>
+      <div className="relative aspect-video h-full max-w-full">
+        {backdrop && (
+          <img
+            src={backdrop}
+            alt=""
+            draggable={false}
+            className={cn(
+              'absolute inset-0 size-full object-contain transition-opacity duration-500',
+              (started || stalled) && !failed ? 'opacity-0' : 'opacity-100'
+            )}
+          />
         )}
 
-        {src && playing && started && !failed && !(touch && handedOver) && (
-          <button
-            type="button"
-            onClick={touch ? handOverForSound : toggleSound}
-            aria-pressed={touch ? undefined : !muted}
-            aria-label={
-              touch ? 'Control the trailer' : muted ? 'Turn trailer sound on' : 'Mute trailer'
-            }
-            className="absolute right-2 bottom-2 flex size-9 items-center justify-center rounded-full bg-black/60 text-white outline-none transition-colors hover:bg-black/75 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            <HugeiconsIcon icon={muted ? VolumeOffIcon : VolumeHighIcon} className="size-4" />
-          </button>
+        {src && playing && !failed && (
+          <iframe
+            key={src}
+            ref={frameRef}
+            src={src}
+            title={`${card.title} trailer`}
+            tabIndex={-1}
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            onLoad={onLoad}
+            className={cn(
+              'absolute inset-0 size-full border-0 transition-opacity duration-500',
+              started || stalled ? 'opacity-100' : 'opacity-0'
+            )}
+          />
+        )}
+
+        {videoKey === undefined && !backdrop && (
+          <Skeleton className="absolute inset-0 rounded-none" />
         )}
       </div>
-      {touch && handedOver && showTapHint && (
-        <p
-          role="status"
-          className="border-b border-border bg-muted px-3 py-1.5 text-center text-xs text-muted-foreground"
+
+      {src && !playing && !failed && (
+        <button
+          type="button"
+          onClick={() => setPlaying(true)}
+          className="group absolute inset-0 flex items-center justify-center outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+          aria-label={`Play ${card.title} trailer`}
         >
-          Tap the speaker in the player for sound
-        </p>
+          <span className="flex h-10 items-center gap-2 rounded-full bg-black/70 pr-4 pl-3 text-sm font-medium text-white transition-colors group-hover:bg-black/85">
+            <HugeiconsIcon icon={PlayIcon} className="size-5" />
+            Play trailer
+          </span>
+        </button>
       )}
-    </>
+    </div>
   )
 }
 
