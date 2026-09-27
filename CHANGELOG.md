@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.37.0](https://github.com/Gitsack/hamster/compare/hamster-v1.36.3...hamster-v1.37.0) (2026-09-27)
+
+
+### Features
+
+* **dashboard:** calmer status panel, multi-type deck filter, safer swipes ([70a6967](https://github.com/Gitsack/hamster/commit/70a696754de94fc1592c00b5a231f3a035378416))
+* **dashboard:** deck modes — your taste, new, classics, top rated ([5f6b7a3](https://github.com/Gitsack/hamster/commit/5f6b7a3aadf94d42d50d39e5a591eb85df75fa23))
+* **dashboard:** For you swipe deck, Simkl and media-server taste sources ([1207139](https://github.com/Gitsack/hamster/commit/1207139e5bab6495042d673a979488a7cae78a4b))
+* **dashboard:** new-artist album suggestions and streaming icons ([86558a8](https://github.com/Gitsack/hamster/commit/86558a8b55b58a4913ed83d9e997fd97c8b5c8b8))
+* **dashboard:** publication years, new-release boost, subjects that learn ([8ee6392](https://github.com/Gitsack/hamster/commit/8ee6392e200a987d3c73ea6c741fda5ae45a3878))
+* **dashboard:** save picks to a watchlist, learn only from what you want ([371bd4f](https://github.com/Gitsack/hamster/commit/371bd4f59f96b1a70ad0f3d14c02929e88d09f96))
+* **dashboard:** streaming icons open the title on the service ([fbf31bc](https://github.com/Gitsack/hamster/commit/fbf31bcdb563d5867b295fad89cae7d959f0c326))
+* **dashboard:** suggest books only in languages the user reads ([1b45fa2](https://github.com/Gitsack/hamster/commit/1b45fa2b4fface1a11834bcaf2fd0d45c4d2525a))
+* **tv:** search and grab requested episodes in watching order ([2908d0a](https://github.com/Gitsack/hamster/commit/2908d0a86337f73e4753307f2e8f56a1c3b25042))
+* **ui:** covers breathe while they load, then fade in ([02e900c](https://github.com/Gitsack/hamster/commit/02e900c5460522aad370c290282d4c12f3c82023))
+* **watchlist:** its own page, saved from previews and detail pages ([60b8508](https://github.com/Gitsack/hamster/commit/60b8508a9f04eba97b6f9dede905305e09b51221))
+
+
+### Bug Fixes
+
+* **dashboard:** controllable trailers, no captions, deliberate flicks ([60378c1](https://github.com/Gitsack/hamster/commit/60378c10f4ef9057a2f26f988684658c3a9de2a9))
+* **dashboard:** skipped titles get their own icon and label ([2a344be](https://github.com/Gitsack/hamster/commit/2a344be72dfe682e172e8b42897292e694388375))
+* **dashboard:** swipes survive a wobbly start ([c0b3ca4](https://github.com/Gitsack/hamster/commit/c0b3ca46d71314db84a7c58631434879db075303))
+* **dashboard:** trailers keep their sound after a slow start ([db66b04](https://github.com/Gitsack/hamster/commit/db66b04fac259358d65e6b8a23348ddaaa3130a2))
+* **downloads:** stop two scanners re-failing an imported release forever ([6619395](https://github.com/Gitsack/hamster/commit/66193959bb8be8c6dda353e460448ad76a0c04cf))
+
 ## [1.36.3](https://github.com/Gitsack/hamster/compare/hamster-v1.36.2...hamster-v1.36.3) (2026-09-26)
 
 
