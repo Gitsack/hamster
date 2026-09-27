@@ -394,6 +394,7 @@ router
     router.get('/recommendations/tv', [RecommendationsController, 'tv'])
     router.get('/for-you', [ForYouController, 'index'])
     router.post('/for-you/feedback', [ForYouController, 'feedback'])
+    router.put('/for-you/preferences', [ForYouController, 'savePreferences'])
     router.delete('/for-you/feedback/:mediaType/:externalId', [ForYouController, 'undo'])
     router
       .get('/for-you/extras/:mediaType/:tmdbId', [ForYouController, 'extras'])

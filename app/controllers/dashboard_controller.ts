@@ -26,7 +26,7 @@ const EMPTY_PROPS = {
   stats: { movies: 0, tvShows: 0, episodes: 0, artists: 0, albums: 0, authors: 0, books: 0 },
   missing: { movies: 0, episodes: 0, albums: 0, books: 0 },
   activeDownloadCount: 0,
-  failedLastDay: 0,
+  stuck: { count: 0, titles: [] as string[] },
   recentAdditions: [] as RecentItem[],
   health: { downloadClients: [], indexers: [] },
 }
@@ -50,7 +50,7 @@ export default class DashboardController {
         missingAlbums,
         missingBooks,
         activeDownloads,
-        failedLastDay,
+        stuck,
         downloadClients,
         indexers,
         recentImports,
@@ -90,10 +90,7 @@ export default class DashboardController {
         Download.query()
           .whereIn('status', ['queued', 'downloading', 'paused', 'importing'])
           .count('* as total'),
-        History.query()
-          .whereIn('eventType', ['download_failed', 'import_failed'])
-          .where('createdAt', '>=', DateTime.now().minus({ hours: 24 }).toSQL()!)
-          .count('* as total'),
+        this.stuckTitles(),
         DownloadClient.query().select('id', 'name', 'type', 'enabled'),
         Indexer.query().select('id', 'name', 'type', 'enabled'),
         History.query()
@@ -123,7 +120,7 @@ export default class DashboardController {
           books: count(missingBooks),
         },
         activeDownloadCount: count(activeDownloads),
-        failedLastDay: count(failedLastDay),
+        stuck,
         recentAdditions: this.recentFromImports(recentImports),
         health: {
           downloadClients: downloadClients.map((dc) => ({
@@ -144,6 +141,49 @@ export default class DashboardController {
       logger.error({ err: error }, 'Dashboard query failed')
       return inertia.render('dashboard', EMPTY_PROPS)
     }
+  }
+
+  /**
+   * Titles that are stuck: a download or import failed in the last day, the
+   * title is still wanted and still not on disk, and nothing new is
+   * downloading for it. Failed attempts on their own are routine — a release
+   * missing articles is blacklisted and the next one grabbed — so they are not
+   * counted; only a failure nothing has recovered from is worth a look.
+   */
+  private async stuckTitles(): Promise<{ count: number; titles: string[] }> {
+    const { rows } = await db.rawQuery(`
+      WITH failed AS (
+        SELECT DISTINCT movie_id, episode_id, album_id, book_id
+        FROM history
+        WHERE event_type IN ('download_failed', 'import_failed')
+          AND created_at > now() - interval '24 hours'
+      ),
+      active AS (
+        SELECT movie_id, episode_id, album_id, book_id
+        FROM downloads
+        WHERE status IN ('queued', 'downloading', 'paused', 'importing')
+      )
+      SELECT m.title FROM failed f JOIN movies m ON m.id = f.movie_id
+        WHERE m.has_file = false AND m.monitored = true
+          AND NOT EXISTS (SELECT 1 FROM active a WHERE a.movie_id = m.id)
+      UNION
+      SELECT s.title || ' S' || lpad(e.season_number::text, 2, '0') || 'E' || lpad(e.episode_number::text, 2, '0')
+        FROM failed f JOIN episodes e ON e.id = f.episode_id JOIN tv_shows s ON s.id = e.tv_show_id
+        WHERE e.has_file = false AND e.requested = true
+          AND NOT EXISTS (SELECT 1 FROM active a WHERE a.episode_id = e.id)
+      UNION
+      SELECT ar.name || ' – ' || al.title
+        FROM failed f JOIN albums al ON al.id = f.album_id JOIN artists ar ON ar.id = al.artist_id
+        WHERE al.requested = true
+          AND NOT EXISTS (SELECT 1 FROM track_files t WHERE t.album_id = al.id)
+          AND NOT EXISTS (SELECT 1 FROM active a WHERE a.album_id = al.id)
+      UNION
+      SELECT b.title FROM failed f JOIN books b ON b.id = f.book_id
+        WHERE b.has_file = false AND b.requested = true
+          AND NOT EXISTS (SELECT 1 FROM active a WHERE a.book_id = b.id)
+    `)
+    const titles = (rows as { title: string }[]).map((r) => r.title).sort()
+    return { count: titles.length, titles: titles.slice(0, 3) }
   }
 
   /**

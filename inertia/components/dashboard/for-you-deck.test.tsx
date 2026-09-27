@@ -38,7 +38,8 @@ const card = (over: Partial<ForYouCard>): ForYouCard => ({
   ...over,
 })
 
-const deck = (cards: ForYouCard[]) => ({
+const deck = (cards: ForYouCard[], types: string[] | null = null) => ({
+  preferences: { types },
   cards,
   signals: {
     sources: [
@@ -55,7 +56,7 @@ const deck = (cards: ForYouCard[]) => ({
 })
 
 let fetchMock: ReturnType<typeof vi.fn>
-function mockFetch(cards: ForYouCard[]) {
+function mockFetch(cards: ForYouCard[], types: string[] | null = null) {
   fetchMock = vi.fn((url: string) => {
     if (url.startsWith('/api/v1/for-you/extras/'))
       return Promise.resolve({
@@ -71,7 +72,11 @@ function mockFetch(cards: ForYouCard[]) {
           }),
       })
     if (url.startsWith('/api/v1/for-you') && !url.includes('feedback'))
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(deck(cards)) })
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(deck(cards, types)),
+      })
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ id: 'new' }) })
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -175,6 +180,47 @@ describe('ForYouDeck', () => {
     await start()
     expect(await screen.findByText('Al Pacino')).toBeInTheDocument()
     expect(screen.getByText('Neil McCauley')).toBeInTheDocument()
+  })
+
+  const mixed = () => [
+    card({}),
+    card({ key: 'tv:9', mediaType: 'tv', externalId: '9', title: 'The Wire' }),
+    card({ key: 'book:b1', mediaType: 'book', externalId: 'b1', title: 'Dune' }),
+  ]
+
+  it('shows several types together and remembers the choice', async () => {
+    mockFetch(mixed())
+    render(<ForYouDeck />)
+    await start()
+    await userEvent.click(screen.getByRole('button', { name: /^TV/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Books/ }))
+    expect(screen.getByRole('button', { name: /^TV/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^Books/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'false')
+    // Movies are out: the first card is the show.
+    expect(await screen.findByText('The Wire')).toBeInTheDocument()
+    expect(screen.queryByText('Heat')).not.toBeInTheDocument()
+    const saves = calls('/api/v1/for-you/preferences')
+    expect(JSON.parse(saves.at(-1)![1].body)).toEqual({ types: ['tv', 'book'] })
+  })
+
+  it('opens on the saved choice', async () => {
+    mockFetch(mixed(), ['book'])
+    render(<ForYouDeck />)
+    await start()
+    expect(await screen.findByText('Dune')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Books/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('shows the type icon when a card has no cover', async () => {
+    mockFetch([card({ key: 'book:b1', mediaType: 'book', externalId: 'b1', title: 'Dune' })])
+    const { container } = render(<ForYouDeck />)
+    await start()
+    await screen.findByText('Dune')
+    expect(container.querySelector('[aria-roledescription="recommendation"] img')).toBeNull()
+    expect(
+      container.querySelector('[aria-roledescription="recommendation"] svg[aria-hidden="true"]')
+    ).not.toBeNull()
   })
 
   it('says when the deck is used up', async () => {

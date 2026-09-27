@@ -29,6 +29,10 @@ export default class UserSetting extends BaseModel {
   @column()
   declare notificationSettings: NotificationSettings
 
+  /** Media types the dashboard's For you deck shows; null means all. */
+  @column()
+  declare forYouTypes: string[] | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   MusicNote01Icon,
@@ -34,7 +34,12 @@ export function MediaImage({
   iconClassName = 'h-16 w-16',
 }: MediaImageProps) {
   const [hasError, setHasError] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   const Icon = MEDIA_ICONS[mediaType]
+  // Server-rendered or cached images can finish before onLoad is attached.
+  const imgRef = useCallback((img: HTMLImageElement | null) => {
+    if (img?.complete && img.naturalWidth > 0) setLoaded(true)
+  }, [])
 
   if (!src || hasError) {
     return (
@@ -48,13 +53,26 @@ export function MediaImage({
     )
   }
 
+  // Slow covers breathe while they load instead of sitting as a flat grey box.
   return (
-    <img
-      src={src}
-      alt={alt}
-      className={`w-full h-full object-cover ${className}`}
-      loading="lazy"
-      onError={() => setHasError(true)}
-    />
+    <div className="relative h-full w-full">
+      {!loaded && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 animate-pulse bg-muted motion-reduce:animate-none"
+        />
+      )}
+      <img
+        ref={imgRef}
+        src={src}
+        alt={alt}
+        className={`relative w-full h-full object-cover transition-opacity duration-300 ${
+          loaded ? 'opacity-100' : 'opacity-0'
+        } ${className}`}
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        onError={() => setHasError(true)}
+      />
+    </div>
   )
 }

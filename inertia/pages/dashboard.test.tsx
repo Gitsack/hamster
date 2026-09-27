@@ -28,7 +28,7 @@ const defaultProps = {
   stats: { movies: 42, tvShows: 15, episodes: 320, artists: 8, albums: 25, authors: 5, books: 30 },
   missing: { movies: 3, episodes: 10, albums: 2, books: 1 },
   activeDownloadCount: 0,
-  failedLastDay: 0,
+  stuck: { count: 0, titles: [] as string[] },
   recentAdditions: [] as any[],
   health: { downloadClients: [] as any[], indexers: [] as any[] },
 }
@@ -47,26 +47,48 @@ describe('Dashboard', () => {
     expect(screen.getByText('320')).toBeInTheDocument()
     expect(screen.getByText('25')).toBeInTheDocument()
     expect(screen.getByText('30')).toBeInTheDocument()
-    expect(screen.getByText('15 shows')).toBeInTheDocument()
-    expect(screen.getByText('8 artists')).toBeInTheDocument()
-    expect(screen.getByText('5 authors')).toBeInTheDocument()
+    expect(screen.getByText(/15 shows/)).toBeInTheDocument()
+    expect(screen.getByText(/8 artists/)).toBeInTheDocument()
+    expect(screen.getByText(/5 authors/)).toBeInTheDocument()
   })
 
-  it('shows missing counts', () => {
+  it('shows what is still wanted next to each shelf, linking to the wanted list', () => {
     render(<Dashboard {...defaultProps} />)
-    for (const n of ['3', '10', '2', '1']) expect(screen.getByText(n)).toBeInTheDocument()
+    const wanted = screen
+      .getAllByRole('link')
+      .filter((a) => a.getAttribute('href') === '/library?tab=missing')
+    expect(wanted.map((a) => a.textContent)).toEqual([
+      '3 wanted',
+      '10 wanted',
+      '2 wanted',
+      '1 wanted',
+    ])
   })
 
-  it('flags failures from the last day and links to history', () => {
-    render(<Dashboard {...defaultProps} failedLastDay={12} />)
-    const link = screen.getByText(/failed in the last 24h/).closest('a')
-    expect(link).toHaveAttribute('href', '/activity/history')
-    expect(screen.getByText('12')).toBeInTheDocument()
+  it('leaves out the wanted count and bar when nothing is missing', () => {
+    render(
+      <Dashboard {...defaultProps} missing={{ movies: 0, episodes: 0, albums: 0, books: 0 }} />
+    )
+    expect(screen.queryByText(/wanted/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: /on disk/ })).not.toBeInTheDocument()
   })
 
-  it('says so when nothing failed', () => {
+  it('flags titles that are stuck, naming them', () => {
+    render(
+      <Dashboard
+        {...defaultProps}
+        stuck={{ count: 4, titles: ['Heat', 'Matlock S02E16', 'Ronin'] }}
+      />
+    )
+    const link = screen.getByText(/titles are stuck/).closest('a')
+    expect(link).toHaveAttribute('href', '/library?tab=missing')
+    expect(screen.getByText(/Heat, Matlock S02E16, Ronin and 1 more/)).toBeInTheDocument()
+  })
+
+  it('stays quiet when nothing is stuck — routine failures are not counted', () => {
     render(<Dashboard {...defaultProps} />)
-    expect(screen.getByText('No failures in the last 24h')).toBeInTheDocument()
+    expect(screen.queryByText(/stuck/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/failed/)).not.toBeInTheDocument()
   })
 
   it('lists active downloads from the shared queue', () => {
@@ -95,8 +117,9 @@ describe('Dashboard', () => {
       />
     )
     expect(screen.getByText('SABnzbd')).toBeInTheDocument()
-    expect(screen.getByText('NZBgeek')).toBeInTheDocument()
-    expect(screen.getByText('disabled')).toBeInTheDocument()
+    // The only indexer is switched off: counted as off, and flagged.
+    expect(screen.getByText(/1 off/)).toBeInTheDocument()
+    expect(screen.getByText('Services need attention:')).toBeInTheDocument()
   })
 
   it('shows recently imported titles', () => {

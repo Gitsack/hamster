@@ -16,7 +16,6 @@ import {
 } from '@hugeicons/core-free-icons'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { MediaImage } from '@/components/library/media-image'
 import { useMediaPreview } from '@/contexts/media_preview_context'
 import { cn } from '@/lib/utils'
 
@@ -61,9 +60,91 @@ interface DeckResponse {
     library: number
   }
   requestDefaults: { movie: RequestDefaults | null; tv: RequestDefaults | null }
+  /** The types the user last chose to see; null means all. */
+  preferences?: { types: DeckMediaType[] | null }
 }
 
-type Filter = 'all' | DeckMediaType
+const ALL_TYPES = ['movie', 'tv', 'album', 'book'] as const
+
+/**
+ * A faint tint per kind of media for covers that are missing. Hues sit between
+ * the status colours, and chroma stays low, so a blank cover says "a book" at
+ * a glance without reading as a state.
+ */
+const COVER_TINT: Record<DeckMediaType, string> = {
+  movie:
+    'bg-[oklch(0.95_0.025_0)] text-[oklch(0.62_0.1_0)] dark:bg-[oklch(0.3_0.035_0)] dark:text-[oklch(0.72_0.09_0)]',
+  tv: 'bg-[oklch(0.95_0.025_190)] text-[oklch(0.6_0.08_190)] dark:bg-[oklch(0.3_0.03_190)] dark:text-[oklch(0.72_0.08_190)]',
+  album:
+    'bg-[oklch(0.95_0.03_110)] text-[oklch(0.6_0.09_110)] dark:bg-[oklch(0.3_0.035_110)] dark:text-[oklch(0.74_0.09_110)]',
+  book: 'bg-[oklch(0.95_0.03_50)] text-[oklch(0.62_0.09_50)] dark:bg-[oklch(0.3_0.035_50)] dark:text-[oklch(0.74_0.08_50)]',
+}
+
+/** A card's cover, or the type's icon on a faint tint when there is none. */
+function DeckCover({ card, iconClassName }: { card: ForYouCard; iconClassName: string }) {
+  const [broken, setBroken] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  // An image that finished before React attached its handlers (server-rendered
+  // pages, the browser cache) never fires onLoad; check once on mount.
+  const imgRef = useCallback((img: HTMLImageElement | null) => {
+    if (img?.complete) {
+      if (img.naturalWidth <= 2) setBroken(true)
+      else setLoaded(true)
+    }
+  }, [])
+
+  if (card.posterUrl && !broken) {
+    return (
+      <div className="relative size-full">
+        {/* Covers can take a while; the tile breathes until one arrives. */}
+        {!loaded && (
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 animate-pulse bg-muted motion-reduce:animate-none"
+          />
+        )}
+        <img
+          ref={imgRef}
+          src={card.posterUrl}
+          alt=""
+          loading="lazy"
+          draggable={false}
+          onError={() => setBroken(true)}
+          // OpenLibrary answers a missing cover with a 1×1 blank image rather
+          // than an error; treat anything that small as no cover at all.
+          onLoad={(e) => {
+            if (e.currentTarget.naturalWidth <= 2) setBroken(true)
+            else setLoaded(true)
+          }}
+          className={cn(
+            'pointer-events-none relative size-full object-cover transition-opacity duration-300',
+            loaded ? 'opacity-100' : 'opacity-0'
+          )}
+        />
+      </div>
+    )
+  }
+  return (
+    <div className={cn('flex size-full items-center justify-center', COVER_TINT[card.mediaType])}>
+      <HugeiconsIcon
+        icon={TYPE_META[card.mediaType].icon}
+        aria-hidden="true"
+        className={iconClassName}
+        strokeWidth={1.5}
+      />
+    </div>
+  )
+}
+
+/** Remember the user's type selection on the server, so it follows them. */
+function saveTypes(types: DeckMediaType[]) {
+  fetch('/api/v1/for-you/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ types: types.length > 0 ? types : null }),
+  }).catch(() => {})
+}
+
 type Verdict = 'request' | 'skip'
 
 const TYPE_META: Record<
@@ -72,13 +153,12 @@ const TYPE_META: Record<
     label: string
     plural: string
     icon: typeof Film01Icon
-    imageType: 'movies' | 'tv' | 'album' | 'books'
   }
 > = {
-  movie: { label: 'Movie', plural: 'Movies', icon: Film01Icon, imageType: 'movies' },
-  tv: { label: 'Series', plural: 'TV', icon: Tv01Icon, imageType: 'tv' },
-  album: { label: 'Album', plural: 'Music', icon: CdIcon, imageType: 'album' },
-  book: { label: 'Book', plural: 'Books', icon: Book01Icon, imageType: 'books' },
+  movie: { label: 'Movie', plural: 'Movies', icon: Film01Icon },
+  tv: { label: 'Series', plural: 'TV', icon: Tv01Icon },
+  album: { label: 'Album', plural: 'Music', icon: CdIcon },
+  book: { label: 'Book', plural: 'Books', icon: Book01Icon },
 }
 
 function prefersReducedMotion() {
@@ -165,7 +245,10 @@ export function ForYouDeck() {
   const [cards, setCards] = useState<ForYouCard[]>([])
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
-  const [filter, setFilter] = useState<Filter>('all')
+  // Types the user picked; empty means everything. Restored from their saved
+  // preference on the first load, saved again on every change.
+  const [selected, setSelected] = useState<DeckMediaType[]>([])
+  const restoredPrefs = useRef(false)
   const [announce, setAnnounce] = useState('')
   // The start stage's click is the user gesture browsers want before a video
   // may play with sound; until then the deck is a preview.
@@ -180,6 +263,10 @@ export function ForYouDeck() {
       const body: DeckResponse = await res.json()
       setData(body)
       setCards(body.cards)
+      if (!restoredPrefs.current) {
+        restoredPrefs.current = true
+        setSelected(body.preferences?.types ?? [])
+      }
     } catch {
       setFailed(true)
     } finally {
@@ -193,18 +280,31 @@ export function ForYouDeck() {
 
   const available = useMemo(() => {
     const types = new Set(cards.map((c) => c.mediaType))
-    return (['movie', 'tv', 'album', 'book'] as const).filter((t) => types.has(t))
+    return ALL_TYPES.filter((t) => types.has(t))
   }, [cards])
 
-  // A filter whose last card was just used falls back to everything.
-  useEffect(() => {
-    if (filter !== 'all' && !available.includes(filter)) setFilter('all')
-  }, [available, filter])
+  // What is actually shown: the picked types that still have cards. When none
+  // of them do (their last card was just used), everything shows — without
+  // forgetting the saved choice, which applies again once they have cards.
+  const shown = useMemo(() => selected.filter((t) => available.includes(t)), [selected, available])
 
   const visible = useMemo(
-    () => (filter === 'all' ? cards : cards.filter((c) => c.mediaType === filter)),
-    [cards, filter]
+    () => (shown.length === 0 ? cards : cards.filter((c) => shown.includes(c.mediaType))),
+    [cards, shown]
   )
+
+  const toggleType = (type: DeckMediaType) => {
+    const next = shown.includes(type) ? shown.filter((t) => t !== type) : [...shown, type]
+    // Every type picked is the same as all of them.
+    const normalized = next.length >= available.length ? [] : next
+    setSelected(normalized)
+    saveTypes(normalized)
+  }
+
+  const showAll = () => {
+    setSelected([])
+    saveTypes([])
+  }
   const current = visible[0] ?? null
   const next = visible[1] ?? null
 
@@ -286,31 +386,24 @@ export function ForYouDeck() {
 
       {available.length > 1 && (
         <div
-          role="radiogroup"
-          aria-label="Show"
+          role="group"
+          aria-label="Show these types"
+          data-deck-filters
           className="-mx-4 mb-3 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:px-0"
         >
-          {(['all', ...available] as Filter[]).map((f) => {
-            const count = f === 'all' ? cards.length : cards.filter((c) => c.mediaType === f).length
-            const active = filter === f
-            return (
-              <button
-                key={f}
-                role="radio"
-                aria-checked={active}
-                onClick={() => setFilter(f)}
-                className={cn(
-                  'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                  active
-                    ? 'border-foreground bg-foreground text-background'
-                    : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
-                )}
-              >
-                {f === 'all' ? 'All' : TYPE_META[f].plural}
-                <span className={cn('readout', active ? 'opacity-70' : 'opacity-60')}>{count}</span>
-              </button>
-            )
-          })}
+          <FilterChip active={shown.length === 0} onClick={showAll} count={cards.length}>
+            All
+          </FilterChip>
+          {available.map((t) => (
+            <FilterChip
+              key={t}
+              active={shown.includes(t)}
+              onClick={() => toggleType(t)}
+              count={cards.filter((c) => c.mediaType === t).length}
+            >
+              {TYPE_META[t].plural}
+            </FilterChip>
+          ))}
         </div>
       )}
 
@@ -363,6 +456,36 @@ export function ForYouDeck() {
   )
 }
 
+/** A type toggle. Several can be on at once; none on means all. */
+function FilterChip({
+  active,
+  count,
+  onClick,
+  children,
+}: {
+  active: boolean
+  count: number
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        active
+          ? 'border-foreground bg-foreground text-background'
+          : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+      )}
+    >
+      {children}
+      <span className={cn('readout', active ? 'opacity-70' : 'opacity-60')}>{count}</span>
+    </button>
+  )
+}
+
 /**
  * Where the picks come from, in one quiet line: each active taste source's
  * own summary, then what the deck learnt here. Sources that are off get a
@@ -404,15 +527,6 @@ function SignalLine({ data }: { data: DeckResponse | null }) {
 // The card stack: drag, fling, or press
 // ---------------------------------------------------------------------------
 
-/**
- * A flick commits short of the full drag distance only when it is clearly
- * meant: fast over the last ~100 ms (not one jittery pointer sample), still
- * heading the way it travelled, and at least half-way to the commit point.
- */
-const FLING_VELOCITY = 1 // px per ms
-const FLING_WINDOW_MS = 100
-const FLING_MIN_SHARE = 0.5
-const FLING_MIN_PX = 80
 const MAX_TILT = 6 // degrees
 
 function Stack({
@@ -437,8 +551,8 @@ function Stack({
     id: number
     x0: number
     y0: number
-    /** Recent positions, for the velocity over the last FLING_WINDOW_MS. */
-    samples: { x: number; t: number }[]
+    /** Where the last real move put the card — never read from the end event. */
+    dx: number
     active: boolean
   } | null>(null)
   const suppressClick = useRef(false)
@@ -534,7 +648,7 @@ function Stack({
       const target = e.target instanceof Element ? e.target : null
       if (
         target?.closest(
-          'input, textarea, select, [contenteditable], [role="dialog"], [role="slider"], [role="radiogroup"]'
+          'input, textarea, select, [contenteditable], [role="dialog"], [role="slider"], [data-deck-filters]'
         )
       )
         return
@@ -556,7 +670,7 @@ function Stack({
       id: e.pointerId,
       x0: e.clientX,
       y0: e.clientY,
-      samples: [{ x: e.clientX, t: e.timeStamp }],
+      dx: 0,
       active: false,
     }
     suppressClick.current = false
@@ -578,29 +692,33 @@ function Stack({
       suppressClick.current = true
       cardRef.current?.setPointerCapture(e.pointerId)
     }
-    d.samples.push({ x: e.clientX, t: e.timeStamp })
-    while (d.samples.length > 2 && e.timeStamp - d.samples[0].t > FLING_WINDOW_MS) {
-      d.samples.shift()
-    }
+    d.dx = dx
     paint(dx, false)
   }
 
-  const onPointerEnd = (e: React.PointerEvent) => {
+  /**
+   * The end of a drag. A cancelled one never commits: iPad Safari cancels a
+   * touch when it takes it over (to scroll, say) and may report the finger at
+   * x = 0, which read as a long drag to the left and skipped the card on a
+   * light touch. And the distance is the last move's, not the end event's.
+   */
+  const onPointerEnd = (e: React.PointerEvent, cancelled = false) => {
     const d = drag.current
     drag.current = null
     if (!d || d.id !== e.pointerId || !d.active) return
-    const dx = e.clientX - d.x0
+    if (cancelled) {
+      paint(0, true)
+      return
+    }
+    const dx = d.dx
     const width = cardRef.current?.offsetWidth ?? 300
     const threshold = thresholdFor(width)
 
-    const first = d.samples[0]
-    const span = e.timeStamp - first.t
-    const v = span > 0 ? (e.clientX - first.x) / span : 0
-    const flingReach = Math.max(FLING_MIN_PX, threshold * FLING_MIN_SHARE)
-    const flung = (dir: 1 | -1) => dir * v > FLING_VELOCITY && dir * dx > flingReach
-
-    if (dx > threshold || flung(1)) commit('request')
-    else if (dx < -threshold || flung(-1)) commit('skip')
+    // Only a drag past the commit point counts — the point where the stamp
+    // says "Release to …". Speed alone never commits: quick flicks fired far
+    // too easily.
+    if (dx > threshold) commit('request')
+    else if (dx < -threshold) commit('skip')
     else paint(0, true)
   }
 
@@ -619,8 +737,8 @@ function Stack({
           ref={cardRef}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={onPointerEnd}
-          onPointerCancel={onPointerEnd}
+          onPointerUp={(e) => onPointerEnd(e)}
+          onPointerCancel={(e) => onPointerEnd(e, true)}
           onClickCapture={(e) => {
             if (suppressClick.current) {
               e.preventDefault()
@@ -1036,12 +1154,7 @@ function StartStage({ cards, onStart }: { cards: ForYouCard[]; onStart: () => vo
                   zIndex: fan.length - Math.abs(Math.round(offset * 2)),
                 }}
               >
-                <MediaImage
-                  src={card.posterUrl}
-                  alt=""
-                  mediaType={TYPE_META[card.mediaType].imageType}
-                  iconClassName="size-8"
-                />
+                <DeckCover card={card} iconClassName="size-10" />
               </div>
             )
           })}
@@ -1089,13 +1202,7 @@ function CardBody({ card }: { card: ForYouCard }) {
           square ? 'aspect-square self-start' : 'aspect-[2/3]'
         )}
       >
-        <MediaImage
-          src={card.posterUrl}
-          alt=""
-          mediaType={meta.imageType}
-          iconClassName="size-10"
-          className="pointer-events-none"
-        />
+        <DeckCover card={card} iconClassName="size-12 sm:size-14" />
       </div>
 
       <div className="flex min-w-0 flex-col gap-2 sm:gap-3">
@@ -1153,7 +1260,7 @@ function CardBody({ card }: { card: ForYouCard }) {
         )}
 
         {card.overview && (
-          <p className="hidden max-w-[65ch] text-sm leading-relaxed text-muted-foreground sm:line-clamp-5 sm:block">
+          <p className="hidden max-w-[65ch] text-sm leading-relaxed text-muted-foreground sm:line-clamp-5">
             {card.overview}
           </p>
         )}

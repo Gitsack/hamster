@@ -18,6 +18,15 @@ const feedbackValidator = vine.compile(
   })
 )
 
+const preferencesValidator = vine.compile(
+  vine.object({
+    types: vine
+      .array(vine.enum(['movie', 'tv', 'album', 'book'] as const))
+      .maxLength(4)
+      .nullable(),
+  })
+)
+
 export default class ForYouController {
   /** The deck, plus the profile and folder a one-tap request will use. */
   async index({ auth, request, response }: HttpContext) {
@@ -43,7 +52,18 @@ export default class ForYouController {
     return response.json({
       ...deck,
       requestDefaults: { movie: defaultsFor('movies'), tv: defaultsFor('tv') },
+      preferences: { types: userSetting?.forYouTypes ?? null },
     })
+  }
+
+  /** Remember which media types the user's deck shows. */
+  async savePreferences({ auth, request, response }: HttpContext) {
+    const { types } = await request.validateUsing(preferencesValidator)
+    const setting = await UserSetting.firstOrNew({ userId: auth.user!.id })
+    // Nothing selected, or everything, both mean "all": store null.
+    setting.forYouTypes = types && types.length > 0 && types.length < 4 ? [...new Set(types)] : null
+    await setting.save()
+    return response.noContent()
   }
 
   async feedback({ auth, request, response }: HttpContext) {

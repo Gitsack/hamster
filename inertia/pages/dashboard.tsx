@@ -7,6 +7,7 @@ import {
   type DashboardMissing,
   type DashboardStats,
   type HealthService,
+  type StuckTitles,
 } from '@/components/dashboard/status-panel'
 
 interface RecentItem {
@@ -23,7 +24,7 @@ interface DashboardProps {
   stats: DashboardStats
   missing: DashboardMissing
   activeDownloadCount: number
-  failedLastDay: number
+  stuck: StuckTitles
   recentAdditions: RecentItem[]
   health: {
     downloadClients: HealthService[]
@@ -118,7 +119,7 @@ function RecentlyImported({ items }: { items: RecentItem[] }) {
 export default function Dashboard({
   stats,
   missing,
-  failedLastDay = 0,
+  stuck = { count: 0, titles: [] },
   recentAdditions,
   health,
 }: DashboardProps) {
@@ -131,12 +132,7 @@ export default function Dashboard({
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-10">
           <ForYouDeck />
           <div>
-            <StatusPanel
-              stats={stats}
-              missing={missing}
-              failedLastDay={failedLastDay}
-              health={health}
-            />
+            <StatusPanel stats={stats} missing={missing} stuck={stuck} health={health} />
           </div>
         </div>
 
