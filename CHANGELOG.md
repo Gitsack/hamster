@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.1](https://github.com/Gitsack/hamster/compare/hamster-v1.39.0...hamster-v1.39.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **activity:** keep routine failures out of Needs attention ([4245b47](https://github.com/Gitsack/hamster/commit/4245b47fb13ff65ca2c688b62ad1986e0ee9571b))
+
 ## [1.39.0](https://github.com/Gitsack/hamster/compare/hamster-v1.38.0...hamster-v1.39.0) (2026-09-28)
 
 
