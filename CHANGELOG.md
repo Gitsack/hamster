@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.40.0](https://github.com/Gitsack/hamster/compare/hamster-v1.39.1...hamster-v1.40.0) (2026-09-28)
+
+
+### Features
+
+* **for-you:** library-wide taste and prebuilt decks for every mode ([ad31e0b](https://github.com/Gitsack/hamster/commit/ad31e0b4ed26682d4c1983d102c5d052a8b98f01))
+
 ## [1.39.1](https://github.com/Gitsack/hamster/compare/hamster-v1.39.0...hamster-v1.39.1) (2026-09-28)
 
 
