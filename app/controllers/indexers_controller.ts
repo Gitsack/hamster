@@ -3,10 +3,14 @@ import Indexer from '#models/indexer'
 import vine from '@vinejs/vine'
 import { indexerManager } from '#services/indexers/indexer_manager'
 
+// Self-hosted services live at LAN or Docker hostnames (http://jellyfin:8096),
+// which have no TLD.
+const LAN_URL = { require_tld: false, allow_underscores: true }
+
 const indexerValidator = vine.compile(
   vine.object({
     name: vine.string().minLength(1).maxLength(255),
-    url: vine.string().url(),
+    url: vine.string().url(LAN_URL),
     apiKey: vine.string().minLength(1),
     categories: vine.array(vine.number()).optional(),
     enabled: vine.boolean().optional(),
@@ -16,7 +20,7 @@ const indexerValidator = vine.compile(
 
 const indexerTestValidator = vine.compile(
   vine.object({
-    url: vine.string().url(),
+    url: vine.string().url(LAN_URL),
     apiKey: vine.string().minLength(1),
   })
 )

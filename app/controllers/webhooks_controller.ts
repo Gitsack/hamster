@@ -11,10 +11,14 @@ import {
   restoreWebhookUrl,
 } from '#services/webhooks/webhook_secrets'
 
+// Self-hosted services live at LAN or Docker hostnames (http://jellyfin:8096),
+// which have no TLD.
+const LAN_URL = { require_tld: false, allow_underscores: true }
+
 const webhookValidator = vine.compile(
   vine.object({
     name: vine.string().minLength(1).maxLength(255),
-    url: vine.string().url(),
+    url: vine.string().url(LAN_URL),
     enabled: vine.boolean().optional(),
     method: vine.enum(['GET', 'POST', 'PUT', 'PATCH'] as const).optional(),
     headers: vine.record(vine.string()).optional(),
@@ -30,6 +34,15 @@ const webhookValidator = vine.compile(
     onHealthRestored: vine.boolean().optional(),
   })
 )
+
+/**
+ * Validate the body only. request.validateUsing() also mixes the request's own
+ * `headers`, `params` and `cookies` into the data, and the request headers
+ * would win over the webhook's `headers` field: the browser's Host, Cookie and
+ * session would be stored and sent with every delivery.
+ */
+const validateBody = (request: HttpContext['request']) =>
+  request.validateUsing(webhookValidator, { data: request.all() })
 
 /** The most recent delivery attempt, shown on the target row. */
 export interface LastDelivery {
@@ -97,7 +110,7 @@ export default class WebhooksController {
    * Create a new webhook
    */
   async store({ request, response }: HttpContext) {
-    const data = await request.validateUsing(webhookValidator)
+    const data = await validateBody(request)
 
     const webhook = await Webhook.create({
       name: data.name,
@@ -141,7 +154,7 @@ export default class WebhooksController {
       return response.notFound({ error: 'Webhook not found' })
     }
 
-    const data = await request.validateUsing(webhookValidator)
+    const data = await validateBody(request)
 
     // The editor was given masked values; whatever still reads "****" keeps what is stored.
     const url = restoreWebhookUrl(data.url, webhook.url)

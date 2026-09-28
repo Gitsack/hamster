@@ -3,9 +3,13 @@ import ProwlarrConfigModel from '#models/prowlarr_config'
 import vine from '@vinejs/vine'
 import { prowlarrService } from '#services/indexers/prowlarr_service'
 
+// Self-hosted services live at LAN or Docker hostnames (http://jellyfin:8096),
+// which have no TLD.
+const LAN_URL = { require_tld: false, allow_underscores: true }
+
 const prowlarrValidator = vine.compile(
   vine.object({
-    url: vine.string().url(),
+    url: vine.string().url(LAN_URL),
     apiKey: vine.string().minLength(1),
     syncCategories: vine.array(vine.number()).optional(),
     enabled: vine.boolean().optional(),
@@ -14,7 +18,7 @@ const prowlarrValidator = vine.compile(
 
 const prowlarrTestValidator = vine.compile(
   vine.object({
-    url: vine.string().url(),
+    url: vine.string().url(LAN_URL),
     apiKey: vine.string().minLength(1),
   })
 )

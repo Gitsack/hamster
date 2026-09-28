@@ -98,6 +98,7 @@ test.group('WebhooksController', (group) => {
 
     await controller.store({
       request: {
+        all: () => ({}),
         validateUsing: async () => ({
           name: 'Webhook Test New',
           url: 'https://example.com/webhook/new',
@@ -134,6 +135,7 @@ test.group('WebhooksController', (group) => {
 
     await controller.store({
       request: {
+        all: () => ({}),
         validateUsing: async () => ({
           name: 'Webhook Test Defaults',
           url: 'https://example.com/webhook/defaults',
@@ -228,6 +230,7 @@ test.group('WebhooksController', (group) => {
     await controller.update({
       params: { id: toUpdate.id },
       request: {
+        all: () => ({}),
         validateUsing: async () => ({
           name: 'Webhook Test Updated',
           url: 'https://example.com/webhook/updated',
@@ -262,6 +265,7 @@ test.group('WebhooksController', (group) => {
     await controller.update({
       params: { id: '00000000-0000-0000-0000-000000000000' },
       request: {
+        all: () => ({}),
         validateUsing: async () => ({
           name: 'Whatever',
           url: 'https://example.com',
@@ -448,7 +452,7 @@ test.group('WebhooksController secrets and delivery log', (group) => {
     return controller
       .update({
         params: { id },
-        request: { validateUsing: async () => body },
+        request: { all: () => body, validateUsing: async () => body },
         response: {
           json(data: unknown) {
             outcome.status = 200

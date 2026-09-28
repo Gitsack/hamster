@@ -1,6 +1,7 @@
 import { test } from '@japa/runner'
 import env from '#start/env'
 import User from '#models/user'
+import Webhook from '#models/webhook'
 import { localAccessService } from '#services/auth/local_access_service'
 import { UserFactory } from '../../../database/factories/user_factory.js'
 
@@ -52,5 +53,46 @@ test.group('Notifications routes', (group) => {
       { method: 'DELETE', headers: { Accept: 'application/json' } }
     )
     assert.equal(response.status, 204)
+  })
+
+  test('a webhook stores the headers it was given, not the request carrying them', async ({
+    assert,
+  }) => {
+    const json = { 'Accept': 'application/json', 'Content-Type': 'application/json' }
+    const created = await fetch(`${baseUrl}/api/v1/webhooks`, {
+      method: 'POST',
+      headers: { ...json, Cookie: 'hamster-session=browser-session' },
+      body: JSON.stringify({
+        name: 'Routes test Jellyfin',
+        // A Docker service name: no TLD.
+        url: 'http://jellyfin:8096/Library/Refresh',
+        headers: { Authorization: 'MediaBrowser Token="k3y"' },
+      }),
+    })
+    assert.equal(created.status, 201)
+    const { id } = (await created.json()) as { id: string }
+
+    try {
+      let stored = await Webhook.findOrFail(id)
+      assert.deepEqual(stored.headers, { Authorization: 'MediaBrowser Token="k3y"' })
+
+      const updated = await fetch(`${baseUrl}/api/v1/webhooks/${id}`, {
+        method: 'PUT',
+        headers: { ...json, Cookie: 'hamster-session=browser-session' },
+        body: JSON.stringify({
+          name: 'Routes test Jellyfin',
+          url: 'http://jellyfin:8096/Library/Refresh',
+          headers: { 'Authorization': '****', 'X-Extra': 'yes' },
+        }),
+      })
+      assert.equal(updated.status, 200)
+      stored = await Webhook.findOrFail(id)
+      assert.deepEqual(stored.headers, {
+        'Authorization': 'MediaBrowser Token="k3y"',
+        'X-Extra': 'yes',
+      })
+    } finally {
+      await Webhook.query().where('id', id).delete()
+    }
   })
 })
