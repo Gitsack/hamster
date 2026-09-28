@@ -385,7 +385,7 @@ export function TargetSheet({
         }
       }
       url = preset.buildUrl(draft.presetValues)
-      // The preset's own headers (Kodi's Basic auth) first; a row typed under Advanced wins.
+      // The preset's own headers (Kodi's Basic auth, Jellyfin's token) first; a row typed under Advanced wins.
       allHeaders = { ...(preset.headers?.(draft.presetValues) ?? {}), ...headers }
     } else if (!url) {
       found.url = 'A URL is required.'

@@ -214,6 +214,11 @@ export function basicAuth(username: string, password: string): string {
   return `Basic ${btoa(binary)}`
 }
 
+/** Jellyfin's API key as an Authorization header. */
+export function jellyfinAuth(apiKey: string): string {
+  return `MediaBrowser Token="${apiKey.trim()}"`
+}
+
 /**
  * Kodi's JSON-RPC wants a method call, not Hamster's event body. VideoLibrary.Scan
  * rescans every video source; Kodi skips unchanged folders, so it is cheap.
@@ -333,10 +338,12 @@ export const WEBHOOK_PRESETS: Record<WebhookPresetId, WebhookPreset> = {
         required: true,
       },
     ],
-    buildUrl: (values) =>
-      `${trimSlash(values.serverUrl)}/Library/Refresh?api_key=${encodeURIComponent(
-        (values.apiKey ?? '').trim()
-      )}`,
+    buildUrl: (values) => `${trimSlash(values.serverUrl)}/Library/Refresh`,
+    // Jellyfin 10.11 and later refuse ?api_key= with a 401. The MediaBrowser
+    // Authorization header works on every version, so the key always goes there.
+    headers: (values): Record<string, string> => ({
+      Authorization: jellyfinAuth(values.apiKey ?? ''),
+    }),
   },
   emby: {
     id: 'emby',

@@ -168,4 +168,13 @@ describe('targets', () => {
     expect(WEBHOOK_PRESETS.kodi.payloadTemplate).toContain('VideoLibrary.Scan')
     expect(basicAuth('ü', 'x')).toBe(`Basic ${btoa('Ã¼:x')}`)
   })
+
+  it('sends the Jellyfin key as a MediaBrowser header, never in the URL', () => {
+    const values = { serverUrl: 'http://jellyfin:8096/', apiKey: ' k3y ' }
+    expect(WEBHOOK_PRESETS.jellyfin.buildUrl(values)).toBe('http://jellyfin:8096/Library/Refresh')
+    expect(WEBHOOK_PRESETS.jellyfin.headers?.(values)).toEqual({
+      Authorization: 'MediaBrowser Token="k3y"',
+    })
+    expect(detectPreset(WEBHOOK_PRESETS.jellyfin.buildUrl(values), 'Jellyfin')).toBe('jellyfin')
+  })
 })
