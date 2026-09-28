@@ -6,7 +6,15 @@ import {
   weightedRating,
   isWorthSuggestingBook,
   drawDeck,
+  genreKeys,
+  genreAffinity,
+  genreShare,
+  blendGenres,
+  spreadByGenre,
+  neighbourPicks,
+  interleave,
 } from '#services/recommendations/for_you_service'
+import type { FeedbackRow, ForYouCard } from '#services/recommendations/for_you_service'
 
 test.group('for_you_service book filter', () => {
   const owned = ['The Subtle Art of Not Giving a F*ck', 'Everything Is F*cked']
@@ -146,5 +154,133 @@ test.group('for_you_service drawDeck', () => {
       { random: seeded(3) }
     )
     assert.lengthOf(deck, 5)
+  })
+})
+
+test.group('for_you_service taste', () => {
+  const seeded = (seed: number) => () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296
+    return seed / 4294967296
+  }
+
+  test('film and show spellings of a genre land on the same keys', ({ assert }) => {
+    assert.deepEqual(genreKeys('Sci-Fi & Fantasy'), ['science-fiction', 'fantasy'])
+    assert.deepEqual(genreKeys('Science Fiction'), ['science-fiction'])
+    assert.deepEqual(genreKeys('Sci-Fi'), ['science-fiction'])
+    const profile = genreShare([{ genres: ['Science Fiction'] }])
+    assert.equal(genreAffinity(['Sci-Fi & Fantasy'], profile), 1)
+  })
+
+  test('the whole library shapes the profile, in proportion', ({ assert }) => {
+    const profile = genreShare([
+      { genres: ['Thriller', 'Crime'] },
+      { genres: ['Thriller'] },
+      { genres: ['Thriller', 'Drama'] },
+      { genres: ['Comedy'] },
+    ])
+    assert.equal(profile.get('thriller'), 1)
+    assert.closeTo(profile.get('comedy')!, 1 / 3, 1e-9)
+    assert.isUndefined(profile.get('horror'))
+  })
+
+  test('the watchlist counts as much as a large library', ({ assert }) => {
+    const library = genreShare(Array.from({ length: 200 }, () => ({ genres: ['Drama'] })))
+    const wanted = genreShare([{ genres: ['Animation'] }])
+    const blended = blendGenres(library, wanted)
+    assert.equal(blended.get('drama'), 0.5)
+    assert.equal(blended.get('animation'), 0.5)
+    assert.deepEqual([...blendGenres(new Map(), wanted)], [...wanted])
+  })
+
+  test('library seeds spread over its genres instead of piling into the biggest', ({ assert }) => {
+    const items = [
+      ...Array.from({ length: 90 }, (_, i) => ({ id: `t${i}`, genres: ['Thriller'] })),
+      ...Array.from({ length: 10 }, (_, i) => ({ id: `c${i}`, genres: ['Comedy'] })),
+      ...Array.from({ length: 10 }, (_, i) => ({ id: `a${i}`, genres: ['Animation'] })),
+    ]
+    let minority = 0
+    const random = seeded(4)
+    for (let run = 0; run < 100; run++) {
+      const picked = spreadByGenre(items, 10, random)
+      assert.lengthOf(new Set(picked.map((p) => p.id)), 10)
+      minority += picked.filter((p) => !p.id.startsWith('t')).length
+    }
+    // At random the two small genres would get about 2 of 10 a run; spread,
+    // they get about 4, and thrillers still lead.
+    assert.isAbove(minority, 300)
+    assert.isBelow(minority, 500)
+    assert.lengthOf(spreadByGenre(items.slice(0, 3), 10), 3)
+  })
+})
+
+test.group('for_you_service neighbours', () => {
+  const row = (userId: string, id: string, action: FeedbackRow['action']): FeedbackRow => ({
+    userId,
+    mediaType: 'movie',
+    externalId: id,
+    action,
+  })
+
+  test('titles wanted by users who agree with this one come first', ({ assert }) => {
+    const picks = neighbourPicks('me', [
+      row('me', '1', 'requested'),
+      row('me', '2', 'interested'),
+      row('me', '3', 'skipped'),
+      // Agrees on everything.
+      row('alike', '1', 'requested'),
+      row('alike', '2', 'requested'),
+      row('alike', '3', 'skipped'),
+      row('alike', '10', 'requested'),
+      // Nothing in common.
+      row('stranger', '20', 'requested'),
+      // Wants what this user skipped, skipped what they wanted.
+      row('opposite', '3', 'requested'),
+      row('opposite', '1', 'skipped'),
+      row('opposite', '30', 'requested'),
+    ])
+    assert.deepEqual(
+      picks.map((p) => p.externalId),
+      ['10', '20']
+    )
+    assert.isTrue(picks[0].similar)
+    assert.isFalse(picks[1].similar)
+    assert.isAbove(picks[0].weight, picks[1].weight)
+  })
+
+  test('never offers back what this user already answered', ({ assert }) => {
+    const picks = neighbourPicks('me', [
+      row('me', '1', 'requested'),
+      row('me', '2', 'skipped'),
+      row('other', '1', 'requested'),
+      row('other', '2', 'skipped'),
+      row('other', '3', 'requested'),
+      row('other', '4', 'interested'),
+    ])
+    assert.sameMembers(
+      picks.map((p) => p.externalId),
+      ['3', '4']
+    )
+  })
+
+  test('a new user starts from what everyone else here wanted', ({ assert }) => {
+    const picks = neighbourPicks('new', [row('a', '1', 'requested'), row('b', '1', 'interested')])
+    assert.lengthOf(picks, 1)
+    assert.closeTo(picks[0].weight, 0.3, 1e-9)
+  })
+})
+
+test.group('for_you_service interleave', () => {
+  const cards = (type: string, n: number) =>
+    Array.from({ length: n }, (_, i) => ({ key: `${type}:${i}` }) as ForYouCard)
+
+  test('alternates types by weight and keeps every card', ({ assert }) => {
+    const out = interleave([
+      { cards: cards('movie', 5), weight: 2 },
+      { cards: cards('book', 3), weight: 1 },
+    ])
+    assert.deepEqual(
+      out.map((c) => c.key),
+      ['movie:0', 'movie:1', 'book:0', 'movie:2', 'movie:3', 'book:1', 'movie:4', 'book:2']
+    )
   })
 })

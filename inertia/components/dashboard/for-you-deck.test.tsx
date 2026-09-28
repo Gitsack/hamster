@@ -374,4 +374,25 @@ describe('ForYouDeck', () => {
     render(<ForYouDeck />)
     expect(await screen.findByText("You're through the deck")).toBeInTheDocument()
   })
+  it('asks for more when the deck runs low, without bringing back what was used', async () => {
+    const heat = card({})
+    const ronin = card({ key: 'movie:2', externalId: '2', title: 'Ronin' })
+    const thief = card({ key: 'movie:3', externalId: '3', title: 'Thief' })
+    mockFetch([heat, ronin])
+    const firstLoad = fetchMock.getMockImplementation()!
+    let deckLoads = 0
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/v1/for-you') && !url.includes('/for-you/') && ++deckLoads > 1)
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(deck([heat, ronin, thief])),
+        })
+      return firstLoad(url, init)
+    })
+    render(<ForYouDeck />)
+    // Two cards is below the top-up mark: the deck asks again and keeps the new one.
+    expect(await screen.findByText(/picks ready/)).toHaveTextContent('3 picks ready')
+    expect(deckLoads).toBe(2)
+  })
 })

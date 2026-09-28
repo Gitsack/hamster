@@ -13,6 +13,7 @@ export type TaskType =
   | 'refresh_metadata'
   | 'folder_scan'
   | 'stuck_import_recovery'
+  | 'for_you_refresh'
 
 export default class ScheduledTask extends BaseModel {
   @column({ isPrimary: true })

@@ -4,7 +4,8 @@ import QualityProfile from '#models/quality_profile'
 import RootFolder from '#models/root_folder'
 import UserSetting from '#models/user_setting'
 import RecommendationFeedback from '#models/recommendation_feedback'
-import { forYouService, DECK_MODES } from '#services/recommendations/for_you_service'
+import { DECK_MODES } from '#services/recommendations/for_you_service'
+import { forYouPools } from '#services/recommendations/for_you_pools'
 import type { DeckMode } from '#services/recommendations/for_you_service'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import { cache, CACHE_TTL } from '#services/cache/cache_service'
@@ -51,7 +52,7 @@ export default class ForYouController {
         : 'for-you'
 
     const [deck, profiles, folders] = await Promise.all([
-      forYouService.getDeck(userId, { refresh, mode }),
+      forYouPools.getDeck(userId, { refresh, mode }),
       QualityProfile.query().orderBy('createdAt', 'asc').select('id', 'mediaType'),
       RootFolder.query().select('id', 'mediaType'),
     ])
@@ -106,9 +107,9 @@ export default class ForYouController {
       }
     )
 
-    // A request or an "interested" is a new seed; rebuild on the next load
-    // rather than serving the neighbourhood of titles from before it.
-    if (data.action !== 'skipped') forYouService.invalidate(userId)
+    // A request or an "interested" is a new seed: the type's pools are marked
+    // for a rebuild. Any swipe may leave the pool low; that tops it up.
+    await forYouPools.afterFeedback(userId, data.mediaType, data.action)
 
     return response.noContent()
   }
@@ -144,7 +145,7 @@ export default class ForYouController {
       .where('userId', auth.user!.id)
       .where('action', action)
       .delete()
-    forYouService.invalidate(auth.user!.id)
+    await forYouPools.invalidate(auth.user!.id)
     return response.noContent()
   }
 
@@ -157,7 +158,7 @@ export default class ForYouController {
       .whereIn('action', ['skipped', 'interested'])
       .delete()
     // A saved title's genres counted towards the deck; rebuild without them.
-    forYouService.invalidate(auth.user!.id)
+    await forYouPools.invalidate(auth.user!.id)
     return response.noContent()
   }
 

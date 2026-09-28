@@ -1,7 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { findAccount } from '#services/accounts/registry'
 import { AccountConfigError } from '#services/accounts/types'
-import { forYouService } from '#services/recommendations/for_you_service'
+import { forYouPools } from '#services/recommendations/for_you_pools'
 
 /**
  * Connecting external accounts with the device flow. Generic over every
@@ -25,7 +25,7 @@ export default class AccountsController {
     const account = findAccount(params.provider)
     if (!account) return response.notFound({ error: 'Unknown account provider' })
     const result = await account.pollDeviceFlow().catch(() => ({ status: 'pending' as const }))
-    if (result.status === 'authorized') forYouService.invalidateAll()
+    if (result.status === 'authorized') await forYouPools.invalidateAll()
     return response.json(result)
   }
 
@@ -33,7 +33,7 @@ export default class AccountsController {
     const account = findAccount(params.provider)
     if (!account) return response.notFound({ error: 'Unknown account provider' })
     await account.disconnect()
-    forYouService.invalidateAll()
+    await forYouPools.invalidateAll()
     return response.noContent()
   }
 }

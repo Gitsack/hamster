@@ -17,6 +17,7 @@ import { stuckImportRecoveryTask } from '#services/tasks/stuck_import_recovery_t
 import { libraryScanTask } from '#services/tasks/library_scan_task'
 import { rssSyncTask } from '#services/tasks/rss_sync_task'
 import { refreshMetadataTask } from '#services/tasks/refresh_metadata_task'
+import { forYouRefreshTask } from '#services/tasks/for_you_refresh_task'
 import { backupService } from '#services/backup/backup_service'
 import { blacklistService } from '#services/blacklist/blacklist_service'
 import { historyService } from '#services/history/history_service'
@@ -71,6 +72,7 @@ taskScheduler.register('requested_search', requestedSearchTask)
 taskScheduler.register('rss_sync', rssSyncTask)
 taskScheduler.register('backup', backupService)
 taskScheduler.register('refresh_metadata', refreshMetadataTask)
+taskScheduler.register('for_you_refresh', forYouRefreshTask)
 taskScheduler.register('cleanup', {
   start() {},
   stop() {},

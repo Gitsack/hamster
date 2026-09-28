@@ -5,7 +5,7 @@ import Movie from '#models/movie'
 import TvShow from '#models/tv_show'
 import RecommendationFeedback from '#models/recommendation_feedback'
 import type { FeedbackMediaType } from '#models/recommendation_feedback'
-import { tmdbService } from '#services/metadata/tmdb_service'
+import { tmdbService, MOVIE_GENRES, TV_GENRES } from '#services/metadata/tmdb_service'
 import type { TmdbMovie, TmdbTvShow } from '#services/metadata/tmdb_service'
 import { tasteProviders } from '#services/taste/registry'
 import { bookLanguages, titleSpeaks } from '#services/library/book_languages'
@@ -14,19 +14,23 @@ import { listenBrainz, coverUrl } from '#services/music/listenbrainz_client'
 import type { ArtistGenre } from '#services/music/listenbrainz_client'
 import type { TastePick, TasteProviderStatus, TasteSeed } from '#services/taste/types'
 import { recommendationService } from '#services/metadata/recommendation_service'
-import { cache } from '#services/cache/cache_service'
 
 /**
  * The dashboard's "For you" deck: one card at a time, request or skip.
  *
  * Movies and shows are found by walking TMDB recommendations out from what the
  * user has shown they like — every taste provider in `#services/taste` (Simkl
- * ratings, media-server watch history, …), titles they requested from this
- * deck, and what is already on disk — then ranked by how
- * many of those seeds point at a title and how well its genres match what was
- * kept versus skipped. Albums and books are the unowned studio albums and
- * books by artists and authors already in the library, weighted by how much of
- * each the user already has.
+ * ratings, media-server watch history, …), titles they requested or saved to
+ * their watchlist, and a spread of what is already in the library — plus what
+ * is trending, what is popular in the genres the library is full of, and what
+ * other users here with a similar taste wanted. Candidates are then ranked by
+ * how many of those sources point at a title and how well its genres match the
+ * whole library and watchlist. Albums and books are the unowned studio albums
+ * and books by artists and authors already in the library, weighted by how
+ * much of each the user already has.
+ *
+ * Building a deck takes dozens of TMDB lookups, so decks are built ahead of
+ * time, per media type, and kept in `for_you_pools` — see `for_you_pools.ts`.
  */
 
 export interface ForYouCard {
@@ -79,10 +83,13 @@ interface Candidate {
   seedCount: number
 }
 
-interface TasteProfile {
+export interface TasteProfile {
   movieSeeds: Seed[]
   tvSeeds: Seed[]
-  /** Genre slug → affinity in [-1, 1]; only ratings go below zero. */
+  /**
+   * Genre slug → affinity in [0, 1]: how much of the library and of what the
+   * user asked for (requests, watchlist) carries the genre.
+   */
   genres: Map<string, number>
   exclude: { movie: Set<string>; tv: Set<string> }
   /** Titles providers suggest outright — a watchlist, say. */
@@ -91,13 +98,16 @@ interface TasteProfile {
   counts: { requests: number; library: number }
 }
 
-const DECK_TTL = 30 * 60 * 1000
-const DECK_SIZE = 48
+/** Cards kept per media type; the deck is topped up before it runs dry. */
+export const DECK_SIZE = 60
 /** Share of each deck kept for cards whose genres have no signal yet. */
 const EXPLORE_SHARE = 0.15
 /** Below this either way, a card's genres say nothing about the user yet. */
 const UNTRIED_AFFINITY = 0.05
-const SEEDS_PER_TYPE = 8
+/** Titles the user asked for or rated, walked per build. */
+const STRONG_SEEDS = 10
+/** Titles from the library, spread over its genres, walked per build. */
+const LIBRARY_SEEDS = 8
 const RECS_PER_SEED = 20
 /** Obscure titles with a handful of votes are mostly noise in TMDB's graph. */
 const MIN_VOTES = 80
@@ -108,6 +118,25 @@ const slug = (genre: string) =>
     .replace(/&/g, 'and')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
+
+/**
+ * TMDB names the same genre differently for films and shows, and differently
+ * again in lists and details ("Sci-Fi", "Science Fiction", "Sci-Fi & Fantasy").
+ * Every spelling maps onto the same keys, so a library of science-fiction films
+ * also speaks for science-fiction shows.
+ */
+const GENRE_ALIASES: Record<string, string[]> = {
+  'sci-fi': ['science-fiction'],
+  'sci-fi-and-fantasy': ['science-fiction', 'fantasy'],
+  'action-and-adventure': ['action', 'adventure'],
+  'war-and-politics': ['war', 'politics'],
+  'kids': ['family'],
+}
+
+export function genreKeys(genre: string): string[] {
+  const key = slug(genre)
+  return GENRE_ALIASES[key] ?? [key]
+}
 
 function sample<T>(items: T[], n: number): T[] {
   const copy = [...items]
@@ -314,80 +343,218 @@ export function weightedRating(average: number, votes: number, minVotes: number,
   return (votes / (votes + minVotes)) * average + (minVotes / (votes + minVotes)) * typical
 }
 
+/** Mean affinity of a title's genres; a genre the profile has never seen counts 0. */
+export function genreAffinity(genres: string[], profile: Map<string, number>): number {
+  if (genres.length === 0) return 0
+  const total = genres.reduce((sum, g) => {
+    const keys = genreKeys(g)
+    return sum + Math.max(...keys.map((k) => profile.get(k) ?? 0))
+  }, 0)
+  return total / genres.length
+}
+
+/**
+ * How much of a collection carries each genre, scaled so the most common one
+ * is 1. Weighted items count for more (something requested says more than
+ * something that happened to be on disk).
+ */
+export function genreShare(items: { genres: string[]; weight?: number }[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const item of items) {
+    const keys = new Set(item.genres.flatMap(genreKeys))
+    for (const k of keys) counts.set(k, (counts.get(k) ?? 0) + (item.weight ?? 1))
+  }
+  const max = Math.max(0, ...counts.values())
+  if (max === 0) return new Map()
+  return new Map([...counts].map(([k, v]) => [k, v / max]))
+}
+
+/**
+ * The library says what the user collects; requests and the watchlist say
+ * what they want now. Both count equally once both exist, so a big library
+ * does not drown out a handful of fresh requests or the other way round.
+ */
+export function blendGenres(
+  library: Map<string, number>,
+  wanted: Map<string, number>
+): Map<string, number> {
+  if (library.size === 0) return new Map(wanted)
+  if (wanted.size === 0) return new Map(library)
+  const out = new Map<string, number>()
+  for (const k of new Set([...library.keys(), ...wanted.keys()])) {
+    out.set(k, 0.5 * (library.get(k) ?? 0) + 0.5 * (wanted.get(k) ?? 0))
+  }
+  return out
+}
+
+/**
+ * `n` items spread over the collection's genres instead of `n` at random — a
+ * random handful from a library that is mostly thrillers is nearly all
+ * thrillers, and the deck never leaves them. A genre comes up in proportion
+ * to the square root of its size: the big ones still lead, the small ones get
+ * their turn. Each item is filed under its first genre.
+ */
+export function spreadByGenre<T extends { genres: string[] | null }>(
+  items: T[],
+  n: number,
+  random = Math.random
+): T[] {
+  if (items.length <= n) return [...items]
+  const groups = new Map<string, T[]>()
+  for (const item of items) {
+    const key = item.genres?.[0] ? genreKeys(item.genres[0])[0] : ''
+    groups.set(key, [...(groups.get(key) ?? []), item])
+  }
+  // Draw a genre by the root of its size, then a random item from it.
+  const pools = [...groups.values()].map((list) => [...list])
+  const out: T[] = []
+  while (out.length < n) {
+    const left = pools.filter((p) => p.length > 0)
+    const total = left.reduce((sum, p) => sum + Math.sqrt(p.length), 0)
+    let pick = random() * total
+    const pool = left.find((p) => (pick -= Math.sqrt(p.length)) < 0) ?? left[left.length - 1]
+    out.push(pool.splice(Math.floor(random() * pool.length), 1)[0])
+  }
+  return out
+}
+
+export interface FeedbackRow {
+  userId: string
+  mediaType: string
+  externalId: string
+  action: 'requested' | 'skipped' | 'interested'
+}
+
+export interface NeighbourPick {
+  mediaType: string
+  externalId: string
+  weight: number
+  /** At least one of the users behind it agrees with this one on something. */
+  similar: boolean
+}
+
+/**
+ * What other users on this server wanted, weighted by how alike their taste
+ * is to this user's: titles both wanted, or both skipped, count for; one
+ * wanting what the other skipped counts against. A user with nothing in
+ * common still contributes a little — "wanted by others here" — so a new user
+ * starts from the household's taste rather than nothing.
+ */
+export function neighbourPicks(userId: string, rows: FeedbackRow[]): NeighbourPick[] {
+  const byUser = new Map<string, { liked: Set<string>; skipped: Set<string> }>()
+  for (const r of rows) {
+    const entry = byUser.get(r.userId) ?? { liked: new Set(), skipped: new Set() }
+    const key = `${r.mediaType}:${r.externalId}`
+    ;(r.action === 'skipped' ? entry.skipped : entry.liked).add(key)
+    byUser.set(r.userId, entry)
+  }
+  const me = byUser.get(userId) ?? { liked: new Set<string>(), skipped: new Set<string>() }
+  const mine = new Set([...me.liked, ...me.skipped])
+
+  const picks = new Map<string, NeighbourPick>()
+  for (const [other, theirs] of byUser) {
+    if (other === userId || theirs.liked.size === 0) continue
+    let agree = 0
+    let disagree = 0
+    for (const k of me.liked) {
+      if (theirs.liked.has(k)) agree++
+      if (theirs.skipped.has(k)) disagree++
+    }
+    for (const k of me.skipped) {
+      if (theirs.skipped.has(k)) agree += 0.5
+      if (theirs.liked.has(k)) disagree++
+    }
+    const size = Math.sqrt(Math.max(1, mine.size) * (theirs.liked.size + theirs.skipped.size))
+    const similarity = (agree - disagree) / size
+    if (similarity < 0) continue
+    const weight = 0.15 + Math.min(0.6, similarity * 2)
+    for (const key of theirs.liked) {
+      if (mine.has(key)) continue
+      const [mediaType, externalId] = [
+        key.slice(0, key.indexOf(':')),
+        key.slice(key.indexOf(':') + 1),
+      ]
+      const prev = picks.get(key)
+      picks.set(key, {
+        mediaType,
+        externalId,
+        // Several people wanting it adds up, without running away.
+        weight: Math.min(1, (prev?.weight ?? 0) + weight),
+        similar: (prev?.similar ?? false) || similarity > 0.1,
+      })
+    }
+  }
+  return [...picks.values()].sort((a, b) => b.weight - a.weight)
+}
+
 function isMovie(item: TmdbMovie | TmdbTvShow): item is TmdbMovie {
   return 'title' in item
 }
 
+/** The deck's media types, and the library setting that turns each on. */
+export const DECK_TYPES: FeedbackMediaType[] = ['movie', 'tv', 'album', 'book']
+const SETTING_FOR: Record<FeedbackMediaType, MediaType> = {
+  movie: 'movies',
+  tv: 'tv',
+  album: 'music',
+  book: 'books',
+}
+
+export async function enabledDeckTypes(): Promise<FeedbackMediaType[]> {
+  const enabled = new Set(
+    (await AppSetting.get<MediaType[]>('enabledMediaTypes', ['movies'])) ?? ['movies']
+  )
+  return DECK_TYPES.filter((t) => enabled.has(SETTING_FOR[t]))
+}
+
 class ForYouService {
-  deckCacheKey(userId: string, mode: DeckMode = 'for-you') {
-    return `for-you:${userId}:${mode}`
-  }
-
-  invalidate(userId: string) {
-    cache.deleteByPrefix(`for-you:${userId}:`)
-  }
-
-  /** After a settings change that affects every user's taste profile. */
-  invalidateAll() {
-    cache.deleteByPrefix('for-you:')
-  }
-
-  async getDeck(
+  /**
+   * One media type's cards for a deck. `alsoExclude` holds keys already in
+   * the stored pool, so a top-up brings new titles rather than the same ones.
+   */
+  async buildType(
     userId: string,
-    { refresh = false, mode = 'for-you' as DeckMode } = {}
-  ): Promise<ForYouDeck> {
-    if (refresh) cache.delete(this.deckCacheKey(userId, mode))
-    const deck = await cache.getOrSet(this.deckCacheKey(userId, mode), DECK_TTL, () =>
-      this.buildDeck(userId, mode)
-    )
-
-    // The deck is cached, swipes are not: drop anything acted on since.
-    const acted = await RecommendationFeedback.query()
-      .where('userId', userId)
-      .select('mediaType', 'externalId')
-    const seen = new Set(acted.map((f) => `${f.mediaType}:${f.externalId}`))
-    return { ...deck, cards: deck.cards.filter((c) => !seen.has(c.key)) }
-  }
-
-  private async buildDeck(userId: string, mode: DeckMode): Promise<ForYouDeck> {
-    const enabled = new Set(
-      (await AppSetting.get<MediaType[]>('enabledMediaTypes', ['movies'])) ?? ['movies']
-    )
-    const taste = await this.buildTasteProfile(userId)
-
-    const [movies, shows, albums, books] = await Promise.all([
-      enabled.has('movies') ? this.movieCards(taste, mode) : [],
-      enabled.has('tv') ? this.tvCards(taste, mode) : [],
-      enabled.has('music')
-        ? Promise.all([
-            this.albumCards(userId, mode),
-            this.newArtistCards(userId, taste, mode).catch(() => [] as ForYouCard[]),
-          ]).then(([owned, discovered]) => alternate(owned, discovered))
-        : [],
-      enabled.has('books') ? this.bookCards(userId, taste, mode) : [],
-    ])
-
-    return {
-      cards: this.interleave([
-        { cards: movies, weight: 3 },
-        { cards: shows, weight: 2 },
-        { cards: albums, weight: 2 },
-        { cards: books, weight: 1 },
-      ]),
-      signals: { sources: taste.sources, ...taste.counts },
+    mode: DeckMode,
+    type: FeedbackMediaType,
+    taste: TasteProfile,
+    alsoExclude: Set<string> = new Set()
+  ): Promise<ForYouCard[]> {
+    const withExtra = (kind: 'movie' | 'tv'): TasteProfile => {
+      const extra = [...alsoExclude]
+        .filter((k) => k.startsWith(`${kind}:`))
+        .map((k) => k.slice(kind.length + 1))
+      if (extra.length === 0) return taste
+      return {
+        ...taste,
+        exclude: { ...taste.exclude, [kind]: new Set([...taste.exclude[kind], ...extra]) },
+      }
     }
+    let cards: ForYouCard[]
+    switch (type) {
+      case 'movie':
+        cards = await this.movieCards(withExtra('movie'), mode)
+        break
+      case 'tv':
+        cards = await this.tvCards(withExtra('tv'), mode)
+        break
+      case 'album':
+        cards = await Promise.all([
+          this.albumCards(userId, mode),
+          this.newArtistCards(userId, taste, mode).catch(() => [] as ForYouCard[]),
+        ]).then(([owned, discovered]) => alternate(owned, discovered))
+        break
+      case 'book':
+        cards = await this.bookCards(userId, taste, mode)
+        break
+    }
+    return cards.filter((c) => !alsoExclude.has(c.key)).slice(0, DECK_SIZE)
   }
 
   // ---------------------------------------------------------------------------
   // Taste
   // ---------------------------------------------------------------------------
 
-  private async buildTasteProfile(userId: string): Promise<TasteProfile> {
-    const genres = new Map<string, number>()
-    const bump = (list: string[], by: number) => {
-      for (const g of list) genres.set(slug(g), (genres.get(slug(g)) ?? 0) + by)
-    }
-
+  async buildTasteProfile(userId: string): Promise<TasteProfile> {
     const exclude = { movie: new Set<string>(), tv: new Set<string>() }
     const movieSeeds: Seed[] = []
     const tvSeeds: Seed[] = []
@@ -414,77 +581,112 @@ class ForYouService {
       })
     )
 
-    // What the user asked for from this deck, and what they turned down.
-    const feedback = await RecommendationFeedback.query()
-      .where('userId', userId)
+    // What every user here asked for, saved or skipped: this user's own
+    // answers are seeds and genres; everyone's feed the neighbour picks.
+    const allFeedback = await RecommendationFeedback.query()
+      .select('userId', 'mediaType', 'externalId', 'action', 'title', 'genres', 'createdAt')
       .orderBy('createdAt', 'desc')
-      .limit(500)
+      .limit(20_000)
+    const feedback = allFeedback.filter((f) => f.userId === userId)
+
     let requestCount = 0
+    const wanted: { genres: string[]; weight: number }[] = []
     for (const f of feedback) {
+      // Anything answered once is never offered again.
+      if (f.mediaType === 'movie' || f.mediaType === 'tv') exclude[f.mediaType].add(f.externalId)
       // A skip only hides its title. Titles get skipped for being bad, old or
       // simply not tonight far more often than for their genre, so only what
       // the user wanted teaches the deck about genres.
       if (f.action === 'skipped') continue
-      // Interested — wanted, but watched elsewhere — is a lighter taste
-      // signal than a request: nothing was fetched for it.
+      // Interested — on the watchlist, watched elsewhere — is wanted just as
+      // much for taste; it only weighs a little less as a seed, nothing was
+      // fetched for it.
       const interested = f.action === 'interested'
       if (!interested) requestCount++
-      bump(f.genres, interested ? 0.3 : 0.6)
+      wanted.push({ genres: f.genres, weight: interested ? 0.9 : 1 })
       const seed = {
         tmdbId: Number(f.externalId),
         title: f.title ?? 'a title',
-        weight: interested ? 0.5 : 0.7,
-        reason: interested ? `Because you saved ${f.title}` : `Because you requested ${f.title}`,
+        weight: interested ? 0.65 : 0.75,
+        reason: interested
+          ? `Because ${f.title} is on your watchlist`
+          : `Because you requested ${f.title}`,
       }
       if (f.mediaType === 'movie') movieSeeds.push(seed)
       if (f.mediaType === 'tv') tvSeeds.push(seed)
     }
 
-    // What is on disk. Weaker than a rating: owning is not the same as liking.
-    const [libraryMovies, libraryShows] = await Promise.all([
-      Movie.query().whereNotNull('tmdbId').select('tmdbId', 'title', 'hasFile', 'genres'),
+    // The whole library: every title's genres count, and seeds come from all
+    // over it. Owning is weaker than asking, so library seeds weigh less.
+    const [libraryMovies, libraryShows, libraryBooks] = await Promise.all([
+      Movie.query()
+        .whereNotNull('tmdbId')
+        .select('tmdbId', 'title', 'hasFile', 'requested', 'genres'),
       TvShow.query().whereNotNull('tmdbId').select('tmdbId', 'title', 'genres'),
+      db.from('books').where('has_file', true).whereNotNull('genres').select('genres'),
     ])
-    for (const m of libraryMovies) {
-      exclude.movie.add(String(m.tmdbId))
-      if (m.hasFile) bump(m.genres ?? [], 0.15)
-    }
-    for (const s of libraryShows) {
-      exclude.tv.add(String(s.tmdbId))
-      bump(s.genres ?? [], 0.15)
-    }
-    const ownedMovies = libraryMovies.filter((m) => m.hasFile)
-    movieSeeds.push(
-      ...sample(ownedMovies, 4).map((m) => ({
-        tmdbId: Number(m.tmdbId),
-        title: m.title,
-        weight: 0.45,
-        reason: `Because you have ${m.title}`,
-      }))
+    for (const m of libraryMovies) exclude.movie.add(String(m.tmdbId))
+    for (const s of libraryShows) exclude.tv.add(String(s.tmdbId))
+    // Wanted-but-missing films are in the library because someone asked.
+    const keptMovies = libraryMovies.filter((m) => m.hasFile || m.requested)
+    const screen = genreShare([
+      ...keptMovies.map((m) => ({ genres: m.genres ?? [], weight: m.hasFile ? 1 : 1.3 })),
+      ...libraryShows.map((s) => ({ genres: s.genres ?? [] })),
+    ])
+    const shelf = genreShare(
+      (libraryBooks as { genres: string[] }[]).map((b) => ({ genres: cleanSubjects(b.genres) }))
     )
-    tvSeeds.push(
-      ...sample(libraryShows, 4).map((s) => ({
-        tmdbId: Number(s.tmdbId),
-        title: s.title,
-        weight: 0.45,
-        reason: `Because you have ${s.title}`,
-      }))
-    )
+    // Subjects are free text: on a small shelf every one of them looks like a
+    // favourite. The shelf speaks up as it grows.
+    const shelfSays = Math.min(1, libraryBooks.length / 25)
+    const library = new Map(screen)
+    for (const [k, v] of shelf) library.set(k, Math.max(library.get(k) ?? 0, v * shelfSays))
+    const genres = blendGenres(library, genreShare(wanted))
 
-    // Rated titles pull their genres along, both ways.
-    const max = Math.max(1, ...[...genres.values()].map(Math.abs))
-    for (const [k, v] of genres) genres.set(k, v / max)
+    const librarySeed = (item: { tmdbId: string | null; title: string }) => ({
+      tmdbId: Number(item.tmdbId),
+      title: item.title,
+      weight: 0.45,
+      reason: `Because you have ${item.title}`,
+    })
+
+    // Other users here: what they wanted, weighted by how alike they are.
+    const neighbours = neighbourPicks(
+      userId,
+      allFeedback.map((f) => ({
+        userId: f.userId,
+        mediaType: f.mediaType,
+        externalId: f.externalId,
+        action: f.action,
+      }))
+    )
+    for (const n of neighbours) {
+      if (n.mediaType !== 'movie' && n.mediaType !== 'tv') continue
+      const tmdbId = Number(n.externalId)
+      if (!Number.isInteger(tmdbId) || tmdbId <= 0) continue
+      picks[n.mediaType].push({
+        kind: n.mediaType,
+        tmdbId,
+        weight: n.weight * 0.8,
+        reason: n.similar
+          ? 'Wanted by someone here with a taste like yours'
+          : 'Wanted by others on this server',
+      })
+    }
 
     return {
-      movieSeeds: this.pickSeeds(movieSeeds),
-      tvSeeds: this.pickSeeds(tvSeeds),
+      movieSeeds: this.pickSeeds(
+        movieSeeds,
+        spreadByGenre(keptMovies, LIBRARY_SEEDS).map(librarySeed)
+      ),
+      tvSeeds: this.pickSeeds(tvSeeds, spreadByGenre(libraryShows, LIBRARY_SEEDS).map(librarySeed)),
       genres,
       exclude,
       picks,
       sources,
       counts: {
         requests: requestCount,
-        library: ownedMovies.length + libraryShows.length,
+        library: keptMovies.length + libraryShows.length,
       },
     }
   }
@@ -494,20 +696,23 @@ class ForYouService {
   }
 
   /**
-   * A handful of seeds per refresh, favouring the strongest but rotating
-   * through the rest so the deck does not show the same neighbourhood forever.
+   * The seeds walked this build: a handful of what the user asked for or
+   * rated, favouring the strongest but rotating through the rest so the deck
+   * does not show the same neighbourhood forever, plus the library spread.
    */
-  private pickSeeds(seeds: Seed[]): Seed[] {
+  private pickSeeds(strongSeeds: Seed[], librarySeeds: Seed[]): Seed[] {
     const unique = new Map<number, Seed>()
-    for (const s of seeds) {
+    for (const s of strongSeeds) {
       const prev = unique.get(s.tmdbId)
       if (!prev || prev.weight < s.weight) unique.set(s.tmdbId, s)
     }
     const all = [...unique.values()]
     const strong = all.filter((s) => s.weight >= 0.7)
     const rest = all.filter((s) => s.weight < 0.7)
-    const picked = sample(strong, Math.ceil(SEEDS_PER_TYPE * 0.6))
-    return [...picked, ...sample(rest, SEEDS_PER_TYPE - picked.length)]
+    const picked = sample(strong, Math.ceil(STRONG_SEEDS * 0.6))
+    const chosen = [...picked, ...sample(rest, STRONG_SEEDS - picked.length)]
+    const taken = new Set(chosen.map((s) => s.tmdbId))
+    return [...chosen, ...librarySeeds.filter((s) => !taken.has(s.tmdbId))]
   }
 
   /** The deck's share of these cards, drawn by score with room to explore. */
@@ -520,9 +725,7 @@ class ForYouService {
   }
 
   private genreAffinity(genres: string[], taste: TasteProfile): number {
-    if (genres.length === 0) return 0
-    const total = genres.reduce((sum, g) => sum + (taste.genres.get(slug(g)) ?? 0), 0)
-    return total / genres.length
+    return genreAffinity(genres, taste.genres)
   }
 
   // ---------------------------------------------------------------------------
@@ -536,8 +739,12 @@ class ForYouService {
     await this.addPicks(candidates, taste.exclude.movie, taste.picks.movie, (id) =>
       tmdbService.getMovie(id)
     )
-    if (mode === 'for-you') await this.addPopular(candidates, taste.exclude.movie, 'movie')
-    else await this.addModePool(candidates, taste.exclude.movie, 'movie', mode)
+    if (mode === 'for-you') {
+      await Promise.all([
+        this.addPopular(candidates, taste.exclude.movie, 'movie'),
+        this.addGenrePopular(candidates, taste, 'movie'),
+      ])
+    } else await this.addModePool(candidates, taste.exclude.movie, 'movie', mode)
     return this.rank(candidates, taste, 'movie', mode)
   }
 
@@ -548,8 +755,12 @@ class ForYouService {
     await this.addPicks(candidates, taste.exclude.tv, taste.picks.tv, (id) =>
       tmdbService.getTvShow(id)
     )
-    if (mode === 'for-you') await this.addPopular(candidates, taste.exclude.tv, 'tv')
-    else await this.addModePool(candidates, taste.exclude.tv, 'tv', mode)
+    if (mode === 'for-you') {
+      await Promise.all([
+        this.addPopular(candidates, taste.exclude.tv, 'tv'),
+        this.addGenrePopular(candidates, taste, 'tv'),
+      ])
+    } else await this.addModePool(candidates, taste.exclude.tv, 'tv', mode)
     return this.rank(candidates, taste, 'tv', mode)
   }
 
@@ -653,8 +864,9 @@ class ForYouService {
   }
 
   /**
-   * Titles a provider suggests outright (a watchlist): hydrated from TMDB and
-   * weighted by the provider, on top of anything the walk already found.
+   * Titles suggested outright — a provider's watchlist, what similar users
+   * here wanted: hydrated from TMDB and weighted by their source, on top of
+   * anything the walk already found.
    */
   private async addPicks(
     candidates: Map<number, Candidate>,
@@ -662,10 +874,15 @@ class ForYouService {
     picks: TastePick[],
     hydrate: (id: number) => Promise<TmdbMovie | TmdbTvShow>
   ) {
-    const chosen = sample(
-      picks.filter((p) => !exclude.has(String(p.tmdbId))),
-      20
-    )
+    // The strongest first, with enough jitter that the tail gets its turn.
+    const seen = new Set<number>()
+    const chosen = picks
+      .filter((p) => !exclude.has(String(p.tmdbId)))
+      .map((p) => ({ p, rank: p.weight + Math.random() * 0.3 }))
+      .sort((a, b) => b.rank - a.rank)
+      .map(({ p }) => p)
+      .filter((p) => !seen.has(p.tmdbId) && seen.add(p.tmdbId))
+      .slice(0, 30)
     const hydrated = await Promise.allSettled(
       chosen.map((p) => (candidates.has(p.tmdbId) ? Promise.resolve(null) : hydrate(p.tmdbId)))
     )
@@ -689,16 +906,41 @@ class ForYouService {
     })
   }
 
-  /** Trending titles fill the deck when there is little to go on. */
+  /**
+   * What is hot right now: TMDB's trending week, plus the Simkl and JustWatch
+   * lanes when those are on. Weak on their own — taste still decides whether a
+   * trending title makes the deck — but they keep it current.
+   */
   private async addPopular(
     candidates: Map<number, Candidate>,
     exclude: Set<string>,
     kind: 'movie' | 'tv'
   ) {
-    const lanes =
+    const [lanes, trending] = await Promise.all([
       kind === 'movie'
-        ? await recommendationService.getMovieRecommendationLanes().catch(() => [])
-        : await recommendationService.getTvRecommendationLanes().catch(() => [])
+        ? recommendationService.getMovieRecommendationLanes().catch(() => [])
+        : recommendationService.getTvRecommendationLanes().catch(() => []),
+      Promise.allSettled(
+        [1, 2].map((page) =>
+          kind === 'movie'
+            ? tmdbService.getTrendingMovies('week', page)
+            : tmdbService.getTrendingTvShows('week', page)
+        )
+      ),
+    ])
+
+    const hot: (TmdbMovie | TmdbTvShow)[] = trending.flatMap((t) =>
+      t.status === 'fulfilled' ? (t.value.results as (TmdbMovie | TmdbTvShow)[]) : []
+    )
+    hot.forEach((item, rank) => {
+      if (exclude.has(String(item.id))) return
+      this.addCandidate(
+        candidates,
+        item,
+        0.3 * (1 - rank / (hot.length * 1.5)),
+        'Trending this week'
+      )
+    })
 
     for (const lane of lanes) {
       if (lane.source === 'tmdb') continue // personalized lanes; we already walk the library
@@ -728,6 +970,80 @@ class ForYouService {
         })
       }
     }
+  }
+
+  /**
+   * Well-liked titles in the genres the library and watchlist are full of,
+   * so the deck reaches past the neighbours of the few seeds walked this time.
+   * Three genres per build, drawn by affinity, from a random one of the first
+   * few pages so consecutive builds differ.
+   */
+  private async addGenrePopular(
+    candidates: Map<number, Candidate>,
+    taste: TasteProfile,
+    kind: 'movie' | 'tv'
+  ) {
+    const table = kind === 'movie' ? MOVIE_GENRES : TV_GENRES
+    const scored = Object.entries(table)
+      .map(([id, name]) => ({ id, name, affinity: this.genreAffinity([name], taste) }))
+      .filter((g) => g.affinity > 0.15)
+    if (scored.length === 0) return
+    const genres = drawDeck(
+      scored.map((g) => ({ ...g, score: g.affinity })),
+      3,
+      { temperature: 0.25 }
+    )
+
+    const results = await Promise.allSettled(
+      genres.map((g) => {
+        const params = {
+          'with_genres': g.id,
+          'sort_by': 'popularity.desc',
+          'vote_count.gte': kind === 'movie' ? 400 : 200,
+          'vote_average.gte': 6.5,
+          'page': 1 + Math.floor(Math.random() * 3),
+        }
+        return kind === 'movie'
+          ? tmdbService.discoverMovies(params)
+          : tmdbService.discoverTvShows(params)
+      })
+    )
+    results.forEach((result, i) => {
+      if (result.status !== 'fulfilled') return
+      const genre = genres[i]
+      const items = result.value as (TmdbMovie | TmdbTvShow)[]
+      items.forEach((item, rank) => {
+        if (taste.exclude[kind].has(String(item.id))) return
+        const contribution = 0.3 * genre.affinity * (1 - rank / (items.length * 1.5))
+        this.addCandidate(
+          candidates,
+          item,
+          contribution,
+          `Popular in ${genre.name}, which you like`
+        )
+      })
+    })
+  }
+
+  private addCandidate(
+    candidates: Map<number, Candidate>,
+    item: TmdbMovie | TmdbTvShow,
+    contribution: number,
+    reason: string
+  ) {
+    const existing = candidates.get(item.id)
+    if (existing) {
+      existing.score += contribution
+      existing.seedCount++
+      if (contribution > existing.best.contribution) existing.best = { contribution, reason }
+      return
+    }
+    candidates.set(item.id, {
+      item,
+      score: contribution,
+      best: { contribution, reason },
+      seedCount: 1,
+    })
   }
 
   private rank(
@@ -769,7 +1085,7 @@ class ForYouService {
             ? c.score * 0.5 + affinity * 0.6 + (rated - 6.8) * 0.4 + jitter
             : mode === 'top-rated'
               ? (rated - 6.8) * 1.2 + affinity * 0.5 + c.score * 0.3 + jitter
-              : c.score + agreement + affinity * 0.45 + quality + fresh.boost + jitter
+              : c.score + agreement + affinity * 0.7 + quality + fresh.boost + jitter
 
       // Several seeds agreeing is the better explanation than any one of them.
       let reason =
@@ -1230,23 +1546,21 @@ class ForYouService {
       await db.from('books').where('id', r.id).update({ release_date: r.release_date })
     }
   }
+}
 
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Weighted round-robin, so the deck alternates media types instead of
-   * showing forty movies before the first album.
-   */
-  private interleave(sources: { cards: ForYouCard[]; weight: number }[]): ForYouCard[] {
-    const queues = sources.filter((s) => s.cards.length > 0).map((s) => ({ ...s, i: 0 }))
-    const out: ForYouCard[] = []
-    while (out.length < DECK_SIZE && queues.some((q) => q.i < q.cards.length)) {
-      for (const q of queues) {
-        for (let n = 0; n < q.weight && q.i < q.cards.length; n++) out.push(q.cards[q.i++])
-      }
+/**
+ * Weighted round-robin, so the deck alternates media types instead of
+ * showing forty movies before the first album.
+ */
+export function interleave(sources: { cards: ForYouCard[]; weight: number }[]): ForYouCard[] {
+  const queues = sources.filter((s) => s.cards.length > 0).map((s) => ({ ...s, i: 0 }))
+  const out: ForYouCard[] = []
+  while (queues.some((q) => q.i < q.cards.length)) {
+    for (const q of queues) {
+      for (let n = 0; n < q.weight && q.i < q.cards.length; n++) out.push(q.cards[q.i++])
     }
-    return out.slice(0, DECK_SIZE)
   }
+  return out
 }
 
 export const forYouService = new ForYouService()

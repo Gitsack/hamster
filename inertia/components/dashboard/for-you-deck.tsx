@@ -76,7 +76,15 @@ interface DeckResponse {
   /** The types the user last chose to see; null means all. */
   preferences?: { types: DeckMediaType[] | null; mode?: DeckMode }
   mode?: DeckMode
+  /** Types the server is topping up right now; ask again shortly for more. */
+  refilling?: DeckMediaType[]
 }
+
+/** At this many cards left the deck asks the server for more. */
+const TOP_UP_AT = 5
+/** While the server is still topping up: how often, and how often at most, to ask again. */
+const TOP_UP_RETRY_MS = 10_000
+const TOP_UP_RETRIES = 6
 
 const ALL_TYPES = ['movie', 'tv', 'album', 'book'] as const
 
@@ -387,9 +395,58 @@ export function ForYouDeck() {
     }
   }
 
-  const remove = (key: string) => setCards((prev) => prev.filter((c) => c.key !== key))
-  const restore = (card: ForYouCard) =>
+  // Cards acted on this session. A top-up can be answered before the server
+  // has heard of the latest swipe; these never come back through one.
+  const decided = useRef(new Set<string>())
+  const remove = (key: string) => {
+    decided.current.add(key)
+    setCards((prev) => prev.filter((c) => c.key !== key))
+  }
+  const restore = (card: ForYouCard) => {
+    decided.current.delete(card.key)
     setCards((prev) => (prev.some((c) => c.key === card.key) ? prev : [card, ...prev]))
+  }
+
+  // Running low: ask for more. The server tops up any type that is nearly
+  // used up in the background, and says so; until it is done, ask again.
+  const modeRef = useRef(mode)
+  modeRef.current = mode
+  const topping = useRef(false)
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const topUp = useCallback(async (attempt = 0) => {
+    if (topping.current) return
+    topping.current = true
+    const asked = modeRef.current
+    try {
+      const res = await fetch(`/api/v1/for-you${asked ? `?mode=${asked}` : ''}`)
+      if (!res.ok) return
+      const body: DeckResponse = await res.json()
+      // The user switched modes meanwhile: these cards belong to another deck.
+      if (modeRef.current !== asked) return
+      setCards((prev) => {
+        const have = new Set(prev.map((c) => c.key))
+        const more = body.cards.filter((c) => !have.has(c.key) && !decided.current.has(c.key))
+        return more.length > 0 ? [...prev, ...more] : prev
+      })
+      if (body.refilling?.length && attempt < TOP_UP_RETRIES) {
+        if (retryTimer.current) clearTimeout(retryTimer.current)
+        retryTimer.current = setTimeout(() => topUp(attempt + 1), TOP_UP_RETRY_MS)
+      }
+    } catch {
+      // The next swipe asks again.
+    } finally {
+      topping.current = false
+    }
+  }, [])
+  useEffect(
+    () => () => {
+      if (retryTimer.current) clearTimeout(retryTimer.current)
+    },
+    []
+  )
+  useEffect(() => {
+    if (!loading && data && visible.length <= TOP_UP_AT) topUp()
+  }, [loading, data, visible.length, topUp])
 
   const decide = useCallback(
     async (card: ForYouCard, verdict: Verdict) => {

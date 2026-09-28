@@ -7,6 +7,10 @@ interface TaskRunner {
   stop(): void
   run(): Promise<any>
   readonly running: boolean
+  /** Run once after every start, whether or not the task is due. */
+  readonly runOnStartup?: boolean
+  /** When the next run is due, for tasks tied to a time of day. */
+  nextRunAt?(intervalMinutes: number): DateTime
 }
 
 interface DefaultTask {
@@ -46,6 +50,9 @@ const DEFAULT_TASKS: DefaultTask[] = [
   { name: 'Backup', type: 'backup', intervalMinutes: 1440, enabled: true },
   { name: 'Blacklist Cleanup', type: 'cleanup', intervalMinutes: 1440, enabled: true },
   { name: 'Refresh Metadata', type: 'refresh_metadata', intervalMinutes: 720, enabled: true },
+  // Builds every mode of each user's dashboard For you deck ahead of time. Daily runs land
+  // on midnight; it also runs after every start.
+  { name: 'For You Suggestions', type: 'for_you_refresh', intervalMinutes: 1440, enabled: true },
 ]
 
 class TaskScheduler {
@@ -54,6 +61,9 @@ class TaskScheduler {
   // Tasks currently executing, claimed by this scheduler rather than trusting
   // each runner's own `running` flag.
   private inFlight = new Set<TaskType>()
+  // Tasks handed to a startup-delay timer but not started yet, so the next
+  // tick does not queue them a second time.
+  private queued = new Set<TaskType>()
   private ticker: NodeJS.Timeout | null = null
   private startupDone = false
   private started = false
@@ -139,14 +149,18 @@ class TaskScheduler {
     const now = DateTime.now()
 
     for (const task of tasks) {
-      if (!this.runners.has(task.type)) continue
-      if (task.nextRunAt && task.nextRunAt > now) continue
-      if (this.inFlight.has(task.type)) continue
+      const runner = this.runners.get(task.type)
+      if (!runner) continue
+      const startupRun = !this.startupDone && runner.runOnStartup
+      if (task.nextRunAt && task.nextRunAt > now && !startupRun) continue
+      if (this.inFlight.has(task.type) || this.queued.has(task.type)) continue
 
       // Stagger the first run of each type so a cold start does not fire
       // everything into the indexers at once.
       const delay = this.startupDone ? 0 : this.getStartupDelay(task.type)
+      this.queued.add(task.type)
       setTimeout(() => {
+        this.queued.delete(task.type)
         this.executeTask(task.type).catch((err) => {
           console.error(`[TaskScheduler] Error executing ${task.type}:`, err)
         })
@@ -171,6 +185,7 @@ class TaskScheduler {
       cleanup: 45000,
       backup: 60000,
       refresh_metadata: 75000,
+      for_you_refresh: 120000,
     }
     return delays[type] || 15000
   }
@@ -205,7 +220,7 @@ class TaskScheduler {
     // Schedule the next run up front. Doing it only in the `finally` meant a
     // crash or restart mid-run left nextRunAt permanently in the past, so the
     // task fired on every subsequent tick.
-    task.nextRunAt = DateTime.now().plus({ minutes: task.intervalMinutes })
+    task.nextRunAt = this.nextRun(runner, task.intervalMinutes)
     await task.save()
 
     let status = 'success'
@@ -232,7 +247,7 @@ class TaskScheduler {
       task.lastError = error ? error.slice(0, 2000) : null
       // Recompute from the end of the run so a task that takes longer than its
       // interval does not immediately re-fire.
-      task.nextRunAt = DateTime.now().plus({ minutes: task.intervalMinutes })
+      task.nextRunAt = this.nextRun(runner, task.intervalMinutes)
       await task.save()
       // The sidebar dot and the dashboard read failed tasks from the health
       // cache; refresh it now rather than on the next health run.
@@ -287,7 +302,10 @@ class TaskScheduler {
       task.enabled = updates.enabled
     }
 
-    task.nextRunAt = DateTime.now().plus({ minutes: task.intervalMinutes })
+    const runner = this.runners.get(task.type)
+    task.nextRunAt = runner
+      ? this.nextRun(runner, task.intervalMinutes)
+      : DateTime.now().plus({ minutes: task.intervalMinutes })
     await task.save()
     // A disabled task no longer counts as failing.
     void healthMonitor.refreshFailedTasks()
@@ -295,6 +313,10 @@ class TaskScheduler {
     // No rescheduling needed: the ticker reads nextRunAt and enabled from the
     // row on every pass, so saving is all it takes to take effect.
     return task
+  }
+
+  private nextRun(runner: TaskRunner, intervalMinutes: number): DateTime {
+    return runner.nextRunAt?.(intervalMinutes) ?? DateTime.now().plus({ minutes: intervalMinutes })
   }
 
   /**

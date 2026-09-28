@@ -1,7 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import vine from '@vinejs/vine'
 import RecommendationFeedback from '#models/recommendation_feedback'
-import { forYouService } from '#services/recommendations/for_you_service'
+import { forYouPools } from '#services/recommendations/for_you_pools'
 
 /**
  * The user's watchlist: titles they want but won't necessarily get here —
@@ -80,7 +80,7 @@ export default class WatchlistController {
         genres: data.genres ?? [],
       }
     )
-    forYouService.invalidate(userId)
+    await forYouPools.afterFeedback(userId, t.mediaType, 'interested')
     return response.noContent()
   }
 
@@ -93,7 +93,8 @@ export default class WatchlistController {
       .where('externalId', t.externalId)
       .where('action', 'interested')
       .delete()
-    forYouService.invalidate(auth.user!.id)
+    // A saved title's genres counted towards the deck; rebuild without them.
+    await forYouPools.afterFeedback(auth.user!.id, t.mediaType, 'interested')
     return response.noContent()
   }
 }
