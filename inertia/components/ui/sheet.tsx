@@ -169,7 +169,10 @@ function SheetContent({ className, children, side = 'right', ...props }: SheetCo
       if (e.key === 'Escape') {
         // Only the topmost layer responds, so a dialog opened from inside the
         // sheet closes itself without taking the sheet with it.
-        if (document.querySelector('[data-slot="dialog-content"]')) return
+        if (
+          document.querySelector('[data-slot="dialog-content"], [data-slot="alert-dialog-content"]')
+        )
+          return
         onOpenChange(false)
         return
       }

@@ -47,6 +47,7 @@ test.group('DownloadClientsController', (group) => {
     let result: unknown[] = []
 
     await controller.index({
+      auth: { user: { isAdmin: true } },
       response: {
         json(data: unknown) {
           result = data as unknown[]
@@ -65,6 +66,7 @@ test.group('DownloadClientsController', (group) => {
     let result: unknown[] = []
 
     await controller.index({
+      auth: { user: { isAdmin: true } },
       response: {
         json(data: unknown) {
           result = data as unknown[]
@@ -78,6 +80,43 @@ test.group('DownloadClientsController', (group) => {
     assert.equal(sab.apiKey, 'test-sab-key')
     assert.equal(sab.type, 'sabnzbd')
     assert.equal(sab.enabled, true)
+  })
+
+  test('index and show keep host and credentials from non-admins', async ({ assert }) => {
+    const controller = new DownloadClientsController()
+    let list: any[] = []
+    let one: Record<string, unknown> = {}
+
+    await controller.index({
+      auth: { user: { isAdmin: false } },
+      response: {
+        json(data: unknown) {
+          list = data as any[]
+        },
+      },
+    } as never)
+    await controller.show({
+      auth: { user: { isAdmin: false } },
+      params: { id: client1.id },
+      response: {
+        json(data: unknown) {
+          one = data as Record<string, unknown>
+        },
+        notFound() {},
+      },
+    } as never)
+
+    const sab = list.find((c) => c.name === 'DLC Test SABnzbd')
+    for (const shape of [sab, one]) {
+      assert.equal(shape.name, 'DLC Test SABnzbd')
+      assert.equal(shape.type, 'sabnzbd')
+      assert.equal(shape.enabled, true)
+      assert.property(shape, 'localPath')
+      for (const secret of ['apiKey', 'username', 'password', 'host', 'port']) {
+        assert.notProperty(shape, secret)
+      }
+    }
+    assert.notInclude(JSON.stringify(list), 'test-sab-key')
   })
 
   // ---- store ----
@@ -163,6 +202,7 @@ test.group('DownloadClientsController', (group) => {
     let result: Record<string, unknown> = {}
 
     await controller.show({
+      auth: { user: { isAdmin: true } },
       params: { id: client1.id },
       response: {
         json(data: unknown) {

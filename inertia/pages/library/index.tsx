@@ -508,7 +508,7 @@ export default function Library() {
 
       if (foldersToScan.length === 0) {
         toast.error(
-          `No root folder is configured for ${MEDIA_TYPE_CONFIG[activeTab].label}. Add one in Settings → Media Management, then scan again.`
+          `No root folder is configured for ${MEDIA_TYPE_CONFIG[activeTab].label}. Add one in Settings → Media, then scan again.`
         )
         return
       }

@@ -1,5 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import NotificationProvider from '#models/notification_provider'
+import NotificationHistory from '#models/notification_history'
+import db from '@adonisjs/lucid/services/db'
 import vine from '@vinejs/vine'
 import { notificationService } from '#services/notifications/notification_service'
 
@@ -40,10 +42,38 @@ export default class NotificationsController {
   async index({ response }: HttpContext) {
     const providers = await NotificationProvider.query().orderBy('name', 'asc')
 
+    // One row per provider: its newest delivery attempt, for the target row.
+    const rows: {
+      provider_id: string
+      success: boolean
+      error_message: string | null
+      created_at: Date | string
+    }[] = await db
+      .from('notification_history')
+      .distinctOn('provider_id')
+      .select('provider_id', 'success', 'error_message', 'created_at')
+      .orderBy('provider_id', 'asc')
+      .orderBy('created_at', 'desc')
+    const last = new Map(
+      rows.map((row) => [
+        row.provider_id,
+        {
+          success: row.success,
+          status: null,
+          error: row.error_message,
+          createdAt:
+            row.created_at instanceof Date
+              ? row.created_at.toISOString()
+              : new Date(String(row.created_at)).toISOString(),
+        },
+      ])
+    )
+
     // Hide sensitive settings in response
     const safeProviders = providers.map((p) => ({
       ...p.toJSON(),
       settings: this.maskSensitiveSettings(p.type, p.settings),
+      lastDelivery: last.get(p.id) ?? null,
     }))
 
     return response.json(safeProviders)
@@ -180,6 +210,19 @@ export default class NotificationsController {
     })
 
     return response.json(history)
+  }
+
+  /**
+   * Clear the delivery log, for one provider (?providerId=) or all of them
+   */
+  async clearHistory({ request, response }: HttpContext) {
+    const { providerId } = request.qs()
+    const query = NotificationHistory.query()
+    if (typeof providerId === 'string' && providerId !== '') {
+      query.where('providerId', providerId)
+    }
+    await query.delete()
+    return response.noContent()
   }
 
   /**

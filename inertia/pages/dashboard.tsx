@@ -6,7 +6,7 @@ import {
   StatusPanel,
   type DashboardMissing,
   type DashboardStats,
-  type HealthService,
+  type DashboardHealth,
   type StuckTitles,
 } from '@/components/dashboard/status-panel'
 
@@ -26,10 +26,7 @@ interface DashboardProps {
   activeDownloadCount: number
   stuck: StuckTitles
   recentAdditions: RecentItem[]
-  health: {
-    downloadClients: HealthService[]
-    indexers: HealthService[]
-  }
+  health: DashboardHealth
 }
 
 function formatRelativeTime(dateString: string): string {

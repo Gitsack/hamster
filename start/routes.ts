@@ -54,8 +54,10 @@ const BulkController = () => import('#controllers/bulk_controller')
 const RenameController = () => import('#controllers/rename_controller')
 const DashboardController = () => import('#controllers/dashboard_controller')
 const AdminUsersController = () => import('#controllers/admin/users_controller')
+const SettingsController = () => import('#controllers/settings_controller')
 
-// Health check endpoint (enhanced for Docker/load balancers)
+// Health check endpoint for Docker and load balancers. Reads the health
+// monitor's cache; see SystemController.health for the status-code contract.
 router.get('/health', [SystemController, 'health'])
 
 // Public routes (with silent auth to check if user is logged in)
@@ -141,13 +143,33 @@ router
     // Calendar
     router.on('/calendar').renderInertia('calendar/index', {}).as('calendar')
 
-    // Activity
-    router.on('/activity/queue').renderInertia('activity/queue', {}).as('activity.queue')
-    router.on('/activity/history').renderInertia('activity/history', {}).as('activity.history')
+    // Activity: one page, three tabs. Each tab has its own URL so links and
+    // reloads land on it; /activity is the canonical Queue.
+    router.on('/activity').renderInertia('activity/index', { tab: 'queue' }).as('activity')
+    router
+      .on('/activity/imports')
+      .renderInertia('activity/index', { tab: 'imports' })
+      .as('activity.imports')
+    router
+      .on('/activity/history')
+      .renderInertia('activity/index', { tab: 'history' })
+      .as('activity.history')
+    router.get('/activity/queue', async ({ response }) =>
+      response.redirect().status(301).toPath('/activity')
+    )
 
-    // System
-    router.on('/system/status').renderInertia('system/status', {}).as('system.status')
-    router.on('/system/events').renderInertia('system/events', {}).as('system.events')
+    // System. Status became Settings → System; health is on the dashboard too.
+    router.get('/system/status', async ({ response }) =>
+      response.redirect().status(301).toPath('/settings/system#health')
+    )
+    // The notification delivery log lives on the Notifications page now.
+    router.get('/system/events', async ({ response }) =>
+      response.redirect().status(301).toPath('/settings/notifications#deliveries')
+    )
+
+    // Settings. The sidebar's Settings item links here for everyone: admins get
+    // the Overview, everyone else is sent on to Profile, the one page they have.
+    router.get('/settings', [SettingsController, 'index']).as('settings')
 
     // Profile settings (accessible to all authenticated users)
     router.on('/settings/profile').renderInertia('settings/ui', {}).as('settings.profile')
@@ -156,13 +178,20 @@ router
     // Settings pages (admin only)
     router
       .group(() => {
-        router.get('/settings', async ({ response }) =>
-          response.redirect('/settings/media-management')
-        )
+        // Library: Media Management split into Media, Quality and Discovery, and
+        // Playback became a section of Media. The old URLs keep working.
+        router.on('/settings/media').renderInertia('settings/media', {}).as('settings.media')
+        router.on('/settings/quality').renderInertia('settings/quality', {}).as('settings.quality')
         router
-          .on('/settings/media-management')
-          .renderInertia('settings/media-management', {})
-          .as('settings.media-management')
+          .on('/settings/discovery')
+          .renderInertia('settings/discovery', {})
+          .as('settings.discovery')
+        router.get('/settings/media-management', async ({ response }) =>
+          response.redirect().status(301).toPath('/settings/media')
+        )
+        router.get('/settings/playback', async ({ response }) =>
+          response.redirect().status(301).toPath('/settings/media#playback')
+        )
         router
           .on('/settings/indexers')
           .renderInertia('settings/indexers', {})
@@ -172,18 +201,15 @@ router
           .renderInertia('settings/download-clients', {})
           .as('settings.download-clients')
         router
-          .on('/settings/playback')
-          .renderInertia('settings/playback', {})
-          .as('settings.playback')
-        router
           .on('/settings/notifications')
           .renderInertia('settings/notifications', {})
           .as('settings.notifications')
-        router
-          .on('/settings/webhooks')
-          .renderInertia('settings/webhooks', {})
-          .as('settings.webhooks')
+        // Webhooks are targets on the Notifications page now.
+        router.get('/settings/webhooks', async ({ response }) =>
+          response.redirect().status(301).toPath('/settings/notifications')
+        )
         router.on('/settings/users').renderInertia('settings/users', {}).as('settings.users')
+        router.on('/settings/system').renderInertia('settings/system', {}).as('settings.system')
       })
       .use(middleware.admin())
   })
@@ -343,6 +369,7 @@ router
     router.post('/queue/grab', [QueueController, 'grab'])
     router.post('/queue/deduplicate', [QueueController, 'deduplicateQueue'])
     router.post('/queue/search-requested', [QueueController, 'searchRequested'])
+    router.get('/activity/counts', [QueueController, 'counts'])
     router.get('/queue/requested-status', [QueueController, 'requestedStatus'])
 
     // Blacklist
@@ -472,6 +499,8 @@ router
     // Read-only endpoints available to all authenticated users
     router.get('/notifications/history', [NotificationsController, 'history'])
     router.get('/system/info', [SystemController, 'info'])
+    // Cached health verdict (never probes); admins get paths and failed tasks too.
+    router.get('/system/health-summary', [SystemController, 'healthSummary'])
 
     // Admin-only API routes
     router
@@ -499,6 +528,7 @@ router
         router.get('/prowlarr', [ProwlarrController, 'show'])
         router.put('/prowlarr', [ProwlarrController, 'update'])
         router.post('/prowlarr/test', [ProwlarrController, 'test'])
+        router.get('/prowlarr/status', [ProwlarrController, 'status'])
         router.post('/prowlarr/sync', [ProwlarrController, 'sync'])
         router.get('/prowlarr/indexers', [ProwlarrController, 'indexers'])
 
@@ -549,9 +579,12 @@ router
         router.get('/filesystem/quick-paths', [FilesystemController, 'quickPaths'])
         router.get('/filesystem/check', [FilesystemController, 'checkPath'])
 
-        // Webhooks
+        // Webhooks. The cross-webhook delivery log is registered before /webhooks/:id
+        // so "history" is never read as an id.
         router.get('/webhooks', [WebhooksController, 'index'])
         router.post('/webhooks', [WebhooksController, 'store'])
+        router.get('/webhooks/history', [WebhooksController, 'allHistory'])
+        router.delete('/webhooks/history', [WebhooksController, 'clearAllHistory'])
         router.get('/webhooks/:id', [WebhooksController, 'show'])
         router.put('/webhooks/:id', [WebhooksController, 'update'])
         router.delete('/webhooks/:id', [WebhooksController, 'destroy'])
@@ -563,6 +596,7 @@ router
         router.get('/notifications', [NotificationsController, 'index'])
         router.post('/notifications', [NotificationsController, 'store'])
         router.get('/notifications/types', [NotificationsController, 'types'])
+        router.delete('/notifications/history', [NotificationsController, 'clearHistory'])
         router.get('/notifications/:id', [NotificationsController, 'show'])
         router.put('/notifications/:id', [NotificationsController, 'update'])
         router.delete('/notifications/:id', [NotificationsController, 'destroy'])
@@ -574,6 +608,9 @@ router
         router.get('/system/backup/:name/download', [BackupController, 'download'])
         router.post('/system/backup/:name/restore', [BackupController, 'restore'])
         router.delete('/system/backup/:name', [BackupController, 'destroy'])
+
+        // Health: start a background re-check; the page polls the summary.
+        router.post('/system/health/check', [SystemController, 'recheck'])
 
         // Scheduled Tasks
         router.get('/system/tasks', [ScheduledTasksController, 'index'])

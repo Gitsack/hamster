@@ -47,6 +47,26 @@ const TRANSIENT_ERROR_PATTERNS: RegExp[] = [
  */
 const STUCK_IMPORTING_THRESHOLD_MINUTES = 10
 
+/** The moment before which a download still 'importing' counts as stuck. */
+export function stuckImportingThreshold(now: DateTime = DateTime.now()): DateTime {
+  return now.minus({ minutes: STUCK_IMPORTING_THRESHOLD_MINUTES })
+}
+
+/**
+ * Whether an 'importing' download has sat untouched past the threshold. Mirrors
+ * the query in findStuckImporting, for rows that are already loaded.
+ */
+export function isStuckImporting(
+  download: Pick<Download, 'status' | 'completedAt' | 'updatedAt'>,
+  now: DateTime = DateTime.now()
+): boolean {
+  if (download.status !== 'importing') return false
+  const threshold = stuckImportingThreshold(now)
+  const completedOld = !download.completedAt || download.completedAt < threshold
+  const updatedOld = !download.updatedAt || download.updatedAt < threshold
+  return completedOld && updatedOld
+}
+
 /**
  * Failed downloads must be at least this old before we consider a retry.
  * Avoids fighting with other workers that just marked the row failed.
@@ -157,7 +177,7 @@ class StuckImportRecoveryTask {
    * (server crashed, process killed, I/O hung).
    */
   async findStuckImporting(): Promise<Download[]> {
-    const threshold = DateTime.now().minus({ minutes: STUCK_IMPORTING_THRESHOLD_MINUTES })
+    const threshold = stuckImportingThreshold()
     return Download.query()
       .where('status', 'importing')
       .where((q) => q.where('completedAt', '<', threshold.toSQL()!).orWhereNull('completedAt'))

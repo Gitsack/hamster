@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react'
+import { Head, Link, usePage } from '@inertiajs/react'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -6,6 +6,8 @@ import { Alert01Icon } from '@hugeicons/core-free-icons'
 
 export default function ServerError(props: { error: { message?: string } }) {
   const message = props.error?.message
+  // Shared props may be missing when the error happened before auth ran.
+  const isAdmin = Boolean(usePage<{ user?: { isAdmin?: boolean } }>().props?.user?.isAdmin)
 
   return (
     <AppLayout title="Server Error">
@@ -21,8 +23,10 @@ export default function ServerError(props: { error: { message?: string } }) {
         <h2 className="mt-4 text-lg font-medium">The server could not finish that request</h2>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
           Hamster answered <span className="readout">500</span> while handling this request, so the
-          action did not complete. Retry it; if it keeps failing, the stack trace is in the server
-          log.
+          action did not complete. Retry it; if it keeps failing,{' '}
+          {isAdmin
+            ? 'check Settings → System → Health for a service that is down. The stack trace is in the server log.'
+            : 'ask whoever runs this Hamster to check the server log.'}
         </p>
         {message && (
           <p className="readout mt-4 max-w-md overflow-x-auto rounded-md border border-border bg-muted px-3 py-2 text-left text-xs text-foreground">
@@ -33,9 +37,11 @@ export default function ServerError(props: { error: { message?: string } }) {
           <Button asChild>
             <Link href="/">Go home</Link>
           </Button>
-          <Button variant="outline" asChild>
-            <Link href="/system/status">Check system status</Link>
-          </Button>
+          {isAdmin && (
+            <Button variant="outline" asChild>
+              <Link href="/settings/system#health">Check system health</Link>
+            </Button>
+          )}
         </div>
       </div>
     </AppLayout>

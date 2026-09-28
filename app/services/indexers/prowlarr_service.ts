@@ -83,15 +83,17 @@ export class ProwlarrService {
   /**
    * Get all indexers from Prowlarr
    */
-  async getIndexers(config: ProwlarrConfig): Promise<ProwlarrIndexer[]> {
+  async getIndexers(config: ProwlarrConfig, signal?: AbortSignal): Promise<ProwlarrIndexer[]> {
     const response = await fetch(`${this.normalizeUrl(config.url)}/api/v1/indexer`, {
       headers: {
         'X-Api-Key': config.apiKey,
       },
+      signal,
     })
 
     if (!response.ok) {
-      throw new Error(`Failed to get indexers: ${response.status}`)
+      if (response.status === 401) throw new Error('Invalid API key')
+      throw new Error(`Failed to get indexers: HTTP ${response.status}`)
     }
 
     return (await response.json()) as ProwlarrIndexer[]

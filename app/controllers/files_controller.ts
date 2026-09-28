@@ -486,7 +486,7 @@ export default class FilesController {
       return a.name.localeCompare(b.name)
     })
 
-    // Include importing downloads as separate list for the Pending Import tab
+    // Importing downloads, for callers that list them beside the folder entries
     const importing = importingDownloads.map((d) => ({
       id: d.id,
       title: d.title,

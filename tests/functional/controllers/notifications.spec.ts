@@ -1,5 +1,6 @@
 import { test } from '@japa/runner'
 import NotificationProvider from '#models/notification_provider'
+import NotificationHistory from '#models/notification_history'
 import NotificationsController from '#controllers/notifications_controller'
 
 test.group('NotificationsController', (group) => {
@@ -435,5 +436,71 @@ test.group('NotificationsController', (group) => {
     } as never)
 
     assert.isNotNull(result)
+  })
+  // ---- delivery log ----
+
+  test("index reports each provider's last delivery", async ({ assert }) => {
+    await NotificationHistory.create({
+      providerId: provider1.id,
+      eventType: 'import.failed',
+      title: 'Older',
+      message: null,
+      success: true,
+    })
+    await NotificationHistory.create({
+      providerId: provider1.id,
+      eventType: 'import.failed',
+      title: 'Newest',
+      message: null,
+      success: false,
+      errorMessage: 'HTTP 401',
+    })
+
+    const controller = new NotificationsController()
+    let result: any[] = []
+    await controller.index({
+      response: {
+        json(data: unknown) {
+          result = data as any[]
+        },
+      },
+    } as never)
+
+    const row = result.find((p) => p.id === provider1.id)
+    assert.equal(row.lastDelivery.success, false)
+    assert.equal(row.lastDelivery.error, 'HTTP 401')
+    assert.isNull(result.find((p) => p.id === provider2.id).lastDelivery)
+  })
+
+  test("clearHistory empties one provider's log when given providerId", async ({ assert }) => {
+    await NotificationHistory.create({
+      providerId: provider2.id,
+      eventType: 'grab',
+      title: 'Keep me',
+      message: null,
+      success: true,
+    })
+
+    const controller = new NotificationsController()
+    let cleared = false
+    await controller.clearHistory({
+      request: { qs: () => ({ providerId: provider1.id }) },
+      response: {
+        noContent() {
+          cleared = true
+        },
+      },
+    } as never)
+
+    assert.isTrue(cleared)
+    assert.lengthOf(await NotificationHistory.query().where('providerId', provider1.id), 0)
+    const kept = await NotificationHistory.query().where('providerId', provider2.id)
+    assert.isAbove(kept.length, 0)
+
+    await controller.clearHistory({
+      request: { qs: () => ({}) },
+      response: { noContent() {} },
+    } as never)
+    assert.lengthOf(await NotificationHistory.query().where('providerId', provider2.id), 0)
   })
 })

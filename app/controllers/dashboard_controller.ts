@@ -11,6 +11,9 @@ import Download from '#models/download'
 import DownloadClient from '#models/download_client'
 import Indexer from '#models/indexer'
 import History from '#models/history'
+import ScheduledTask from '#models/scheduled_task'
+import { healthState, mediaFolderLabel, type HealthLevel } from '#services/system/health_state'
+import { countFailedDeliveries24h } from '#services/system/delivery_failures'
 
 interface RecentItem {
   id: string
@@ -22,17 +25,60 @@ interface RecentItem {
   subtitle: string | null
 }
 
+export interface DashboardHealth {
+  level: HealthLevel
+  checkedAt: string | null
+  /** Admins get Fix links; everyone else sees the same facts without them. */
+  canManage: boolean
+  /** False when the dashboard's queries failed: clients and indexers are unknown, not absent. */
+  configLoaded: boolean
+  downloadClients: {
+    id: string
+    name: string
+    type: string
+    enabled: boolean
+    /** `unknown` until the monitor has probed it (just booted, or just added). */
+    status: 'ok' | 'error' | 'unknown'
+    message: string | null
+    since: string | null
+  }[]
+  indexers: { enabled: number; total: number }
+  rootFolders: { total: number; problems: { label: string; status: string; message: string }[] }
+  freeBytes: number | null
+  /** Set only when the database check is not ok. */
+  database: { status: string; message: string; since: string } | null
+  failedTasks: { id: string; name: string; lastError: string | null; lastRunAt: string | null }[]
+  backup: { lastRunAt: string | null; lastStatus: string | null } | null
+  failedDeliveries: number
+}
+
+const EMPTY_HEALTH: DashboardHealth = {
+  level: 'starting',
+  checkedAt: null,
+  canManage: false,
+  configLoaded: false,
+  downloadClients: [],
+  indexers: { enabled: 0, total: 0 },
+  rootFolders: { total: 0, problems: [] },
+  freeBytes: null,
+  database: null,
+  failedTasks: [],
+  backup: null,
+  failedDeliveries: 0,
+}
+
 const EMPTY_PROPS = {
   stats: { movies: 0, tvShows: 0, episodes: 0, artists: 0, albums: 0, authors: 0, books: 0 },
   missing: { movies: 0, episodes: 0, albums: 0, books: 0 },
   activeDownloadCount: 0,
   stuck: { count: 0, titles: [] as string[] },
   recentAdditions: [] as RecentItem[],
-  health: { downloadClients: [], indexers: [] },
+  health: EMPTY_HEALTH,
 }
 
 export default class DashboardController {
-  async index({ inertia, logger }: HttpContext) {
+  async index({ inertia, logger, auth }: HttpContext) {
+    const canManage = Boolean(auth.user?.isAdmin)
     try {
       const count = (result: { $extras: Record<string, unknown> }[]) =>
         Number(result[0].$extras.total)
@@ -54,6 +100,8 @@ export default class DashboardController {
         downloadClients,
         indexers,
         recentImports,
+        backupTask,
+        failedDeliveries,
       ] = await Promise.all([
         // The library is what is on disk. Albums and books also exist as rows
         // for everything an artist or author has released, so counting rows
@@ -101,6 +149,8 @@ export default class DashboardController {
           .preload('tvShow')
           .preload('album', (q) => q.preload('artist'))
           .preload('book', (q) => q.preload('author')),
+        ScheduledTask.query().where('type', 'backup').first(),
+        canManage ? countFailedDeliveries24h() : Promise.resolve(0),
       ])
 
       return inertia.render('dashboard', {
@@ -122,24 +172,97 @@ export default class DashboardController {
         activeDownloadCount: count(activeDownloads),
         stuck,
         recentAdditions: this.recentFromImports(recentImports),
-        health: {
-          downloadClients: downloadClients.map((dc) => ({
-            id: dc.id,
-            name: dc.name,
-            type: dc.type,
-            enabled: dc.enabled,
-          })),
-          indexers: indexers.map((idx) => ({
-            id: idx.id,
-            name: idx.name,
-            type: idx.type,
-            enabled: idx.enabled,
-          })),
-        },
+        health: this.health({
+          canManage,
+          configLoaded: true,
+          downloadClients,
+          indexers,
+          backupTask,
+          failedDeliveries,
+        }),
       })
     } catch (error) {
       logger.error({ err: error }, 'Dashboard query failed')
-      return inertia.render('dashboard', EMPTY_PROPS)
+      return inertia.render('dashboard', {
+        ...EMPTY_PROPS,
+        health: this.health({ canManage, configLoaded: false }),
+      })
+    }
+  }
+
+  /**
+   * Services, from configuration plus the health monitor's cache. Reads memory
+   * only: the page never waits on a live probe, so a download client that
+   * hangs cannot hold up the dashboard.
+   */
+  private health({
+    canManage,
+    configLoaded,
+    downloadClients = [],
+    indexers = [],
+    backupTask = null,
+    failedDeliveries = 0,
+  }: {
+    canManage: boolean
+    configLoaded: boolean
+    downloadClients?: DownloadClient[]
+    indexers?: Indexer[]
+    backupTask?: ScheduledTask | null
+    failedDeliveries?: number
+  }): DashboardHealth {
+    const cached = healthState.result
+    const probed = new Map((cached?.downloadClients ?? []).map((c) => [c.id, c]))
+    const database = cached?.checks.find((c) => c.name === 'database')
+    const folders = cached?.rootFolders ?? []
+
+    return {
+      level: healthState.isStale() ? 'error' : healthState.level,
+      checkedAt: cached?.checkedAt ?? null,
+      canManage,
+      configLoaded,
+      downloadClients: downloadClients.map((dc) => {
+        const probe = dc.enabled ? probed.get(dc.id) : undefined
+        return {
+          id: dc.id,
+          name: dc.name,
+          type: dc.type,
+          enabled: dc.enabled,
+          status: probe?.status ?? 'unknown',
+          message: probe?.status === 'error' ? probe.message : null,
+          since: probe?.since ?? null,
+        }
+      }),
+      indexers: {
+        enabled: indexers.filter((i) => i.enabled).length,
+        total: indexers.length,
+      },
+      rootFolders: {
+        total: folders.length,
+        problems: folders
+          .filter((f) => f.status !== 'ok')
+          .map((f) => ({
+            label: canManage ? f.path : mediaFolderLabel(f.mediaType),
+            status: f.status,
+            message: f.message,
+          })),
+      },
+      freeBytes: cached?.freeBytes ?? null,
+      database:
+        database && database.status !== 'ok'
+          ? { status: database.status, message: database.message, since: database.since }
+          : null,
+      failedTasks: canManage
+        ? healthState.failedTasks.map((t) => ({
+            id: t.id,
+            name: t.name,
+            lastError: t.lastError,
+            lastRunAt: t.lastRunAt,
+          }))
+        : [],
+      backup: backupTask
+        ? { lastRunAt: backupTask.lastRunAt?.toISO() ?? null, lastStatus: backupTask.lastStatus }
+        : null,
+      failedDeliveries,
     }
   }
 

@@ -31,6 +31,16 @@ class BackupService {
     return dir || DEFAULT_BACKUP_DIR
   }
 
+  /** Where backups are written, for display. */
+  async directory(): Promise<string> {
+    return this.getBackupDir()
+  }
+
+  /** How many backups are kept, for display. */
+  async retention(): Promise<number> {
+    return this.getRetention()
+  }
+
   /**
    * Get the retention count
    */
@@ -151,6 +161,11 @@ class BackupService {
    * Restore from a backup file
    */
   async restore(backupName: string): Promise<void> {
+    // Validate the filename before touching the filesystem (path traversal)
+    if (backupName.includes('..') || backupName.includes('/')) {
+      throw new Error('Invalid backup filename')
+    }
+
     const backupDir = await this.getBackupDir()
     const backupPath = path.join(backupDir, backupName)
 
@@ -159,11 +174,6 @@ class BackupService {
       await fs.access(backupPath)
     } catch {
       throw new Error(`Backup file not found: ${backupName}`)
-    }
-
-    // Validate the filename to prevent path traversal
-    if (backupName.includes('..') || backupName.includes('/')) {
-      throw new Error('Invalid backup filename')
     }
 
     console.log(`[Backup] Restoring from: ${backupPath}`)
@@ -186,7 +196,12 @@ class BackupService {
     }
 
     try {
-      // Restore using psql
+      // The dump is a plain pg_dump without DROP statements, so replaying it
+      // over a populated database used to fail table by table while psql still
+      // exited 0 — "Restore completed" with nothing restored. Now the schema is
+      // emptied and the dump replayed in one transaction that stops at the
+      // first error: the database ends up either fully restored or untouched.
+      // lock_timeout keeps a busy task from holding the restore forever.
       await execFileAsync(
         'psql',
         [
@@ -198,6 +213,15 @@ class BackupService {
           String(dbUser),
           '-d',
           String(dbName),
+          '-v',
+          'ON_ERROR_STOP=1',
+          '--single-transaction',
+          '-c',
+          "SET LOCAL lock_timeout = '30s'",
+          '-c',
+          'DROP SCHEMA public CASCADE',
+          '-c',
+          'CREATE SCHEMA public',
           '-f',
           sqlFile,
         ],

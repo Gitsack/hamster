@@ -1,5 +1,6 @@
 import { test } from '@japa/runner'
 import Webhook from '#models/webhook'
+import WebhookHistory from '#models/webhook_history'
 import WebhooksController from '#controllers/webhooks_controller'
 
 test.group('WebhooksController', (group) => {
@@ -411,5 +412,181 @@ test.group('WebhooksController', (group) => {
     } as never)
 
     assert.isTrue(noContentCalled)
+  })
+})
+
+test.group('WebhooksController secrets and delivery log', (group) => {
+  let secret: Webhook
+
+  group.each.setup(async () => {
+    secret = await Webhook.create({
+      name: 'Webhook Secret Jellyfin',
+      url: 'http://jellyfin.lan:8096/Library/Refresh?api_key=supersecretkey',
+      enabled: true,
+      method: 'POST',
+      events: [],
+      headers: { 'Authorization': 'Bearer hunter2', 'X-Custom': 'plain' },
+      payloadTemplate: '{"a":1}',
+      onGrab: false,
+      onDownloadComplete: false,
+      onImportComplete: true,
+      onImportFailed: false,
+      onUpgrade: true,
+      onRename: false,
+      onDelete: true,
+      onHealthIssue: false,
+      onHealthRestored: false,
+    })
+    return async () => {
+      await Webhook.query().where('id', secret.id).delete()
+    }
+  })
+
+  function update(id: string, body: Record<string, unknown>) {
+    const controller = new WebhooksController()
+    const outcome: { status: number; data: Record<string, unknown> } = { status: 0, data: {} }
+    return controller
+      .update({
+        params: { id },
+        request: { validateUsing: async () => body },
+        response: {
+          json(data: unknown) {
+            outcome.status = 200
+            outcome.data = data as Record<string, unknown>
+          },
+          notFound() {
+            outcome.status = 404
+          },
+          unprocessableEntity(data: unknown) {
+            outcome.status = 422
+            outcome.data = data as Record<string, unknown>
+          },
+        },
+      } as never)
+      .then(() => outcome)
+  }
+
+  test('index masks URL and header secrets and reports the last delivery', async ({ assert }) => {
+    await WebhookHistory.create({
+      webhookId: secret.id,
+      eventType: 'import.completed',
+      payload: {},
+      responseStatus: 401,
+      responseBody: 'nope',
+      success: false,
+      errorMessage: 'HTTP 401',
+    })
+
+    const controller = new WebhooksController()
+    let result: any[] = []
+    await controller.index({
+      response: {
+        json(data: unknown) {
+          result = data as any[]
+        },
+      },
+    } as never)
+
+    const row = result.find((w) => w.id === secret.id)
+    assert.equal(row.url, 'http://jellyfin.lan:8096/Library/Refresh?api_key=****')
+    assert.deepEqual(row.headers, { 'Authorization': '****', 'X-Custom': 'plain' })
+    assert.notInclude(JSON.stringify(result), 'supersecretkey')
+    assert.notInclude(JSON.stringify(result), 'hunter2')
+    assert.equal(row.lastDelivery.success, false)
+    assert.equal(row.lastDelivery.status, 401)
+    assert.isString(row.lastDelivery.createdAt)
+  })
+
+  test('update keeps masked secrets when sent back unchanged', async ({ assert }) => {
+    const outcome = await update(secret.id, {
+      name: 'Webhook Secret Jellyfin',
+      url: 'http://jellyfin.lan:8096/Library/Refresh?api_key=****',
+      headers: { 'Authorization': '****', 'X-Custom': 'changed' },
+      enabled: false,
+    })
+
+    assert.equal(outcome.status, 200)
+    assert.equal(outcome.data.url, 'http://jellyfin.lan:8096/Library/Refresh?api_key=****')
+    await secret.refresh()
+    assert.equal(secret.url, 'http://jellyfin.lan:8096/Library/Refresh?api_key=supersecretkey')
+    assert.deepEqual(secret.headers, { 'Authorization': 'Bearer hunter2', 'X-Custom': 'changed' })
+    assert.isFalse(secret.enabled)
+  })
+
+  test('update keeps the stored key when only the host changes', async ({ assert }) => {
+    const outcome = await update(secret.id, {
+      name: 'Webhook Secret Jellyfin',
+      url: 'http://jf.home:8096/Library/Refresh?api_key=****',
+    })
+
+    assert.equal(outcome.status, 200)
+    await secret.refresh()
+    assert.equal(secret.url, 'http://jf.home:8096/Library/Refresh?api_key=supersecretkey')
+  })
+
+  test('update refuses a mask it cannot restore', async ({ assert }) => {
+    const outcome = await update(secret.id, {
+      name: 'Webhook Secret Jellyfin',
+      url: 'http://jellyfin.lan:8096/Library/Refresh?token=****',
+    })
+
+    assert.equal(outcome.status, 422)
+    await secret.refresh()
+    assert.equal(secret.url, 'http://jellyfin.lan:8096/Library/Refresh?api_key=supersecretkey')
+  })
+
+  test('update clears the payload template with null and keeps it when omitted', async ({
+    assert,
+  }) => {
+    await update(secret.id, { name: 'Webhook Secret Jellyfin', url: secret.url })
+    await secret.refresh()
+    assert.equal(secret.payloadTemplate, '{"a":1}')
+
+    await update(secret.id, {
+      name: 'Webhook Secret Jellyfin',
+      url: secret.url,
+      payloadTemplate: null,
+    })
+    await secret.refresh()
+    assert.isNull(secret.payloadTemplate)
+  })
+
+  test('allHistory lists deliveries across webhooks; clearAllHistory empties it', async ({
+    assert,
+  }) => {
+    await WebhookHistory.create({
+      webhookId: secret.id,
+      eventType: 'grab',
+      payload: {},
+      responseStatus: 200,
+      responseBody: 'ok',
+      success: true,
+      errorMessage: null,
+    })
+
+    const controller = new WebhooksController()
+    let rows: any[] = []
+    await controller.allHistory({
+      request: { qs: () => ({ limit: '500' }) },
+      response: {
+        json(data: unknown) {
+          rows = (data as any[]).map((row) => (row.toJSON ? row.toJSON() : row))
+        },
+      },
+    } as never)
+    assert.isTrue(rows.some((row) => row.webhookId === secret.id))
+    assert.isAtMost(rows.length, 200)
+
+    let cleared = false
+    await controller.clearAllHistory({
+      response: {
+        noContent() {
+          cleared = true
+        },
+      },
+    } as never)
+    assert.isTrue(cleared)
+    const left = await WebhookHistory.query().where('webhookId', secret.id)
+    assert.lengthOf(left, 0)
   })
 })

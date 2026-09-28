@@ -4,6 +4,7 @@ import { Switch } from '@/components/ui/switch'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AudioLanguageRules } from '@/components/settings/audio-language-rules'
+import { FieldGroup, type FieldGroupComponent } from '@/components/settings/field-group'
 
 /**
  * Mirrors QualityRequirements on the server. Kept as a plain object so the
@@ -84,6 +85,8 @@ interface Props {
   onChange: (next: QualityRequirements) => void
   /** Audio/video rules only make sense for video profiles. */
   showVideoRules: boolean
+  /** How each group of fields is framed: FieldGroup inline, SheetSection in a Sheet. */
+  group?: FieldGroupComponent
 }
 
 /**
@@ -95,7 +98,12 @@ interface Props {
  * profile would silently reject every release on badly-labelled indexers. The
  * file check after import is where silence stops being an excuse.
  */
-export function QualityRequirementsFields({ value, onChange, showVideoRules }: Props) {
+export function QualityRequirementsFields({
+  value,
+  onChange,
+  showVideoRules,
+  group: Group = FieldGroup,
+}: Props) {
   const set = <K extends keyof QualityRequirements>(key: K, next: QualityRequirements[K]) =>
     onChange({ ...value, [key]: next })
 
@@ -111,17 +119,11 @@ export function QualityRequirementsFields({ value, onChange, showVideoRules }: P
     <div className="space-y-6">
       {showVideoRules && (
         <>
-          <fieldset className="space-y-3 border-t border-border pt-6">
-            <legend className="sr-only">Audio</legend>
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold">Audio</h3>
-              <p className="text-xs text-muted-foreground">
-                A perfect 1080p picture with a 2.0 AAC track is still the wrong file. These rules
-                reject releases that say they carry weak audio, and rank the rest.
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
+          <Group
+            title="Audio"
+            description="A perfect 1080p picture with a 2.0 AAC track is still the wrong file. These rules reject releases that say they carry weak audio, and rank the rest."
+          >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="minAudioChannels">Minimum channels</Label>
                 <Select
@@ -217,14 +219,9 @@ export function QualityRequirementsFields({ value, onChange, showVideoRules }: P
                 ))}
               </div>
             </div>
-          </fieldset>
+          </Group>
 
-          <fieldset className="space-y-3 border-t border-border pt-6">
-            <legend className="sr-only">Video</legend>
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold">Video</h3>
-            </div>
-
+          <Group title="Video">
             <div className="space-y-2">
               <Label>Never accept these video codecs</Label>
               <div className="flex flex-wrap gap-x-4 gap-y-2">
@@ -283,20 +280,13 @@ export function QualityRequirementsFields({ value, onChange, showVideoRules }: P
               Camera, telesync, telecine and screener rips are always rejected — there is no setting
               for those.
             </p>
-          </fieldset>
+          </Group>
 
-          <fieldset className="space-y-3 border-t border-border pt-6">
-            <legend className="sr-only">File checks</legend>
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold">File checks</h3>
-              <p className="text-xs text-muted-foreground">
-                Checked after import, against what the file actually contains. Release names never
-                carry bitrates, so these cannot block a grab — they flag a file as below profile and
-                offer a replacement.
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
+          <Group
+            title="File checks"
+            description="Checked after import, against what the file actually contains. Release names never carry bitrates, so these cannot block a grab — they flag a file as below profile and offer a replacement."
+          >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="minVideoBitrate">Minimum video bitrate (kbps)</Label>
                 <Input
@@ -326,7 +316,7 @@ export function QualityRequirementsFields({ value, onChange, showVideoRules }: P
                 />
               </div>
             </div>
-          </fieldset>
+          </Group>
         </>
       )}
 
@@ -335,14 +325,13 @@ export function QualityRequirementsFields({ value, onChange, showVideoRules }: P
        * language is as useless as a film in one, and the server evaluates the
        * rule for every media type.
        */}
-      <AudioLanguageRules value={value} onChange={(next) => onChange({ ...value, ...next })} />
+      <AudioLanguageRules
+        value={value}
+        onChange={(next) => onChange({ ...value, ...next })}
+        group={Group}
+      />
 
-      <fieldset className="space-y-3 border-t border-border pt-6">
-        <legend className="sr-only">Matching</legend>
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Matching</h3>
-        </div>
-
+      <Group title="Matching">
         <div className="space-y-2">
           <Label htmlFor="minCustomFormatScore">Minimum custom format score</Label>
           <Input
@@ -367,7 +356,7 @@ export function QualityRequirementsFields({ value, onChange, showVideoRules }: P
             Reject releases whose quality can't be read from the name
           </Label>
         </div>
-      </fieldset>
+      </Group>
     </div>
   )
 }

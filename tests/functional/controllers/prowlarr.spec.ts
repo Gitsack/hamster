@@ -369,4 +369,58 @@ test.group('ProwlarrController', (group) => {
 
     await config.delete()
   })
+
+  // ---- status ----
+
+  test('status reports an unconfigured Prowlarr without probing', async ({ assert }) => {
+    await ProwlarrConfig.query().delete()
+
+    const controller = new ProwlarrController()
+    let result: Record<string, unknown> = {}
+
+    await controller.status({
+      response: {
+        json(data: unknown) {
+          result = data as Record<string, unknown>
+        },
+      },
+    } as never)
+
+    assert.equal(result.configured, false)
+    assert.isNull(result.reachable)
+    assert.isNull(result.indexers)
+    assert.isString(result.checkedAt)
+  })
+
+  test('status says unreachable, with the reason, when Prowlarr does not answer', async ({
+    assert,
+  }) => {
+    await ProwlarrConfig.query().delete()
+    const config = await ProwlarrConfig.create({
+      baseUrl: 'http://127.0.0.1:1/prowlarr-test',
+      apiKey: 'prowlarr-test-status',
+      syncEnabled: true,
+      syncCategories: [3000],
+    })
+
+    const controller = new ProwlarrController()
+    let result: Record<string, unknown> = {}
+
+    await controller.status({
+      response: {
+        json(data: unknown) {
+          result = data as Record<string, unknown>
+        },
+      },
+    } as never)
+
+    assert.equal(result.configured, true)
+    assert.equal(result.enabled, true)
+    assert.equal(result.reachable, false)
+    assert.isNull(result.indexers)
+    assert.isString(result.error)
+    assert.isAbove((result.error as string).length, 0)
+
+    await config.delete()
+  })
 })

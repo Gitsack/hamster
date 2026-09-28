@@ -4,7 +4,7 @@
  * Parses release titles to extract quality attributes (resolution, source, codec, audio)
  * and maps them to quality profile item IDs.
  *
- * Quality IDs match the frontend definitions in media-management.tsx:
+ * Quality IDs match QUALITY_OPTIONS in inertia/components/library-settings/library_catalog.ts:
  *
  * Movies/TV:
  *   1: Bluray 2160p, 2: Bluray 1080p, 3: Bluray 720p,

@@ -75,7 +75,7 @@ export default function AddArtist() {
       .catch((error) => {
         console.error('Failed to load options:', error)
         toast.error(
-          'Could not load quality profiles. Reload the page, or add one in Settings → Media Management.'
+          'Could not load quality profiles. Reload the page, or add one in Settings → Quality.'
         )
       })
       .finally(() => setLoadingOptions(false))
