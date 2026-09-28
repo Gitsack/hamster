@@ -20,6 +20,13 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   /*
   |----------------------------------------------------------
+  | Where database backups are written (default: tmp/backups)
+  |----------------------------------------------------------
+  */
+  BACKUP_PATH: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
   | Variables for configuring session package
   |----------------------------------------------------------
   */

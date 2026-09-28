@@ -41,6 +41,7 @@ A self-hosted media management application for organizing and streaming your per
    TV_PATH=/path/to/your/tv
    BOOKS_PATH=/path/to/your/books
    DOWNLOADS_PATH=/path/to/your/downloads
+   BACKUPS_PATH=/path/to/your/backups
 
    # Timezone (optional)
    TZ=UTC
@@ -71,6 +72,9 @@ The container expects media to be mounted at these paths:
 | `/media/tv`     | TV Shows library       | `TV_PATH`            |
 | `/media/books`  | Books library          | `BOOKS_PATH`         |
 | `/downloads`    | Download client output | `DOWNLOADS_PATH`     |
+| `/backups`      | Database backups       | `BACKUPS_PATH`       |
+
+Backups (Settings → System) are written to `BACKUP_PATH` inside the container, which the bundled compose file sets to `/backups`. Without it they go to `/app/tmp/backups` on the `app_data` volume.
 
 After starting, configure your root folders in the Hamster UI using the container paths (e.g., `/media/music`).
 

@@ -6,9 +6,28 @@ import { createReadStream, createWriteStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
 import { createGzip, createGunzip } from 'node:zlib'
 import AppSetting from '#models/app_setting'
+import app from '@adonisjs/core/services/app'
 import env from '#start/env'
 
-const execFileAsync = promisify(execFile)
+const execFileP = promisify(execFile)
+
+/**
+ * pg_dump and psql come with the container image. On a host running
+ * `npm run dev` they may be missing, which surfaces as "spawn pg_dump ENOENT";
+ * say what is missing instead.
+ */
+async function execFileAsync(...args: Parameters<typeof execFileP>) {
+  try {
+    return await execFileP(...args)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new Error(
+        `${args[0]} is not installed on this machine. Install the PostgreSQL client tools (e.g. postgresql-client) to create or restore backups.`
+      )
+    }
+    throw error
+  }
+}
 
 export interface BackupInfo {
   name: string
@@ -17,7 +36,14 @@ export interface BackupInfo {
   createdAt: string
 }
 
-const DEFAULT_BACKUP_DIR = '/config/backups'
+/**
+ * BACKUP_PATH when set (the container mounts a host folder at /backups),
+ * otherwise tmp/backups under the app root: /app/tmp/backups in the container,
+ * which sits on the persistent app_data volume, and ./tmp/backups on the host.
+ */
+function defaultBackupDir(): string {
+  return env.get('BACKUP_PATH') || app.makePath('tmp/backups')
+}
 const DEFAULT_RETENTION = 5
 
 class BackupService {
@@ -27,8 +53,8 @@ class BackupService {
    * Get the configured backup directory
    */
   private async getBackupDir(): Promise<string> {
-    const dir = await AppSetting.get<string>('backupDirectory', DEFAULT_BACKUP_DIR)
-    return dir || DEFAULT_BACKUP_DIR
+    const dir = await AppSetting.get<string>('backupDirectory', '')
+    return dir || defaultBackupDir()
   }
 
   /** Where backups are written, for display. */

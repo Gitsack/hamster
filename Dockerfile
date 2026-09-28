@@ -78,8 +78,8 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Make app files world-readable so any PUID/PGID can read them without runtime chown
 RUN chmod -R a+rX /app && \
-    mkdir -p /media/music /media/movies /media/tv /media/books /downloads /app/tmp && \
-    chown hamster:hamster /app/tmp
+    mkdir -p /media/music /media/movies /media/tv /media/books /downloads /app/tmp /backups && \
+    chown hamster:hamster /app/tmp /backups
 
 # Note: Container starts as root, entrypoint drops to hamster user after PUID/PGID setup
 
