@@ -331,13 +331,26 @@ The one component that most defines Hamster, appearing on posters, in tables, on
 
 ### Navigation
 
-The left rail is grouped into **Main** (Dashboard, Library, Calendar, Search), **Activity** (Activity, History), **Settings**, and **System**, each under a 12px Readout Grey group label. Items are 32px tall, md radius, 14px text with a 16px leading icon.
+The left rail has seven items and no group labels: Dashboard, Library, Watchlist, Calendar, Search and Activity above, and Settings in the footer above the user menu. Activity carries a count badge (Alarm Red ink when something needs attention); Settings carries a 6px Alarm Red dot while any settings area is failing. The muted version line under Settings links to Settings → System → About, and the user menu holds Profile, the theme (System / Light / Dark) and sign-out. Items are 32px tall, md radius, 14px text with a 16px leading icon.
+
+Settings has its own shell: from 768px up a sticky 13rem rail (Overview, then Library, Downloading, Connect, System and You under 12px Readout Grey labels, each item with a trailing status dot when failing) beside a content column capped at 48rem; below 768px `/settings` is the drill-in list and each page names itself in the header with a "‹ Settings" link back.
 
 - **Default:** transparent, sidebar foreground.
 - **Hover:** Tray Ash / Tray Slate fill.
 - **Active:** filled, with weight increasing to 500. The active item is identified by fill and weight; a violet marker is permitted but only one active item exists at a time.
 - **Collapsed:** icons only at 3rem, labels move into tooltips.
 - **Mobile:** below 768px the rail becomes an 18rem overlay sheet opened from the header trigger.
+
+### Settings pages
+
+Every settings page has the same anatomy, so moving between them never means relearning one:
+
+- **Page header** in the content column: a 20px/600 title equal to its rail label, one muted sentence, and the primary action (small button) on the right, full width under 640px. 32px to the first section.
+- **Sections**, flat and 40px apart: a 14px/600 sentence-case heading, an optional muted line (often a live readout such as "4 clients · 1 unreachable"), the section's own action on the right, and an `id` so `#anchor` links land there once data has loaded.
+- **Row groups** are the only box: xl radius, Seam border, hairlines between rows, 56px minimum row height. Nothing boxed inside them. Switches and selects save as they change (a muted "Saved" tick, or the row reverts and says why); typed fields wait for the sticky save bar.
+- **Entity rows** for anything there are several of (indexers, clients, targets, profiles, users, tasks): icon, name and Status Badge on line one, Readout meta on line two, the failure in Alarm Red on line three. On the right an Enabled switch where it applies, a ⋯ menu (Test, then Delete behind an alert dialog) and a chevron. Failing rows sort first. No tables.
+- **Editors** are Sheets: 32rem from 768px, full screen below. Sticky section headings, a footer with Delete on the left and Test / Save on the right, form grids that collapse to one column under 640px. Dialogs are only for confirmations and single-field entry (a credential, a new password).
+- **Loading, empty, failed**: skeleton rows until data arrives, one muted line with an inline action when empty, an inline Alarm Red row with the HTTP status and Retry when a fetch fails.
 
 ### Tables and Rows
 
@@ -369,7 +382,7 @@ Centred stack with 48px of vertical air: a Tray Ash circle holding a 24px icon, 
 - **Don't** raise body text to 16px on desktop or loosen the spacing steps to consumer proportions. Density is the product.
 - **Don't** ship a colour-only state signal. Every status carries an icon and a label alongside its fill (the 20px tiny badge is the sole exception, and it is always tooltip-backed).
 - **Don't** remove or restyle the focus ring. 3px, Signal Violet at 50%, plus the border shift.
-- **Don't** let a settings screen become an undifferentiated wall of form rows — group into cards with subtitles. That is the \*arr failure this product exists to correct.
+- **Don't** let a settings screen become an undifferentiated wall of form rows — group rows into titled sections, each with its own readout line and action (see Settings pages). That is the \*arr failure this product exists to correct.
 - **Don't** introduce full-bleed cinematic backdrop heroes with heavy gradient scrims; Hamster manages media, it is not a lean-back streaming surface.
 
 ---

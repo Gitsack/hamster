@@ -221,7 +221,7 @@ async function requestCard(
     if (!d) {
       return {
         ok: false,
-        error: `No quality profile or root folder for ${card.mediaType === 'movie' ? 'movies' : 'TV'}. Add one in Settings → Media Management.`,
+        error: `No quality profile or root folder for ${card.mediaType === 'movie' ? 'movies' : 'TV'}. Add them in Settings → Media and Settings → Quality.`,
       }
     }
     const res = await postJson(
@@ -255,7 +255,7 @@ async function requestCard(
       return {
         ok: false,
         error:
-          'No quality profile or root folder for music. Add one in Settings → Media Management.',
+          'No quality profile or root folder for music. Add them in Settings → Media and Settings → Quality.',
       }
     }
     const res = await postJson('/api/v1/albums', 'POST', {
@@ -657,7 +657,7 @@ function SignalLine({ data }: { data: DeckResponse | null }) {
       {nothingConnected && sources.length > 0 && (
         <>
           {' '}
-          <Link href="/settings/media-management" className="text-primary hover:underline">
+          <Link href="/settings/discovery#accounts" className="text-primary hover:underline">
             Connect {sources.map((s) => s.label).join(' or ')}
           </Link>{' '}
           to learn from what you watch.

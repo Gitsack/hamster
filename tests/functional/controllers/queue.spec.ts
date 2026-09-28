@@ -1,6 +1,10 @@
 import { test } from '@japa/runner'
 import Download from '#models/download'
 import QueueController from '#controllers/queue_controller'
+import UnmatchedFile from '#models/unmatched_file'
+import RootFolder from '#models/root_folder'
+import db from '@adonisjs/lucid/services/db'
+import { DateTime } from 'luxon'
 import { DownloadFactory } from '../../../database/factories/download_factory.js'
 
 test.group('QueueController', (group) => {
@@ -11,6 +15,129 @@ test.group('QueueController', (group) => {
       await Download.query().whereIn('id', downloadIds).delete()
     }
     await Download.query().where('title', 'like', 'Queue Test%').delete()
+    await UnmatchedFile.query().where('fileName', 'like', 'queue-test-%').delete()
+    await RootFolder.query().where('name', 'Queue Test Root').delete()
+  })
+
+  async function readCounts() {
+    const controller = new QueueController()
+    let result: Record<string, number> = {}
+    await controller.counts({
+      response: {
+        json(data: unknown) {
+          result = data as Record<string, number>
+        },
+      },
+    } as never)
+    return result
+  }
+
+  async function readHistory(status: string) {
+    const controller = new QueueController()
+    let result: Record<string, unknown> = {}
+    await controller.history({
+      request: {
+        input: (key: string, defaultVal: unknown) => {
+          if (key === 'page') return 1
+          if (key === 'limit') return 200
+          if (key === 'status') return status
+          return defaultVal
+        },
+      },
+      response: {
+        json(data: unknown) {
+          result = data as Record<string, unknown>
+        },
+      },
+    } as never)
+    return result.data as any[]
+  }
+
+  /** Age a download past the stuck-import threshold, bypassing the model's autoUpdate. */
+  async function age(id: string, minutes: number) {
+    const then = DateTime.now().minus({ minutes }).toSQL()
+    await db.from('downloads').where('id', id).update({ updated_at: then, completed_at: then })
+  }
+
+  // ---- counts ----
+
+  test('counts reports active, failed, importing, stuck and unmatched totals', async ({
+    assert,
+  }) => {
+    const before = await readCounts()
+
+    const created = await Promise.all([
+      DownloadFactory.create({ title: 'Queue Test Count Active 1', status: 'downloading' }),
+      DownloadFactory.create({ title: 'Queue Test Count Active 2', status: 'queued' }),
+      DownloadFactory.create({ title: 'Queue Test Count Active 3', status: 'paused' }),
+      DownloadFactory.create({ title: 'Queue Test Count Failed', status: 'failed' }),
+      DownloadFactory.create({ title: 'Queue Test Count Importing', status: 'importing' }),
+      DownloadFactory.create({ title: 'Queue Test Count Stuck', status: 'importing' }),
+      DownloadFactory.create({ title: 'Queue Test Count Done', status: 'completed' }),
+    ])
+    downloadIds.push(...created.map((d) => d.id))
+    await age(created[5].id, 60)
+
+    const rootFolder = await RootFolder.create({
+      name: 'Queue Test Root',
+      path: `/tmp/queue-test-root-${Date.now()}`,
+      mediaType: 'movies',
+      accessible: true,
+      scanStatus: 'idle',
+    })
+    await UnmatchedFile.create({
+      rootFolderId: rootFolder.id,
+      relativePath: 'queue-test-pending.mkv',
+      fileName: 'queue-test-pending.mkv',
+      mediaType: 'movies',
+      status: 'pending',
+    })
+    await UnmatchedFile.create({
+      rootFolderId: rootFolder.id,
+      relativePath: 'queue-test-ignored.mkv',
+      fileName: 'queue-test-ignored.mkv',
+      mediaType: 'movies',
+      status: 'ignored',
+    })
+
+    const after = await readCounts()
+
+    assert.equal(after.active - before.active, 3)
+    assert.equal(after.failed - before.failed, 1)
+    assert.equal(after.importing - before.importing, 2)
+    assert.equal(after.stuckImporting - before.stuckImporting, 1)
+    assert.equal(after.unmatchedPending - before.unmatchedPending, 1)
+  })
+
+  test('history filters to importing rows and flags the stuck ones', async ({ assert }) => {
+    const fresh = await DownloadFactory.create({
+      title: 'Queue Test Importing Fresh',
+      status: 'importing',
+    })
+    const stuck = await DownloadFactory.create({
+      title: 'Queue Test Importing Stuck',
+      status: 'importing',
+    })
+    downloadIds.push(fresh.id, stuck.id)
+    await age(stuck.id, 30)
+
+    const rows = await readHistory('importing')
+    assert.isTrue(rows.every((row) => row.status === 'importing'))
+
+    const freshRow = rows.find((row) => row.id === fresh.id)
+    const stuckRow = rows.find((row) => row.id === stuck.id)
+    assert.isDefined(freshRow)
+    assert.isDefined(stuckRow)
+    assert.isFalse(freshRow.stuck)
+    assert.isTrue(stuckRow.stuck)
+    assert.property(stuckRow, 'mediaType')
+    assert.property(stuckRow, 'movieId')
+    assert.property(stuckRow, 'episodeId')
+  })
+
+  test('history ignores an unknown status filter', async ({ assert }) => {
+    const rows = await readHistory('downloading')
+    assert.isTrue(rows.every((row) => row.status === 'completed' || row.status === 'failed'))
   })
 
   // ---- history ----

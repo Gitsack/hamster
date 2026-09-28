@@ -28,11 +28,29 @@ export interface DashboardMissing {
   books: number
 }
 
-export interface HealthService {
-  id: string
-  name: string
-  type: string
-  enabled: boolean
+/** The dashboard's `health` prop: configuration plus the health monitor's cache. */
+export interface DashboardHealth {
+  level: 'ok' | 'warning' | 'error' | 'starting'
+  checkedAt: string | null
+  canManage: boolean
+  /** False when the dashboard's queries failed: clients and indexers are unknown, not absent. */
+  configLoaded?: boolean
+  downloadClients: {
+    id: string
+    name: string
+    type: string
+    enabled: boolean
+    status: 'ok' | 'error' | 'unknown'
+    message: string | null
+    since: string | null
+  }[]
+  indexers: { enabled: number; total: number }
+  rootFolders: { total: number; problems: { label: string; status: string; message: string }[] }
+  freeBytes: number | null
+  database: { status: string; message: string; since: string } | null
+  failedTasks: { id: string; name: string; lastError: string | null; lastRunAt: string | null }[]
+  backup: { lastRunAt: string | null; lastStatus: string | null } | null
+  failedDeliveries: number
 }
 
 /**
@@ -57,7 +75,7 @@ export function StatusPanel({
   stats: DashboardStats
   missing: DashboardMissing
   stuck: StuckTitles
-  health: { downloadClients: HealthService[]; indexers: HealthService[] }
+  health: DashboardHealth
 }) {
   return (
     <aside
@@ -246,7 +264,7 @@ function ActivitySection({ stuck }: { stuck: StuckTitles }) {
   const shown = active.slice(0, 3)
 
   return (
-    <Section title="Downloads" href="/activity/queue" linkLabel="Queue">
+    <Section title="Downloads" href="/activity" linkLabel="Queue">
       {shown.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing downloading.</p>
       ) : (
@@ -313,62 +331,232 @@ function ActivitySection({ stuck }: { stuck: StuckTitles }) {
 }
 
 // ---------------------------------------------------------------------------
-// Services — one line while all is well
+// Services — one quiet line while all is well
 // ---------------------------------------------------------------------------
 
-function ServicesSection({
-  health,
-}: {
-  health: { downloadClients: HealthService[]; indexers: HealthService[] }
-}) {
-  const clients = health.downloadClients
-  const indexers = health.indexers
-  const clientsOn = clients.filter((c) => c.enabled)
-  const indexersOn = indexers.filter((i) => i.enabled)
-  const off = clients.length - clientsOn.length + (indexers.length - indexersOn.length)
-  const healthy = clientsOn.length > 0 && indexersOn.length > 0
+/** "4m", "3h", "2d" — how long ago, without the "ago". */
+function age(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return null
+  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000))
+  if (seconds < 60) return 'now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`
+  return `${Math.floor(seconds / 86400)}d`
+}
+
+/** Disk space for the summary line: "812 GB", "1.2 TB". */
+function formatFree(bytes: number): string {
+  const tb = bytes / 1024 ** 4
+  if (tb >= 1) return `${tb.toFixed(1)} TB`
+  const gb = bytes / 1024 ** 3
+  return `${gb >= 10 ? Math.round(gb) : gb.toFixed(1)} GB`
+}
+
+export interface HealthIssue {
+  key: string
+  tone: 'error' | 'warning'
+  title: string
+  detail?: string | null
+  /** When it started, for "3h". */
+  since?: string | null
+  href: string
+}
+
+/**
+ * Everything that is wrong, worst first. Configuration gaps come from the
+ * database; reachability, folders and the database itself from the health
+ * monitor's cache. Routine download failures are left to the stuck-titles
+ * line above: a failed grab that was replaced is not a problem.
+ */
+export function healthIssues(health: DashboardHealth): HealthIssue[] {
+  const issues: HealthIssue[] = []
+
+  if (health.database) {
+    issues.push({
+      key: 'database',
+      tone: health.database.status === 'error' ? 'error' : 'warning',
+      title: health.database.status === 'error' ? 'Database unreachable' : 'Database is slow',
+      detail: health.database.message,
+      since: health.database.since,
+      href: '/settings/system#health',
+    })
+  }
+
+  // When the dashboard's own queries failed, configuration is unknown, not empty.
+  const configKnown = health.configLoaded !== false
+
+  if (!configKnown) {
+    // Nothing to say about clients and indexers; the database issue above covers it.
+  } else if (health.downloadClients.length === 0) {
+    issues.push({
+      key: 'no-client',
+      tone: 'error',
+      title: 'No download client — nothing can be grabbed',
+      href: '/settings/download-clients',
+    })
+  } else if (!health.downloadClients.some((c) => c.enabled)) {
+    issues.push({
+      key: 'clients-off',
+      tone: 'error',
+      title: 'Every download client is switched off',
+      href: '/settings/download-clients',
+    })
+  }
+  for (const client of health.downloadClients) {
+    if (client.enabled && client.status === 'error') {
+      issues.push({
+        key: `client:${client.id}`,
+        tone: 'error',
+        title: `${client.name} unreachable`,
+        detail: client.message,
+        since: client.since,
+        href: '/settings/download-clients',
+      })
+    }
+  }
+
+  if (!configKnown) {
+    // As above.
+  } else if (health.indexers.total === 0) {
+    issues.push({
+      key: 'no-indexer',
+      tone: 'error',
+      title: 'No indexer — searches return nothing',
+      href: '/settings/indexers',
+    })
+  } else if (health.indexers.enabled === 0) {
+    issues.push({
+      key: 'indexers-off',
+      tone: 'error',
+      title: 'Every indexer is switched off',
+      href: '/settings/indexers',
+    })
+  }
+
+  for (const folder of health.rootFolders.problems) {
+    issues.push({
+      key: `folder:${folder.label}`,
+      tone: folder.status === 'error' ? 'error' : 'warning',
+      title: `${folder.label}: ${folder.message.charAt(0).toLowerCase()}${folder.message.slice(1)}`,
+      // Media → Media types, where each type's folder is set.
+      href: '/settings/media#types',
+    })
+  }
+
+  for (const task of health.failedTasks) {
+    issues.push({
+      key: `task:${task.id}`,
+      tone: 'error',
+      title: `${task.name} failed`,
+      detail: task.lastError,
+      since: task.lastRunAt,
+      href: '/settings/system#tasks',
+    })
+  }
+
+  if (health.failedDeliveries > 0) {
+    issues.push({
+      key: 'deliveries',
+      tone: 'warning',
+      title: `${health.failedDeliveries} ${plural(health.failedDeliveries, ['notification', 'notifications'])} failed to send in 24h`,
+      href: '/settings/notifications#deliveries',
+    })
+  }
+
+  return [
+    ...issues.filter((i) => i.tone === 'error'),
+    ...issues.filter((i) => i.tone === 'warning'),
+  ]
+}
+
+function ServicesSection({ health }: { health: DashboardHealth }) {
+  const issues = healthIssues(health)
+  const starting = health.level === 'starting'
+  const clientsOn = health.downloadClients.filter((c) => c.enabled)
+  const reachable = clientsOn.filter((c) => c.status !== 'error')
+  const failing = issues.some((i) => i.tone === 'error')
+
+  const facts: React.ReactNode[] = []
+  if (reachable.length > 0) {
+    facts.push(
+      health.canManage ? (
+        <Link key="clients" href="/settings/download-clients" className="hover:underline">
+          {reachable.map((c) => c.name).join(', ')}
+        </Link>
+      ) : (
+        <span key="clients">{reachable.map((c) => c.name).join(', ')}</span>
+      )
+    )
+  }
+  if (health.indexers.enabled > 0) {
+    facts.push(
+      <span key="indexers">
+        <span className="readout">{health.indexers.enabled}</span>{' '}
+        {plural(health.indexers.enabled, ['indexer', 'indexers'])}
+      </span>
+    )
+  }
+  if (health.freeBytes !== null) {
+    facts.push(
+      <span key="free">
+        <span className="readout">{formatFree(health.freeBytes)}</span> free
+      </span>
+    )
+  }
+  if (health.canManage && health.backup?.lastRunAt && health.backup.lastStatus !== 'failed') {
+    facts.push(
+      <span key="backup">
+        backup <span className="readout">{age(health.backup.lastRunAt)}</span>
+        {age(health.backup.lastRunAt) === 'now' ? '' : ' ago'}
+      </span>
+    )
+  }
 
   return (
     <section aria-label="Services" className="px-4 py-3 text-sm">
-      {clients.length === 0 && (
-        <Warning href="/settings/download-clients">
-          No download client — nothing can be grabbed.
-        </Warning>
+      {issues.length > 0 && (
+        <ul className="mb-2.5 space-y-2 last:mb-0">
+          {issues.map((issue) => (
+            <Warning key={issue.key} issue={issue} canManage={health.canManage} />
+          ))}
+        </ul>
       )}
-      {indexers.length === 0 && (
-        <Warning href="/settings/indexers">No indexer — searches return nothing.</Warning>
-      )}
-      {(clients.length > 0 || indexers.length > 0) && (
+      {(facts.length > 0 || starting) && (
         <p className="flex min-w-0 items-center gap-2">
           <span
             aria-hidden="true"
             className={cn(
               'size-1.5 shrink-0 rounded-full',
-              healthy ? 'bg-status-complete' : 'bg-status-failed'
+              starting
+                ? 'bg-muted-foreground/60'
+                : failing
+                  ? 'bg-status-failed'
+                  : issues.length > 0
+                    ? 'bg-status-queued'
+                    : 'bg-status-complete'
             )}
           />
           <span className="sr-only">
-            {healthy ? 'Services ready:' : 'Services need attention:'}
+            {starting
+              ? 'Checking services:'
+              : issues.length > 0
+                ? 'Services need attention:'
+                : 'Services ready:'}
           </span>
           <span className="min-w-0 truncate">
-            {clients.length > 0 && (
-              <Link
-                href="/settings/download-clients"
-                className={cn('hover:underline', clientsOn.length === 0 && 'text-muted-foreground')}
-              >
-                {(clientsOn.length > 0 ? clientsOn : clients).map((c) => c.name).join(', ')}
-              </Link>
+            {facts.map((fact, index) => (
+              <span key={index}>
+                {index > 0 && <span className="text-muted-foreground"> · </span>}
+                {fact}
+              </span>
+            ))}
+            {starting && (
+              <span className="text-muted-foreground">
+                {facts.length > 0 ? ' · ' : ''}checking…
+              </span>
             )}
-            {clients.length > 0 && indexers.length > 0 && (
-              <span className="text-muted-foreground"> · </span>
-            )}
-            {indexers.length > 0 && (
-              <Link href="/settings/indexers" className="hover:underline">
-                <span className="readout">{indexersOn.length}</span>{' '}
-                {plural(indexersOn.length, ['indexer', 'indexers'])}
-              </Link>
-            )}
-            {off > 0 && <span className="text-muted-foreground"> · {off} off</span>}
           </span>
         </p>
       )}
@@ -376,14 +564,44 @@ function ServicesSection({
   )
 }
 
-function Warning({ href, children }: { href: string; children: React.ReactNode }) {
+function Warning({ issue, canManage }: { issue: HealthIssue; canManage: boolean }) {
+  const ink = issue.tone === 'error' ? 'text-status-failed-ink' : 'text-status-queued-ink'
+  const since = age(issue.since)
   return (
-    <Link
-      href={href}
-      className="mb-1.5 flex items-start gap-2 text-status-failed-ink last:mb-0 hover:underline"
-    >
-      <HugeiconsIcon icon={Alert02Icon} className="mt-0.5 size-4 shrink-0" />
-      {children}
-    </Link>
+    <li className="flex min-w-0 items-start gap-2">
+      <HugeiconsIcon
+        icon={Alert02Icon}
+        aria-hidden="true"
+        className={cn('mt-0.5 size-4 shrink-0', ink)}
+      />
+      <div className="min-w-0 flex-1">
+        <p className={cn('text-sm', ink)}>
+          {issue.title}
+          {since && (
+            <span
+              className="readout text-xs text-muted-foreground"
+              title={issue.since ?? undefined}
+            >
+              {' · '}
+              {since}
+            </span>
+          )}
+        </p>
+        {issue.detail && (
+          <p className="truncate text-xs text-muted-foreground" title={issue.detail}>
+            {issue.detail}
+          </p>
+        )}
+      </div>
+      {canManage && (
+        <Link
+          href={issue.href}
+          className="shrink-0 rounded-sm text-xs font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          aria-label={`Fix: ${issue.title}`}
+        >
+          Fix
+        </Link>
+      )}
+    </li>
   )
 }

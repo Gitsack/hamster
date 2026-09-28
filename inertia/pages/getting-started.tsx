@@ -179,8 +179,12 @@ export default function GettingStarted() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <SettingItem
-                  title="Media Management"
-                  description="Configure root folders and quality profiles for each media type"
+                  title="Media"
+                  description="Switch media types on and give each one a root folder"
+                />
+                <SettingItem
+                  title="Quality"
+                  description="Say which releases are acceptable for each media type"
                 />
                 <SettingItem
                   title="Indexers"
@@ -203,14 +207,14 @@ export default function GettingStarted() {
             <h2 className="text-base font-semibold">Ready to get started?</h2>
             <p className="mt-2 max-w-[70ch] text-sm text-muted-foreground">
               {isLoggedIn
-                ? 'Next step: add a root folder for each media type you plan to manage, under Settings → Media Management. Nothing can be imported until one exists.'
+                ? 'Next step: add a root folder for each media type you plan to manage, under Settings → Media. Nothing can be imported until one exists.'
                 : 'Create your account, then set a root folder for each media type you plan to manage.'}
             </p>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               {isLoggedIn ? (
                 <>
                   <Button asChild>
-                    <Link href="/settings/media-management">
+                    <Link href="/settings/media#types">
                       Configure root folders
                       <HugeiconsIcon icon={ArrowRight01Icon} aria-hidden="true" />
                     </Link>

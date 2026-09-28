@@ -20,7 +20,10 @@ import { refreshMetadataTask } from '#services/tasks/refresh_metadata_task'
 import { backupService } from '#services/backup/backup_service'
 import { blacklistService } from '#services/blacklist/blacklist_service'
 import { historyService } from '#services/history/history_service'
+import { notificationService } from '#services/notifications/notification_service'
+import { webhookService } from '#services/webhooks/webhook_service'
 import { taskScheduler } from '#services/tasks/task_scheduler'
+import { healthMonitor } from '#services/system/health_monitor'
 import AppSetting from '#models/app_setting'
 import { tmdbService } from '#services/metadata/tmdb_service'
 import { justwatchService } from '#services/metadata/justwatch_service'
@@ -74,11 +77,27 @@ taskScheduler.register('cleanup', {
   async run() {
     await blacklistService.cleanupExpired()
     await historyService.prune()
+    // Delivery logs keep 30 days; each is independent, so one failing never skips the other.
+    const results = await Promise.allSettled([
+      notificationService.cleanupHistory(),
+      webhookService.cleanupHistory(),
+    ])
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('[Cleanup] Failed to prune delivery history:', result.reason)
+      }
+    }
   },
   get running() {
     return false
   },
 })
+
+// Probe the database, root folders and download clients once a minute into an
+// in-memory cache. /health, the dashboard and Settings → System only ever read
+// that cache. The first run comes a second after boot, well inside Docker's
+// start period, and /health answers 200 "starting" until it lands.
+healthMonitor.start()
 
 // Start the task scheduler after a brief delay to let the app initialize
 setTimeout(async () => {

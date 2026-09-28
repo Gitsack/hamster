@@ -1,5 +1,6 @@
 import ScheduledTask, { type TaskType } from '#models/scheduled_task'
 import { DateTime } from 'luxon'
+import { healthMonitor } from '#services/system/health_monitor'
 
 interface TaskRunner {
   start(interval: number): void
@@ -233,6 +234,9 @@ class TaskScheduler {
       // interval does not immediately re-fire.
       task.nextRunAt = DateTime.now().plus({ minutes: task.intervalMinutes })
       await task.save()
+      // The sidebar dot and the dashboard read failed tasks from the health
+      // cache; refresh it now rather than on the next health run.
+      void healthMonitor.refreshFailedTasks()
     }
   }
 
@@ -285,6 +289,8 @@ class TaskScheduler {
 
     task.nextRunAt = DateTime.now().plus({ minutes: task.intervalMinutes })
     await task.save()
+    // A disabled task no longer counts as failing.
+    void healthMonitor.refreshFailedTasks()
 
     // No rescheduling needed: the ticker reads nextRunAt and enabled from the
     // row on every pass, so saving is all it takes to take effect.

@@ -1,4 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
+import db from '@adonisjs/lucid/services/db'
+import { DateTime } from 'luxon'
 import Download from '#models/download'
 import DownloadClient from '#models/download_client'
 import { downloadManager } from '#services/download_clients/download_manager'
@@ -13,6 +15,13 @@ import Book from '#models/book'
 import { isUpgrade } from '#services/quality/quality_scorer'
 import type { MediaType } from '#services/quality/quality_parser'
 import type { QualityItem } from '#models/quality_profile'
+import {
+  isStuckImporting,
+  stuckImportingThreshold,
+} from '#services/tasks/stuck_import_recovery_task'
+
+const HISTORY_STATUSES = ['completed', 'failed', 'importing'] as const
+type HistoryStatus = (typeof HISTORY_STATUSES)[number]
 
 export default class QueueController {
   private static lastRefresh: Date | null = null
@@ -84,10 +93,11 @@ export default class QueueController {
     const limit = request.input('limit', 50)
     const status = request.input('status')
 
-    // Allow filtering to just one status (used by the Activity feed which
-    // pulls failed and completed separately).
-    const statuses =
-      status === 'failed' || status === 'completed' ? [status] : ['completed', 'failed']
+    // Allow filtering to one status: the Activity queue pulls failed and
+    // importing rows separately for its "Needs attention" band.
+    const statuses: HistoryStatus[] = (HISTORY_STATUSES as readonly string[]).includes(status)
+      ? [status as HistoryStatus]
+      : ['completed', 'failed']
 
     const downloads = await Download.query()
       .whereIn('status', statuses)
@@ -98,18 +108,26 @@ export default class QueueController {
       .orderByRaw('COALESCE(completed_at, updated_at, started_at) DESC')
       .paginate(page, limit)
 
+    const now = DateTime.now()
     return response.json({
       data: downloads.all().map((d) => ({
         id: d.id,
         title: d.title,
         status: d.status,
         size: d.sizeBytes,
+        mediaType: d.mediaType,
         albumId: d.albumId,
         albumTitle: d.album?.title,
+        movieId: d.movieId,
+        tvShowId: d.tvShowId,
+        episodeId: d.episodeId,
+        bookId: d.bookId,
         downloadClient: d.downloadClient?.name,
         errorMessage: d.errorMessage,
         startedAt: d.startedAt?.toISO(),
         completedAt: d.completedAt?.toISO(),
+        updatedAt: d.updatedAt?.toISO() ?? null,
+        stuck: isStuckImporting(d, now),
       })),
       meta: {
         total: downloads.total,
@@ -117,6 +135,50 @@ export default class QueueController {
         currentPage: downloads.currentPage,
         lastPage: downloads.lastPage,
       },
+    })
+  }
+
+  /**
+   * Cheap counts for the Activity badges: database COUNTs only, never a
+   * download-client call or a completed-folder scan, so it is safe to poll.
+   *
+   *   active           — queued, downloading or paused in a client
+   *   failed           — downloads that ended in failure
+   *   importing        — every download currently being imported
+   *   stuckImporting   — the subset of those untouched past the recovery threshold
+   *   unmatchedPending — scanned files nobody has matched or ignored yet
+   */
+  async counts({ response }: HttpContext) {
+    const threshold = stuckImportingThreshold().toSQL()!
+
+    const [downloads, unmatched] = await Promise.all([
+      db
+        .from('downloads')
+        .select(
+          db.raw(
+            "count(*) filter (where status in ('queued', 'downloading', 'paused'))::int as active"
+          ),
+          db.raw("count(*) filter (where status = 'failed')::int as failed"),
+          db.raw("count(*) filter (where status = 'importing')::int as importing"),
+          db.raw(
+            `count(*) filter (
+              where status = 'importing'
+                and (completed_at < ? or completed_at is null)
+                and (updated_at < ? or updated_at is null)
+            )::int as stuck_importing`,
+            [threshold, threshold]
+          )
+        )
+        .first(),
+      db.from('unmatched_files').where('status', 'pending').count('* as total').first(),
+    ])
+
+    return response.json({
+      active: Number(downloads?.active ?? 0),
+      failed: Number(downloads?.failed ?? 0),
+      importing: Number(downloads?.importing ?? 0),
+      stuckImporting: Number(downloads?.stuck_importing ?? 0),
+      unmatchedPending: Number(unmatched?.total ?? 0),
     })
   }
 

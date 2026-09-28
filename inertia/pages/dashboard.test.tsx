@@ -24,13 +24,38 @@ vi.mock('@/hooks/use_active_downloads', () => ({
   useActiveDownloads: () => ({ queue: mockQueue() }),
 }))
 
+const healthy = {
+  level: 'ok' as const,
+  checkedAt: new Date().toISOString(),
+  canManage: true,
+  configLoaded: true,
+  downloadClients: [
+    {
+      id: 'c1',
+      name: 'SABnzbd',
+      type: 'sabnzbd',
+      enabled: true,
+      status: 'ok' as const,
+      message: null,
+      since: null,
+    },
+  ],
+  indexers: { enabled: 14, total: 14 },
+  rootFolders: { total: 4, problems: [] },
+  freeBytes: 1.2 * 1024 ** 4,
+  database: null,
+  failedTasks: [],
+  backup: { lastRunAt: new Date(Date.now() - 3 * 3600_000).toISOString(), lastStatus: 'success' },
+  failedDeliveries: 0,
+}
+
 const defaultProps = {
   stats: { movies: 42, tvShows: 15, episodes: 320, artists: 8, albums: 25, authors: 5, books: 30 },
   missing: { movies: 3, episodes: 10, albums: 2, books: 1 },
   activeDownloadCount: 0,
   stuck: { count: 0, titles: [] as string[] },
   recentAdditions: [] as any[],
-  health: { downloadClients: [] as any[], indexers: [] as any[] },
+  health: healthy,
 }
 
 afterEach(() => mockQueue.mockReset().mockImplementation(() => []))
@@ -100,26 +125,131 @@ describe('Dashboard', () => {
     expect(screen.getByText('42%')).toBeInTheDocument()
   })
 
-  it('points at settings when no services are configured', () => {
+  it('sums up healthy services in one quiet line', () => {
     render(<Dashboard {...defaultProps} />)
-    expect(screen.getByText(/No download client/)).toBeInTheDocument()
-    expect(screen.getByText(/No indexer/)).toBeInTheDocument()
+    expect(screen.getByText('Services ready:')).toBeInTheDocument()
+    expect(screen.getByText('SABnzbd')).toBeInTheDocument()
+    expect(screen.getByText('14')).toBeInTheDocument()
+    expect(screen.getByText('1.2 TB')).toBeInTheDocument()
+    expect(screen.getByText(/backup/)).toHaveTextContent('backup 3h ago')
+    expect(screen.queryByText('Fix')).not.toBeInTheDocument()
   })
 
-  it('lists configured services', () => {
+  it('points at settings when no services are configured', () => {
+    render(
+      <Dashboard
+        {...defaultProps}
+        health={{ ...healthy, downloadClients: [], indexers: { enabled: 0, total: 0 } }}
+      />
+    )
+    expect(screen.getByText(/No download client/)).toBeInTheDocument()
+    expect(screen.getByText(/No indexer/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Fix: No download client/)).toHaveAttribute(
+      'href',
+      '/settings/download-clients'
+    )
+    expect(screen.getByLabelText(/Fix: No indexer/)).toHaveAttribute('href', '/settings/indexers')
+  })
+
+  it('names an unreachable client from the health cache, with its error, age and a fix link', () => {
     render(
       <Dashboard
         {...defaultProps}
         health={{
-          downloadClients: [{ id: '1', name: 'SABnzbd', type: 'sabnzbd', enabled: true }],
-          indexers: [{ id: '2', name: 'NZBgeek', type: 'newznab', enabled: false }],
+          ...healthy,
+          level: 'error',
+          downloadClients: [
+            {
+              ...healthy.downloadClients[0],
+              status: 'error',
+              message: 'getaddrinfo ENOTFOUND sabnzbd',
+              since: new Date(Date.now() - 2 * 3600_000).toISOString(),
+            },
+          ],
         }}
       />
     )
-    expect(screen.getByText('SABnzbd')).toBeInTheDocument()
-    // The only indexer is switched off: counted as off, and flagged.
-    expect(screen.getByText(/1 off/)).toBeInTheDocument()
+    expect(screen.getByText(/SABnzbd unreachable/)).toBeInTheDocument()
+    expect(screen.getByText('getaddrinfo ENOTFOUND sabnzbd')).toBeInTheDocument()
+    expect(screen.getByText(/· 2h/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Fix: SABnzbd unreachable')).toHaveAttribute(
+      'href',
+      '/settings/download-clients'
+    )
     expect(screen.getByText('Services need attention:')).toBeInTheDocument()
+  })
+
+  it('lists failed tasks, folder problems and failed deliveries with their fix links', () => {
+    render(
+      <Dashboard
+        {...defaultProps}
+        health={{
+          ...healthy,
+          rootFolders: {
+            total: 4,
+            problems: [{ label: '/media/books', status: 'error', message: 'Not accessible' }],
+          },
+          failedTasks: [
+            {
+              id: 't1',
+              name: 'Backup',
+              lastError: 'spawn pg_dump ENOENT',
+              lastRunAt: new Date().toISOString(),
+            },
+          ],
+          failedDeliveries: 2,
+        }}
+      />
+    )
+    expect(screen.getByLabelText('Fix: Backup failed')).toHaveAttribute(
+      'href',
+      '/settings/system#tasks'
+    )
+    expect(screen.getByText('spawn pg_dump ENOENT')).toBeInTheDocument()
+    expect(screen.getByLabelText('Fix: /media/books: not accessible')).toBeInTheDocument()
+    expect(screen.getByLabelText('Fix: 2 notifications failed to send in 24h')).toHaveAttribute(
+      'href',
+      '/settings/notifications#deliveries'
+    )
+  })
+
+  it('shows problems without fix links to someone who cannot change settings', () => {
+    render(
+      <Dashboard
+        {...defaultProps}
+        health={{
+          ...healthy,
+          canManage: false,
+          indexers: { enabled: 0, total: 3 },
+        }}
+      />
+    )
+    expect(screen.getByText('Every indexer is switched off')).toBeInTheDocument()
+    expect(screen.queryByText('Fix')).not.toBeInTheDocument()
+  })
+
+  it('says it is still checking right after a restart instead of guessing', () => {
+    render(
+      <Dashboard {...defaultProps} health={{ ...healthy, level: 'starting', checkedAt: null }} />
+    )
+    expect(screen.getByText('Checking services:')).toBeInTheDocument()
+    expect(screen.getByText(/checking…/)).toBeInTheDocument()
+  })
+
+  it('does not claim nothing is configured when its own queries failed', () => {
+    render(
+      <Dashboard
+        {...defaultProps}
+        health={{
+          ...healthy,
+          configLoaded: false,
+          downloadClients: [],
+          indexers: { enabled: 0, total: 0 },
+        }}
+      />
+    )
+    expect(screen.queryByText(/No download client/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/No indexer/)).not.toBeInTheDocument()
   })
 
   it('shows recently imported titles', () => {

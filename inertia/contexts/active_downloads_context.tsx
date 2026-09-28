@@ -48,19 +48,42 @@ function toDownloadInfo(item: QueueItem): ActiveDownloadInfo {
   }
 }
 
+/** GET /api/v1/activity/counts — database COUNTs only, cheap enough to poll. */
+export interface ActivityCounts {
+  /** Queued, downloading or paused in a client. */
+  active: number
+  /** Downloads that ended in failure. */
+  failed: number
+  /** Every download currently being imported. */
+  importing: number
+  /** Imports untouched past the recovery threshold. */
+  stuckImporting: number
+  /** Scanned files nobody has matched or ignored yet. */
+  unmatchedPending: number
+}
+
+/** What needs the operator: failures plus imports that stopped moving. */
+export function attentionCount(counts: ActivityCounts | null): number {
+  return counts ? counts.failed + counts.stuckImporting : 0
+}
+
 interface ActiveDownloadsContextValue {
   queue: QueueItem[]
+  /** Null until the first answer arrives, so badges never paint a false zero. */
+  counts: ActivityCounts | null
   getForMovie: (movieId: string) => ActiveDownloadInfo | null
   getForBook: (bookId: string) => ActiveDownloadInfo | null
   getForEpisode: (episodeId: string) => ActiveDownloadInfo | null
   getForAlbum: (albumId: string) => ActiveDownloadInfo[]
   getForTvShow: (showId: string) => Map<string, ActiveDownloadInfo>
   refresh: () => Promise<void>
+  refreshCounts: () => Promise<void>
 }
 
 const ActiveDownloadsContext = createContext<ActiveDownloadsContextValue | null>(null)
 
 const POLL_INTERVAL = 5000
+const COUNTS_POLL_INTERVAL = 15000
 
 export function ActiveDownloadsProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<QueueItem[]>([])
@@ -85,6 +108,36 @@ export function ActiveDownloadsProvider({ children }: { children: ReactNode }) {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
   }, [fetchQueue])
+
+  const [counts, setCounts] = useState<ActivityCounts | null>(null)
+
+  const fetchCounts = useCallback(async () => {
+    try {
+      const response = await fetch('/api/v1/activity/counts')
+      if (response.ok) {
+        setCounts((await response.json()) as ActivityCounts)
+      }
+    } catch {
+      // Keep the last known counts - the next poll will retry
+    }
+  }, [])
+
+  // One poll for the whole app: the sidebar badge and the Activity tabs both read it.
+  // A hidden tab skips its turns and catches up the moment it is shown again.
+  useEffect(() => {
+    fetchCounts()
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') fetchCounts()
+    }, COUNTS_POLL_INTERVAL)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchCounts()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [fetchCounts])
 
   const getForMovie = useCallback(
     (movieId: string): ActiveDownloadInfo | null => {
@@ -134,12 +187,14 @@ export function ActiveDownloadsProvider({ children }: { children: ReactNode }) {
     <ActiveDownloadsContext.Provider
       value={{
         queue,
+        counts,
         getForMovie,
         getForBook,
         getForEpisode,
         getForAlbum,
         getForTvShow,
         refresh: fetchQueue,
+        refreshCounts: fetchCounts,
       }}
     >
       {children}
@@ -153,4 +208,12 @@ export function useActiveDownloadsContext(): ActiveDownloadsContextValue {
     throw new Error('useActiveDownloadsContext must be used within an ActiveDownloadsProvider')
   }
   return context
+}
+
+/**
+ * The activity counts, or null outside the provider (Storybook, isolated tests)
+ * and before the first poll answers.
+ */
+export function useActivityCounts(): ActivityCounts | null {
+  return useContext(ActiveDownloadsContext)?.counts ?? null
 }

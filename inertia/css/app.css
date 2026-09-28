@@ -315,3 +315,27 @@
     transform: rotate(-135deg);
   }
 }
+
+/* Settings save bar: rises into place when a field row becomes dirty. */
+@keyframes save-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The sidebar swapping between the app nav and the settings nav. */
+@keyframes sidebar-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--sidebar-in-from, 12px));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

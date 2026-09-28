@@ -29,6 +29,9 @@ fi
 # Media and download directories are NAS mounts - permissions are managed by the host/NAS
 chown -R hamster:hamster /app/tmp
 
+# Backups: only the mount point itself, the host owns what is inside
+chown hamster:hamster /backups 2>/dev/null || true
+
 # Handle APP_KEY: use env var if set, otherwise load/generate persisted key
 if [ -n "$APP_KEY" ]; then
   echo "Using APP_KEY from environment"

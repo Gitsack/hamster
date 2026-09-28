@@ -11,7 +11,7 @@ export class SimklWatchlistProvider {
   async fetchWatchlist(mediaType: 'movies' | 'tv'): Promise<ImportListItem[]> {
     const { account } = await simklAccount.status()
     if (!account) {
-      throw new Error('Connect a Simkl account in Settings → Media Management first.')
+      throw new Error('Connect a Simkl account in Settings → Discovery first.')
     }
     const kind = mediaType === 'movies' ? 'movie' : 'tv'
     const items = await simklLibrary.items()

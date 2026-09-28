@@ -43,10 +43,20 @@ const downloadClientTestValidator = vine.compile(
 )
 
 export default class DownloadClientsController {
-  async index({ response }: HttpContext) {
+  /**
+   * Listing and reading are open to every signed-in user (search, the queue's
+   * client indicator and the Imports tab's browser all need the clients), but
+   * connection details and credentials are only for admins, who manage them.
+   */
+  async index({ auth, response }: HttpContext) {
     const clients = await DownloadClient.query().orderBy('priority', 'asc').orderBy('name', 'asc')
+    const isAdmin = Boolean(auth?.user?.isAdmin)
 
-    return response.json(clients.map((client) => this.serializeClient(client)))
+    return response.json(
+      clients.map((client) =>
+        isAdmin ? this.serializeClient(client) : this.serializePublicClient(client)
+      )
+    )
   }
 
   async store({ request, response }: HttpContext) {
@@ -80,13 +90,15 @@ export default class DownloadClientsController {
     return response.created(this.serializeClient(client))
   }
 
-  async show({ params, response }: HttpContext) {
+  async show({ auth, params, response }: HttpContext) {
     const client = await DownloadClient.find(params.id)
     if (!client) {
       return response.notFound({ error: 'Download client not found' })
     }
 
-    return response.json(this.serializeClient(client))
+    return response.json(
+      auth?.user?.isAdmin ? this.serializeClient(client) : this.serializePublicClient(client)
+    )
   }
 
   async update({ params, request, response }: HttpContext) {
@@ -402,6 +414,21 @@ export default class DownloadClientsController {
       'webp': 'image/webp',
     }
     return mimeTypes[ext || ''] || 'application/octet-stream'
+  }
+
+  /**
+   * What a non-admin may see: enough to name a client, pick it, and know
+   * whether its completed folder can be browsed. No host, port or credentials.
+   */
+  private serializePublicClient(client: DownloadClient) {
+    return {
+      id: client.id,
+      name: client.name,
+      type: client.type,
+      enabled: client.enabled,
+      priority: client.priority,
+      localPath: client.settings.localPath || '',
+    }
   }
 
   private serializeClient(client: DownloadClient) {

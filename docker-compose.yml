@@ -57,6 +57,9 @@ services:
       DB_USER: ${DB_USER:-hamster}
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
       DB_DATABASE: ${DB_DATABASE:-hamster}
+
+      # Database backups (Settings > System), written to the volume below
+      BACKUP_PATH: /backups
     volumes:
       # Media library volumes - map your local paths
       - ${MUSIC_PATH:-./media/music}:/media/music
@@ -69,6 +72,9 @@ services:
 
       # Persistent app data (logs, cache, etc.)
       - app_data:/app/tmp
+
+      # Database backups - keep them outside the container
+      - ${BACKUPS_PATH:-./backups}:/backups
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3333/health']
       interval: 30s

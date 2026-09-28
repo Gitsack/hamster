@@ -6,8 +6,12 @@ export default class BackupController {
    * List available backups
    */
   async index({ response }: HttpContext) {
-    const backups = await backupService.list()
-    return response.json({ backups })
+    const [backups, directory, retention] = await Promise.all([
+      backupService.list(),
+      backupService.directory(),
+      backupService.retention(),
+    ])
+    return response.json({ backups, directory, retention, running: backupService.running })
   }
 
   /**

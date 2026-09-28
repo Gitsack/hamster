@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { LANGUAGES, ORIGINAL_LANGUAGE, describeLanguages, type Language } from '@/lib/languages'
 import { cn } from '@/lib/utils'
+import { FieldGroup, type FieldGroupComponent } from '@/components/settings/field-group'
 
 /**
  * Stands in for whatever language the title was made in, resolved per title
@@ -81,9 +82,12 @@ function roleOf(value: AudioLanguageValue, code: string): Role | null {
 export function AudioLanguageRules({
   value,
   onChange,
+  group: Group = FieldGroup,
 }: {
   value: AudioLanguageValue
   onChange: (next: AudioLanguageValue) => void
+  /** How the group is framed: FieldGroup inline, SheetSection in a Sheet. */
+  group?: FieldGroupComponent
 }) {
   const [query, setQuery] = useState('')
   const [browsing, setBrowsing] = useState(false)
@@ -134,17 +138,10 @@ export function AudioLanguageRules({
   const showList = browsing || query.trim() !== ''
 
   return (
-    <fieldset className="border-border space-y-3 border-t pt-6">
-      <legend className="sr-only">Language</legend>
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold">Language</h3>
-        <p className="text-muted-foreground text-xs">
-          The audio track for film and television, the text for books — and the one flaw no amount
-          of resolution makes up for. Mark the languages you need, the ones you would rather have,
-          and the ones you never want.
-        </p>
-      </div>
-
+    <Group
+      title="Language"
+      description="The audio track for film and television, the text for books — and the one flaw no amount of resolution makes up for. Mark the languages you need, the ones you would rather have, and the ones you never want."
+    >
       {chosen.length > 0 && (
         <ul className="divide-border border-border divide-y rounded-md border">
           {chosen.map((language) => (
@@ -253,7 +250,7 @@ export function AudioLanguageRules({
       )}
 
       <AudioLanguageSummary value={value} />
-    </fieldset>
+    </Group>
   )
 }
 

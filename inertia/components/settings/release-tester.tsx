@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { releaseBadges, type AnnotatedRelease } from '@/components/release-list'
 import { cn } from '@/lib/utils'
+import { FieldGroup, type FieldGroupComponent } from '@/components/settings/field-group'
 
 const TONE_CLASS = {
   neutral: 'border-border text-muted-foreground',
@@ -16,6 +17,8 @@ const TONE_CLASS = {
 interface Props {
   profileId: number | string
   mediaType: string
+  /** How the group is framed: FieldGroup inline, SheetSection in a Sheet. */
+  group?: FieldGroupComponent
 }
 
 /**
@@ -25,7 +28,7 @@ interface Props {
  * out a rule was wrong days later, when the wrong file has already landed. This
  * turns the rules into something you can check in five seconds.
  */
-export function ReleaseTester({ profileId, mediaType }: Props) {
+export function ReleaseTester({ profileId, mediaType, group: Group = FieldGroup }: Props) {
   const [title, setTitle] = useState('')
   const [testing, setTesting] = useState(false)
   const [result, setResult] = useState<AnnotatedRelease | null>(null)
@@ -57,15 +60,10 @@ export function ReleaseTester({ profileId, mediaType }: Props) {
   }
 
   return (
-    <fieldset className="space-y-3 border-t border-border pt-6">
-      <legend className="sr-only">Test a release name</legend>
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold">Test a release name</h3>
-        <p className="text-xs text-muted-foreground">
-          Checks against the profile as last saved. Save your changes first to test them.
-        </p>
-      </div>
-
+    <Group
+      title="Test a release name"
+      description="Checks against the profile as last saved. Save your changes first to test them."
+    >
       <div className="flex flex-col gap-2 sm:flex-row">
         <Label htmlFor="release-test-input" className="sr-only">
           Release name
@@ -83,7 +81,12 @@ export function ReleaseTester({ profileId, mediaType }: Props) {
             }
           }}
         />
-        <Button variant="outline" onClick={runTest} disabled={testing || !title.trim()}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={runTest}
+          disabled={testing || !title.trim()}
+        >
           {testing ? <Spinner className="size-4" /> : 'Test'}
         </Button>
       </div>
@@ -124,6 +127,6 @@ export function ReleaseTester({ profileId, mediaType }: Props) {
           )}
         </div>
       )}
-    </fieldset>
+    </Group>
   )
 }
