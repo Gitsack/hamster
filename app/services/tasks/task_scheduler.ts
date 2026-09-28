@@ -208,20 +208,31 @@ class TaskScheduler {
       return
     }
 
-    const task = await ScheduledTask.query().where('type', type).first()
-    if (!task || !task.enabled) {
-      return
-    }
-
+    // Claim before the first await: claimed only after loading the row, a tick
+    // landing in between saw the task neither queued nor running and started
+    // it a second time.
     this.inFlight.add(type)
 
+    let task: ScheduledTask | null
+    try {
+      task = await ScheduledTask.query().where('type', type).first()
+      if (!task || !task.enabled) {
+        this.inFlight.delete(type)
+        return
+      }
+
+      task.lastRunAt = DateTime.now()
+      // Schedule the next run up front. Doing it only in the `finally` meant a
+      // crash or restart mid-run left nextRunAt permanently in the past, so the
+      // task fired on every subsequent tick.
+      task.nextRunAt = this.nextRun(runner, task.intervalMinutes)
+      await task.save()
+    } catch (err) {
+      this.inFlight.delete(type)
+      throw err
+    }
+
     const startTime = Date.now()
-    task.lastRunAt = DateTime.now()
-    // Schedule the next run up front. Doing it only in the `finally` meant a
-    // crash or restart mid-run left nextRunAt permanently in the past, so the
-    // task fired on every subsequent tick.
-    task.nextRunAt = this.nextRun(runner, task.intervalMinutes)
-    await task.save()
 
     let status = 'success'
     let error: string | null = null
