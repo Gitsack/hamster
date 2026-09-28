@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.39.0](https://github.com/Gitsack/hamster/compare/hamster-v1.38.0...hamster-v1.39.0) (2026-09-28)
+
+
+### Features
+
+* **nav:** consolidate navigation and restructure settings ([1308928](https://github.com/Gitsack/hamster/commit/13089287075ab01f21cdde6c52bdfd4d299e51fe))
+
+
+### Bug Fixes
+
+* **backup:** write backups to a mountable, persistent folder ([e426a8b](https://github.com/Gitsack/hamster/commit/e426a8bc8420f254655277ae57b2a130c8467e76))
+* **notifications:** send the Jellyfin API key as an Authorization header ([2307c65](https://github.com/Gitsack/hamster/commit/2307c65e213103f48b474d8da0d15a17a047b315))
+* **webhooks:** store the headers from the form, accept Docker hostnames ([3550361](https://github.com/Gitsack/hamster/commit/3550361206c5b481cf5e1a835f59b6ada6b81081))
+
 ## [1.38.0](https://github.com/Gitsack/hamster/compare/hamster-v1.37.0...hamster-v1.38.0) (2026-09-27)
 
 
