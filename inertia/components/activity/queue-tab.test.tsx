@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueueTab, type DownloadRecord } from './queue-tab'
 
 vi.mock('@inertiajs/react', () => ({
@@ -38,15 +39,21 @@ function record(overrides: Partial<DownloadRecord>): DownloadRecord {
   }
 }
 
-function mockHistory(failed: DownloadRecord[], importing: DownloadRecord[]) {
+function mockHistory(
+  failed: DownloadRecord[],
+  importing: DownloadRecord[],
+  routine: DownloadRecord[] = []
+) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      const rows = url.includes('status=failed')
-        ? failed
-        : url.includes('status=importing')
-          ? importing
-          : []
+      const rows = url.includes('severity=routine')
+        ? routine
+        : url.includes('status=failed')
+          ? failed
+          : url.includes('status=importing')
+            ? importing
+            : []
       return new Response(JSON.stringify({ data: rows, meta: { total: rows.length } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -90,6 +97,39 @@ describe('QueueTab', () => {
     const downloading = section('Downloading')
     expect(within(downloading).getByText('Moving.Release')).toBeInTheDocument()
     expect(within(downloading).getByText('Importing')).toBeInTheDocument()
+  })
+
+  it('keeps routine failures out of Needs attention, folded away until asked for', async () => {
+    mockHistory(
+      [],
+      [],
+      [
+        record({
+          id: 'r1',
+          title: 'Incomplete.Release',
+          severity: 'warning',
+          errorMessage: 'Aborted, cannot be completed - https://sabnzbd.org/not-complete',
+        }),
+        record({
+          id: 'r2',
+          title: 'Duplicate.Release',
+          severity: 'info',
+          errorMessage: 'Existing file is larger (22517 MB) than source (12936 MB)',
+        }),
+      ]
+    )
+    const user = userEvent.setup()
+    renderTab()
+
+    expect(await screen.findByText('Nothing needs attention.')).toBeInTheDocument()
+    const handled = section('Handled automatically')
+    expect(within(handled).queryByText('Incomplete.Release')).not.toBeInTheDocument()
+
+    await user.click(within(handled).getByRole('button', { name: /show 2/i }))
+    expect(within(handled).getByText('Incomplete.Release')).toBeInTheDocument()
+    expect(within(handled).getByText('Skipped')).toBeInTheDocument()
+    expect(within(handled).getByText('Duplicate.Release')).toBeInTheDocument()
+    expect(within(handled).getByText('In library')).toBeInTheDocument()
   })
 
   it('shows live downloads with their percentage and says when nothing needs attention', async () => {

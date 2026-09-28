@@ -632,6 +632,19 @@ class FolderScanner {
           continue
         }
 
+        // A name match says nothing about what is inside: a concert video named
+        // like an album matches the album, then fails with "No audio files found".
+        // That failure was recreated on every scan, forever. The folder holds
+        // media, just not this item's kind, so it belongs with the unmatched files.
+        if (!(await this.holdsMediaFor(folderPath, match.type))) {
+          console.log(
+            `[FolderScanner] "${folder.name}" matched ${match.type} "${match.title}" but holds no ${match.type} files - filing as unmatched`
+          )
+          await this.createUnmatchedFileRecord(folderPath, folder.name, localPath)
+          onProgress?.('moved', `Moved "${folder.name}" to unmatched`)
+          continue
+        }
+
         // Create a download record and import
         const importResult = await this.importFolder(folderPath, match, client)
 
@@ -731,6 +744,24 @@ class FolderScanner {
     }
 
     return null
+  }
+
+  /**
+   * Whether the folder holds at least one file the matched item's importer can
+   * use: audio for an album, video for a movie or episode, a book file for a book.
+   */
+  private async holdsMediaFor(
+    folderPath: string,
+    type: 'movie' | 'episode' | 'album' | 'book'
+  ): Promise<boolean> {
+    const accepts =
+      type === 'album'
+        ? (name: string) => fileNamingService.isAudioFile(name)
+        : type === 'book'
+          ? (name: string) => fileNamingService.isBookFile(name)
+          : (name: string) => fileNamingService.isVideoFile(name)
+    const files = await this.listFilesRecursive(folderPath)
+    return files.some((file) => accepts(path.basename(file)))
   }
 
   /**

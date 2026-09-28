@@ -28,6 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { cn } from '@/lib/utils'
 import { Section } from '@/components/settings/section'
 import { RowGroup, describeHttpError } from '@/components/settings/row-group'
 import { StatusBadge } from '@/components/status-badge'
@@ -52,6 +53,11 @@ export interface DownloadRecord {
   mediaType: string | null
   downloadClient: string | null
   errorMessage: string | null
+  /**
+   * Failed rows only. 'error' needs a person; 'warning' is routine (bad release,
+   * network hiccup) and 'info' lost nothing (the item is already in the library).
+   */
+  severity?: 'error' | 'warning' | 'info' | null
   startedAt: string | null
   completedAt: string | null
   updatedAt: string | null
@@ -65,13 +71,16 @@ interface DownloadPage {
 }
 
 const FAILED_LIMIT = 50
+const ROUTINE_LIMIT = 50
 const IMPORTING_LIMIT = 100
 
 async function fetchDownloads(
   status: 'failed' | 'importing',
-  limit: number
+  limit: number,
+  severity?: 'attention' | 'routine'
 ): Promise<DownloadPage> {
-  const response = await fetch(`/api/v1/queue/history?status=${status}&limit=${limit}`)
+  const filter = severity ? `&severity=${severity}` : ''
+  const response = await fetch(`/api/v1/queue/history?status=${status}&limit=${limit}${filter}`)
   if (!response.ok) throw new Error(describeHttpError(response))
   const payload = (await response.json()) as { data?: DownloadRecord[]; meta?: { total?: number } }
   const rows = payload.data ?? []
@@ -111,6 +120,7 @@ type Confirm =
   | { kind: 'cancel'; item: QueueItem }
   | { kind: 'remove'; item: DownloadRecord }
   | { kind: 'clear-failed' }
+  | { kind: 'clear-routine' }
 
 export function QueueTab({
   reloadSignal,
@@ -131,6 +141,8 @@ export function QueueTab({
 
   const [failed, setFailed] = useState<DownloadPage | null>(null)
   const [failedError, setFailedError] = useState<string | null>(null)
+  const [routine, setRoutine] = useState<DownloadPage | null>(null)
+  const [showRoutine, setShowRoutine] = useState(false)
   const [importing, setImporting] = useState<DownloadPage | null>(null)
   const [importingError, setImportingError] = useState<string | null>(null)
   const [unreachable, setUnreachable] = useState<UnreachableClient[]>([])
@@ -147,7 +159,12 @@ export function QueueTab({
 
   const loadFailed = useCallback(async () => {
     try {
-      setFailed(await fetchDownloads('failed', FAILED_LIMIT))
+      const [attention, handled] = await Promise.all([
+        fetchDownloads('failed', FAILED_LIMIT, 'attention'),
+        fetchDownloads('failed', ROUTINE_LIMIT, 'routine'),
+      ])
+      setFailed(attention)
+      setRoutine(handled)
       setFailedError(null)
     } catch (error) {
       setFailedError(error instanceof Error ? error.message : 'The server did not answer')
@@ -198,7 +215,9 @@ export function QueueTab({
 
   // The app-wide counts poll notices a new failure or a finished import before this
   // tab would; when those numbers move, re-read the lists they summarise.
-  const countsKey = counts ? `${counts.failed}:${counts.importing}:${counts.stuckImporting}` : null
+  const countsKey = counts
+    ? `${counts.failed}:${counts.failedRoutine ?? 0}:${counts.importing}:${counts.stuckImporting}`
+    : null
   const lastCountsKey = useRef(countsKey)
   useEffect(() => {
     if (countsKey === null) return
@@ -282,11 +301,12 @@ export function QueueTab({
         method: 'DELETE',
       })
       if (response.ok) {
-        setFailed((prev) =>
-          prev
+        const without = (prev: DownloadPage | null) =>
+          prev && prev.rows.some((row) => row.id === item.id)
             ? { rows: prev.rows.filter((row) => row.id !== item.id), total: prev.total - 1 }
             : prev
-        )
+        setFailed(without)
+        setRoutine(without)
         void refreshCounts()
       } else {
         toast.error('The error record could not be dismissed', {
@@ -333,11 +353,16 @@ export function QueueTab({
           })
         }
       } else {
-        const response = await fetch('/api/v1/queue/clear-failed', { method: 'POST' })
+        const routineOnly = confirm.kind === 'clear-routine'
+        const response = await fetch(
+          `/api/v1/queue/clear-failed${routineOnly ? '?severity=routine' : '?severity=attention'}`,
+          { method: 'POST' }
+        )
         if (response.ok) {
           const data = await response.json().catch(() => ({}))
           toast.success(data.message || 'Failed records cleared')
-          setFailed({ rows: [], total: 0 })
+          if (routineOnly) setRoutine({ rows: [], total: 0 })
+          else setFailed({ rows: [], total: 0 })
           void refreshCounts()
         } else {
           toast.error('The failed records could not be cleared', {
@@ -360,6 +385,7 @@ export function QueueTab({
   const stuck = importing?.rows.filter((row) => row.stuck) ?? []
   const moving = importing?.rows.filter((row) => !row.stuck) ?? []
   const failedRows = failed?.rows ?? []
+  const routineRows = routine?.rows ?? []
   const attention = (failed?.total ?? 0) + stuck.length + unreachable.length
 
   const attentionLoading =
@@ -544,6 +570,99 @@ export function QueueTab({
         </RowGroup>
       </Section>
 
+      {routine && routine.total > 0 && (
+        <Section
+          id="handled"
+          title="Handled automatically"
+          description="Incomplete or broken releases, network hiccups and duplicates of items already in the library. Hamster skips the release or retries on its own; nothing to do here."
+          actions={
+            <>
+              {showRoutine && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => setConfirm({ kind: 'clear-routine' })}
+                >
+                  Clear
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                aria-expanded={showRoutine}
+                aria-controls="handled-rows"
+                onClick={() => setShowRoutine((open) => !open)}
+              >
+                {showRoutine ? 'Hide' : 'Show'} <Num>{routine.total}</Num>
+              </Button>
+            </>
+          }
+        >
+          {showRoutine && (
+            <div id="handled-rows" className="space-y-3">
+              <RowGroup empty="Nothing here.">
+                {routineRows.map((item) => (
+                  <ActivityRow
+                    key={item.id}
+                    title={<span className="readout">{item.title}</span>}
+                    titleHint={item.title}
+                    status={
+                      item.severity === 'info' ? (
+                        <StatusBadge tone="neutral" label="In library" />
+                      ) : (
+                        <StatusBadge tone="warning" label="Skipped" />
+                      )
+                    }
+                    meta={[
+                      item.downloadClient,
+                      formatSize(item.size),
+                      <span key="t" title={formatTimestamp(item.completedAt ?? item.startedAt)}>
+                        {timeAgo(item.completedAt ?? item.updatedAt ?? item.startedAt)}
+                      </span>,
+                    ]}
+                    actions={
+                      <RowButton
+                        icon={Cancel01Icon}
+                        label="Dismiss"
+                        iconOnly
+                        disabled={actioningId === item.id}
+                        onClick={() => dismiss(item)}
+                      />
+                    }
+                  >
+                    {item.errorMessage && (
+                      <p
+                        className={cn(
+                          'mt-0.5 line-clamp-2 text-xs break-words',
+                          item.severity === 'info'
+                            ? 'text-muted-foreground'
+                            : 'text-status-queued-ink'
+                        )}
+                        title={item.errorMessage}
+                      >
+                        {item.errorMessage}
+                      </p>
+                    )}
+                  </ActivityRow>
+                ))}
+              </RowGroup>
+              {routine.total > routineRows.length && (
+                <p className="text-xs text-muted-foreground">
+                  Showing the latest <Num>{routineRows.length}</Num> of <Num>{routine.total}</Num>.{' '}
+                  <Link
+                    href="/activity/history?event=failures"
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    See all in History
+                  </Link>
+                </p>
+              )}
+            </div>
+          )}
+        </Section>
+      )}
+
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           {confirm?.kind === 'cancel' && (
@@ -573,6 +692,16 @@ export function QueueTab({
               </AlertDialogDescription>
             </AlertDialogHeader>
           )}
+          {confirm?.kind === 'clear-routine' && (
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear the handled failures?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes {plural(routine?.total ?? 0, 'failed download record')} Hamster has
+                already dealt with. Files on disk are not affected, and History keeps its own record
+                of each failure.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>
               {confirm?.kind === 'cancel' ? 'Keep downloading' : 'Cancel'}
@@ -585,7 +714,9 @@ export function QueueTab({
                 ? 'Cancel download'
                 : confirm?.kind === 'remove'
                   ? 'Remove'
-                  : 'Clear errors'}
+                  : confirm?.kind === 'clear-routine'
+                    ? 'Clear'
+                    : 'Clear errors'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -52,8 +52,10 @@ function toDownloadInfo(item: QueueItem): ActiveDownloadInfo {
 export interface ActivityCounts {
   /** Queued, downloading or paused in a client. */
   active: number
-  /** Downloads that ended in failure. */
+  /** Failures a person has to act on. */
   failed: number
+  /** Failures Hamster handles by itself: bad releases, network hiccups, duplicates. */
+  failedRoutine?: number
   /** Every download currently being imported. */
   importing: number
   /** Imports untouched past the recovery threshold. */

@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import Download from '#models/download'
+import { failureSeveritySql, type FailureSeverity } from '#utils/failure_severity'
 import DownloadClient from '#models/download_client'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { downloadImportService } from '#services/media/download_import_service'
@@ -99,8 +100,22 @@ export default class QueueController {
       ? [status as HistoryStatus]
       : ['completed', 'failed']
 
-    const downloads = await Download.query()
+    // 'attention' keeps the failures a person has to act on; 'routine' the ones
+    // Hamster handles by itself (see failure_severity.ts).
+    const severity = request.input('severity')
+    const severitySql = failureSeveritySql()
+
+    const query = Download.query()
       .whereIn('status', statuses)
+      .select('downloads.*')
+      .select(db.raw(`${severitySql.sql} as failure_severity`, severitySql.bindings))
+    if (severity === 'attention') {
+      query.whereRaw(`${severitySql.sql} = 'error'`, severitySql.bindings)
+    } else if (severity === 'routine') {
+      query.whereRaw(`${severitySql.sql} <> 'error'`, severitySql.bindings)
+    }
+
+    const downloads = await query
       .preload('album')
       .preload('downloadClient')
       // Failed rows often have no completedAt — fall back to updatedAt so
@@ -124,6 +139,7 @@ export default class QueueController {
         bookId: d.bookId,
         downloadClient: d.downloadClient?.name,
         errorMessage: d.errorMessage,
+        severity: d.status === 'failed' ? (d.$extras.failure_severity as FailureSeverity) : null,
         startedAt: d.startedAt?.toISO(),
         completedAt: d.completedAt?.toISO(),
         updatedAt: d.updatedAt?.toISO() ?? null,
@@ -143,13 +159,16 @@ export default class QueueController {
    * download-client call or a completed-folder scan, so it is safe to poll.
    *
    *   active           — queued, downloading or paused in a client
-   *   failed           — downloads that ended in failure
+   *   failed           — failures a person has to act on
+   *   failedRoutine    — failures Hamster handles by itself (bad release,
+   *                      network hiccup, item already in the library)
    *   importing        — every download currently being imported
    *   stuckImporting   — the subset of those untouched past the recovery threshold
    *   unmatchedPending — scanned files nobody has matched or ignored yet
    */
   async counts({ response }: HttpContext) {
     const threshold = stuckImportingThreshold().toSQL()!
+    const severity = failureSeveritySql()
 
     const [downloads, unmatched] = await Promise.all([
       db
@@ -158,7 +177,14 @@ export default class QueueController {
           db.raw(
             "count(*) filter (where status in ('queued', 'downloading', 'paused'))::int as active"
           ),
-          db.raw("count(*) filter (where status = 'failed')::int as failed"),
+          db.raw(
+            `count(*) filter (where status = 'failed' and ${severity.sql} = 'error')::int as failed`,
+            severity.bindings
+          ),
+          db.raw(
+            `count(*) filter (where status = 'failed' and ${severity.sql} <> 'error')::int as failed_routine`,
+            severity.bindings
+          ),
           db.raw("count(*) filter (where status = 'importing')::int as importing"),
           db.raw(
             `count(*) filter (
@@ -176,6 +202,7 @@ export default class QueueController {
     return response.json({
       active: Number(downloads?.active ?? 0),
       failed: Number(downloads?.failed ?? 0),
+      failedRoutine: Number(downloads?.failed_routine ?? 0),
       importing: Number(downloads?.importing ?? 0),
       stuckImporting: Number(downloads?.stuck_importing ?? 0),
       unmatchedPending: Number(unmatched?.total ?? 0),
@@ -573,8 +600,17 @@ export default class QueueController {
   /**
    * Clear all failed downloads (removes from database, doesn't touch files)
    */
-  async clearFailed({ response }: HttpContext) {
-    const deleted = await Download.query().where('status', 'failed').delete()
+  async clearFailed({ request, response }: HttpContext) {
+    // ?severity=attention|routine clears one band of the Activity queue only.
+    const severity = request.input('severity')
+    const severitySql = failureSeveritySql()
+    const query = Download.query().where('status', 'failed')
+    if (severity === 'attention') {
+      query.whereRaw(`${severitySql.sql} = 'error'`, severitySql.bindings)
+    } else if (severity === 'routine') {
+      query.whereRaw(`${severitySql.sql} <> 'error'`, severitySql.bindings)
+    }
+    const deleted = await query.delete()
 
     return response.json({
       message: `Cleared ${deleted} failed downloads`,

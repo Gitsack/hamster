@@ -109,6 +109,74 @@ test.group('QueueController', (group) => {
     assert.equal(after.unmatchedPending - before.unmatchedPending, 1)
   })
 
+  test('routine failures leave Needs attention; config errors stay in it', async ({ assert }) => {
+    async function readFailed(severity: string) {
+      const controller = new QueueController()
+      let result: Record<string, unknown> = {}
+      await controller.history({
+        request: {
+          input: (key: string, defaultVal: unknown) =>
+            ({ page: 1, limit: 500, status: 'failed', severity })[key] ?? defaultVal,
+        },
+        response: {
+          json(data: unknown) {
+            result = data as Record<string, unknown>
+          },
+        },
+      } as never)
+      return result.data as any[]
+    }
+
+    const before = await readCounts()
+    const [incomplete, noAudio, timeout, larger, permission, silent] = await Promise.all([
+      DownloadFactory.create({
+        title: 'Queue Test Severity Incomplete',
+        status: 'failed',
+        errorMessage: 'Aborted, cannot be completed - https://sabnzbd.org/not-complete',
+      }),
+      DownloadFactory.create({
+        title: 'Queue Test Severity No Audio',
+        status: 'failed',
+        errorMessage: 'No audio files found in download',
+      }),
+      DownloadFactory.create({
+        title: 'Queue Test Severity Timeout',
+        status: 'failed',
+        errorMessage: 'The operation timed out.',
+      }),
+      DownloadFactory.create({
+        title: 'Queue Test Severity Larger',
+        status: 'failed',
+        errorMessage:
+          'Existing file is larger (22517 MB) than source (12936 MB) — refusing to overwrite with smaller file',
+      }),
+      DownloadFactory.create({
+        title: 'Queue Test Severity Permission',
+        status: 'failed',
+        errorMessage: 'EACCES: permission denied, mkdir /mnt/nas/video/movies/Foo',
+      }),
+      DownloadFactory.create({ title: 'Queue Test Severity Silent', status: 'failed' }),
+    ])
+    downloadIds.push(incomplete.id, noAudio.id, timeout.id, larger.id, permission.id, silent.id)
+
+    const after = await readCounts()
+    assert.equal(after.failed - before.failed, 2)
+    assert.equal(after.failedRoutine - before.failedRoutine, 4)
+
+    const attentionRows = await readFailed('attention')
+    const routineRows = await readFailed('routine')
+    const attention = new Map(attentionRows.map((row) => [row.id, row]))
+    const routine = new Map(routineRows.map((row) => [row.id, row]))
+
+    assert.equal(attention.get(permission.id)?.severity, 'error')
+    assert.equal(attention.get(silent.id)?.severity, 'error')
+    for (const id of [incomplete.id, noAudio.id, timeout.id]) {
+      assert.isFalse(attention.has(id))
+      assert.equal(routine.get(id)?.severity, 'warning')
+    }
+    assert.equal(routine.get(larger.id)?.severity, 'info')
+  })
+
   test('history filters to importing rows and flags the stuck ones', async ({ assert }) => {
     const fresh = await DownloadFactory.create({
       title: 'Queue Test Importing Fresh',
@@ -274,6 +342,7 @@ test.group('QueueController', (group) => {
     let result: Record<string, unknown> = {}
 
     await controller.clearFailed({
+      request: { input: () => undefined },
       response: {
         json(data: unknown) {
           result = data as Record<string, unknown>
