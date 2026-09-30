@@ -25,6 +25,7 @@ import {
 import { MediaTypesSection, type MediaTypeRowState } from './media-types-section'
 import { NamingSection, type NamingDraft, type NamingFieldErrors } from './naming-section'
 import { PlaybackSection, usePlaybackSettings } from './playback-section'
+import { VersionsSection } from './versions-section'
 import { RootFolderSheet } from './root-folder-sheet'
 
 /** How often a running scan is checked, and when the page stops waiting on it. */
@@ -326,7 +327,7 @@ export function MediaSettings() {
   return (
     <SettingsPage
       title="Media"
-      description="Media types and their folders, file naming, import clean-up and playback."
+      description="Media types and their folders, file naming, import clean-up, versions and playback."
       ready={ready}
     >
       <MediaTypesSection
@@ -361,6 +362,8 @@ export function MediaSettings() {
         onMaxTracksChange={(value) => form.set('maxTracks', value)}
         maxTracksError={maxTracksError}
       />
+
+      <VersionsSection />
 
       <PlaybackSection state={playback} />
 

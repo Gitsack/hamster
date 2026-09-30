@@ -25,6 +25,22 @@ if [ "$PUID" != "$CURRENT_UID" ]; then
   usermod -o -u "$PUID" hamster
 fi
 
+# GPU access for version encoding. /dev/dri/renderD* belongs to the host's
+# render group, whose GID differs between distros; give hamster a group with
+# that GID so it can open the device after dropping root. Nothing happens when
+# no GPU is passed through, and encodes then run on the CPU.
+for DEVICE in /dev/dri/renderD*; do
+  [ -e "$DEVICE" ] || continue
+  DEVICE_GID=$(stat -c '%g' "$DEVICE")
+  DEVICE_GROUP=$(getent group "$DEVICE_GID" | cut -d: -f1)
+  if [ -z "$DEVICE_GROUP" ]; then
+    DEVICE_GROUP="hostrender$DEVICE_GID"
+    groupadd -g "$DEVICE_GID" "$DEVICE_GROUP"
+  fi
+  usermod -aG "$DEVICE_GROUP" hamster
+  echo "GPU $DEVICE available (group $DEVICE_GROUP)"
+done
+
 # Fix ownership of app tmp directory only
 # Media and download directories are NAS mounts - permissions are managed by the host/NAS
 chown -R hamster:hamster /app/tmp

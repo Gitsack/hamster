@@ -88,6 +88,14 @@ export interface MediaAnalysis {
   /** Every subtitle stream, in file order. */
   subtitleTracks: SubtitleTrackInfo[]
   container: string
+  /** e.g. "yuv420p10le"; a 10-bit source must stay 10-bit or it bands. */
+  videoPixFmt?: string | null
+  /** "smpte2084" for HDR10/Dolby Vision, "arib-std-b67" for HLG. */
+  videoColorTransfer?: string | null
+  videoColorPrimaries?: string | null
+  videoColorSpace?: string | null
+  /** Dolby Vision profile, when the stream carries a DV configuration record. */
+  dolbyVisionProfile?: number | null
 }
 
 export interface TranscodeDecision {
@@ -171,7 +179,11 @@ export async function probeFile(filePath: string): Promise<MediaAnalysis> {
         const streams = data.streams || []
 
         // Find video and audio streams
-        const videoStream = streams.find((s: any) => s.codec_type === 'video')
+        // Cover art is muxed as a video stream too; skip it or a poster
+        // becomes "the video" of a film that has one.
+        const videoStream =
+          streams.find((s: any) => s.codec_type === 'video' && s.disposition?.attached_pic !== 1) ??
+          streams.find((s: any) => s.codec_type === 'video')
         const audioStreams = streams.filter((s: any) => s.codec_type === 'audio')
         const audioStream = audioStreams[0]
 
@@ -217,6 +229,13 @@ export async function probeFile(filePath: string): Promise<MediaAnalysis> {
           audioChannelLayout: audioStream?.channel_layout || null,
           audioTracks,
           subtitleTracks,
+          videoPixFmt: videoStream?.pix_fmt || null,
+          videoColorTransfer: videoStream?.color_transfer || null,
+          videoColorPrimaries: videoStream?.color_primaries || null,
+          videoColorSpace: videoStream?.color_space || null,
+          dolbyVisionProfile:
+            (videoStream?.side_data_list ?? []).find((d: any) => typeof d.dv_profile === 'number')
+              ?.dv_profile ?? null,
         }
 
         resolve(analysis)

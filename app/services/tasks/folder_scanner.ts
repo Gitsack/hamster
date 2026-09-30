@@ -177,7 +177,7 @@ class FolderScanner {
    * "_unpack" / "_failed" entries below never fires and the scanner would
    * process — or delete — a job mid-extraction.
    */
-  private static readonly EXCLUDED_FOLDER_PREFIXES = ['_unpack', '_failed', '_admin']
+  private static readonly EXCLUDED_FOLDER_PREFIXES = ['_unpack', '_failed', '_admin', '.hamster-']
 
   private static isExcludedFolder(name: string): boolean {
     const lower = name.toLowerCase()

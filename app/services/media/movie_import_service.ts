@@ -6,6 +6,7 @@ import { fileNamingService } from './file_naming_service.js'
 import { fileTransferService } from './file_transfer_service.js'
 import { subtitlePruningService } from './subtitle_pruning_service.js'
 import { subtitleSidecarService } from './subtitle_sidecar_service.js'
+import { movieVersionService } from './movie_version_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
 import { probeFile, checkFfmpegAvailable, type MediaAnalysis } from '#utils/ffmpeg_utils'
 import { analysisToMediaInfo } from '#services/quality/file_quality_service'
@@ -139,7 +140,8 @@ export class MovieImportService {
           movie,
           rootFolder,
           mainFile.quality,
-          download.nzbInfo?.replaceExisting === true
+          download.nzbInfo?.replaceExisting === true,
+          outputPath
         )
 
         if (importResult.success) {
@@ -246,7 +248,8 @@ export class MovieImportService {
     movie: Movie,
     rootFolder: RootFolder,
     quality?: string,
-    forceReplace: boolean = false
+    forceReplace: boolean = false,
+    downloadPath: string = sourcePath
   ): Promise<{ success: boolean; error?: string; destinationPath?: string }> {
     // --- Integrity check 1: minimum file size ---
     const sourceStats = await fs.stat(sourcePath)
@@ -327,6 +330,41 @@ export class MovieImportService {
     // Create directories
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
 
+    // Keep a local hardlink of the download for any automatic version
+    // profile, taken before the move below deletes the source. The encoder
+    // then reads this local disk instead of the whole original back off the
+    // library share.
+    const stagedSource = await movieVersionService.stageForImport(sourcePath, downloadPath)
+    try {
+      await this.placeFile(sourcePath, absolutePath, sourceAnalysis, probedInfo, {
+        movie,
+        relativePath,
+        quality,
+      })
+    } catch (error) {
+      if (stagedSource) await movieVersionService.releaseStaged(stagedSource)
+      throw error
+    }
+
+    await movieVersionService
+      .onMainFileImported(movie.id, stagedSource)
+      .catch((err) => logger.error({ err }, 'MovieImportService: Failed to queue versions'))
+
+    return { success: true, destinationPath: absolutePath }
+  }
+
+  /**
+   * Put the file in the library and record it.
+   */
+  private async placeFile(
+    sourcePath: string,
+    absolutePath: string,
+    sourceAnalysis: MediaAnalysis | null,
+    probedInfo: VideoMediaInfo | null,
+    target: { movie: Movie; relativePath: string; quality?: string }
+  ): Promise<void> {
+    const { movie, relativePath, quality } = target
+
     // Write the text subtitle tracks out beside where the video is going. A
     // media server that has to demux them itself does it on first play, reading
     // the whole file off the share while someone waits for a picture to appear.
@@ -378,6 +416,8 @@ export class MovieImportService {
           quality: quality || null,
           mediaInfo: probedInfo,
           dateAdded: DateTime.now(),
+          // A fresh original, not a version standing in for one
+          versionLabel: null,
         })
         await movieFile.save()
       } else {
@@ -399,8 +439,6 @@ export class MovieImportService {
       movie.hasFile = true
       await movie.save()
     })
-
-    return { success: true, destinationPath: absolutePath }
   }
 
   /**

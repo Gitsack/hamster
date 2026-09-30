@@ -65,6 +65,13 @@ export default class MovieFile extends BaseModel {
   })
   declare mediaInfo: VideoMediaInfo | null
 
+  /**
+   * Set when this file is a version whose original was removed, e.g. "Mobile".
+   * Such a file is not encoded again.
+   */
+  @column()
+  declare versionLabel: string | null
+
   @column.dateTime()
   declare dateAdded: DateTime | null
 

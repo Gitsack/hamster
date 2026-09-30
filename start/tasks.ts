@@ -24,6 +24,7 @@ import { historyService } from '#services/history/history_service'
 import { notificationService } from '#services/notifications/notification_service'
 import { webhookService } from '#services/webhooks/webhook_service'
 import { taskScheduler } from '#services/tasks/task_scheduler'
+import { movieVersionService } from '#services/media/movie_version_service'
 import { healthMonitor } from '#services/system/health_monitor'
 import AppSetting from '#models/app_setting'
 import { tmdbService } from '#services/metadata/tmdb_service'
@@ -109,3 +110,8 @@ setTimeout(async () => {
     console.error('[TaskScheduler] Failed to start:', error)
   }
 }, 5000)
+
+// Work through queued movie versions (smaller copies beside the main file).
+// The queue lives in the database, so anything left from before a restart
+// picks up where it stopped.
+setTimeout(() => movieVersionService.start(), 10000)

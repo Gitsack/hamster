@@ -1,0 +1,271 @@
+import path from 'node:path'
+import type { HttpContext } from '@adonisjs/core/http'
+import Movie from '#models/movie'
+import MovieVersion from '#models/movie_version'
+import VersionProfile, {
+  VERSION_AUDIO_MODES,
+  VERSION_MAX_HEIGHTS,
+  VERSION_QUALITIES,
+} from '#models/version_profile'
+import { movieVersionService } from '#services/media/movie_version_service'
+import { describeMediaInfo } from '#services/quality/file_quality_service'
+import { accessWithTimeout } from '#utils/fs_utils'
+
+/**
+ * Version profiles (Settings → Media) and the versions made from them on a
+ * movie's page.
+ */
+export default class MovieVersionsController {
+  // ---------------------------------------------------------------------------
+  // Profiles
+  // ---------------------------------------------------------------------------
+
+  async profiles({ response }: HttpContext) {
+    const [profiles, options, encoder, counts] = await Promise.all([
+      VersionProfile.query().orderBy('created_at'),
+      movieVersionService.getOptions(),
+      movieVersionService.encoderSummary(),
+      MovieVersion.query().select('label', 'status').count('* as total').groupBy('label', 'status'),
+    ])
+
+    const countsFor = (label: string) => {
+      const out: Record<string, number> = {}
+      for (const row of counts) {
+        if (row.label === label) out[row.status] = Number(row.$extras.total)
+      }
+      return out
+    }
+
+    return response.json({
+      profiles: profiles.map((profile) => ({
+        ...serializeProfile(profile),
+        counts: countsFor(profile.label),
+      })),
+      options,
+      encoder,
+    })
+  }
+
+  async storeProfile({ request, response }: HttpContext) {
+    const parsed = parseProfile(request.all())
+    if ('error' in parsed) return response.badRequest({ error: parsed.error })
+
+    if (await VersionProfile.findBy('label', parsed.label)) {
+      return response.conflict({ error: `A profile named "${parsed.label}" already exists` })
+    }
+
+    const profile = await VersionProfile.create(parsed)
+    return response.created(serializeProfile(profile))
+  }
+
+  async updateProfile({ params, request, response }: HttpContext) {
+    const profile = await VersionProfile.find(params.id)
+    if (!profile) return response.notFound({ error: 'Profile not found' })
+
+    const parsed = parseProfile(request.all())
+    if ('error' in parsed) return response.badRequest({ error: parsed.error })
+
+    // The label is in every file name made from this profile; renaming it would
+    // strand those files under the old name, so it stays what it was.
+    if (parsed.label !== profile.label) {
+      return response.badRequest({
+        error: 'The file label cannot change once versions may exist; create a new profile instead',
+      })
+    }
+
+    profile.merge(parsed)
+    await profile.save()
+    return response.json(serializeProfile(profile))
+  }
+
+  async destroyProfile({ params, request, response }: HttpContext) {
+    const profile = await VersionProfile.find(params.id)
+    if (!profile) return response.notFound({ error: 'Profile not found' })
+
+    // Queued work from a deleted profile has nothing left to follow. Finished
+    // files stay unless asked for, since they may be what someone downloads.
+    const deleteFiles = request.input('deleteFiles') === 'true'
+    const versions = await MovieVersion.query().where('profileId', profile.id)
+    for (const version of versions) {
+      if (deleteFiles || version.status !== 'ready') {
+        await movieVersionService.remove(version)
+      }
+    }
+
+    await profile.delete()
+    return response.json({ id: profile.id, deleted: true })
+  }
+
+  /** Queue the profile for every movie that has no version from it yet. */
+  async backfill({ params, response }: HttpContext) {
+    const profile = await VersionProfile.find(params.id)
+    if (!profile) return response.notFound({ error: 'Profile not found' })
+
+    const queued = await movieVersionService.backfill(profile)
+    return response.json({ queued })
+  }
+
+  async updateOptions({ request, response }: HttpContext) {
+    const hardwareEncoding = request.input('hardwareEncoding')
+    if (typeof hardwareEncoding !== 'boolean') {
+      return response.badRequest({ error: 'hardwareEncoding must be a boolean' })
+    }
+    await movieVersionService.setOptions({ hardwareEncoding })
+    return response.json({ hardwareEncoding })
+  }
+
+  // ---------------------------------------------------------------------------
+  // A movie's versions
+  // ---------------------------------------------------------------------------
+
+  async index({ params, response }: HttpContext) {
+    const movie = await Movie.find(params.id)
+    if (!movie) return response.notFound({ error: 'Movie not found' })
+
+    const [versions, profiles] = await Promise.all([
+      MovieVersion.query().where('movieId', movie.id).orderBy('created_at'),
+      VersionProfile.query().orderBy('created_at'),
+    ])
+
+    return response.json({
+      versions: versions.map(serializeVersion),
+      profiles: profiles.map(serializeProfile),
+    })
+  }
+
+  async store({ params, request, response }: HttpContext) {
+    const movie = await Movie.find(params.id)
+    if (!movie) return response.notFound({ error: 'Movie not found' })
+
+    const profile = await VersionProfile.find(request.input('profileId'))
+    if (!profile) return response.badRequest({ error: 'Profile not found' })
+
+    try {
+      const result = await movieVersionService.enqueue(movie.id, profile)
+      return response.json({ ...serializeVersion(result.version), queued: result.queued })
+    } catch (error) {
+      return response.badRequest({ error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  async destroy({ params, response }: HttpContext) {
+    const version = await MovieVersion.query()
+      .where('id', params.versionId)
+      .where('movieId', params.id)
+      .first()
+    if (!version) return response.notFound({ error: 'Version not found' })
+
+    await movieVersionService.remove(version)
+    return response.json({ id: version.id, deleted: true })
+  }
+
+  /** Delete the original and keep this version as the movie's file. */
+  async promote({ params, response }: HttpContext) {
+    const version = await MovieVersion.query()
+      .where('id', params.versionId)
+      .where('movieId', params.id)
+      .first()
+    if (!version) return response.notFound({ error: 'Version not found' })
+
+    try {
+      const movieFile = await movieVersionService.promote(version)
+      return response.json({ movieFileId: movieFile.id, path: movieFile.relativePath })
+    } catch (error) {
+      return response.badRequest({ error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  async download({ params, response }: HttpContext) {
+    const version = await MovieVersion.find(params.versionId)
+    if (!version?.relativePath || version.status !== 'ready') {
+      return response.notFound({ error: 'Version not found' })
+    }
+    const movie = await Movie.query().where('id', version.movieId).preload('rootFolder').first()
+    if (!movie?.rootFolder) return response.notFound({ error: 'Movie not found' })
+
+    const absolutePath = path.join(movie.rootFolder.path, version.relativePath)
+    try {
+      await accessWithTimeout(absolutePath)
+    } catch {
+      return response.notFound({ error: 'File not found on disk' })
+    }
+
+    response.header('Content-Disposition', `attachment; filename="${path.basename(absolutePath)}"`)
+    return response.download(absolutePath)
+  }
+}
+
+function serializeProfile(profile: VersionProfile) {
+  return {
+    id: profile.id,
+    name: profile.name,
+    label: profile.label,
+    maxHeight: profile.maxHeight,
+    quality: profile.quality,
+    audio: profile.audio,
+    subtitles: profile.subtitles,
+    auto: profile.auto,
+  }
+}
+
+function serializeVersion(version: MovieVersion) {
+  return {
+    id: version.id,
+    profileId: version.profileId,
+    label: version.label,
+    status: version.status,
+    path: version.relativePath,
+    size: version.sizeBytes,
+    summary: describeMediaInfo(version.mediaInfo),
+    error: version.error,
+    encoder: version.encoder,
+    progress: movieVersionService.getProgress(version.id),
+    completedAt: version.completedAt?.toISO() ?? null,
+    downloadUrl:
+      version.status === 'ready'
+        ? `/api/v1/movies/${version.movieId}/versions/${version.id}/download`
+        : null,
+  }
+}
+
+type ParsedProfile = Pick<
+  VersionProfile,
+  'name' | 'label' | 'maxHeight' | 'quality' | 'audio' | 'subtitles' | 'auto'
+>
+
+function parseProfile(body: Record<string, unknown>): ParsedProfile | { error: string } {
+  const name = typeof body.name === 'string' ? body.name.trim() : ''
+  if (!name || name.length > 64) return { error: 'Name is required (up to 64 characters)' }
+
+  // The label ends up in a file name on a share Windows or macOS may read.
+  const label = (typeof body.label === 'string' && body.label.trim() ? body.label : name)
+    .trim()
+    .replace(/[<>:"/\\|?*]/g, '')
+    .replace(/\p{Cc}/gu, '')
+    .slice(0, 64)
+  if (!label) return { error: 'Label must contain at least one usable character' }
+
+  const maxHeight = Number(body.maxHeight)
+  if (!(VERSION_MAX_HEIGHTS as readonly number[]).includes(maxHeight)) {
+    return { error: `maxHeight must be one of ${VERSION_MAX_HEIGHTS.join(', ')}` }
+  }
+  if (!(VERSION_QUALITIES as readonly unknown[]).includes(body.quality)) {
+    return { error: `quality must be one of ${VERSION_QUALITIES.join(', ')}` }
+  }
+  if (!(VERSION_AUDIO_MODES as readonly unknown[]).includes(body.audio)) {
+    return { error: `audio must be one of ${VERSION_AUDIO_MODES.join(', ')}` }
+  }
+  if (typeof body.subtitles !== 'boolean' || typeof body.auto !== 'boolean') {
+    return { error: 'subtitles and auto must be booleans' }
+  }
+
+  return {
+    name,
+    label,
+    maxHeight,
+    quality: body.quality as ParsedProfile['quality'],
+    audio: body.audio as ParsedProfile['audio'],
+    subtitles: body.subtitles,
+    auto: body.auto,
+  }
+}

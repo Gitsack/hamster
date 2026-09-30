@@ -49,12 +49,15 @@ FROM oven/bun:1-alpine AS production
 # ffmpeg carries ffprobe, which the importers use to verify a download is not
 # corrupt and to trim surplus subtitle tracks. Without it both checks silently
 # skip themselves, so a corrupt file imports looking perfectly healthy.
+# intel-media-driver lets ffmpeg encode movie versions on an Intel GPU (VAAPI)
+# when /dev/dri is passed through; without a GPU it is never loaded.
 # postgresql16-client carries pg_dump and psql for Settings → System → Backups;
 # without them a backup fails with "spawn pg_dump ENOENT". The client
 # matches the postgres:16 server in docker-compose.yml.
 RUN apk add --no-cache \
     curl \
     ffmpeg \
+    intel-media-driver \
     postgresql16-client \
     tini \
     shadow \

@@ -60,6 +60,10 @@ services:
 
       # Database backups (Settings > System), written to the volume below
       BACKUP_PATH: /backups
+    # Intel GPU for encoding movie versions (Settings > Media > Versions).
+    # Several times faster than the CPU; leave commented out without one.
+    # devices:
+    #   - /dev/dri:/dev/dri
     volumes:
       # Media library volumes - map your local paths
       - ${MUSIC_PATH:-./media/music}:/media/music

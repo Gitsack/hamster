@@ -1,6 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Movie from '#models/movie'
 import MovieFile from '#models/movie_file'
+import { movieVersionService } from '#services/media/movie_version_service'
 import QualityProfile from '#models/quality_profile'
 import {
   assessFile,
@@ -397,20 +398,24 @@ export default class MoviesController {
             summary: describeMediaInfo(movie.movieFile.mediaInfo),
             ...describeMediaInfoParts(movie.movieFile.mediaInfo),
             downloadUrl: `/api/v1/files/movies/${movie.movieFile.id}/download`,
+            versionLabel: movie.movieFile.versionLabel,
           }
         : null,
       // What the file on disk actually is, measured against the profile. This
       // is the difference between "you have this movie" and "you have a copy of
       // this movie that your own profile would have refused".
-      qualityAssessment: movie.movieFile
-        ? assessFile(
-            movie.movieFile.mediaInfo,
-            movie.movieFile.quality,
-            movie.qualityProfile ?? null,
-            'movies',
-            movie.originalLanguage
-          )
-        : null,
+      // A version kept in place of the original is small on purpose; holding
+      // it to the profile would only nag about a choice already made.
+      qualityAssessment:
+        movie.movieFile && !movie.movieFile.versionLabel
+          ? assessFile(
+              movie.movieFile.mediaInfo,
+              movie.movieFile.quality,
+              movie.qualityProfile ?? null,
+              'movies',
+              movie.originalLanguage
+            )
+          : null,
       addedAt: movie.addedAt?.toISO(),
     })
   }
@@ -459,6 +464,9 @@ export default class MoviesController {
 
     // If movie has a file and deleteFile is requested, delete the file first
     if (deleteFile && movie.movieFile && movie.rootFolder) {
+      // Versions first, so the folder can end up empty and go too
+      await movieVersionService.removeAllForMovie(movie.id)
+
       const absolutePath = path.join(movie.rootFolder.path, movie.movieFile.relativePath)
       const folderPath = path.dirname(absolutePath)
 
@@ -936,6 +944,9 @@ export default class MoviesController {
 
     const absolutePath = path.join(movie.rootFolder.path, movie.movieFile.relativePath)
     const folderPath = path.dirname(absolutePath)
+
+    // Versions are copies of this file and go with it
+    await movieVersionService.removeAllForMovie(movie.id)
 
     try {
       // Delete the file from disk

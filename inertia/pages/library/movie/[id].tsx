@@ -52,6 +52,7 @@ import { VideoPlayer } from '@/components/player/video_player'
 import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
 import { ReplaceFileDialog } from '@/components/library/replace-file-dialog'
 import { MediaFileCard } from '@/components/library/media-file-card'
+import { MovieVersionsCard } from '@/components/library/movie-versions-card'
 import { AudioTrackList, type AudioTrack } from '@/components/library/audio-track-list'
 
 interface QualityProfile {
@@ -80,6 +81,8 @@ interface MovieFile {
   languages: string | null
   mediaInfo: { audioTracks?: AudioTrack[] } | null
   downloadUrl: string
+  /** Set when this file is a version kept in place of a deleted original. */
+  versionLabel: string | null
 }
 
 interface QualityAssessment {
@@ -663,6 +666,14 @@ export default function MovieDetail() {
             path={movie.movieFile.path}
             specs={[
               { label: 'Quality', value: movie.movieFile.quality },
+              ...(movie.movieFile.versionLabel
+                ? [
+                    {
+                      label: 'Version',
+                      value: `${movie.movieFile.versionLabel} (original removed)`,
+                    },
+                  ]
+                : []),
               { label: 'Size', value: formatSize(movie.movieFile.size), mono: true },
               { label: 'Video', value: movie.movieFile.video, mono: true },
               { label: 'Audio', value: movie.movieFile.audio, mono: true },
@@ -733,6 +744,14 @@ export default function MovieDetail() {
               </div>
             )}
           </MediaFileCard>
+        )}
+
+        {movie.movieFile && !movie.movieFile.versionLabel && (
+          <MovieVersionsCard
+            movieId={String(movie.id)}
+            originalSize={movie.movieFile.size}
+            onPromoted={() => void fetchMovie()}
+          />
         )}
 
         {/* Search results */}
