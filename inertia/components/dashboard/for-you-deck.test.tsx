@@ -392,7 +392,13 @@ describe('ForYouDeck', () => {
     })
     render(<ForYouDeck />)
     // Two cards is below the top-up mark: the deck asks again and keeps the new one.
-    expect(await screen.findByText(/picks ready/)).toHaveTextContent('3 picks ready')
-    expect(deckLoads).toBe(2)
+    // "2 picks ready" renders first, so wait for the end state rather than
+    // asserting on the first heading — that raced the top-up.
+    const heading = await screen.findByText(/picks ready/)
+    await waitFor(() => expect(heading).toHaveTextContent('3 picks ready'))
+    // Still below the mark at three, it asks once more; that answer repeats
+    // Heat and Ronin, and neither comes back.
+    await waitFor(() => expect(deckLoads).toBe(3))
+    expect(heading).toHaveTextContent('3 picks ready')
   })
 })
