@@ -14,7 +14,6 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from '@/c
 import { Section } from '@/components/settings/section'
 import { RowGroup } from '@/components/settings/row-group'
 import { EntityRow } from '@/components/settings/entity-row'
-import { ToggleRow } from '@/components/settings/setting-row'
 import { EditorSheet, SheetField, SheetSwitch } from '@/components/settings/editor-sheet'
 import { SheetSection } from '@/components/settings/field-group'
 import { getJson, send } from '@/components/system/system_api'
@@ -38,8 +37,6 @@ export interface VersionProfile {
 
 interface VersionProfilesResponse {
   profiles: VersionProfile[]
-  options: { hardwareEncoding: boolean }
-  encoder: { hardwareAvailable: boolean; active: 'gpu' | 'cpu' }
 }
 
 export const MAX_HEIGHTS = [
@@ -140,7 +137,6 @@ export function VersionsSection() {
   const [sheet, setSheet] = useState<SheetMode | null>(null)
 
   const profiles = data?.profiles ?? []
-  const encoder = data?.encoder
 
   const patchProfile = (saved: VersionProfile) =>
     setData((current) =>
@@ -189,12 +185,6 @@ export function VersionsSection() {
     )
     toast.success(`${profile.name} deleted`)
   }
-
-  const encoderDescription = !encoder
-    ? undefined
-    : encoder.hardwareAvailable
-      ? 'The GPU encodes about three times faster than the CPU, at the same size and quality.'
-      : 'No usable GPU was found, so versions are encoded on the CPU. Pass /dev/dri to the container to use one.'
 
   return (
     <Section
@@ -281,23 +271,6 @@ export function VersionsSection() {
           />
         ))}
       </RowGroup>
-
-      {data && (
-        <RowGroup>
-          <ToggleRow
-            label="Encode on the GPU"
-            description={encoderDescription}
-            checked={data.options.hardwareEncoding && encoder?.hardwareAvailable === true}
-            disabled={!encoder?.hardwareAvailable}
-            onSave={async (hardwareEncoding) => {
-              await send('/api/v1/versionprofiles/options', 'PUT', { hardwareEncoding })
-              setData((current) =>
-                current ? { ...current, options: { hardwareEncoding } } : current
-              )
-            }}
-          />
-        </RowGroup>
-      )}
 
       <VersionProfileSheet
         mode={sheet}

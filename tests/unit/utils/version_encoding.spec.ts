@@ -155,6 +155,37 @@ test.group('version_encoding | buildVersionEncodeArgs', () => {
     assert.equal(after(args, '-vf'), 'scale=1280:720:flags=bicubic,format=nv12,hwupload')
   })
 
+  test('Quick Sync decodes through VAAPI and encodes with look-ahead', ({ assert }) => {
+    const args = buildVersionEncodeArgs(input({ encoder: 'qsv' }))
+    assert.equal(after(args, '-hwaccel'), 'vaapi')
+    assert.equal(after(args, '-filter_hw_device'), 'qs')
+    assert.include(args, 'qsv=qs@va')
+    assert.equal(after(args, '-vf'), 'hwmap=derive_device=qsv,format=qsv,vpp_qsv=format=nv12')
+    assert.equal(after(args, '-c:v'), 'hevc_qsv')
+    assert.equal(after(args, '-global_quality'), '25')
+    assert.equal(after(args, '-look_ahead_depth'), '40')
+    assert.equal(after(args, '-extbrc'), '1')
+  })
+
+  test('Quick Sync scales 4K HDR on the GPU and stays 10-bit', ({ assert }) => {
+    const args = buildVersionEncodeArgs(
+      input({
+        encoder: 'qsv',
+        analysis: analysis({
+          videoWidth: 3840,
+          videoHeight: 2160,
+          videoPixFmt: 'yuv420p10le',
+          videoColorTransfer: 'smpte2084',
+        }),
+      })
+    )
+    assert.equal(
+      after(args, '-vf'),
+      'hwmap=derive_device=qsv,format=qsv,vpp_qsv=w=1920:h=1080:format=p010'
+    )
+    assert.equal(after(args, '-profile:v'), 'main10')
+  })
+
   test('falls back to constant QP where the driver has no ICQ', ({ assert }) => {
     const args = buildVersionEncodeArgs(input({ vaapiRateControl: 'CQP' }))
     assert.equal(after(args, '-rc_mode'), 'CQP')

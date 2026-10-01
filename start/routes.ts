@@ -191,7 +191,7 @@ router
           response.redirect().status(301).toPath('/settings/media')
         )
         router.get('/settings/playback', async ({ response }) =>
-          response.redirect().status(301).toPath('/settings/media#playback')
+          response.redirect().status(301).toPath('/settings/media#hardware')
         )
         router
           .on('/settings/indexers')
@@ -529,7 +529,6 @@ router
         // Version profiles: smaller copies kept beside a movie's main file
         router.get('/versionprofiles', [MediaVersionsController, 'profiles'])
         router.post('/versionprofiles', [MediaVersionsController, 'storeProfile'])
-        router.put('/versionprofiles/options', [MediaVersionsController, 'updateOptions'])
         router.put('/versionprofiles/:id', [MediaVersionsController, 'updateProfile'])
         router.delete('/versionprofiles/:id', [MediaVersionsController, 'destroyProfile'])
         router.post('/versionprofiles/:id/backfill', [MediaVersionsController, 'backfill'])
@@ -589,6 +588,7 @@ router
 
         // Playback settings (write)
         router.put('/settings/playback', [PlaybackSettingsController, 'update'])
+        router.post('/settings/playback/retest', [PlaybackSettingsController, 'retest'])
 
         // Filesystem browser (admin only - exposes server filesystem)
         router.get('/filesystem/browse', [FilesystemController, 'browse'])

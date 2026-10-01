@@ -23,10 +23,8 @@ export default class MediaVersionsController {
   // ---------------------------------------------------------------------------
 
   async profiles({ response }: HttpContext) {
-    const [profiles, options, encoder, counts] = await Promise.all([
+    const [profiles, counts] = await Promise.all([
       VersionProfile.query().orderBy('created_at'),
-      mediaVersionService.getOptions(),
-      mediaVersionService.encoderSummary(),
       MediaVersion.query().select('label', 'status').count('* as total').groupBy('label', 'status'),
     ])
 
@@ -43,8 +41,6 @@ export default class MediaVersionsController {
         ...serializeProfile(profile),
         counts: countsFor(profile.label),
       })),
-      options,
-      encoder,
     })
   }
 
@@ -105,15 +101,6 @@ export default class MediaVersionsController {
 
     const queued = await mediaVersionService.backfill(profile)
     return response.json({ queued })
-  }
-
-  async updateOptions({ request, response }: HttpContext) {
-    const hardwareEncoding = request.input('hardwareEncoding')
-    if (typeof hardwareEncoding !== 'boolean') {
-      return response.badRequest({ error: 'hardwareEncoding must be a boolean' })
-    }
-    await mediaVersionService.setOptions({ hardwareEncoding })
-    return response.json({ hardwareEncoding })
   }
 
   // ---------------------------------------------------------------------------

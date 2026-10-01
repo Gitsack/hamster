@@ -6,7 +6,6 @@ import app from '@adonisjs/core/services/app'
 import logger from '@adonisjs/core/services/logger'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
-import AppSetting from '#models/app_setting'
 import Episode from '#models/episode'
 import EpisodeFile from '#models/episode_file'
 import MediaVersion from '#models/media_version'
@@ -14,6 +13,7 @@ import Movie from '#models/movie'
 import MovieFile from '#models/movie_file'
 import VersionProfile from '#models/version_profile'
 import { fileTransferService } from './file_transfer_service.js'
+import { hardwareAccelerationService } from './hardware_acceleration_service.js'
 import { subtitlePruningService } from './subtitle_pruning_service.js'
 import { analysisToMediaInfo } from '#services/quality/file_quality_service'
 import { probeFile, type MediaAnalysis } from '#utils/ffmpeg_utils'
@@ -26,16 +26,6 @@ import {
   type VaapiRateControl,
   type VersionEncoder,
 } from '#utils/version_encoding'
-
-/** Kept under its first name so the stored GPU switch survives the rename. */
-export const VERSIONS_SETTING_KEY = 'movieVersions'
-
-export interface VersionOptions {
-  /** Use the GPU when one is usable. Off forces x265 on the CPU. */
-  hardwareEncoding: boolean
-}
-
-const DEFAULT_OPTIONS: VersionOptions = { hardwareEncoding: true }
 
 /** Where import-time hardlinks go, beside the download they came from. */
 export const STAGING_DIR_NAME = '.hamster-versions'
@@ -153,7 +143,6 @@ export class MediaVersionService {
   private timer: NodeJS.Timeout | null = null
   private draining = false
   private current: RunningEncode | null = null
-  private encoderProbe: Promise<VaapiRateControl | null> | null = null
 
   start(): void {
     if (this.timer) return
@@ -185,88 +174,29 @@ export class MediaVersionService {
       .catch(() => {})
   }
 
-  async getOptions(): Promise<VersionOptions> {
-    const stored = await AppSetting.get<Partial<VersionOptions>>(VERSIONS_SETTING_KEY)
-    return { ...DEFAULT_OPTIONS, ...stored }
-  }
-
-  async setOptions(options: VersionOptions): Promise<void> {
-    await AppSetting.set(VERSIONS_SETTING_KEY, options)
-  }
-
-  get vaapiDevice(): string {
-    return process.env.VAAPI_DEVICE || '/dev/dri/renderD128'
-  }
-
   /**
-   * Whether the GPU can encode HEVC here, and with which rate control. Probed
-   * once, with a one-second test encode per mode: the device node existing
-   * says nothing about whether the driver inside this container can use it,
-   * and older drivers turn down ICQ.
+   * Encoders to try, best first, from the shared hardware acceleration
+   * setting. A later one runs only if the one before fails. Versions encode
+   * with Quick Sync or VAAPI; any other method (CUDA, VideoToolbox) or none
+   * means the CPU.
    */
-  hardwareAvailable(): Promise<boolean> {
-    return this.probeHardware().then((mode) => mode !== null)
-  }
+  private async encoderChain(): Promise<{
+    chain: VersionEncoder[]
+    device: string
+    vaapiRateControl: VaapiRateControl | null
+  }> {
+    const settings = await hardwareAccelerationService.get()
+    const method = settings.hardwareAccelType
+    const usable =
+      settings.useForVersions && (method === 'auto' || method === 'qsv' || method === 'vaapi')
+    if (!usable) return { chain: ['x265'], device: settings.vaapiDevice, vaapiRateControl: null }
 
-  private probeHardware(): Promise<VaapiRateControl | null> {
-    this.encoderProbe ??= (async () => {
-      try {
-        await fs.access(this.vaapiDevice)
-      } catch {
-        return null
-      }
-      let lastError: unknown = null
-      for (const mode of ['ICQ', 'CQP'] as const) {
-        try {
-          await runFfmpeg([
-            '-hide_banner',
-            '-nostdin',
-            '-loglevel',
-            'error',
-            '-init_hw_device',
-            `vaapi=va:${this.vaapiDevice}`,
-            '-filter_hw_device',
-            'va',
-            '-f',
-            'lavfi',
-            '-i',
-            'testsrc2=s=640x360:d=1',
-            '-vf',
-            'format=nv12,hwupload',
-            '-c:v',
-            'hevc_vaapi',
-            ...(mode === 'ICQ'
-              ? ['-rc_mode', 'ICQ', '-global_quality', '23']
-              : ['-rc_mode', 'CQP', '-qp', '25']),
-            '-f',
-            'hevc',
-            'pipe:1',
-          ])
-          logger.info(`Versions: GPU encoding available on ${this.vaapiDevice} (${mode})`)
-          return mode
-        } catch (error) {
-          lastError = error
-        }
-      }
-      logger.info(`Versions: no GPU encoding (${describeError(lastError)}), using x265`)
-      return null
-    })()
-    return this.encoderProbe
-  }
-
-  /** Encoders to try, best first. A later one runs only if the one before fails. */
-  private async encoderChain(): Promise<VersionEncoder[]> {
-    const { hardwareEncoding } = await this.getOptions()
-    if (hardwareEncoding && (await this.hardwareAvailable())) {
-      return ['vaapi', 'vaapi-upload', 'x265']
-    }
-    return ['x265']
-  }
-
-  async encoderSummary(): Promise<{ hardwareAvailable: boolean; active: 'gpu' | 'cpu' }> {
-    const hardwareAvailable = await this.hardwareAvailable()
-    const { hardwareEncoding } = await this.getOptions()
-    return { hardwareAvailable, active: hardwareAvailable && hardwareEncoding ? 'gpu' : 'cpu' }
+    const gpu = await hardwareAccelerationService.capabilities(settings.vaapiDevice)
+    const chain: VersionEncoder[] = []
+    if (gpu.qsv && method !== 'vaapi') chain.push('qsv')
+    if (gpu.vaapi) chain.push('vaapi', 'vaapi-upload')
+    chain.push('x265')
+    return { chain, device: settings.vaapiDevice, vaapiRateControl: gpu.vaapi }
   }
 
   /** Where a finished version lives on disk, or null when that cannot be told. */
@@ -694,7 +624,8 @@ export class MediaVersionService {
     // on every encoder, and retrying it meant encoding the whole film again.
     const failures: string[] = []
     let used: VersionEncoder | null = null
-    for (const encoder of await this.encoderChain()) {
+    const { chain, device, vaapiRateControl } = await this.encoderChain()
+    for (const encoder of chain) {
       if (running.cancelled) throw new Error('cancelled')
       try {
         await version.merge({ encoder }).save()
@@ -707,8 +638,8 @@ export class MediaVersionService {
             encoder,
             subtitleIndices,
             sidecars,
-            vaapiDevice: this.vaapiDevice,
-            vaapiRateControl: (await this.probeHardware()) ?? undefined,
+            vaapiDevice: device,
+            vaapiRateControl: vaapiRateControl ?? undefined,
           }),
           analysis.duration,
           running
@@ -860,31 +791,6 @@ function resolutionLabel(width?: number, height?: number): string | null {
   if (width >= 1800 || height >= 1000) return '1080p'
   if (width >= 1200 || height >= 700) return '720p'
   return '480p'
-}
-
-/**
- * Run a short ffmpeg command that writes to stdout, and fail unless it
- * produced output. Exit code 0 is not enough: with a driver that cannot encode
- * (Ubuntu's free intel-media-va-driver, for one) ffmpeg opens the encoder,
- * receives no packets, and still exits 0.
- */
-function runFfmpeg(args: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('ffmpeg', args, { env: { ...process.env, LIBVA_MESSAGING_LEVEL: '0' } })
-    let stderr = ''
-    let bytes = 0
-    proc.stdout.on('data', (chunk: Buffer) => {
-      bytes += chunk.length
-    })
-    proc.stderr.on('data', (chunk) => {
-      stderr = (stderr + chunk.toString()).slice(-1000)
-    })
-    proc.on('error', (error) => reject(error))
-    proc.on('close', (code) => {
-      if (code === 0 && bytes > 0) return resolve()
-      reject(new Error(stderr.trim().split('\n').pop() || `exit ${code}, ${bytes} bytes`))
-    })
-  })
 }
 
 async function exists(filePath: string): Promise<boolean> {

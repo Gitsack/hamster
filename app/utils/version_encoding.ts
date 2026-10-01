@@ -4,13 +4,16 @@ import type { VersionAudioMode, VersionQuality } from '#models/version_profile'
 /**
  * How a version gets encoded.
  *
+ * - `qsv`: Intel Quick Sync. The same encoder silicon as `vaapi`, but driven
+ *   through oneVPL, which adds look-ahead rate control: about a third smaller
+ *   at the same quality. Needs the VPL GPU runtime (jellyfin-ffmpeg has it).
  * - `vaapi`: the GPU decodes and encodes; nothing but the compressed stream
  *   crosses into system memory. Several times faster than the CPU.
  * - `vaapi-upload`: the CPU decodes and the GPU encodes. For sources the GPU
  *   cannot decode (MPEG-4 ASP, some odd profiles).
  * - `x265`: all on the CPU. Slow, but runs anywhere ffmpeg does.
  */
-export type VersionEncoder = 'vaapi' | 'vaapi-upload' | 'x265'
+export type VersionEncoder = 'qsv' | 'vaapi' | 'vaapi-upload' | 'x265'
 
 export interface VersionEncodeProfile {
   maxHeight: number
@@ -55,26 +58,27 @@ export type VaapiRateControl = 'ICQ' | 'CQP'
 const CQP_OFFSET = 2
 
 /**
- * Quality levels per encoder, kept separate because the GPU's ICQ value and
- * x265's CRF are different scales that happen to line up here.
+ * Quality levels per encoder, kept separate because the GPU's ICQ values and
+ * x265's CRF are different scales.
  *
  * Measured on a 1080p Blu-ray clip (Intel Iris Xe, VMAF against the source,
  * sizes scaled to a two-hour film):
  *
- *   GPU ICQ 22  3.4 GB  VMAF 96.3  180 fps      x265 CRF 22  3.5 GB  96.2  28 fps
- *   GPU ICQ 25  1.8 GB  VMAF 93.9  200 fps      x265 CRF 24  2.2 GB  94.9  31 fps
- *                                               x265 CRF 26  1.5 GB  93.2  36 fps
+ *   QSV  q22  2.2 GB  VMAF 97.3   90 fps     VAAPI ICQ 22  3.4 GB  96.3  180 fps
+ *   QSV  q25  1.2 GB  VMAF 95.0  100 fps     VAAPI ICQ 25  1.8 GB  93.9  200 fps
+ *   QSV  q28  0.8 GB  VMAF 91.3  110 fps     x265 CRF 24   2.2 GB  94.9   31 fps
  *
- * Same size for the same picture, six times faster on the GPU. x265's "slow"
- * preset bought 2 VMAF points at 8 fps — six hours a film — so it is not
+ * Quick Sync's look-ahead is worth a third of the size at the same picture,
+ * at half VAAPI's speed — still about twenty minutes a film. x265's "slow"
+ * preset bought 2 VMAF points at 8 fps, six hours a film, so it is not
  * offered. "Balanced" sits near VMAF 95, where a phone or tablet screen stops
  * showing a difference. Grainy films come out larger, clean digital ones
  * (most 4K HDR) about half this.
  */
-const QUALITY_VALUES: Record<VersionQuality, { vaapi: number; x265: number }> = {
-  high: { vaapi: 21, x265: 21 },
-  balanced: { vaapi: 23, x265: 23 },
-  small: { vaapi: 25, x265: 25 },
+const QUALITY_VALUES: Record<VersionQuality, { qsv: number; vaapi: number; x265: number }> = {
+  high: { qsv: 22, vaapi: 21, x265: 21 },
+  balanced: { qsv: 25, vaapi: 23, x265: 23 },
+  small: { qsv: 27, vaapi: 25, x265: 25 },
 }
 
 /** Sources taller than this are resized on the GPU, despite its flush bug. */
@@ -242,7 +246,24 @@ export function buildVersionEncodeArgs(input: VersionEncodeInput): string[] {
   // accepts the lost final second (see `encodeStoppedAtFlush`).
   const gpuScale = encoder === 'vaapi' && target.scaled && analysis.videoHeight! > GPU_SCALE_ABOVE
   const gpuFrames = encoder === 'vaapi' && (!target.scaled || gpuScale)
-  if (encoder === 'vaapi') {
+  if (encoder === 'qsv') {
+    // Decoded through VAAPI and mapped across: QSV's own decoders refuse some
+    // streams VAAPI takes, and the frames never leave the GPU either way.
+    args.push(
+      '-init_hw_device',
+      `vaapi=va:${device}`,
+      '-init_hw_device',
+      'qsv=qs@va',
+      '-filter_hw_device',
+      'qs',
+      '-hwaccel',
+      'vaapi',
+      '-hwaccel_output_format',
+      'vaapi',
+      '-hwaccel_device',
+      'va'
+    )
+  } else if (encoder === 'vaapi') {
     args.push('-init_hw_device', `vaapi=va:${device}`, '-hwaccel', 'vaapi')
     if (gpuFrames) args.push('-hwaccel_output_format', 'vaapi')
     args.push('-hwaccel_device', 'va')
@@ -275,7 +296,9 @@ export function buildVersionEncodeArgs(input: VersionEncodeInput): string[] {
   const pixel = highBitDepth ? 'p010' : 'nv12'
   const size = target.scaled ? `w=${target.width}:h=${target.height}:` : ''
   const cpuScale = target.scaled ? `scale=${target.width}:${target.height}:flags=bicubic,` : ''
-  if (gpuFrames) {
+  if (encoder === 'qsv') {
+    args.push('-vf', `hwmap=derive_device=qsv,format=qsv,vpp_qsv=${size}format=${pixel}`)
+  } else if (gpuFrames) {
     args.push('-vf', `scale_vaapi=${size}format=${pixel}`)
   } else if (encoder === 'vaapi' || encoder === 'vaapi-upload') {
     args.push('-vf', `${cpuScale}format=${highBitDepth ? 'p010le' : 'nv12'},hwupload`)
@@ -297,6 +320,23 @@ export function buildVersionEncodeArgs(input: VersionEncodeInput): string[] {
       String(quality.x265),
       '-x265-params',
       params.join(':')
+    )
+  } else if (encoder === 'qsv') {
+    // ICQ with look-ahead: the encoder reads 40 frames ahead and moves bits
+    // to where the picture needs them. extbrc is what lets HEVC use it.
+    args.push(
+      '-c:v',
+      'hevc_qsv',
+      '-profile:v',
+      highBitDepth ? 'main10' : 'main',
+      '-preset',
+      'slower',
+      '-global_quality',
+      String(quality.qsv),
+      '-look_ahead_depth',
+      '40',
+      '-extbrc',
+      '1'
     )
   } else {
     // ICQ is the GPU's constant-quality mode: bits go where the picture needs

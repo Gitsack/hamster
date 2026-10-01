@@ -13,11 +13,14 @@ const CLEANUP_INTERVAL = 60 * 1000 // 1 minute
 export interface TranscodingSettings {
   useHardwareAcceleration: boolean
   hardwareAccelType: 'auto' | 'videotoolbox' | 'cuda' | 'qsv' | 'vaapi' | 'none'
+  /** The render node VAAPI and Quick Sync open. */
+  vaapiDevice: string
 }
 
 let transcodingSettings: TranscodingSettings = {
   useHardwareAcceleration: false,
   hardwareAccelType: 'auto',
+  vaapiDevice: '/dev/dri/renderD128',
 }
 
 export function updateTranscodingSettings(settings: Partial<TranscodingSettings>): void {
@@ -85,7 +88,7 @@ function getHwAccelArgs(): string[] {
     case 'qsv':
       return ['-hwaccel', 'qsv']
     case 'vaapi':
-      return ['-hwaccel', 'vaapi', '-hwaccel_device', '/dev/dri/renderD128']
+      return ['-hwaccel', 'vaapi', '-hwaccel_device', transcodingSettings.vaapiDevice]
     default:
       return []
   }

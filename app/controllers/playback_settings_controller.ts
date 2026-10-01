@@ -1,92 +1,84 @@
+import fs from 'node:fs/promises'
 import type { HttpContext } from '@adonisjs/core/http'
-import AppSetting from '#models/app_setting'
 import {
-  updateTranscodingSettings,
-  getTranscodingSettings,
-  type TranscodingSettings,
-} from '#services/media/video_transcoding_service'
-import { execSync } from 'node:child_process'
+  hardwareAccelerationService,
+  HARDWARE_ACCEL_TYPES,
+  type HardwareAccelerationSettings,
+} from '#services/media/hardware_acceleration_service'
 
-interface PlaybackSettings {
-  transcoding: TranscodingSettings
-  availableHardwareAccel: string[]
-}
-
+/**
+ * Settings → Media → Hardware acceleration: the one GPU setting that playback
+ * and versions share. Kept at /settings/playback, where it started.
+ */
 export default class PlaybackSettingsController {
-  /**
-   * Get playback settings
-   */
   async index({ response }: HttpContext) {
-    // Load settings from database
-    const storedSettings = await AppSetting.get<Partial<TranscodingSettings>>('transcodingSettings')
-
-    // Apply stored settings if they exist
-    if (storedSettings) {
-      updateTranscodingSettings(storedSettings)
-    }
-
-    // Detect available hardware acceleration
-    const availableHardwareAccel = await this.detectAvailableHwAccel()
-
-    const settings: PlaybackSettings = {
-      transcoding: getTranscodingSettings(),
-      availableHardwareAccel,
-    }
-
-    return response.json(settings)
+    return response.json(await this.describe(await hardwareAccelerationService.get()))
   }
 
-  /**
-   * Update playback settings
-   */
   async update({ request, response }: HttpContext) {
     const { transcoding } = request.only(['transcoding'])
+    if (!transcoding || typeof transcoding !== 'object') {
+      return response.badRequest({ error: 'transcoding is required' })
+    }
 
-    if (transcoding) {
-      // Validate hardware accel type
-      const validTypes = ['auto', 'videotoolbox', 'cuda', 'qsv', 'vaapi', 'none']
-      if (transcoding.hardwareAccelType && !validTypes.includes(transcoding.hardwareAccelType)) {
+    const patch: Partial<HardwareAccelerationSettings> = {}
+    if (transcoding.hardwareAccelType !== undefined) {
+      if (!HARDWARE_ACCEL_TYPES.includes(transcoding.hardwareAccelType)) {
         return response.badRequest({ error: 'Invalid hardware acceleration type' })
       }
-
-      // Update in-memory settings
-      updateTranscodingSettings(transcoding)
-
-      // Persist to database
-      await AppSetting.set('transcodingSettings', getTranscodingSettings())
+      patch.hardwareAccelType = transcoding.hardwareAccelType
+    }
+    if (transcoding.vaapiDevice !== undefined) {
+      const device = String(transcoding.vaapiDevice).trim()
+      if (!/^\/dev\/\S+$/.test(device)) {
+        return response.badRequest({ error: 'The device must be a path under /dev' })
+      }
+      patch.vaapiDevice = device
+    }
+    for (const key of ['useHardwareAcceleration', 'useForVersions'] as const) {
+      if (transcoding[key] !== undefined) {
+        if (typeof transcoding[key] !== 'boolean') {
+          return response.badRequest({ error: `${key} must be a boolean` })
+        }
+        patch[key] = transcoding[key]
+      }
     }
 
-    const availableHardwareAccel = await this.detectAvailableHwAccel()
-
-    return response.json({
-      transcoding: getTranscodingSettings(),
-      availableHardwareAccel,
-    })
+    return response.json(await this.describe(await hardwareAccelerationService.set(patch)))
   }
 
-  /**
-   * Detect available hardware acceleration methods
-   */
-  private async detectAvailableHwAccel(): Promise<string[]> {
-    const available: string[] = []
+  /** Run the GPU test encodes again, e.g. after installing a runtime. */
+  async retest({ response }: HttpContext) {
+    hardwareAccelerationService.retest()
+    return response.json(await this.describe(await hardwareAccelerationService.get()))
+  }
 
-    try {
-      const output = execSync('ffmpeg -hide_banner -hwaccels', {
-        encoding: 'utf-8',
-        timeout: 5000,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
-
-      const hwaccels = output.toLowerCase()
-
-      if (hwaccels.includes('videotoolbox')) available.push('videotoolbox')
-      if (hwaccels.includes('cuda')) available.push('cuda')
-      if (hwaccels.includes('qsv')) available.push('qsv')
-      if (hwaccels.includes('vaapi')) available.push('vaapi')
-    } catch {
-      // FFmpeg not available or error detecting
+  private async describe(settings: HardwareAccelerationSettings) {
+    const gpu = await hardwareAccelerationService.capabilities(settings.vaapiDevice)
+    return {
+      transcoding: settings,
+      availableHardwareAccel: gpu.hwaccels,
+      // What passed a test encode, as opposed to what ffmpeg lists
+      gpu: {
+        qsv: gpu.qsv,
+        vaapi: gpu.vaapi,
+        qsvReason: gpu.qsvReason,
+        vaapiReason: gpu.vaapiReason,
+      },
+      devices: await renderNodes(),
     }
+  }
+}
 
-    return available
+/** The GPU render nodes this process can see, e.g. /dev/dri/renderD128. */
+async function renderNodes(): Promise<string[]> {
+  try {
+    const entries = await fs.readdir('/dev/dri')
+    return entries
+      .filter((name) => name.startsWith('renderD'))
+      .sort()
+      .map((name) => `/dev/dri/${name}`)
+  } catch {
+    return []
   }
 }

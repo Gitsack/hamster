@@ -179,10 +179,24 @@ export type HardwareAccelType = 'auto' | 'videotoolbox' | 'cuda' | 'qsv' | 'vaap
 /** GET and PUT /api/v1/settings/playback */
 export interface PlaybackSettings {
   transcoding: {
+    /** GPU decoding while streaming. */
     useHardwareAcceleration: boolean
     hardwareAccelType: HardwareAccelType
+    vaapiDevice: string
+    /** GPU encoding for versions. */
+    useForVersions: boolean
   }
   availableHardwareAccel: string[]
+  /** What passed a test encode on the chosen device. */
+  gpu?: {
+    qsv: boolean
+    vaapi: 'ICQ' | 'CQP' | null
+    /** Why each failed its test encode, or null when it passed. */
+    qsvReason?: string | null
+    vaapiReason?: string | null
+  }
+  /** Render nodes under /dev/dri. */
+  devices?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -298,12 +312,12 @@ export const NAMING_FIELD_LABELS: Record<string, string> = {
 }
 
 export const HW_ACCEL_OPTIONS: { value: HardwareAccelType; label: string }[] = [
-  { value: 'auto', label: 'Auto-detect (recommended)' },
-  { value: 'videotoolbox', label: 'VideoToolbox (macOS)' },
-  { value: 'cuda', label: 'CUDA (NVIDIA)' },
-  { value: 'qsv', label: 'Quick Sync (Intel)' },
-  { value: 'vaapi', label: 'VAAPI (Linux)' },
-  { value: 'none', label: 'None (CPU only)' },
+  { value: 'auto', label: 'Auto (recommended)' },
+  { value: 'qsv', label: 'Intel Quick Sync' },
+  { value: 'vaapi', label: 'VAAPI' },
+  { value: 'cuda', label: 'NVIDIA (CUDA)' },
+  { value: 'videotoolbox', label: 'Apple VideoToolbox' },
+  { value: 'none', label: 'Off (CPU only)' },
 ]
 
 export const HW_ACCEL_NAMES: Record<string, string> = {

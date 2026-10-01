@@ -25,6 +25,7 @@ import { notificationService } from '#services/notifications/notification_servic
 import { webhookService } from '#services/webhooks/webhook_service'
 import { taskScheduler } from '#services/tasks/task_scheduler'
 import { mediaVersionService } from '#services/media/media_version_service'
+import { hardwareAccelerationService } from '#services/media/hardware_acceleration_service'
 import { healthMonitor } from '#services/system/health_monitor'
 import AppSetting from '#models/app_setting'
 import { tmdbService } from '#services/metadata/tmdb_service'
@@ -110,6 +111,14 @@ setTimeout(async () => {
     console.error('[TaskScheduler] Failed to start:', error)
   }
 }, 5000)
+
+// The GPU setting lives in the database; until it is loaded, streaming ignores
+// it and runs on the CPU whatever Settings say.
+setTimeout(() => {
+  hardwareAccelerationService
+    .load()
+    .catch((error) => console.error('[Startup] Failed to load hardware acceleration:', error))
+}, 2000)
 
 // Work through queued versions (smaller copies beside a movie or episode).
 // The queue lives in the database, so anything left from before a restart

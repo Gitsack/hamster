@@ -158,8 +158,15 @@ export const SUBTITLE_FIXTURE: { options: SubtitlePruningOptions; ffmpegAvailabl
 }
 
 export const PLAYBACK_FIXTURE: PlaybackSettings = {
-  transcoding: { useHardwareAcceleration: true, hardwareAccelType: 'auto' },
-  availableHardwareAccel: ['vaapi'],
+  transcoding: {
+    useHardwareAcceleration: true,
+    hardwareAccelType: 'auto',
+    vaapiDevice: '/dev/dri/renderD128',
+    useForVersions: true,
+  },
+  availableHardwareAccel: ['vaapi', 'qsv'],
+  gpu: { qsv: true, vaapi: 'ICQ' },
+  devices: ['/dev/dri/renderD128'],
 }
 
 const VIDEO_ITEMS = [

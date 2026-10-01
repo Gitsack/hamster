@@ -162,21 +162,29 @@ describe('MediaSettings', () => {
     )
   })
 
-  it('folds Playback in, sending only the transcoding block', async () => {
+  it('shares one hardware setting, sending only the transcoding block', async () => {
     const fetchMock = vi.fn(libraryFetchStub())
     vi.stubGlobal('fetch', fetchMock)
     render(<MediaSettings />)
 
-    const playback = section('Playback')
-    expect(await within(playback).findByText('VAAPI')).toBeInTheDocument()
-    await userEvent.click(within(playback).getByRole('switch'))
+    const hardware = section('Hardware acceleration')
+    expect(await within(hardware).findByText('Quick Sync · VAAPI (ICQ)')).toBeInTheDocument()
+    expect(within(hardware).getByText('Uses: Intel Quick Sync.')).toBeInTheDocument()
+    await userEvent.click(within(hardware).getByRole('switch', { name: 'Decode while streaming' }))
 
     await waitFor(() =>
       expect(writes(fetchMock)).toEqual([
         {
           url: '/api/v1/settings/playback',
           method: 'PUT',
-          body: { transcoding: { useHardwareAcceleration: false, hardwareAccelType: 'auto' } },
+          body: {
+            transcoding: {
+              useHardwareAcceleration: false,
+              hardwareAccelType: 'auto',
+              vaapiDevice: '/dev/dri/renderD128',
+              useForVersions: true,
+            },
+          },
         },
       ])
     )
@@ -192,6 +200,8 @@ describe('MediaSettings', () => {
     )
     expect(within(types).getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     // The rest of the page is unaffected.
-    expect(await within(section('Playback')).findByText('VAAPI')).toBeInTheDocument()
+    expect(
+      await within(section('Hardware acceleration')).findByText('Quick Sync · VAAPI (ICQ)')
+    ).toBeInTheDocument()
   })
 })

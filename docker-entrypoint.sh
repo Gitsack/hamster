@@ -55,7 +55,7 @@ elif [ -f /app/tmp/.app_key ]; then
   export APP_KEY=$(cat /app/tmp/.app_key)
   echo "Using persisted APP_KEY"
 else
-  export APP_KEY=$(su-exec hamster bun -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+  export APP_KEY=$(gosu hamster bun -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
   echo "$APP_KEY" > /app/tmp/.app_key
   chown hamster:hamster /app/tmp/.app_key
   echo "Generated and persisted new APP_KEY"
@@ -63,7 +63,7 @@ fi
 
 # Wait for database to be ready
 echo "Checking database connection..."
-until su-exec hamster bun -e "
+until gosu hamster bun -e "
   const { Client } = require('pg');
   const client = new Client({
     host: process.env.DB_HOST,
@@ -83,9 +83,9 @@ echo "Database is ready!"
 
 # Run database migrations
 echo "Running database migrations..."
-su-exec hamster bun ace migration:run --force
+gosu hamster bun ace migration:run --force
 echo "Migrations completed successfully!"
 
 # Execute the main command as hamster user
 echo "Starting server..."
-exec su-exec hamster "$@"
+exec gosu hamster "$@"
