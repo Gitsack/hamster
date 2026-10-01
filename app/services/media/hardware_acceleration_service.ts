@@ -37,7 +37,12 @@ export interface HardwareAccelerationSettings {
   useHardwareAcceleration: boolean
   /** Encode versions on the GPU. */
   useForVersions: boolean
+  /** Speed against size when encoding versions; the picture stays the same. */
+  encoderPreset: EncoderPreset
 }
+
+export type EncoderPreset = 'quality' | 'balanced' | 'fast'
+export const ENCODER_PRESETS: EncoderPreset[] = ['quality', 'balanced', 'fast']
 
 /** What actually works on this machine, from test encodes. */
 export interface GpuCapabilities {
@@ -58,6 +63,7 @@ function defaults(): HardwareAccelerationSettings {
     vaapiDevice: process.env.VAAPI_DEVICE || '/dev/dri/renderD128',
     useHardwareAcceleration: false,
     useForVersions: true,
+    encoderPreset: 'balanced',
   }
 }
 

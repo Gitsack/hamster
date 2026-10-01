@@ -311,6 +311,7 @@ router
     router.delete('/tvshows/:id/episodes/:episodeId/file', [TvShowsController, 'deleteEpisodeFile'])
     router.get('/tvshows/:id/versions', [MediaVersionsController, 'showIndex'])
     router.post('/tvshows/:id/versions', [MediaVersionsController, 'showStore'])
+    router.post('/tvshows/:id/versions/promote', [MediaVersionsController, 'showPromote'])
     router.delete('/versions/:versionId', [MediaVersionsController, 'destroy'])
     router.post('/versions/:versionId/promote', [MediaVersionsController, 'promote'])
     router.get('/versions/:versionId/download', [MediaVersionsController, 'download'])

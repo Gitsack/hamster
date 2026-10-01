@@ -46,6 +46,35 @@ export interface VersionEncodeInput {
    * intel-media 24.1) only offer CQP, CBR, VBR and QVBR.
    */
   vaapiRateControl?: VaapiRateControl
+  /** Speed against size; the picture quality stays the same. Default 'balanced'. */
+  speed?: EncoderSpeed
+}
+
+export type EncoderSpeed = 'quality' | 'balanced' | 'fast'
+
+/**
+ * Quick Sync's knobs per speed. Measured on a 4K HDR AV1 source scaled to
+ * 1080p, at the same global_quality (VMAF 91.8–92.1 for all three, so the
+ * picture does not change, only the size):
+ *
+ *   quality   slower + 40-frame look-ahead   1.0x    2.26 MB
+ *   balanced  medium                         1.55x   2.45 MB (+8%)
+ *   fast      faster                         2.2x    2.73 MB (+21%)
+ *
+ * Look-ahead only takes effect at the slower presets; at medium it changed
+ * nothing, so it is only asked for where it works.
+ */
+const QSV_SPEED: Record<EncoderSpeed, string[]> = {
+  quality: ['-preset', 'slower', '-look_ahead_depth', '40', '-extbrc', '1'],
+  balanced: ['-preset', 'medium'],
+  fast: ['-preset', 'faster'],
+}
+
+/** x265 is the fallback; its "slow" took six hours a film, so it stops at medium. */
+const X265_SPEED: Record<EncoderSpeed, string> = {
+  quality: 'medium',
+  balanced: 'medium',
+  fast: 'faster',
 }
 
 export type VaapiRateControl = 'ICQ' | 'CQP'
@@ -233,6 +262,7 @@ export function buildVersionEncodeArgs(input: VersionEncodeInput): string[] {
   const target = targetDimensions(analysis.videoWidth!, analysis.videoHeight!, profile.maxHeight)
   const quality = QUALITY_VALUES[profile.quality] ?? QUALITY_VALUES.balanced
   const device = input.vaapiDevice ?? '/dev/dri/renderD128'
+  const speed = input.speed ?? 'balanced'
 
   const args: string[] = ['-hide_banner', '-nostdin', '-y', '-loglevel', 'error']
 
@@ -315,28 +345,23 @@ export function buildVersionEncodeArgs(input: VersionEncodeInput): string[] {
       '-c:v',
       'libx265',
       '-preset',
-      'medium',
+      X265_SPEED[speed],
       '-crf',
       String(quality.x265),
       '-x265-params',
       params.join(':')
     )
   } else if (encoder === 'qsv') {
-    // ICQ with look-ahead: the encoder reads 40 frames ahead and moves bits
-    // to where the picture needs them. extbrc is what lets HEVC use it.
+    // ICQ: bits go where the picture needs them, like x265's CRF; the speed
+    // setting decides how hard the encoder looks for the smallest file.
     args.push(
       '-c:v',
       'hevc_qsv',
       '-profile:v',
       highBitDepth ? 'main10' : 'main',
-      '-preset',
-      'slower',
+      ...QSV_SPEED[speed],
       '-global_quality',
-      String(quality.qsv),
-      '-look_ahead_depth',
-      '40',
-      '-extbrc',
-      '1'
+      String(quality.qsv)
     )
   } else {
     // ICQ is the GPU's constant-quality mode: bits go where the picture needs

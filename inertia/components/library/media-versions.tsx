@@ -46,6 +46,8 @@ export interface MediaVersion {
   error: string | null
   encoder: string | null
   progress: { percent: number; fps: number | null; eta: number | null } | null
+  /** Size of the file it was made from; set on a show's versions. */
+  originalSize?: number | null
   /** Set for an episode's version. */
   episode: { id: string; seasonNumber: number; episodeNumber: number; title: string | null } | null
   downloadUrl: string | null
@@ -140,8 +142,14 @@ function useVersionActions(reload: () => Promise<void>, onPromoted?: () => void)
     if (!promoting) return
     setBusy(true)
     try {
-      await send(`/api/v1/versions/${promoting.id}/promote`, 'POST')
-      toast.success(`Kept only the ${promoting.label} version`)
+      const result = await send<{ freedBytes: number }>(
+        `/api/v1/versions/${promoting.id}/promote`,
+        'POST'
+      )
+      toast.success(
+        `Kept only the ${promoting.label} version` +
+          (result?.freedBytes ? `, ${formatSize(result.freedBytes)} freed` : '')
+      )
       setPromoting(null)
       onPromoted?.()
       await reload()
@@ -175,8 +183,9 @@ function PromoteDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Keep only the {version?.label} version?</AlertDialogTitle>
           <AlertDialogDescription>
-            {what === 'the' ? 'The' : what} original file is deleted for good
-            {originalSize ? `, freeing ${formatSize(originalSize)}` : ''}
+            {what === 'the' ? 'The' : what} original file
+            {originalSize ? ` (${formatSize(originalSize)})` : ''} and any other versions are
+            deleted for good
             {version?.size ? `. Playback continues from the ${formatSize(version.size)} copy` : ''}.
             Getting the full quality back means downloading it again.
           </AlertDialogDescription>
@@ -316,6 +325,8 @@ export function ShowVersionsCard({
   }>(`/api/v1/tvshows/${showId}/versions`)
   const actions = useVersionActions(load, onPromoted)
   const [open, setOpen] = useState(false)
+  const [bulk, setBulk] = useState<{ label: string; seasonNumber?: number } | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   if (!data || (data.versions.length === 0 && data.profiles.length === 0)) return null
   if (data.episodesWithFiles === 0 && data.versions.length === 0) return null
@@ -349,6 +360,46 @@ export function ShowVersionsCard({
       await load()
     } catch (err) {
       toast.error('Could not queue the version', { description: message(err) })
+    }
+  }
+
+  const bulkVersions = bulk
+    ? versions.filter(
+        (v) =>
+          v.status === 'ready' &&
+          v.label === bulk.label &&
+          (bulk.seasonNumber === undefined || v.episode?.seasonNumber === bulk.seasonNumber)
+      )
+    : []
+  const bulkFrees = bulkVersions.reduce((sum, v) => sum + (v.originalSize ?? 0), 0)
+  const bulkKeeps = bulkVersions.reduce((sum, v) => sum + (v.size ?? 0), 0)
+
+  const keepOnly = async () => {
+    if (!bulk) return
+    setBulkBusy(true)
+    try {
+      const result = await send<{ promoted: number; freedBytes: number; errors: string[] }>(
+        `/api/v1/tvshows/${showId}/versions/promote`,
+        'POST',
+        { label: bulk.label, seasonNumber: bulk.seasonNumber }
+      )
+      if (result) {
+        const done = `${result.promoted} ${result.promoted === 1 ? 'episode' : 'episodes'} now keep only ${bulk.label}, ${formatSize(result.freedBytes)} freed`
+        if (result.errors.length > 0) {
+          toast.warning(done, {
+            description: `${result.errors.length} could not: ${result.errors.slice(0, 3).join('; ')}`,
+          })
+        } else {
+          toast.success(done)
+        }
+      }
+      setBulk(null)
+      onPromoted?.()
+      await load()
+    } catch (err) {
+      toast.error('Nothing was changed', { description: message(err) })
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -405,6 +456,7 @@ export function ShowVersionsCard({
                   label={label}
                   versions={versions.filter((v) => v.label === label)}
                   episodesWithFiles={episodesWithFiles}
+                  onKeepOnly={(seasonNumber) => setBulk({ label, seasonNumber })}
                 />
               ))}
             </ul>
@@ -445,6 +497,41 @@ export function ShowVersionsCard({
         )}
       </CardContent>
 
+      <AlertDialog open={bulk !== null} onOpenChange={(next) => !next && setBulk(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Keep only {bulk?.label}
+              {bulk?.seasonNumber !== undefined
+                ? ` in ${bulk.seasonNumber === 0 ? 'the specials' : `season ${bulk.seasonNumber}`}`
+                : ''}
+              ?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The originals of {bulkVersions.length}{' '}
+              {bulkVersions.length === 1 ? 'episode' : 'episodes'}
+              {bulkFrees > 0 ? ` (${formatSize(bulkFrees)})` : ''} and their other versions are
+              deleted for good, keeping the {bulk?.label} copies
+              {bulkKeeps > 0 ? ` (${formatSize(bulkKeeps)})` : ''}. Getting the full quality back
+              means downloading them again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault()
+                void keepOnly()
+              }}
+              disabled={bulkBusy || bulkVersions.length === 0}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {bulkBusy ? 'Deleting…' : 'Delete originals'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <PromoteDialog
         version={actions.promoting}
         originalSize={null}
@@ -461,16 +548,22 @@ function ProfileProgress({
   label,
   versions,
   episodesWithFiles,
+  onKeepOnly,
 }: {
   label: string
   versions: MediaVersion[]
   episodesWithFiles: number
+  /** Keep only this label's versions, across the show or in one season. */
+  onKeepOnly: (seasonNumber?: number) => void
 }) {
   const ready = versions.filter((v) => v.status === 'ready')
   const queued = versions.filter((v) => v.status === 'queued').length
   const failed = versions.filter((v) => v.status === 'failed').length
   const encoding = versions.find((v) => v.status === 'encoding')
   const size = ready.reduce((sum, v) => sum + (v.size ?? 0), 0)
+  const readySeasons = [
+    ...new Set(ready.map((v) => v.episode?.seasonNumber).filter((n) => n !== undefined)),
+  ].sort((a, b) => a! - b!) as number[]
 
   const parts = [
     `${ready.length} of ${episodesWithFiles} episodes`,
@@ -481,8 +574,36 @@ function ProfileProgress({
 
   return (
     <li className="space-y-1.5">
-      <p className="text-sm font-medium">{label}</p>
-      <p className="readout text-xs text-muted-foreground">{parts.join(' · ')}</p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{label}</p>
+          <p className="readout text-xs text-muted-foreground">{parts.join(' · ')}</p>
+        </div>
+        {ready.length > 0 &&
+          (readySeasons.length > 1 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
+                  Keep only {label}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onKeepOnly()}>All episodes</DropdownMenuItem>
+                {readySeasons.map((season) => (
+                  <DropdownMenuItem key={season} onClick={() => onKeepOnly(season)}>
+                    {season === 0 ? 'Specials' : `Season ${season}`}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => onKeepOnly()}>
+              <HugeiconsIcon icon={StarIcon} className="h-4 w-4" />
+              Keep only {label}
+            </Button>
+          ))}
+      </div>
       {encoding?.episode && (
         <>
           <p className="readout text-xs text-muted-foreground">

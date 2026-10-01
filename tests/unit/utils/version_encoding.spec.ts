@@ -155,7 +155,7 @@ test.group('version_encoding | buildVersionEncodeArgs', () => {
     assert.equal(after(args, '-vf'), 'scale=1280:720:flags=bicubic,format=nv12,hwupload')
   })
 
-  test('Quick Sync decodes through VAAPI and encodes with look-ahead', ({ assert }) => {
+  test('Quick Sync decodes through VAAPI and encodes on the GPU', ({ assert }) => {
     const args = buildVersionEncodeArgs(input({ encoder: 'qsv' }))
     assert.equal(after(args, '-hwaccel'), 'vaapi')
     assert.equal(after(args, '-filter_hw_device'), 'qs')
@@ -163,8 +163,18 @@ test.group('version_encoding | buildVersionEncodeArgs', () => {
     assert.equal(after(args, '-vf'), 'hwmap=derive_device=qsv,format=qsv,vpp_qsv=format=nv12')
     assert.equal(after(args, '-c:v'), 'hevc_qsv')
     assert.equal(after(args, '-global_quality'), '25')
-    assert.equal(after(args, '-look_ahead_depth'), '40')
-    assert.equal(after(args, '-extbrc'), '1')
+    // Balanced by default: look-ahead only works at the slower presets
+    assert.equal(after(args, '-preset'), 'medium')
+    assert.notInclude(args, '-look_ahead_depth')
+  })
+
+  test('the speed setting picks the Quick Sync preset', ({ assert }) => {
+    const quality = buildVersionEncodeArgs(input({ encoder: 'qsv', speed: 'quality' }))
+    assert.equal(after(quality, '-preset'), 'slower')
+    assert.equal(after(quality, '-look_ahead_depth'), '40')
+    assert.equal(after(quality, '-extbrc'), '1')
+    const fast = buildVersionEncodeArgs(input({ encoder: 'qsv', speed: 'fast' }))
+    assert.equal(after(fast, '-preset'), 'faster')
   })
 
   test('Quick Sync scales 4K HDR on the GPU and stays 10-bit', ({ assert }) => {

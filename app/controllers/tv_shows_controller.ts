@@ -605,15 +605,17 @@ export default class TvShowsController {
               downloadUrl: `/api/v1/files/episodes/${e.episodeFile.id}/download`,
             }
           : null,
-        qualityAssessment: e.episodeFile
-          ? assessFile(
-              e.episodeFile.mediaInfo,
-              e.episodeFile.quality,
-              profile,
-              'tv',
-              show?.originalLanguage
-            )
-          : null,
+        // A version kept in place of the original is small on purpose
+        qualityAssessment:
+          e.episodeFile && !e.episodeFile.versionLabel
+            ? assessFile(
+                e.episodeFile.mediaInfo,
+                e.episodeFile.quality,
+                profile,
+                'tv',
+                show?.originalLanguage
+              )
+            : null,
       })),
     })
   }

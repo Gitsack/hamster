@@ -13,6 +13,7 @@ import Movie from '#models/movie'
 import MovieFile from '#models/movie_file'
 import VersionProfile from '#models/version_profile'
 import { fileTransferService } from './file_transfer_service.js'
+import { libraryFileFilter } from './version_files.js'
 import { hardwareAccelerationService } from './hardware_acceleration_service.js'
 import { subtitlePruningService } from './subtitle_pruning_service.js'
 import { analysisToMediaInfo } from '#services/quality/file_quality_service'
@@ -23,6 +24,7 @@ import {
   parseSidecarName,
   unsupportedSourceReason,
   type SubtitleSidecarInput,
+  type EncoderSpeed,
   type VaapiRateControl,
   type VersionEncoder,
 } from '#utils/version_encoding'
@@ -78,33 +80,55 @@ async function loadSubject(owner: VersionOwner): Promise<VersionSubject | null> 
   if ('episodeId' in owner) {
     const episode = await Episode.query()
       .where('id', owner.episodeId)
-      .preload('episodeFile')
       .preload('tvShow', (query) => query.preload('rootFolder'))
       .first()
-    if (!episode?.episodeFile || !episode.tvShow?.rootFolder) return null
+    const mainFile = await mainFileOf(
+      EpisodeFile.query().where('episodeId', owner.episodeId).orderBy('createdAt'),
+      episode?.episodeFileId
+    )
+    if (!episode || !mainFile || !episode.tvShow?.rootFolder) return null
     const code = `S${String(episode.seasonNumber).padStart(2, '0')}E${String(episode.episodeNumber).padStart(2, '0')}`
     return {
       kind: 'episode',
       title: `${episode.tvShow.title} ${code}`,
       rootPath: episode.tvShow.rootFolder.path,
-      mainFile: episode.episodeFile,
+      mainFile,
       tvShowId: episode.tvShowId,
     }
   }
 
-  const movie = await Movie.query()
-    .where('id', owner.movieId)
-    .preload('rootFolder')
-    .preload('movieFile')
-    .first()
-  if (!movie?.movieFile || !movie.rootFolder) return null
+  const movie = await Movie.query().where('id', owner.movieId).preload('rootFolder').first()
+  const mainFile = await mainFileOf(
+    MovieFile.query().where('movieId', owner.movieId).orderBy('createdAt')
+  )
+  if (!movie || !mainFile || !movie.rootFolder) return null
   return {
     kind: 'movie',
     title: movie.title,
     rootPath: movie.rootFolder.path,
-    mainFile: movie.movieFile,
+    mainFile,
     tvShowId: null,
   }
+}
+
+/**
+ * The main file among a title's file records. There should be one, but older
+ * library scans recorded version and work files as extra ones; taking
+ * whichever the database returned first is how "keep only this version"
+ * could have deleted the version instead of the original. An episode names
+ * its file; otherwise the oldest record that is not a version wins, since the
+ * import records the main file before any scan can add a stray one.
+ */
+async function mainFileOf<T extends MovieFile | EpisodeFile>(
+  query: PromiseLike<T[]>,
+  preferredId?: string | null
+): Promise<T | null> {
+  const files = await query
+  if (files.length <= 1) return files[0] ?? null
+  const preferred = preferredId ? files.find((file) => file.id === preferredId) : undefined
+  if (preferred) return preferred
+  const filter = await libraryFileFilter()
+  return files.find((file) => !filter.isNotMainFile(file.relativePath)) ?? files[0]
 }
 
 function whereOwner<T extends { where: (column: string, value: string) => T }>(
@@ -184,19 +208,23 @@ export class MediaVersionService {
     chain: VersionEncoder[]
     device: string
     vaapiRateControl: VaapiRateControl | null
+    speed: EncoderSpeed
   }> {
     const settings = await hardwareAccelerationService.get()
     const method = settings.hardwareAccelType
     const usable =
       settings.useForVersions && (method === 'auto' || method === 'qsv' || method === 'vaapi')
-    if (!usable) return { chain: ['x265'], device: settings.vaapiDevice, vaapiRateControl: null }
+    const speed = settings.encoderPreset
+    if (!usable) {
+      return { chain: ['x265'], device: settings.vaapiDevice, vaapiRateControl: null, speed }
+    }
 
     const gpu = await hardwareAccelerationService.capabilities(settings.vaapiDevice)
     const chain: VersionEncoder[] = []
     if (gpu.qsv && method !== 'vaapi') chain.push('qsv')
     if (gpu.vaapi) chain.push('vaapi', 'vaapi-upload')
     chain.push('x265')
-    return { chain, device: settings.vaapiDevice, vaapiRateControl: gpu.vaapi }
+    return { chain, device: settings.vaapiDevice, vaapiRateControl: gpu.vaapi, speed }
   }
 
   /** Where a finished version lives on disk, or null when that cannot be told. */
@@ -409,11 +437,13 @@ export class MediaVersionService {
   }
 
   /**
-   * Make a ready version the only file: the original is deleted and the
-   * version takes its name, so the library, Jellyfin and any sidecar
-   * subtitles all keep pointing at the right thing.
+   * Make a ready version the only file: the original and every other version
+   * are deleted and this one takes the original's name, so the library,
+   * Jellyfin and any sidecar subtitles all keep pointing at the right thing.
    */
-  async promote(version: MediaVersion): Promise<MovieFile | EpisodeFile> {
+  async promote(
+    version: MediaVersion
+  ): Promise<{ file: MovieFile | EpisodeFile; freedBytes: number }> {
     if (version.status !== 'ready' || !version.relativePath) {
       throw new Error('Only a finished version can replace the original')
     }
@@ -425,23 +455,32 @@ export class MediaVersionService {
     }
     const mainFile = subject.mainFile
 
-    // Another version still reading the original from the library would lose
-    // its source halfway through.
-    const busy = await whereOwner(MediaVersion.query(), owner)
-      .whereNot('id', version.id)
-      .whereIn('status', ['queued', 'encoding'])
-      .whereNull('stagedSourcePath')
-      .first()
-    if (busy) {
-      throw new Error(`Wait for the ${busy.label} version to finish first`)
+    // "Keep only this version" means only: every other version goes too,
+    // queued and running ones included. Left behind, a larger copy would sit
+    // beside a smaller main file, saving nothing and leaving the folder's
+    // largest file — which the library scan takes for the main one — wrong.
+    const others = await whereOwner(MediaVersion.query(), owner).whereNot('id', version.id)
+    let freedBytes = 0
+    for (const other of others) {
+      freedBytes += other.sizeBytes ?? 0
+      await this.remove(other)
     }
 
     const originalPath = path.join(subject.rootPath, mainFile.relativePath)
     const versionPath = path.join(subject.rootPath, version.relativePath)
+    // The one mistake here that cannot be undone: deleting the copy that is
+    // meant to stay.
+    if (path.normalize(originalPath) === path.normalize(versionPath)) {
+      throw new Error('The recorded original is this version itself; nothing was deleted')
+    }
     const promotedRelative = mainFile.relativePath.replace(/\.[^./]+$/, '') + '.mkv'
     const promotedPath = path.join(subject.rootPath, promotedRelative)
 
     await fs.access(versionPath)
+    freedBytes += await fs
+      .stat(originalPath)
+      .then((original) => original.size)
+      .catch(() => 0)
     await fs.unlink(originalPath).catch((error) => {
       if (error?.code !== 'ENOENT') throw error
     })
@@ -460,7 +499,45 @@ export class MediaVersionService {
     await MediaVersion.query().where('id', version.id).delete()
 
     logger.info(`Versions: ${subject.title} now keeps only its ${version.label} version`)
-    return mainFile
+    return { file: mainFile, freedBytes }
+  }
+
+  /**
+   * Keep only the `label` version of every episode of a show (or one season
+   * of it) that has one ready. Each goes on its own: one that fails is
+   * reported and the rest carry on.
+   */
+  async promoteShow(
+    tvShowId: string,
+    label: string,
+    seasonNumber?: number
+  ): Promise<{ promoted: number; freedBytes: number; errors: string[] }> {
+    const ready = await MediaVersion.query()
+      .where('tvShowId', tvShowId)
+      .where('label', label)
+      .where('status', 'ready')
+      .preload('episode')
+    const versions = ready.filter(
+      (version) => seasonNumber === undefined || version.episode?.seasonNumber === seasonNumber
+    )
+
+    let promoted = 0
+    let freedBytes = 0
+    const errors: string[] = []
+    for (const version of versions) {
+      try {
+        const result = await this.promote(version)
+        promoted++
+        freedBytes += result.freedBytes
+      } catch (error) {
+        const episode = version.episode
+        const code = episode
+          ? `S${String(episode.seasonNumber).padStart(2, '0')}E${String(episode.episodeNumber).padStart(2, '0')}`
+          : version.id
+        errors.push(`${code}: ${describeError(error)}`)
+      }
+    }
+    return { promoted, freedBytes, errors }
   }
 
   // ---------------------------------------------------------------------------
@@ -624,7 +701,7 @@ export class MediaVersionService {
     // on every encoder, and retrying it meant encoding the whole film again.
     const failures: string[] = []
     let used: VersionEncoder | null = null
-    const { chain, device, vaapiRateControl } = await this.encoderChain()
+    const { chain, device, vaapiRateControl, speed } = await this.encoderChain()
     for (const encoder of chain) {
       if (running.cancelled) throw new Error('cancelled')
       try {
@@ -640,6 +717,7 @@ export class MediaVersionService {
             sidecars,
             vaapiDevice: device,
             vaapiRateControl: vaapiRateControl ?? undefined,
+            speed,
           }),
           analysis.duration,
           running

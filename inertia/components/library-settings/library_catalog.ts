@@ -185,6 +185,8 @@ export interface PlaybackSettings {
     vaapiDevice: string
     /** GPU encoding for versions. */
     useForVersions: boolean
+    /** Speed against size when encoding versions. */
+    encoderPreset?: 'quality' | 'balanced' | 'fast'
   }
   availableHardwareAccel: string[]
   /** What passed a test encode on the chosen device. */

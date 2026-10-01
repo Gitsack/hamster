@@ -183,6 +183,7 @@ describe('MediaSettings', () => {
               hardwareAccelType: 'auto',
               vaapiDevice: '/dev/dri/renderD128',
               useForVersions: true,
+              encoderPreset: 'balanced',
             },
           },
         },

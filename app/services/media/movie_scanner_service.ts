@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { libraryFileFilter } from './version_files.js'
 import { DateTime } from 'luxon'
 import { fileNamingService } from './file_naming_service.js'
 import { movieParser, type ParsedMovieInfo } from './parsers/movie_parser.js'
@@ -85,7 +86,13 @@ export class MovieScannerService {
     try {
       // Phase 1: Discover video files
       onProgress?.({ phase: 'discovering', total: 0, current: 0 })
-      const videoFiles = await this.findVideoFiles(directory)
+      // Versions and Hamster's work files sit beside the main files but are not
+      // ones; recorded as such, they become a second file for the same title.
+      const filter = await libraryFileFilter()
+      const allVideoFiles = await this.findVideoFiles(directory)
+      const videoFiles = allVideoFiles.filter(
+        (file) => !filter.isNotMainFile(path.relative(rootFolder.path, file))
+      )
       result.filesFound = videoFiles.length
 
       if (videoFiles.length === 0) {

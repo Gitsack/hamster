@@ -163,6 +163,7 @@ export const PLAYBACK_FIXTURE: PlaybackSettings = {
     hardwareAccelType: 'auto',
     vaapiDevice: '/dev/dri/renderD128',
     useForVersions: true,
+    encoderPreset: 'balanced',
   },
   availableHardwareAccel: ['vaapi', 'qsv'],
   gpu: { qsv: true, vaapi: 'ICQ' },

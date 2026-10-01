@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import type { HttpContext } from '@adonisjs/core/http'
 import {
   hardwareAccelerationService,
+  ENCODER_PRESETS,
   HARDWARE_ACCEL_TYPES,
   type HardwareAccelerationSettings,
 } from '#services/media/hardware_acceleration_service'
@@ -34,6 +35,12 @@ export default class PlaybackSettingsController {
         return response.badRequest({ error: 'The device must be a path under /dev' })
       }
       patch.vaapiDevice = device
+    }
+    if (transcoding.encoderPreset !== undefined) {
+      if (!ENCODER_PRESETS.includes(transcoding.encoderPreset)) {
+        return response.badRequest({ error: 'Invalid encoder preset' })
+      }
+      patch.encoderPreset = transcoding.encoderPreset
     }
     for (const key of ['useHardwareAcceleration', 'useForVersions'] as const) {
       if (transcoding[key] !== undefined) {

@@ -1,6 +1,7 @@
 import path from 'node:path'
 import type { HttpContext } from '@adonisjs/core/http'
 import Episode from '#models/episode'
+import EpisodeFile from '#models/episode_file'
 import MediaVersion from '#models/media_version'
 import Movie from '#models/movie'
 import TvShow from '#models/tv_show'
@@ -152,9 +153,17 @@ export default class MediaVersionsController {
       Episode.query().where('tvShowId', show.id).where('hasFile', true).count('* as total'),
     ])
 
+    // What keeping only a version would free: the size of each episode's file.
+    const episodeIds = versions.map((v) => v.episodeId).filter((id): id is string => Boolean(id))
+    const originals = await EpisodeFile.query().whereIn('episodeId', episodeIds)
+    const originalSize = new Map(originals.map((file) => [file.episodeId, Number(file.sizeBytes)]))
+
     return response.json({
       versions: versions
-        .map((version) => serializeVersion(version))
+        .map((version) => ({
+          ...serializeVersion(version),
+          originalSize: version.episodeId ? (originalSize.get(version.episodeId) ?? null) : null,
+        }))
         .sort(
           (a, b) =>
             (a.episode?.seasonNumber ?? 0) - (b.episode?.seasonNumber ?? 0) ||
@@ -201,6 +210,24 @@ export default class MediaVersionsController {
     return response.json({ queued })
   }
 
+  /** Keep only one profile's versions across a show, or one season of it. */
+  async showPromote({ params, request, response }: HttpContext) {
+    const show = await TvShow.find(params.id)
+    if (!show) return response.notFound({ error: 'Show not found' })
+
+    const label = request.input('label')
+    if (typeof label !== 'string' || !label) {
+      return response.badRequest({ error: 'label is required' })
+    }
+    const season = request.input('seasonNumber')
+    const result = await mediaVersionService.promoteShow(
+      show.id,
+      label,
+      season === undefined || season === null ? undefined : Number(season)
+    )
+    return response.json(result)
+  }
+
   // ---------------------------------------------------------------------------
   // Any version
   // ---------------------------------------------------------------------------
@@ -219,8 +246,8 @@ export default class MediaVersionsController {
     if (!version) return response.notFound({ error: 'Version not found' })
 
     try {
-      const file = await mediaVersionService.promote(version)
-      return response.json({ fileId: file.id, path: file.relativePath })
+      const { file, freedBytes } = await mediaVersionService.promote(version)
+      return response.json({ fileId: file.id, path: file.relativePath, freedBytes })
     } catch (error) {
       return response.badRequest({ error: error instanceof Error ? error.message : String(error) })
     }
