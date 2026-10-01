@@ -44,7 +44,7 @@ export function ReplaceFileDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Replace {subject}</DialogTitle>
+          <DialogTitle>Re-download {subject}</DialogTitle>
           <DialogDescription>
             Hamster searches for a better release and imports it over the current file. The existing
             file stays in place until the replacement has been downloaded and imported.

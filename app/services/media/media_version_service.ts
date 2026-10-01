@@ -173,9 +173,34 @@ export class MediaVersionService {
     this.timer = setInterval(() => this.kick(), POLL_INTERVAL)
     // A restart — a deploy, or the dev server reloading on a save — must not
     // leave ffmpeg running with nobody to collect its output. That orphan kept
-    // writing while the next process encoded the same file again.
+    // writing while the next process encoded the same file again: three
+    // copies of one film at once after three reloads. A clean shutdown stops
+    // it here; a killed process cannot, so the next one stops it on start.
     app.terminating(() => this.shutdown())
-    this.kick()
+    this.stopOrphanedEncode()
+      .catch(() => {})
+      .finally(() => this.kick())
+  }
+
+  private get pidFile(): string {
+    return app.makePath('tmp', 'versions', 'encoder.pid')
+  }
+
+  /** Kill the ffmpeg a previous process of this app left running, if any. */
+  private async stopOrphanedEncode(): Promise<void> {
+    const recorded = await fs.readFile(this.pidFile, 'utf8').catch(() => '')
+    const pid = Number(recorded.trim())
+    await fs.unlink(this.pidFile).catch(() => {})
+    if (!Number.isInteger(pid) || pid <= 0) return
+    // Only ever an ffmpeg: the pid may have been reused by anything since.
+    const command = await fs.readFile(`/proc/${pid}/cmdline`, 'utf8').catch(() => '')
+    if (!command.startsWith('ffmpeg') && !command.includes('/ffmpeg\0')) return
+    try {
+      process.kill(pid, 'SIGKILL')
+      logger.info(`Versions: stopped encode ${pid} left running by a previous process`)
+    } catch {
+      // Already gone
+    }
   }
 
   stop(): void {
@@ -316,8 +341,8 @@ export class MediaVersionService {
   async enqueue(
     owner: VersionOwner,
     profile: VersionProfile,
-    options: { stagedSourcePath?: string | null } = {}
-  ): Promise<{ version: MediaVersion; queued: boolean; reason?: string }> {
+    options: { stagedSourcePath?: string | null; keepOnly?: boolean } = {}
+  ): Promise<{ version: MediaVersion; queued: boolean; promoted?: boolean; reason?: string }> {
     const subject = await loadSubject(owner)
     if (!subject) {
       throw new Error('There is no file to make a version of')
@@ -330,6 +355,16 @@ export class MediaVersionService {
       .where('label', profile.label)
       .first()
     if (existing && existing.status !== 'failed') {
+      if (options.keepOnly) {
+        // Archiving something that already has this version: swap it in now,
+        // or have the running one swap itself in when it is done.
+        if (existing.status === 'ready') {
+          await this.promote(existing)
+          return { version: existing, queued: false, promoted: true }
+        }
+        existing.keepOnly = true
+        await existing.save()
+      }
       return { version: existing, queued: false, reason: `already ${existing.status}` }
     }
 
@@ -349,6 +384,7 @@ export class MediaVersionService {
       heartbeatAt: null,
       completedAt: null,
       stagedSourcePath: options.stagedSourcePath ?? null,
+      keepOnly: options.keepOnly ?? false,
     })
     // A retry goes to the back of the queue like anything else.
     version.createdAt = DateTime.now()
@@ -365,15 +401,19 @@ export class MediaVersionService {
    */
   async backfill(
     profile: VersionProfile,
-    scope: { tvShowId?: string; seasonNumber?: number } = {}
+    scope: { tvShowId?: string; seasonNumber?: number } = {},
+    options: { keepOnly?: boolean } = {}
   ): Promise<number> {
     const owners: VersionOwner[] = []
+    // Archiving also takes in what already has the version: it is swapped in.
     const pendingOrReady = (column: 'movie_id' | 'episode_id', outer: string) => (query: any) =>
-      query
-        .from('media_versions')
-        .whereColumn(`media_versions.${column}`, outer)
-        .where('media_versions.label', profile.label)
-        .whereNot('media_versions.status', 'failed')
+      options.keepOnly
+        ? query.from('media_versions').whereRaw('false')
+        : query
+            .from('media_versions')
+            .whereColumn(`media_versions.${column}`, outer)
+            .where('media_versions.label', profile.label)
+            .whereNot('media_versions.status', 'failed')
 
     if (profile.forMovies && !scope.tvShowId) {
       const rows = await db
@@ -401,8 +441,8 @@ export class MediaVersionService {
 
     let queued = 0
     for (const owner of owners) {
-      const result = await this.enqueue(owner, profile).catch(() => null)
-      if (result?.queued) queued++
+      const result = await this.enqueue(owner, profile, options).catch(() => null)
+      if (result?.queued || result?.promoted || (options.keepOnly && result)) queued++
     }
     return queued
   }
@@ -619,6 +659,20 @@ export class MediaVersionService {
       logger.info(
         `Versions: ${result.relativePath} ready (${formatGb(result.sizeBytes)}, ${result.encoder})`
       )
+      // Read back: archiving may have been asked for while this was encoding.
+      const current = await MediaVersion.find(version.id)
+      if (current?.keepOnly) {
+        try {
+          const { freedBytes } = await this.promote(current)
+          logger.info(`Versions: archived ${result.relativePath}, ${formatGb(freedBytes)} freed`)
+        } catch (error) {
+          // The version is fine; only the swap did not happen. Say so on it.
+          await MediaVersion.query()
+            .where('id', version.id)
+            .update({ error: `Kept beside the original: ${describeError(error)}` })
+            .catch(() => {})
+        }
+      }
     } catch (error) {
       if (running.cancelled) return
       logger.warn(`Versions: ${version.label} for ${version.id} failed: ${describeError(error)}`)
@@ -756,6 +810,11 @@ export class MediaVersionService {
       })
       running.proc = proc
       running.progress = { percent: 0, fps: null, eta: null }
+      if (proc.pid) {
+        fs.mkdir(path.dirname(this.pidFile), { recursive: true })
+          .then(() => fs.writeFile(this.pidFile, String(proc.pid)))
+          .catch(() => {})
+      }
       // Below the web server and the importers: an encode can take hours and
       // should never be why a page is slow.
       if (proc.pid) {
@@ -794,6 +853,7 @@ export class MediaVersionService {
       proc.on('error', (error) => reject(error))
       proc.on('close', (code) => {
         running.proc = null
+        fs.unlink(this.pidFile).catch(() => {})
         if (running.cancelled) return reject(new Error('cancelled'))
         if (code === 0) return resolve()
         if (encodeStoppedAtFlush(stderr, running.progress.percent)) {

@@ -29,6 +29,7 @@ import {
   NotificationOff01Icon,
   Cancel01Icon,
   Refresh01Icon,
+  Archive01Icon,
   Alert01Icon,
 } from '@hugeicons/core-free-icons'
 import { Spinner } from '@/components/ui/spinner'
@@ -52,7 +53,7 @@ import { VideoPlayer } from '@/components/player/video_player'
 import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
 import { ReplaceFileDialog } from '@/components/library/replace-file-dialog'
 import { MediaFileCard } from '@/components/library/media-file-card'
-import { MovieVersionsCard } from '@/components/library/media-versions'
+import { ArchiveDialog, MovieVersionsCard } from '@/components/library/media-versions'
 import { AudioTrackList, type AudioTrack } from '@/components/library/audio-track-list'
 
 interface QualityProfile {
@@ -128,6 +129,9 @@ export default function MovieDetail() {
   const [loading, setLoading] = useState(true)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteFileDialogOpen, setDeleteFileDialogOpen] = useState(false)
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  // Remounts the versions card so it shows what an archive just queued
+  const [versionsKey, setVersionsKey] = useState(0)
   const [downloading, setDownloading] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [enriching, setEnriching] = useState(false)
@@ -535,6 +539,12 @@ export default function MovieDetail() {
                   {enriching ? 'Enriching...' : 'Enrich from TMDB'}
                 </DropdownMenuItem>
               )}
+              {movie.movieFile && !movie.movieFile.versionLabel && (
+                <DropdownMenuItem onClick={() => setArchiveOpen(true)}>
+                  <HugeiconsIcon icon={Archive01Icon} className="h-4 w-4" />
+                  Archive as smaller file…
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
@@ -746,8 +756,19 @@ export default function MovieDetail() {
           </MediaFileCard>
         )}
 
+        <ArchiveDialog
+          open={archiveOpen}
+          onOpenChange={setArchiveOpen}
+          target={{ kind: 'movie', id: String(movie.id), title: movie.title }}
+          onArchived={() => {
+            setVersionsKey((key) => key + 1)
+            void fetchMovie()
+          }}
+        />
+
         {movie.movieFile && !movie.movieFile.versionLabel && (
           <MovieVersionsCard
+            key={versionsKey}
             movieId={String(movie.id)}
             originalSize={movie.movieFile.size}
             onPromoted={() => void fetchMovie()}

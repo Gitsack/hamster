@@ -34,6 +34,7 @@ import {
   Add01Icon,
   PlayIcon,
   Refresh01Icon,
+  Archive01Icon,
   Notification01Icon,
   NotificationOff01Icon,
   Alert01Icon,
@@ -56,7 +57,7 @@ import { CastLane, type CastMember } from '@/components/library/cast-lane'
 import { StreamingOffers, type StreamingOffer } from '@/components/library/streaming-offers'
 import { StreamingBadges } from '@/components/library/streaming-badges'
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
-import { ShowVersionsCard } from '@/components/library/media-versions'
+import { ArchiveDialog, ShowVersionsCard } from '@/components/library/media-versions'
 import { useActiveDownloads, type ActiveDownloadInfo } from '@/hooks/use_active_downloads'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { VideoPlayer } from '@/components/player/video_player'
@@ -163,6 +164,9 @@ export default function TvShowDetail() {
   const { url } = usePage()
   const showId = url.split('/').pop()
 
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  // Remounts the versions card so it shows what an archive just queued
+  const [versionsKey, setVersionsKey] = useState(0)
   const [show, setShow] = useState<TvShow | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -919,8 +923,14 @@ export default function TvShowDetail() {
                 }
               >
                 <HugeiconsIcon icon={Refresh01Icon} className="h-4 w-4" />
-                Replace all files
+                Re-download all episodes
               </DropdownMenuItem>
+              {show.seasons.some((season) => season.downloadedCount > 0) && (
+                <DropdownMenuItem onClick={() => setArchiveOpen(true)}>
+                  <HugeiconsIcon icon={Archive01Icon} className="h-4 w-4" />
+                  Archive as smaller files…
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive"
@@ -1077,7 +1087,7 @@ export default function TvShowDetail() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`Replace files in season ${season.seasonNumber}`}
+                          aria-label={`Re-download season ${season.seasonNumber}`}
                           title={`Re-download all ${season.downloadedCount} downloaded episodes in this season`}
                           onClick={(event) => {
                             event.stopPropagation()
@@ -1452,7 +1462,16 @@ export default function TvShowDetail() {
           </CardContent>
         </Card>
 
+        <ArchiveDialog
+          open={archiveOpen}
+          onOpenChange={setArchiveOpen}
+          target={{ kind: 'show', id: String(show.id), title: show.title }}
+          seasons={show.seasons.filter((s) => s.downloadedCount > 0).map((s) => s.seasonNumber)}
+          onArchived={() => setVersionsKey((key) => key + 1)}
+        />
+
         <ShowVersionsCard
+          key={versionsKey}
           showId={String(show.id)}
           seasons={show.seasons.filter((s) => s.downloadedCount > 0).map((s) => s.seasonNumber)}
           onPromoted={() => void fetchShow()}

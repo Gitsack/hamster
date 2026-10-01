@@ -96,7 +96,7 @@ describe('ReleaseList', () => {
         onConfirm={() => {}}
       />
     )
-    expect(screen.getByText(/Replace Movie/)).toBeTruthy()
+    expect(screen.getByText(/Re-download Movie/)).toBeTruthy()
   })
 })
 

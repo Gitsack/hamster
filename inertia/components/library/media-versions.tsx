@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +47,8 @@ export interface MediaVersion {
   error: string | null
   encoder: string | null
   progress: { percent: number; fps: number | null; eta: number | null } | null
+  /** Replaces the original as soon as it is made: archiving. */
+  keepOnly?: boolean
   /** Size of the file it was made from; set on a show's versions. */
   originalSize?: number | null
   /** Set for an episode's version. */
@@ -565,10 +568,14 @@ function ProfileProgress({
     ...new Set(ready.map((v) => v.episode?.seasonNumber).filter((n) => n !== undefined)),
   ].sort((a, b) => a! - b!) as number[]
 
+  const archiving = versions.filter(
+    (v) => v.keepOnly && (v.status === 'queued' || v.status === 'encoding')
+  ).length
   const parts = [
     `${ready.length} of ${episodesWithFiles} episodes`,
     size > 0 ? formatSize(size) : null,
     queued > 0 ? `${queued} queued` : null,
+    archiving > 0 ? `${archiving} replace their originals when done` : null,
     failed > 0 ? `${failed} failed` : null,
   ].filter(Boolean)
 
@@ -654,13 +661,15 @@ function VersionRow({
     version.size && originalSize ? Math.round((1 - version.size / originalSize) * 100) : null
 
   let detail: string
+  const archiving = version.keepOnly ? 'replaces the original when done' : null
   if (version.status === 'queued') {
-    detail = 'Queued'
+    detail = ['Queued', archiving].filter(Boolean).join(' · ')
   } else if (version.status === 'encoding') {
     detail = [
       `Encoding ${Math.floor(percent)}%`,
       version.encoder === 'x265' ? 'on the CPU' : 'on the GPU',
       formatEta(version.progress?.eta),
+      archiving,
     ]
       .filter(Boolean)
       .join(' · ')
@@ -671,6 +680,8 @@ function VersionRow({
       version.size ? formatSize(version.size) : null,
       saved !== null && saved > 0 ? `${saved}% smaller` : null,
       version.summary,
+      // An archive swap that did not happen leaves the reason on the version
+      version.error,
     ]
       .filter(Boolean)
       .join(' · ')
@@ -741,5 +752,167 @@ function VersionRow({
         <Progress value={percent} aria-label={`${name} encoding progress`} />
       )}
     </li>
+  )
+}
+
+/**
+ * Archive a movie or show at a smaller size: encode it with a profile and let
+ * every copy replace its original as soon as it is made and verified. Nothing
+ * is deleted before its copy is in place, so a failed encode costs nothing.
+ */
+export function ArchiveDialog({
+  open,
+  onOpenChange,
+  target,
+  seasons = [],
+  onArchived,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  target: { kind: 'movie'; id: string; title: string } | { kind: 'show'; id: string; title: string }
+  /** Season numbers with files, for a show. */
+  seasons?: number[]
+  onArchived?: () => void
+}) {
+  const [profiles, setProfiles] = useState<ProfileOption[] | null>(null)
+  const [profileId, setProfileId] = useState('')
+  const [scope, setScope] = useState('all')
+  const [busy, setBusy] = useState(false)
+  const base =
+    target.kind === 'movie' ? `/api/v1/movies/${target.id}` : `/api/v1/tvshows/${target.id}`
+
+  useEffect(() => {
+    if (!open) return
+    setScope('all')
+    getJson<{ profiles: ProfileOption[] }>(`${base}/versions`)
+      .then((data) => {
+        setProfiles(data.profiles)
+        setProfileId((current) => current || data.profiles[0]?.id || '')
+      })
+      .catch(() => setProfiles([]))
+  }, [open, base])
+
+  const profile = profiles?.find((p) => p.id === profileId)
+  const what = target.kind === 'movie' ? 'The original file is' : 'Each original episode is'
+
+  const archive = async () => {
+    if (!profile) return
+    setBusy(true)
+    try {
+      const result = await send<{ queued?: number | boolean; promoted?: boolean }>(
+        `${base}/versions`,
+        'POST',
+        {
+          profileId: profile.id,
+          keepOnly: true,
+          ...(target.kind === 'show' && scope !== 'all' ? { seasonNumber: Number(scope) } : {}),
+        }
+      )
+      if (target.kind === 'movie') {
+        toast.success(
+          result?.promoted
+            ? `${target.title} now keeps only its ${profile.name} version`
+            : `${target.title} will be archived as ${profile.name}`
+        )
+      } else {
+        const count = Number(result?.queued ?? 0)
+        toast.success(
+          count > 0
+            ? `${count} ${count === 1 ? 'episode' : 'episodes'} will be archived as ${profile.name}`
+            : 'Nothing left to archive there'
+        )
+      }
+      onOpenChange(false)
+      onArchived?.()
+    } catch (err) {
+      toast.error('Nothing was archived', { description: message(err) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Archive {target.title} as smaller files?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Hamster encodes {target.kind === 'movie' ? 'it' : 'every episode'} with the profile
+            below. {what} deleted once its smaller copy is made and checked, so a failed encode
+            leaves it untouched. Getting the full quality back means downloading it again.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        {profiles && profiles.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No version profile for {target.kind === 'movie' ? 'movies' : 'TV shows'} yet. Add one in{' '}
+            <Link href="/settings/media#versions" className="underline underline-offset-4">
+              Settings → Media
+            </Link>
+            .
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Profile</p>
+              <Select value={profileId} onValueChange={(value) => setProfileId(String(value))}>
+                <SelectTrigger className="w-full" aria-label="Profile">
+                  <SelectValue>
+                    {(value: string) => profiles?.find((p) => p.id === value)?.name ?? 'Choose'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {(profiles ?? []).map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            </div>
+            {target.kind === 'show' && seasons.length > 1 && (
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium">Episodes</p>
+                <Select value={scope} onValueChange={(value) => setScope(String(value))}>
+                  <SelectTrigger className="w-full" aria-label="Episodes">
+                    <SelectValue>
+                      {(value: string) =>
+                        value === 'all'
+                          ? 'All episodes'
+                          : value === '0'
+                            ? 'Specials'
+                            : `Season ${value}`
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="all">All episodes</SelectItem>
+                    {seasons.map((season) => (
+                      <SelectItem key={season} value={String(season)}>
+                        {season === 0 ? 'Specials' : `Season ${season}`}
+                      </SelectItem>
+                    ))}
+                  </SelectPopup>
+                </Select>
+              </div>
+            )}
+          </div>
+        )}
+
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(event) => {
+              event.preventDefault()
+              void archive()
+            }}
+            disabled={busy || !profile}
+            className="bg-destructive text-white hover:bg-destructive/90"
+          >
+            {busy ? 'Starting…' : 'Archive'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

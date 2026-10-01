@@ -63,6 +63,13 @@ export default class MediaVersion extends BaseModel {
   @column()
   declare error: string | null
 
+  /**
+   * Replace the original with this version as soon as it is made and
+   * verified: how a show or movie gets archived at a smaller size.
+   */
+  @column()
+  declare keepOnly: boolean
+
   /** Local hardlink of the download to encode from, when there is one. */
   @column()
   declare stagedSourcePath: string | null

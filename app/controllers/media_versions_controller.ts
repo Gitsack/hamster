@@ -131,8 +131,14 @@ export default class MediaVersionsController {
     if (!profile) return response.badRequest({ error: 'Profile not found' })
 
     try {
-      const result = await mediaVersionService.enqueue({ movieId: movie.id }, profile)
-      return response.json({ ...serializeVersion(result.version), queued: result.queued })
+      const result = await mediaVersionService.enqueue({ movieId: movie.id }, profile, {
+        keepOnly: request.input('keepOnly') === true,
+      })
+      return response.json({
+        ...serializeVersion(result.version),
+        queued: result.queued,
+        promoted: result.promoted === true,
+      })
     } catch (error) {
       return response.badRequest({ error: error instanceof Error ? error.message : String(error) })
     }
@@ -193,8 +199,10 @@ export default class MediaVersionsController {
         .first()
       if (!episode) return response.notFound({ error: 'Episode not found' })
       try {
-        const result = await mediaVersionService.enqueue({ episodeId: episode.id }, profile)
-        return response.json({ queued: result.queued ? 1 : 0 })
+        const result = await mediaVersionService.enqueue({ episodeId: episode.id }, profile, {
+          keepOnly: request.input('keepOnly') === true,
+        })
+        return response.json({ queued: result.queued || result.promoted ? 1 : 0 })
       } catch (error) {
         return response.badRequest({
           error: error instanceof Error ? error.message : String(error),
@@ -203,10 +211,14 @@ export default class MediaVersionsController {
     }
 
     const season = request.input('seasonNumber')
-    const queued = await mediaVersionService.backfill(profile, {
-      tvShowId: show.id,
-      seasonNumber: season === undefined || season === null ? undefined : Number(season),
-    })
+    const queued = await mediaVersionService.backfill(
+      profile,
+      {
+        tvShowId: show.id,
+        seasonNumber: season === undefined || season === null ? undefined : Number(season),
+      },
+      { keepOnly: request.input('keepOnly') === true }
+    )
     return response.json({ queued })
   }
 
@@ -300,6 +312,7 @@ function serializeVersion(version: MediaVersion) {
     error: version.error,
     encoder: version.encoder,
     progress: mediaVersionService.getProgress(version.id),
+    keepOnly: version.keepOnly,
     completedAt: version.completedAt?.toISO() ?? null,
     episode: episode
       ? {
