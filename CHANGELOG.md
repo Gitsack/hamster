@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.41.0](https://github.com/Gitsack/hamster/compare/hamster-v1.40.0...hamster-v1.41.0) (2026-10-01)
+
+
+### Features
+
+* **movies:** smaller versions beside the main file ([39ae1a2](https://github.com/Gitsack/hamster/commit/39ae1a2aa5e2b58ce874785669d8ddb3ad0fb76a))
+* Quick Sync for versions, one hardware acceleration setting ([4856696](https://github.com/Gitsack/hamster/commit/485669603146f266e0aeb9fbb501e29e2f065276))
+* **tv:** versions for episodes; fix encodes starting over ([f3d8731](https://github.com/Gitsack/hamster/commit/f3d8731edb8fcce3f859f89bd15c37f9142d7f04))
+
+
+### Bug Fixes
+
+* **tasks:** claim a task before loading its row ([5854ad7](https://github.com/Gitsack/hamster/commit/5854ad753172d051285c5f25f63f50213511038b))
+
 ## [1.40.0](https://github.com/Gitsack/hamster/compare/hamster-v1.39.1...hamster-v1.40.0) (2026-09-28)
 
 
