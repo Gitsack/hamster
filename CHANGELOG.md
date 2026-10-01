@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.42.0](https://github.com/Gitsack/hamster/compare/hamster-v1.41.0...hamster-v1.42.0) (2026-10-01)
+
+
+### Features
+
+* **versions:** archive as smaller files; stop orphaned encodes ([0cc2ff3](https://github.com/Gitsack/hamster/commit/0cc2ff3eef4cc068f7a496a9fb2aac3b6f382702))
+
+
+### Bug Fixes
+
+* **versions:** safe keep-only, scans ignore versions, bulk and speed ([1dd6ce3](https://github.com/Gitsack/hamster/commit/1dd6ce3cc06a581de12b6cf52ea9ebebbbcdcf98))
+
 ## [1.41.0](https://github.com/Gitsack/hamster/compare/hamster-v1.40.0...hamster-v1.41.0) (2026-10-01)
 
 
