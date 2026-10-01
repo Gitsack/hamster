@@ -77,6 +77,21 @@ const QUALITY_VALUES: Record<VersionQuality, { vaapi: number; x265: number }> = 
   small: { vaapi: 25, x265: 25 },
 }
 
+/** Sources taller than this are resized on the GPU, despite its flush bug. */
+const GPU_SCALE_ABOVE = 1200
+
+/**
+ * Whether a failed GPU encode only lost its last frames to ffmpeg 6.1's
+ * scaler flush bug, which reads "Out of memory" in Alpine's build and
+ * "Cannot allocate memory" in Ubuntu's. The file is finalised either way; the
+ * duration check afterwards decides whether it is complete enough to keep.
+ */
+export function encodeStoppedAtFlush(stderr: string, percent: number): boolean {
+  return (
+    percent > 97 && /Error while filtering: (Out of memory|Cannot allocate memory)/.test(stderr)
+  )
+}
+
 const HDR_TRANSFERS = new Set(['smpte2084', 'arib-std-b67'])
 
 /** Subtitle codecs a Matroska file can carry as they are. */
@@ -218,17 +233,20 @@ export function buildVersionEncodeArgs(input: VersionEncodeInput): string[] {
   const args: string[] = ['-hide_banner', '-nostdin', '-y', '-loglevel', 'error']
 
   // --- inputs ---
+  // ffmpeg 6.1's GPU scaler (scale_vaapi) runs out of surfaces while the
+  // decoder flushes the last frames of a file, so any encode that resizes on
+  // the GPU dies a second before the end. Resizing on the CPU is complete and,
+  // for anything up to 1080p, still runs at several hundred frames a second.
+  // A 4K source is the exception: pulling its frames off the GPU to scale them
+  // costs three quarters of the speed, so it stays on the GPU and the runner
+  // accepts the lost final second (see `encodeStoppedAtFlush`).
+  const gpuScale = encoder === 'vaapi' && target.scaled && analysis.videoHeight! > GPU_SCALE_ABOVE
+  const gpuFrames = encoder === 'vaapi' && (!target.scaled || gpuScale)
   if (encoder === 'vaapi') {
-    args.push(
-      '-init_hw_device',
-      `vaapi=va:${device}`,
-      '-hwaccel',
-      'vaapi',
-      '-hwaccel_output_format',
-      'vaapi',
-      '-hwaccel_device',
-      'va'
-    )
+    args.push('-init_hw_device', `vaapi=va:${device}`, '-hwaccel', 'vaapi')
+    if (gpuFrames) args.push('-hwaccel_output_format', 'vaapi')
+    args.push('-hwaccel_device', 'va')
+    if (!gpuFrames) args.push('-filter_hw_device', 'va')
   } else if (encoder === 'vaapi-upload') {
     args.push('-init_hw_device', `vaapi=va:${device}`, '-filter_hw_device', 'va')
   }
@@ -256,13 +274,11 @@ export function buildVersionEncodeArgs(input: VersionEncodeInput): string[] {
   // --- video ---
   const pixel = highBitDepth ? 'p010' : 'nv12'
   const size = target.scaled ? `w=${target.width}:h=${target.height}:` : ''
-  if (encoder === 'vaapi') {
+  const cpuScale = target.scaled ? `scale=${target.width}:${target.height}:flags=bicubic,` : ''
+  if (gpuFrames) {
     args.push('-vf', `scale_vaapi=${size}format=${pixel}`)
-  } else if (encoder === 'vaapi-upload') {
-    args.push(
-      '-vf',
-      `format=${highBitDepth ? 'p010le' : 'nv12'},hwupload,scale_vaapi=${size}format=${pixel}`
-    )
+  } else if (encoder === 'vaapi' || encoder === 'vaapi-upload') {
+    args.push('-vf', `${cpuScale}format=${highBitDepth ? 'p010le' : 'nv12'},hwupload`)
   } else {
     const filters = target.scaled ? [`scale=${target.width}:${target.height}:flags=lanczos`] : []
     filters.push(`format=${highBitDepth ? 'yuv420p10le' : 'yuv420p'}`)

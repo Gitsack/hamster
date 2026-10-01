@@ -6,7 +6,7 @@ import { fileNamingService } from './file_naming_service.js'
 import { fileTransferService } from './file_transfer_service.js'
 import { subtitlePruningService } from './subtitle_pruning_service.js'
 import { subtitleSidecarService } from './subtitle_sidecar_service.js'
-import { movieVersionService } from './movie_version_service.js'
+import { mediaVersionService } from './media_version_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
 import { probeFile, checkFfmpegAvailable, type MediaAnalysis } from '#utils/ffmpeg_utils'
 import { analysisToMediaInfo } from '#services/quality/file_quality_service'
@@ -334,7 +334,7 @@ export class MovieImportService {
     // profile, taken before the move below deletes the source. The encoder
     // then reads this local disk instead of the whole original back off the
     // library share.
-    const stagedSource = await movieVersionService.stageForImport(sourcePath, downloadPath)
+    const stagedSource = await mediaVersionService.stageForImport('movie', sourcePath, downloadPath)
     try {
       await this.placeFile(sourcePath, absolutePath, sourceAnalysis, probedInfo, {
         movie,
@@ -342,12 +342,12 @@ export class MovieImportService {
         quality,
       })
     } catch (error) {
-      if (stagedSource) await movieVersionService.releaseStaged(stagedSource)
+      if (stagedSource) await mediaVersionService.releaseStaged(stagedSource)
       throw error
     }
 
-    await movieVersionService
-      .onMainFileImported(movie.id, stagedSource)
+    await mediaVersionService
+      .onMainFileImported({ movieId: movie.id }, stagedSource)
       .catch((err) => logger.error({ err }, 'MovieImportService: Failed to queue versions'))
 
     return { success: true, destinationPath: absolutePath }

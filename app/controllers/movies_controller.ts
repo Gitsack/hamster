@@ -1,7 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import Movie from '#models/movie'
 import MovieFile from '#models/movie_file'
-import { movieVersionService } from '#services/media/movie_version_service'
+import { mediaVersionService } from '#services/media/media_version_service'
 import QualityProfile from '#models/quality_profile'
 import {
   assessFile,
@@ -465,7 +465,7 @@ export default class MoviesController {
     // If movie has a file and deleteFile is requested, delete the file first
     if (deleteFile && movie.movieFile && movie.rootFolder) {
       // Versions first, so the folder can end up empty and go too
-      await movieVersionService.removeAllForMovie(movie.id)
+      await mediaVersionService.removeAllFor({ movieId: movie.id })
 
       const absolutePath = path.join(movie.rootFolder.path, movie.movieFile.relativePath)
       const folderPath = path.dirname(absolutePath)
@@ -946,7 +946,7 @@ export default class MoviesController {
     const folderPath = path.dirname(absolutePath)
 
     // Versions are copies of this file and go with it
-    await movieVersionService.removeAllForMovie(movie.id)
+    await mediaVersionService.removeAllFor({ movieId: movie.id })
 
     try {
       // Delete the file from disk

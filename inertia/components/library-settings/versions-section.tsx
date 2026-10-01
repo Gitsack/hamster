@@ -31,6 +31,8 @@ export interface VersionProfile {
   audio: VersionAudio
   subtitles: boolean
   auto: boolean
+  forMovies: boolean
+  forTv: boolean
   counts?: Partial<Record<'queued' | 'encoding' | 'ready' | 'failed', number>>
 }
 
@@ -73,6 +75,11 @@ export function describeVersionProfile(profile: VersionProfile): string {
   const quality = QUALITIES.find((q) => q.value === profile.quality)?.label ?? profile.quality
   const audio = AUDIO_MODES.find((a) => a.value === profile.audio)?.label ?? profile.audio
   return `${height} · ${quality} · ${audio}${profile.subtitles ? '' : ' · No subtitles'}`
+}
+
+export function describeScope(profile: Pick<VersionProfile, 'forMovies' | 'forTv'>): string {
+  if (profile.forMovies && profile.forTv) return 'Movies and TV'
+  return profile.forMovies ? 'Movies' : 'TV'
 }
 
 function describeCounts(counts: VersionProfile['counts']): string | null {
@@ -164,8 +171,8 @@ export function VersionsSection() {
       const queued = result?.queued ?? 0
       toast.success(
         queued > 0
-          ? `${queued} ${queued === 1 ? 'movie' : 'movies'} queued for ${profile.name}`
-          : `Every movie already has a ${profile.name} version`
+          ? `${queued} queued for ${profile.name}`
+          : `Everything already has a ${profile.name} version`
       )
       void reload()
     } catch (err) {
@@ -193,7 +200,7 @@ export function VersionsSection() {
     <Section
       id="versions"
       title="Versions"
-      description="Smaller copies kept beside a movie, for downloading to a phone or tablet. Jellyfin lists them as versions."
+      description="Smaller copies kept beside a movie or episode, for downloading to a phone or tablet. Jellyfin lists them as versions."
       actions={
         <Button type="button" variant="outline" size="sm" onClick={() => setSheet({ kind: 'add' })}>
           <HugeiconsIcon icon={Add01Icon} aria-hidden="true" />
@@ -227,6 +234,7 @@ export function VersionsSection() {
             name={profile.name}
             meta={[
               describeVersionProfile(profile),
+              describeScope(profile),
               profile.auto ? 'Runs on every import' : 'Manual only',
               describeCounts(profile.counts),
             ].filter((part): part is string => Boolean(part))}
@@ -241,13 +249,13 @@ export function VersionsSection() {
                 onSelect: () => setSheet({ kind: 'edit', profile }),
               },
               {
-                label: 'Create for all movies',
+                label: 'Create for the whole library',
                 icon: PlayListAddIcon,
                 onSelect: () => backfill(profile),
                 confirm: {
-                  title: `Create ${profile.name} for every movie?`,
+                  title: `Create ${profile.name} for the whole library?`,
                   description:
-                    'Every movie without one is queued. Encodes run one at a time in the background, which takes a while for a large library.',
+                    'Every movie and episode without one is queued, as far as the profile is for movies or TV. Encodes run one at a time in the background, which takes a while for a large library.',
                   confirmLabel: 'Queue all',
                 },
               },
@@ -265,7 +273,7 @@ export function VersionsSection() {
                 confirm: {
                   title: `Delete ${profile.name}?`,
                   description:
-                    'Queued copies are cancelled. Finished copies stay on disk and on each movie’s page.',
+                    'Queued copies are cancelled. Finished copies stay on disk and on their pages.',
                   confirmLabel: 'Delete profile',
                 },
               },
@@ -314,6 +322,8 @@ interface ProfileDraft {
   audio: VersionAudio
   subtitles: boolean
   auto: boolean
+  forMovies: boolean
+  forTv: boolean
 }
 
 const NEW_PROFILE: ProfileDraft = {
@@ -324,6 +334,8 @@ const NEW_PROFILE: ProfileDraft = {
   audio: 'stereo',
   subtitles: true,
   auto: false,
+  forMovies: true,
+  forTv: true,
 }
 
 function VersionProfileSheet({
@@ -410,7 +422,8 @@ function VersionProfileSheet({
           optional={!editing}
           help={
             <>
-              Files are named <span className="font-mono">Movie (2020) - {label}.mkv</span>
+              Files are named <span className="font-mono">Movie (2020) - {label}.mkv</span> or{' '}
+              <span className="font-mono">Show - S01E01 - {label}.mkv</span>
               {editing
                 ? '. Fixed once created, so existing copies keep matching.'
                 : '. Defaults to the name.'}
@@ -429,8 +442,22 @@ function VersionProfileSheet({
           )}
         </SheetField>
         <SheetSwitch
+          label="Movies"
+          description="Offered on movie pages and made for movie imports."
+          checked={draft.forMovies}
+          onCheckedChange={(forMovies) => set('forMovies', forMovies)}
+          disabled={draft.forMovies && !draft.forTv}
+        />
+        <SheetSwitch
+          label="TV shows"
+          description="Offered on show pages and made for episode imports."
+          checked={draft.forTv}
+          onCheckedChange={(forTv) => set('forTv', forTv)}
+          disabled={draft.forTv && !draft.forMovies}
+        />
+        <SheetSwitch
           label="Create on every import"
-          description="Off: only when you ask for it on a movie, or for all movies at once."
+          description="Off: only when you ask for it on a page, or for everything at once."
           checked={draft.auto}
           onCheckedChange={(auto) => set('auto', auto)}
         />

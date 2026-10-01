@@ -1,21 +1,23 @@
 import path from 'node:path'
 import type { HttpContext } from '@adonisjs/core/http'
+import Episode from '#models/episode'
+import MediaVersion from '#models/media_version'
 import Movie from '#models/movie'
-import MovieVersion from '#models/movie_version'
+import TvShow from '#models/tv_show'
 import VersionProfile, {
   VERSION_AUDIO_MODES,
   VERSION_MAX_HEIGHTS,
   VERSION_QUALITIES,
 } from '#models/version_profile'
-import { movieVersionService } from '#services/media/movie_version_service'
+import { mediaVersionService } from '#services/media/media_version_service'
 import { describeMediaInfo } from '#services/quality/file_quality_service'
 import { accessWithTimeout } from '#utils/fs_utils'
 
 /**
- * Version profiles (Settings → Media) and the versions made from them on a
- * movie's page.
+ * Version profiles (Settings → Media) and the versions made from them on movie
+ * and show pages.
  */
-export default class MovieVersionsController {
+export default class MediaVersionsController {
   // ---------------------------------------------------------------------------
   // Profiles
   // ---------------------------------------------------------------------------
@@ -23,9 +25,9 @@ export default class MovieVersionsController {
   async profiles({ response }: HttpContext) {
     const [profiles, options, encoder, counts] = await Promise.all([
       VersionProfile.query().orderBy('created_at'),
-      movieVersionService.getOptions(),
-      movieVersionService.encoderSummary(),
-      MovieVersion.query().select('label', 'status').count('* as total').groupBy('label', 'status'),
+      mediaVersionService.getOptions(),
+      mediaVersionService.encoderSummary(),
+      MediaVersion.query().select('label', 'status').count('* as total').groupBy('label', 'status'),
     ])
 
     const countsFor = (label: string) => {
@@ -85,10 +87,10 @@ export default class MovieVersionsController {
     // Queued work from a deleted profile has nothing left to follow. Finished
     // files stay unless asked for, since they may be what someone downloads.
     const deleteFiles = request.input('deleteFiles') === 'true'
-    const versions = await MovieVersion.query().where('profileId', profile.id)
+    const versions = await MediaVersion.query().where('profileId', profile.id)
     for (const version of versions) {
       if (deleteFiles || version.status !== 'ready') {
-        await movieVersionService.remove(version)
+        await mediaVersionService.remove(version)
       }
     }
 
@@ -96,12 +98,12 @@ export default class MovieVersionsController {
     return response.json({ id: profile.id, deleted: true })
   }
 
-  /** Queue the profile for every movie that has no version from it yet. */
+  /** Queue the profile for everything in its libraries that has no version from it. */
   async backfill({ params, response }: HttpContext) {
     const profile = await VersionProfile.find(params.id)
     if (!profile) return response.notFound({ error: 'Profile not found' })
 
-    const queued = await movieVersionService.backfill(profile)
+    const queued = await mediaVersionService.backfill(profile)
     return response.json({ queued })
   }
 
@@ -110,7 +112,7 @@ export default class MovieVersionsController {
     if (typeof hardwareEncoding !== 'boolean') {
       return response.badRequest({ error: 'hardwareEncoding must be a boolean' })
     }
-    await movieVersionService.setOptions({ hardwareEncoding })
+    await mediaVersionService.setOptions({ hardwareEncoding })
     return response.json({ hardwareEncoding })
   }
 
@@ -118,22 +120,22 @@ export default class MovieVersionsController {
   // A movie's versions
   // ---------------------------------------------------------------------------
 
-  async index({ params, response }: HttpContext) {
+  async movieIndex({ params, response }: HttpContext) {
     const movie = await Movie.find(params.id)
     if (!movie) return response.notFound({ error: 'Movie not found' })
 
     const [versions, profiles] = await Promise.all([
-      MovieVersion.query().where('movieId', movie.id).orderBy('created_at'),
-      VersionProfile.query().orderBy('created_at'),
+      MediaVersion.query().where('movieId', movie.id).orderBy('created_at'),
+      VersionProfile.query().where('forMovies', true).orderBy('created_at'),
     ])
 
     return response.json({
-      versions: versions.map(serializeVersion),
+      versions: versions.map((version) => serializeVersion(version)),
       profiles: profiles.map(serializeProfile),
     })
   }
 
-  async store({ params, request, response }: HttpContext) {
+  async movieStore({ params, request, response }: HttpContext) {
     const movie = await Movie.find(params.id)
     if (!movie) return response.notFound({ error: 'Movie not found' })
 
@@ -141,49 +143,110 @@ export default class MovieVersionsController {
     if (!profile) return response.badRequest({ error: 'Profile not found' })
 
     try {
-      const result = await movieVersionService.enqueue(movie.id, profile)
+      const result = await mediaVersionService.enqueue({ movieId: movie.id }, profile)
       return response.json({ ...serializeVersion(result.version), queued: result.queued })
     } catch (error) {
       return response.badRequest({ error: error instanceof Error ? error.message : String(error) })
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // A show's versions
+  // ---------------------------------------------------------------------------
+
+  /** Every episode version of a show, with the episode each belongs to. */
+  async showIndex({ params, response }: HttpContext) {
+    const show = await TvShow.find(params.id)
+    if (!show) return response.notFound({ error: 'Show not found' })
+
+    const [versions, profiles, episodesWithFiles] = await Promise.all([
+      MediaVersion.query().where('tvShowId', show.id).preload('episode').orderBy('created_at'),
+      VersionProfile.query().where('forTv', true).orderBy('created_at'),
+      Episode.query().where('tvShowId', show.id).where('hasFile', true).count('* as total'),
+    ])
+
+    return response.json({
+      versions: versions
+        .map((version) => serializeVersion(version))
+        .sort(
+          (a, b) =>
+            (a.episode?.seasonNumber ?? 0) - (b.episode?.seasonNumber ?? 0) ||
+            (a.episode?.episodeNumber ?? 0) - (b.episode?.episodeNumber ?? 0)
+        ),
+      profiles: profiles.map(serializeProfile),
+      episodesWithFiles: Number(episodesWithFiles[0].$extras.total),
+    })
+  }
+
+  /**
+   * Queue a profile for a show: every episode with a file, one season of it,
+   * or a single episode.
+   */
+  async showStore({ params, request, response }: HttpContext) {
+    const show = await TvShow.find(params.id)
+    if (!show) return response.notFound({ error: 'Show not found' })
+
+    const profile = await VersionProfile.find(request.input('profileId'))
+    if (!profile) return response.badRequest({ error: 'Profile not found' })
+
+    const episodeId = request.input('episodeId')
+    if (episodeId) {
+      const episode = await Episode.query()
+        .where('id', episodeId)
+        .where('tvShowId', show.id)
+        .first()
+      if (!episode) return response.notFound({ error: 'Episode not found' })
+      try {
+        const result = await mediaVersionService.enqueue({ episodeId: episode.id }, profile)
+        return response.json({ queued: result.queued ? 1 : 0 })
+      } catch (error) {
+        return response.badRequest({
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
+    const season = request.input('seasonNumber')
+    const queued = await mediaVersionService.backfill(profile, {
+      tvShowId: show.id,
+      seasonNumber: season === undefined || season === null ? undefined : Number(season),
+    })
+    return response.json({ queued })
+  }
+
+  // ---------------------------------------------------------------------------
+  // Any version
+  // ---------------------------------------------------------------------------
+
   async destroy({ params, response }: HttpContext) {
-    const version = await MovieVersion.query()
-      .where('id', params.versionId)
-      .where('movieId', params.id)
-      .first()
+    const version = await MediaVersion.find(params.versionId)
     if (!version) return response.notFound({ error: 'Version not found' })
 
-    await movieVersionService.remove(version)
+    await mediaVersionService.remove(version)
     return response.json({ id: version.id, deleted: true })
   }
 
-  /** Delete the original and keep this version as the movie's file. */
+  /** Delete the original and keep this version as the file. */
   async promote({ params, response }: HttpContext) {
-    const version = await MovieVersion.query()
-      .where('id', params.versionId)
-      .where('movieId', params.id)
-      .first()
+    const version = await MediaVersion.find(params.versionId)
     if (!version) return response.notFound({ error: 'Version not found' })
 
     try {
-      const movieFile = await movieVersionService.promote(version)
-      return response.json({ movieFileId: movieFile.id, path: movieFile.relativePath })
+      const file = await mediaVersionService.promote(version)
+      return response.json({ fileId: file.id, path: file.relativePath })
     } catch (error) {
       return response.badRequest({ error: error instanceof Error ? error.message : String(error) })
     }
   }
 
   async download({ params, response }: HttpContext) {
-    const version = await MovieVersion.find(params.versionId)
+    const version = await MediaVersion.find(params.versionId)
     if (!version?.relativePath || version.status !== 'ready') {
       return response.notFound({ error: 'Version not found' })
     }
-    const movie = await Movie.query().where('id', version.movieId).preload('rootFolder').first()
-    if (!movie?.rootFolder) return response.notFound({ error: 'Movie not found' })
 
-    const absolutePath = path.join(movie.rootFolder.path, version.relativePath)
+    const absolutePath = await mediaVersionService.absolutePathOf(version)
+    if (!absolutePath) return response.notFound({ error: 'Root folder not found' })
     try {
       await accessWithTimeout(absolutePath)
     } catch {
@@ -205,10 +268,13 @@ function serializeProfile(profile: VersionProfile) {
     audio: profile.audio,
     subtitles: profile.subtitles,
     auto: profile.auto,
+    forMovies: profile.forMovies,
+    forTv: profile.forTv,
   }
 }
 
-function serializeVersion(version: MovieVersion) {
+function serializeVersion(version: MediaVersion) {
+  const episode = version.episodeId && version.$preloaded.episode ? version.episode : null
   return {
     id: version.id,
     profileId: version.profileId,
@@ -219,18 +285,31 @@ function serializeVersion(version: MovieVersion) {
     summary: describeMediaInfo(version.mediaInfo),
     error: version.error,
     encoder: version.encoder,
-    progress: movieVersionService.getProgress(version.id),
+    progress: mediaVersionService.getProgress(version.id),
     completedAt: version.completedAt?.toISO() ?? null,
-    downloadUrl:
-      version.status === 'ready'
-        ? `/api/v1/movies/${version.movieId}/versions/${version.id}/download`
-        : null,
+    episode: episode
+      ? {
+          id: episode.id,
+          seasonNumber: episode.seasonNumber,
+          episodeNumber: episode.episodeNumber,
+          title: episode.title,
+        }
+      : null,
+    downloadUrl: version.status === 'ready' ? `/api/v1/versions/${version.id}/download` : null,
   }
 }
 
 type ParsedProfile = Pick<
   VersionProfile,
-  'name' | 'label' | 'maxHeight' | 'quality' | 'audio' | 'subtitles' | 'auto'
+  | 'name'
+  | 'label'
+  | 'maxHeight'
+  | 'quality'
+  | 'audio'
+  | 'subtitles'
+  | 'auto'
+  | 'forMovies'
+  | 'forTv'
 >
 
 function parseProfile(body: Record<string, unknown>): ParsedProfile | { error: string } {
@@ -258,6 +337,15 @@ function parseProfile(body: Record<string, unknown>): ParsedProfile | { error: s
   if (typeof body.subtitles !== 'boolean' || typeof body.auto !== 'boolean') {
     return { error: 'subtitles and auto must be booleans' }
   }
+  // Older clients send neither; a profile is for both until told otherwise.
+  const forMovies = body.forMovies === undefined ? true : body.forMovies
+  const forTv = body.forTv === undefined ? true : body.forTv
+  if (typeof forMovies !== 'boolean' || typeof forTv !== 'boolean') {
+    return { error: 'forMovies and forTv must be booleans' }
+  }
+  if (!forMovies && !forTv) {
+    return { error: 'A profile has to be for movies, TV shows or both' }
+  }
 
   return {
     name,
@@ -267,5 +355,7 @@ function parseProfile(body: Record<string, unknown>): ParsedProfile | { error: s
     audio: body.audio as ParsedProfile['audio'],
     subtitles: body.subtitles,
     auto: body.auto,
+    forMovies,
+    forTv,
   }
 }

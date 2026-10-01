@@ -7,9 +7,11 @@ import logger from '@adonisjs/core/services/logger'
 import db from '@adonisjs/lucid/services/db'
 import { DateTime } from 'luxon'
 import AppSetting from '#models/app_setting'
+import Episode from '#models/episode'
+import EpisodeFile from '#models/episode_file'
+import MediaVersion from '#models/media_version'
 import Movie from '#models/movie'
 import MovieFile from '#models/movie_file'
-import MovieVersion from '#models/movie_version'
 import VersionProfile from '#models/version_profile'
 import { fileTransferService } from './file_transfer_service.js'
 import { subtitlePruningService } from './subtitle_pruning_service.js'
@@ -17,6 +19,7 @@ import { analysisToMediaInfo } from '#services/quality/file_quality_service'
 import { probeFile, type MediaAnalysis } from '#utils/ffmpeg_utils'
 import {
   buildVersionEncodeArgs,
+  encodeStoppedAtFlush,
   parseSidecarName,
   unsupportedSourceReason,
   type SubtitleSidecarInput,
@@ -24,14 +27,15 @@ import {
   type VersionEncoder,
 } from '#utils/version_encoding'
 
-export const MOVIE_VERSIONS_SETTING_KEY = 'movieVersions'
+/** Kept under its first name so the stored GPU switch survives the rename. */
+export const VERSIONS_SETTING_KEY = 'movieVersions'
 
-export interface MovieVersionOptions {
+export interface VersionOptions {
   /** Use the GPU when one is usable. Off forces x265 on the CPU. */
   hardwareEncoding: boolean
 }
 
-const DEFAULT_OPTIONS: MovieVersionOptions = { hardwareEncoding: true }
+const DEFAULT_OPTIONS: VersionOptions = { hardwareEncoding: true }
 
 /** Where import-time hardlinks go, beside the download they came from. */
 export const STAGING_DIR_NAME = '.hamster-versions'
@@ -43,6 +47,10 @@ const STALE_AFTER_SECONDS = 180
 /** A version must come out at least this much smaller than its source. */
 const MAX_SIZE_RATIO = 0.9
 const MAX_DURATION_DRIFT = 2
+
+/** What a version belongs to: a movie or an episode, never both. */
+export type VersionOwner = { movieId: string } | { episodeId: string }
+export type VersionKind = 'movie' | 'episode'
 
 export interface VersionProgress {
   percent: number
@@ -58,23 +66,90 @@ interface RunningEncode {
   cancelled: boolean
 }
 
+/** The file a version is made from, wherever it lives. */
+interface VersionSubject {
+  kind: VersionKind
+  /** For logs: "8 Mile" or "The Bear S02E03". */
+  title: string
+  rootPath: string
+  mainFile: MovieFile | EpisodeFile
+  tvShowId: string | null
+}
+
+export function ownerOf(version: Pick<MediaVersion, 'movieId' | 'episodeId'>): VersionOwner {
+  return version.episodeId ? { episodeId: version.episodeId } : { movieId: version.movieId! }
+}
+
+function kindOf(owner: VersionOwner): VersionKind {
+  return 'episodeId' in owner ? 'episode' : 'movie'
+}
+
+async function loadSubject(owner: VersionOwner): Promise<VersionSubject | null> {
+  if ('episodeId' in owner) {
+    const episode = await Episode.query()
+      .where('id', owner.episodeId)
+      .preload('episodeFile')
+      .preload('tvShow', (query) => query.preload('rootFolder'))
+      .first()
+    if (!episode?.episodeFile || !episode.tvShow?.rootFolder) return null
+    const code = `S${String(episode.seasonNumber).padStart(2, '0')}E${String(episode.episodeNumber).padStart(2, '0')}`
+    return {
+      kind: 'episode',
+      title: `${episode.tvShow.title} ${code}`,
+      rootPath: episode.tvShow.rootFolder.path,
+      mainFile: episode.episodeFile,
+      tvShowId: episode.tvShowId,
+    }
+  }
+
+  const movie = await Movie.query()
+    .where('id', owner.movieId)
+    .preload('rootFolder')
+    .preload('movieFile')
+    .first()
+  if (!movie?.movieFile || !movie.rootFolder) return null
+  return {
+    kind: 'movie',
+    title: movie.title,
+    rootPath: movie.rootFolder.path,
+    mainFile: movie.movieFile,
+    tvShowId: null,
+  }
+}
+
+function whereOwner<T extends { where: (column: string, value: string) => T }>(
+  query: T,
+  owner: VersionOwner
+): T {
+  return 'episodeId' in owner
+    ? query.where('episodeId', owner.episodeId)
+    : query.where('movieId', owner.movieId)
+}
+
+/** Profiles that run by themselves for this kind of media. */
+function autoProfiles(kind: VersionKind) {
+  return VersionProfile.query()
+    .where('auto', true)
+    .where(kind === 'movie' ? 'forMovies' : 'forTv', true)
+}
+
 /**
- * Makes and manages versions: smaller copies of a movie kept beside its main
- * file, e.g. a 1080p HEVC copy to download to a phone.
+ * Makes and manages versions: smaller copies of a movie or an episode kept
+ * beside its main file, e.g. a 1080p HEVC copy to download to a phone.
  *
  * Encodes run one at a time, in the order they were queued, whichever of the
  * GPU or CPU is doing them — two at once only halves the speed of each. The
- * queue lives in `movie_versions`, so it survives a restart, and a row is
+ * queue lives in `media_versions`, so it survives a restart, and a row is
  * claimed with a conditional update before anything reads it: `npm run dev`
  * and the container share a database, and without the claim both would
- * encode the same film.
+ * encode the same file.
  *
  * At import the download is hardlinked beside itself on the local disk before
  * the original moves to the library. The link costs no space and no time, and
- * lets the encoder read the local copy instead of pulling tens of gigabytes
- * back off a NAS; only the finished, much smaller version crosses the network.
+ * lets the encoder read the local copy instead of pulling the original back
+ * off a NAS; only the finished, much smaller version crosses the network.
  */
-export class MovieVersionService {
+export class MediaVersionService {
   private timer: NodeJS.Timeout | null = null
   private draining = false
   private current: RunningEncode | null = null
@@ -83,6 +158,10 @@ export class MovieVersionService {
   start(): void {
     if (this.timer) return
     this.timer = setInterval(() => this.kick(), POLL_INTERVAL)
+    // A restart — a deploy, or the dev server reloading on a save — must not
+    // leave ffmpeg running with nobody to collect its output. That orphan kept
+    // writing while the next process encoded the same file again.
+    app.terminating(() => this.shutdown())
     this.kick()
   }
 
@@ -91,13 +170,28 @@ export class MovieVersionService {
     this.timer = null
   }
 
-  async getOptions(): Promise<MovieVersionOptions> {
-    const stored = await AppSetting.get<Partial<MovieVersionOptions>>(MOVIE_VERSIONS_SETTING_KEY)
+  /** Stop the running encode and hand its row back to the queue. */
+  private async shutdown(): Promise<void> {
+    this.stop()
+    const running = this.current
+    if (!running) return
+    running.cancelled = true
+    running.proc?.kill('SIGKILL')
+    await db
+      .from('media_versions')
+      .where('id', running.versionId)
+      .where('status', 'encoding')
+      .update({ status: 'queued', heartbeat_at: null, updated_at: db.raw('now()') })
+      .catch(() => {})
+  }
+
+  async getOptions(): Promise<VersionOptions> {
+    const stored = await AppSetting.get<Partial<VersionOptions>>(VERSIONS_SETTING_KEY)
     return { ...DEFAULT_OPTIONS, ...stored }
   }
 
-  async setOptions(options: MovieVersionOptions): Promise<void> {
-    await AppSetting.set(MOVIE_VERSIONS_SETTING_KEY, options)
+  async setOptions(options: VersionOptions): Promise<void> {
+    await AppSetting.set(VERSIONS_SETTING_KEY, options)
   }
 
   get vaapiDevice(): string {
@@ -148,13 +242,13 @@ export class MovieVersionService {
             'hevc',
             'pipe:1',
           ])
-          logger.info(`Movie versions: GPU encoding available on ${this.vaapiDevice} (${mode})`)
+          logger.info(`Versions: GPU encoding available on ${this.vaapiDevice} (${mode})`)
           return mode
         } catch (error) {
           lastError = error
         }
       }
-      logger.info(`Movie versions: no GPU encoding (${describeError(lastError)}), using x265`)
+      logger.info(`Versions: no GPU encoding (${describeError(lastError)}), using x265`)
       return null
     })()
     return this.encoderProbe
@@ -175,6 +269,13 @@ export class MovieVersionService {
     return { hardwareAvailable, active: hardwareAvailable && hardwareEncoding ? 'gpu' : 'cpu' }
   }
 
+  /** Where a finished version lives on disk, or null when that cannot be told. */
+  async absolutePathOf(version: MediaVersion): Promise<string | null> {
+    if (!version.relativePath) return null
+    const subject = await loadSubject(ownerOf(version))
+    return subject ? path.join(subject.rootPath, version.relativePath) : null
+  }
+
   getProgress(versionId: string): VersionProgress | null {
     return this.current?.versionId === versionId ? { ...this.current.progress } : null
   }
@@ -189,14 +290,18 @@ export class MovieVersionService {
    * is automatic or the filesystem cannot link (a network share, another
    * mount) — then the encoder reads the library copy instead.
    */
-  async stageForImport(sourcePath: string, downloadPath: string): Promise<string | null> {
+  async stageForImport(
+    kind: VersionKind,
+    sourcePath: string,
+    downloadPath: string
+  ): Promise<string | null> {
     // Never the reason an import fails: at worst the version reads the library copy.
-    const autoProfiles = await VersionProfile.query()
-      .where('auto', true)
+    const profiles = await autoProfiles(kind)
       .count('* as total')
       .catch(() => null)
-    if (!autoProfiles || Number(autoProfiles[0].$extras.total) === 0) return null
+    if (!profiles || Number(profiles[0].$extras.total) === 0) return null
 
+    // Beside the download, never inside it: the import deletes that folder.
     const stagingDir = path.join(path.dirname(downloadPath), STAGING_DIR_NAME)
     const staged = path.join(
       stagingDir,
@@ -208,23 +313,23 @@ export class MovieVersionService {
       return staged
     } catch (error) {
       logger.info(
-        `Movie versions: could not stage ${path.basename(sourcePath)} locally (${describeError(error)}); will encode from the library`
+        `Versions: could not stage ${path.basename(sourcePath)} locally (${describeError(error)}); will encode from the library`
       )
       return null
     }
   }
 
   /**
-   * A new main file just landed for a movie. Versions made from the file it
-   * replaced are stale and go; every automatic profile is queued afresh.
+   * A new main file just landed. Versions made from the file it replaced are
+   * stale and go; every automatic profile for this kind is queued afresh.
    */
-  async onMainFileImported(movieId: string, stagedSourcePath: string | null): Promise<void> {
+  async onMainFileImported(owner: VersionOwner, stagedSourcePath: string | null): Promise<void> {
     try {
-      await this.removeAllForMovie(movieId)
+      await this.removeAllFor(owner)
 
-      const profiles = await VersionProfile.query().where('auto', true)
+      const profiles = await autoProfiles(kindOf(owner))
       for (const profile of profiles) {
-        await this.enqueue(movieId, profile, { stagedSourcePath })
+        await this.enqueue(owner, profile, { stagedSourcePath })
       }
     } finally {
       if (stagedSourcePath) await this.releaseStaged(stagedSourcePath)
@@ -233,7 +338,7 @@ export class MovieVersionService {
 
   /** Drop a staged hardlink once no queued or running version needs it. */
   async releaseStaged(stagedSourcePath: string): Promise<void> {
-    const pending = await MovieVersion.query()
+    const pending = await MediaVersion.query()
       .where('stagedSourcePath', stagedSourcePath)
       .whereIn('status', ['queued', 'encoding'])
       .first()
@@ -247,34 +352,34 @@ export class MovieVersionService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Queue a version of a movie. An existing ready version is left alone; a
+   * Queue a version. An existing ready or pending version is left alone; a
    * failed one is retried.
    */
   async enqueue(
-    movieId: string,
+    owner: VersionOwner,
     profile: VersionProfile,
     options: { stagedSourcePath?: string | null } = {}
-  ): Promise<{ version: MovieVersion; queued: boolean; reason?: string }> {
-    const mainFile = await MovieFile.query().where('movieId', movieId).first()
-    const existing = await MovieVersion.query()
-      .where('movieId', movieId)
+  ): Promise<{ version: MediaVersion; queued: boolean; reason?: string }> {
+    const subject = await loadSubject(owner)
+    if (!subject) {
+      throw new Error('There is no file to make a version of')
+    }
+    if (subject.mainFile.versionLabel) {
+      throw new Error(`The file is already the ${subject.mainFile.versionLabel} version`)
+    }
+
+    const existing = await whereOwner(MediaVersion.query(), owner)
       .where('label', profile.label)
       .first()
-
-    if (!mainFile) {
-      throw new Error('Movie has no file to make a version of')
-    }
-    if (mainFile.versionLabel) {
-      throw new Error(`The file is already the ${mainFile.versionLabel} version`)
-    }
-
     if (existing && existing.status !== 'failed') {
       return { version: existing, queued: false, reason: `already ${existing.status}` }
     }
 
-    const version = existing ?? new MovieVersion()
+    const version = existing ?? new MediaVersion()
     version.merge({
-      movieId,
+      movieId: 'movieId' in owner ? owner.movieId : null,
+      episodeId: 'episodeId' in owner ? owner.episodeId : null,
+      tvShowId: subject.tvShowId,
       profileId: profile.id,
       label: profile.label,
       status: 'queued',
@@ -295,24 +400,50 @@ export class MovieVersionService {
   }
 
   /**
-   * Queue `profile` for every movie with a file and no version from it.
+   * Queue `profile` for everything with a file and no version from it yet:
+   * the whole library (as far as the profile's movie and TV switches allow),
+   * or one show or season of it, which is asked for by hand and so runs
+   * whatever the TV switch says.
    */
-  async backfill(profile: VersionProfile): Promise<number> {
-    const movieIds = await db
-      .from('movie_files')
-      .whereNull('version_label')
-      .whereNotExists((query) => {
-        query
-          .from('movie_versions')
-          .whereColumn('movie_versions.movie_id', 'movie_files.movie_id')
-          .where('movie_versions.label', profile.label)
-          .whereNot('movie_versions.status', 'failed')
-      })
-      .distinct('movie_id')
+  async backfill(
+    profile: VersionProfile,
+    scope: { tvShowId?: string; seasonNumber?: number } = {}
+  ): Promise<number> {
+    const owners: VersionOwner[] = []
+    const pendingOrReady = (column: 'movie_id' | 'episode_id', outer: string) => (query: any) =>
+      query
+        .from('media_versions')
+        .whereColumn(`media_versions.${column}`, outer)
+        .where('media_versions.label', profile.label)
+        .whereNot('media_versions.status', 'failed')
+
+    if (profile.forMovies && !scope.tvShowId) {
+      const rows = await db
+        .from('movie_files')
+        .whereNull('version_label')
+        .whereNotExists(pendingOrReady('movie_id', 'movie_files.movie_id'))
+        .distinct('movie_id')
+      owners.push(...rows.map((row) => ({ movieId: row.movie_id as string })))
+    }
+
+    if (profile.forTv || scope.tvShowId) {
+      const query = db
+        .from('episode_files')
+        .join('episodes', 'episodes.id', 'episode_files.episode_id')
+        .whereNull('episode_files.version_label')
+        .whereNotExists(pendingOrReady('episode_id', 'episode_files.episode_id'))
+        .orderBy(['episodes.season_number', 'episodes.episode_number'])
+        .select('episode_files.episode_id')
+      if (scope.tvShowId) query.where('episode_files.tv_show_id', scope.tvShowId)
+      if (scope.seasonNumber !== undefined)
+        query.where('episodes.season_number', scope.seasonNumber)
+      const rows = await query
+      owners.push(...rows.map((row) => ({ episodeId: row.episode_id as string })))
+    }
 
     let queued = 0
-    for (const row of movieIds) {
-      const result = await this.enqueue(row.movie_id, profile).catch(() => null)
+    for (const owner of owners) {
+      const result = await this.enqueue(owner, profile).catch(() => null)
       if (result?.queued) queued++
     }
     return queued
@@ -321,56 +452,52 @@ export class MovieVersionService {
   /**
    * Delete a version: stop it if it is encoding, remove its file, drop the row.
    */
-  async remove(version: MovieVersion): Promise<void> {
+  async remove(version: MediaVersion): Promise<void> {
     if (this.current?.versionId === version.id) {
       this.current.cancelled = true
       this.current.proc?.kill('SIGKILL')
     }
 
     if (version.relativePath) {
-      const movie = await Movie.query().where('id', version.movieId).preload('rootFolder').first()
-      if (movie?.rootFolder) {
-        await fs.unlink(path.join(movie.rootFolder.path, version.relativePath)).catch(() => {})
+      const subject = await loadSubject(ownerOf(version))
+      if (subject) {
+        await fs.unlink(path.join(subject.rootPath, version.relativePath)).catch(() => {})
       }
     }
 
     const staged = version.stagedSourcePath
-    await MovieVersion.query().where('id', version.id).delete()
+    await MediaVersion.query().where('id', version.id).delete()
     if (staged) await this.releaseStaged(staged)
   }
 
-  /** Delete every version of a movie, e.g. because its main file is going. */
-  async removeAllForMovie(movieId: string): Promise<void> {
-    const versions = await MovieVersion.query().where('movieId', movieId)
+  /** Delete every version of a movie or episode, e.g. because its file is going. */
+  async removeAllFor(owner: VersionOwner): Promise<void> {
+    const versions = await whereOwner(MediaVersion.query(), owner)
     for (const version of versions) {
       await this.remove(version)
     }
   }
 
   /**
-   * Make a ready version the movie's only file: the original is deleted and
-   * the version takes its name, so the library, Jellyfin and any sidecar
+   * Make a ready version the only file: the original is deleted and the
+   * version takes its name, so the library, Jellyfin and any sidecar
    * subtitles all keep pointing at the right thing.
    */
-  async promote(version: MovieVersion): Promise<MovieFile> {
+  async promote(version: MediaVersion): Promise<MovieFile | EpisodeFile> {
     if (version.status !== 'ready' || !version.relativePath) {
       throw new Error('Only a finished version can replace the original')
     }
 
-    const movie = await Movie.query()
-      .where('id', version.movieId)
-      .preload('rootFolder')
-      .preload('movieFile')
-      .firstOrFail()
-    const mainFile = movie.movieFile
-    if (!mainFile || !movie.rootFolder) {
-      throw new Error('Movie has no file')
+    const owner = ownerOf(version)
+    const subject = await loadSubject(owner)
+    if (!subject) {
+      throw new Error('There is no file to replace')
     }
+    const mainFile = subject.mainFile
 
     // Another version still reading the original from the library would lose
     // its source halfway through.
-    const busy = await MovieVersion.query()
-      .where('movieId', movie.id)
+    const busy = await whereOwner(MediaVersion.query(), owner)
       .whereNot('id', version.id)
       .whereIn('status', ['queued', 'encoding'])
       .whereNull('stagedSourcePath')
@@ -379,11 +506,10 @@ export class MovieVersionService {
       throw new Error(`Wait for the ${busy.label} version to finish first`)
     }
 
-    const root = movie.rootFolder.path
-    const originalPath = path.join(root, mainFile.relativePath)
-    const versionPath = path.join(root, version.relativePath)
+    const originalPath = path.join(subject.rootPath, mainFile.relativePath)
+    const versionPath = path.join(subject.rootPath, version.relativePath)
     const promotedRelative = mainFile.relativePath.replace(/\.[^./]+$/, '') + '.mkv'
-    const promotedPath = path.join(root, promotedRelative)
+    const promotedPath = path.join(subject.rootPath, promotedRelative)
 
     await fs.access(versionPath)
     await fs.unlink(originalPath).catch((error) => {
@@ -401,9 +527,9 @@ export class MovieVersionService {
       versionLabel: version.label,
     })
     await mainFile.save()
-    await MovieVersion.query().where('id', version.id).delete()
+    await MediaVersion.query().where('id', version.id).delete()
 
-    logger.info(`Movie versions: ${movie.title} now keeps only its ${version.label} version`)
+    logger.info(`Versions: ${subject.title} now keeps only its ${version.label} version`)
     return mainFile
   }
 
@@ -415,7 +541,7 @@ export class MovieVersionService {
     if (this.draining) return
     this.draining = true
     this.drain()
-      .catch((error) => logger.error({ err: error }, 'Movie versions: queue failed'))
+      .catch((error) => logger.error({ err: error }, 'Versions: queue failed'))
       .finally(() => {
         this.draining = false
       })
@@ -423,7 +549,7 @@ export class MovieVersionService {
 
   private async drain(): Promise<void> {
     await this.requeueStale()
-    while (true) {
+    while (this.timer) {
       const version = await this.claimNext()
       if (!version) return
       await this.process(version)
@@ -433,27 +559,27 @@ export class MovieVersionService {
   /** Put back rows whose encoding process died without finishing. */
   private async requeueStale(): Promise<void> {
     await db.rawQuery(
-      `UPDATE movie_versions SET status = 'queued', heartbeat_at = NULL, updated_at = now()
+      `UPDATE media_versions SET status = 'queued', heartbeat_at = NULL, updated_at = now()
        WHERE status = 'encoding'
          AND (heartbeat_at IS NULL OR heartbeat_at < now() - make_interval(secs => ?))`,
       [STALE_AFTER_SECONDS]
     )
   }
 
-  private async claimNext(): Promise<MovieVersion | null> {
+  private async claimNext(): Promise<MediaVersion | null> {
     const result = await db.rawQuery(
-      `UPDATE movie_versions SET status = 'encoding', heartbeat_at = now(), updated_at = now()
+      `UPDATE media_versions SET status = 'encoding', heartbeat_at = now(), updated_at = now()
        WHERE id = (
-         SELECT id FROM movie_versions WHERE status = 'queued'
+         SELECT id FROM media_versions WHERE status = 'queued'
          ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED
        )
        RETURNING id`
     )
     const id = result.rows?.[0]?.id
-    return id ? MovieVersion.find(id) : null
+    return id ? MediaVersion.find(id) : null
   }
 
-  private async process(version: MovieVersion): Promise<void> {
+  private async process(version: MediaVersion): Promise<void> {
     const running: RunningEncode = {
       versionId: version.id,
       proc: null,
@@ -462,9 +588,9 @@ export class MovieVersionService {
     }
     this.current = running
     const heartbeat = setInterval(() => {
-      MovieVersion.query()
+      db.from('media_versions')
         .where('id', version.id)
-        .update({ heartbeatAt: DateTime.now().toSQL() })
+        .update({ heartbeat_at: db.raw('now()') })
         .catch(() => {})
     }, HEARTBEAT_INTERVAL)
 
@@ -484,14 +610,12 @@ export class MovieVersionService {
       })
       await version.save()
       logger.info(
-        `Movie versions: ${result.relativePath} ready (${formatGb(result.sizeBytes)}, ${result.encoder})`
+        `Versions: ${result.relativePath} ready (${formatGb(result.sizeBytes)}, ${result.encoder})`
       )
     } catch (error) {
       if (running.cancelled) return
-      logger.warn(
-        `Movie versions: ${version.label} for ${version.movieId} failed: ${describeError(error)}`
-      )
-      await MovieVersion.query()
+      logger.warn(`Versions: ${version.label} for ${version.id} failed: ${describeError(error)}`)
+      await MediaVersion.query()
         .where('id', version.id)
         .update({ status: 'failed', error: describeError(error), heartbeatAt: null })
         .catch(() => {})
@@ -499,20 +623,22 @@ export class MovieVersionService {
       clearInterval(heartbeat)
       this.current = null
       if (tempPath) await fs.unlink(tempPath).catch(() => {})
+      // A cancelled row was deleted or handed back to the queue; either way the
+      // staged link may still be wanted, and releaseStaged checks for that.
       const staged = version.stagedSourcePath
-      if (staged) {
+      if (staged && !running.cancelled) {
         // The staged link has done its job either way; a retry reads the library copy.
-        await MovieVersion.query()
+        await MediaVersion.query()
           .where('id', version.id)
           .update({ stagedSourcePath: null })
           .catch(() => {})
-        await this.releaseStaged(staged)
       }
+      if (staged) await this.releaseStaged(staged)
     }
   }
 
   private async encode(
-    version: MovieVersion,
+    version: MediaVersion,
     running: RunningEncode,
     onTempPath: (tempPath: string) => void
   ): Promise<{
@@ -521,38 +647,39 @@ export class MovieVersionService {
     analysis: MediaAnalysis
     encoder: VersionEncoder
   }> {
-    const movie = await Movie.query()
-      .where('id', version.movieId)
-      .preload('rootFolder')
-      .preload('movieFile')
-      .first()
-    if (!movie?.movieFile || !movie.rootFolder) {
-      throw new Error('Movie has no file')
+    const subject = await loadSubject(ownerOf(version))
+    if (!subject) {
+      throw new Error('There is no file to make a version of')
     }
-    if (movie.movieFile.versionLabel) {
-      throw new Error(`The file is already the ${movie.movieFile.versionLabel} version`)
+    if (subject.mainFile.versionLabel) {
+      throw new Error(`The file is already the ${subject.mainFile.versionLabel} version`)
     }
     const profile = version.profileId ? await VersionProfile.find(version.profileId) : null
     if (!profile) {
       throw new Error('Its profile was deleted')
     }
 
-    const libraryPath = path.join(movie.rootFolder.path, movie.movieFile.relativePath)
+    const libraryPath = path.join(subject.rootPath, subject.mainFile.relativePath)
     const staged = version.stagedSourcePath && (await exists(version.stagedSourcePath))
     const sourcePath = staged ? version.stagedSourcePath! : libraryPath
 
+    if (!(await exists(sourcePath))) {
+      throw new Error(`The file is not on disk: ${subject.mainFile.relativePath}`)
+    }
     const analysis = await probeFile(sourcePath)
     const unsupported = unsupportedSourceReason(analysis)
     if (unsupported) throw new Error(unsupported)
 
-    const relativePath = versionRelativePath(movie.movieFile.relativePath, profile.label)
+    const relativePath = versionRelativePath(subject.mainFile.relativePath, profile.label)
 
     // Write next to the staged source when there is one — the same local
     // disk — and into the app's tmp folder otherwise. Never straight into the
     // library: a half-written file there is a version Jellyfin would list.
+    // The pid keeps a second process (dev server and container share the
+    // queue) from ever writing into the same file.
     const workDir = staged ? path.dirname(sourcePath) : app.makePath('tmp', 'versions')
     await fs.mkdir(workDir, { recursive: true })
-    const tempPath = path.join(workDir, `${version.id}.mkv`)
+    const tempPath = path.join(workDir, `${version.id}-${process.pid}.mkv`)
     onTempPath(tempPath)
 
     const subtitleIndices = profile.subtitles
@@ -562,7 +689,11 @@ export class MovieVersionService {
     // library copy; a staged download still has them embedded.
     const sidecars = profile.subtitles && !staged ? await findSidecars(libraryPath) : []
 
-    let lastError: unknown = null
+    // Only a failed encode moves on to the next encoder. Anything after it —
+    // probing, verifying, copying into the library — would fail the same way
+    // on every encoder, and retrying it meant encoding the whole film again.
+    const failures: string[] = []
+    let used: VersionEncoder | null = null
     for (const encoder of await this.encoderChain()) {
       if (running.cancelled) throw new Error('cancelled')
       try {
@@ -582,27 +713,31 @@ export class MovieVersionService {
           analysis.duration,
           running
         )
-        lastError = null
-
-        const result = await probeFile(tempPath)
-        const problem = await verifyVersion(sourcePath, tempPath, analysis, result)
-        if (problem) throw problem
-
-        const destination = path.join(movie.rootFolder.path, relativePath)
-        await fileTransferService.move(tempPath, destination)
-        const stats = await fs.stat(destination)
-        return { relativePath, sizeBytes: stats.size, analysis: result, encoder }
+        used = encoder
+        break
       } catch (error) {
         if (running.cancelled) throw error
-        lastError = error
-        // A result that fails verification will not get better on another
-        // encoder, except when the failure was the encoder itself.
-        if (error instanceof VerificationError) throw error
-        logger.info(`Movie versions: ${encoder} failed for ${movie.title}: ${describeError(error)}`)
+        failures.push(`${encoder}: ${describeError(error)}`)
+        logger.warn(`Versions: ${encoder} failed for ${subject.title}: ${describeError(error)}`)
         await fs.unlink(tempPath).catch(() => {})
       }
     }
-    throw lastError ?? new Error('No encoder available')
+    if (!used) {
+      throw new Error(failures.join(' | ') || 'No encoder available')
+    }
+
+    const result = await probeFile(tempPath).catch((error) => {
+      throw new Error(`the result could not be read: ${describeError(error)}`)
+    })
+    const problem = await verifyVersion(sourcePath, tempPath, analysis, result)
+    if (problem) throw new Error(problem)
+
+    const destination = path.join(subject.rootPath, relativePath)
+    await fileTransferService.move(tempPath, destination).catch((error) => {
+      throw new Error(`could not copy it into the library: ${describeError(error)}`)
+    })
+    const stats = await fs.stat(destination)
+    return { relativePath, sizeBytes: stats.size, analysis: result, encoder: used }
   }
 
   private runEncode(args: string[], duration: number, running: RunningEncode): Promise<void> {
@@ -652,14 +787,8 @@ export class MovieVersionService {
         running.proc = null
         if (running.cancelled) return reject(new Error('cancelled'))
         if (code === 0) return resolve()
-        // ffmpeg 6.1 (Alpine's) runs the GPU scaler out of surfaces while the
-        // decoder flushes the last frames of a Dolby Vision profile 7 file,
-        // and gives up with the film done bar its final second of credits.
-        // ffmpeg 7 does not. The file it leaves is finalised and plays; the
-        // duration check after this is what decides whether it is complete
-        // enough to keep, so let it through to that check.
-        if (running.progress.percent > 98 && /Error while filtering: Out of memory/.test(stderr)) {
-          logger.info('Movie versions: GPU scaler ran out at the very end; checking the result')
+        if (encodeStoppedAtFlush(stderr, running.progress.percent)) {
+          logger.info('Versions: GPU scaler stopped at the very end; checking the result')
           return resolve()
         }
         reject(new Error(`ffmpeg exited with code ${code}: ${stderr.trim().slice(-300)}`))
@@ -667,8 +796,6 @@ export class MovieVersionService {
     })
   }
 }
-
-class VerificationError extends Error {}
 
 /**
  * Checks before a version is allowed into the library. Returns the first
@@ -679,30 +806,26 @@ async function verifyVersion(
   resultPath: string,
   source: MediaAnalysis,
   result: MediaAnalysis
-): Promise<VerificationError | null> {
+): Promise<string | null> {
   if (!result.videoCodec) {
-    return new VerificationError('the result has no video stream')
+    return 'the result has no video stream'
   }
   const drift = Math.abs(result.duration - source.duration)
   if (source.duration > 0 && drift > Math.max(MAX_DURATION_DRIFT, source.duration * 0.005)) {
-    return new VerificationError(
-      `the result is ${drift.toFixed(1)}s shorter or longer than the source`
-    )
+    return `the result is ${drift.toFixed(1)}s shorter or longer than the source`
   }
   const [sourceStats, resultStats] = await Promise.all([fs.stat(sourcePath), fs.stat(resultPath)])
   if (resultStats.size > sourceStats.size * MAX_SIZE_RATIO) {
-    return new VerificationError(
-      `the result (${formatGb(resultStats.size)}) is not meaningfully smaller than the original (${formatGb(sourceStats.size)})`
-    )
+    return `the result (${formatGb(resultStats.size)}) is not meaningfully smaller than the original (${formatGb(sourceStats.size)})`
   }
   return null
 }
 
 /**
- * `Movie (2020)/Movie (2020).mkv` → `Movie (2020)/Movie (2020) - Mobile.mkv`.
- * Jellyfin groups files in one folder as versions of the same film when each
- * name starts with the folder name, and shows the part after " - " as the
- * version's name.
+ * `Movie (2020)/Movie (2020).mkv` → `Movie (2020)/Movie (2020) - Mobile.mkv`,
+ * and `Show/Season 01/Show - S01E01 - Pilot.mkv` → `… - Pilot - Mobile.mkv`.
+ * Jellyfin groups such files as versions: movies by the folder name the file
+ * starts with, episodes by the same SxxEyy in the same season folder.
  */
 export function versionRelativePath(mainRelativePath: string, label: string): string {
   const dir = path.dirname(mainRelativePath)
@@ -781,4 +904,4 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-export const movieVersionService = new MovieVersionService()
+export const mediaVersionService = new MediaVersionService()

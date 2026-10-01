@@ -4,6 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
 import { fileNamingService } from './file_naming_service.js'
 import { fileTransferService } from './file_transfer_service.js'
+import { mediaVersionService } from './media_version_service.js'
 import { subtitlePruningService } from './subtitle_pruning_service.js'
 import { subtitleSidecarService } from './subtitle_sidecar_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
@@ -144,7 +145,8 @@ export class EpisodeImportService {
             tvShow,
             rootFolder,
             download.episodeId,
-            download.nzbInfo?.replaceExisting === true
+            download.nzbInfo?.replaceExisting === true,
+            outputPath
           )
 
           if (importResult.success) {
@@ -250,7 +252,8 @@ export class EpisodeImportService {
     tvShow: TvShow,
     rootFolder: RootFolder,
     knownEpisodeId?: string | null,
-    forceReplace: boolean = false
+    forceReplace: boolean = false,
+    downloadPath: string = sourcePath
   ): Promise<{ success: boolean; error?: string; destinationPath?: string }> {
     const fileName = path.basename(sourcePath)
 
@@ -362,6 +365,45 @@ export class EpisodeImportService {
     // Create directories
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
 
+    // Keep a local hardlink of the download for any automatic version
+    // profile, taken before the move below deletes the source. The encoder
+    // then reads this local disk instead of the original back off the share.
+    const stagedSource = await mediaVersionService.stageForImport(
+      'episode',
+      sourcePath,
+      downloadPath
+    )
+    try {
+      await this.placeFile(sourcePath, absolutePath, sourceAnalysis, probedInfo, {
+        episode,
+        tvShow,
+        relativePath,
+        quality,
+      })
+    } catch (error) {
+      if (stagedSource) await mediaVersionService.releaseStaged(stagedSource)
+      throw error
+    }
+
+    await mediaVersionService
+      .onMainFileImported({ episodeId: episode.id }, stagedSource)
+      .catch((err) => logger.error({ err }, 'EpisodeImportService: Failed to queue versions'))
+
+    return { success: true, destinationPath: absolutePath }
+  }
+
+  /**
+   * Put the file in the library and record it.
+   */
+  private async placeFile(
+    sourcePath: string,
+    absolutePath: string,
+    sourceAnalysis: MediaAnalysis | null,
+    probedInfo: VideoMediaInfo | null,
+    target: { episode: Episode; tvShow: TvShow; relativePath: string; quality?: string }
+  ): Promise<void> {
+    const { episode, tvShow, relativePath, quality } = target
+
     // Write the text subtitle tracks out beside where the video is going. A
     // media server that has to demux them itself does it on first play, reading
     // the whole file off the share while someone waits for a picture to appear.
@@ -415,6 +457,8 @@ export class EpisodeImportService {
           quality: quality || null,
           mediaInfo: probedInfo,
           dateAdded: DateTime.now(),
+          // A fresh original, not a version standing in for one
+          versionLabel: null,
         })
         await episodeFile.save()
       } else {
@@ -438,8 +482,6 @@ export class EpisodeImportService {
       episode.episodeFileId = episodeFile.id
       await episode.save()
     })
-
-    return { success: true, destinationPath: absolutePath }
   }
 
   /**

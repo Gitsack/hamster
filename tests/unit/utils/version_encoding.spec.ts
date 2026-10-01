@@ -1,13 +1,14 @@
 import { test } from '@japa/runner'
 import {
   buildVersionEncodeArgs,
+  encodeStoppedAtFlush,
   parseSidecarName,
   selectAudioTracks,
   targetDimensions,
   unsupportedSourceReason,
   type VersionEncodeInput,
 } from '../../../app/utils/version_encoding.js'
-import { versionRelativePath } from '../../../app/services/media/movie_version_service.js'
+import { versionRelativePath } from '../../../app/services/media/media_version_service.js'
 import type { MediaAnalysis } from '../../../app/utils/ffmpeg_utils.js'
 
 function analysis(overrides: Partial<MediaAnalysis> = {}): MediaAnalysis {
@@ -144,6 +145,16 @@ test.group('version_encoding | buildVersionEncodeArgs', () => {
     assert.equal(after(args, '-vf'), 'scale_vaapi=format=nv12')
   })
 
+  test('resizes a 1080p source on the CPU, avoiding the GPU scaler flush bug', ({ assert }) => {
+    const args = buildVersionEncodeArgs(
+      input({ profile: { maxHeight: 720, quality: 'balanced', audio: 'stereo', subtitles: true } })
+    )
+    assert.equal(after(args, '-hwaccel'), 'vaapi')
+    assert.notInclude(args, '-hwaccel_output_format')
+    assert.equal(after(args, '-filter_hw_device'), 'va')
+    assert.equal(after(args, '-vf'), 'scale=1280:720:flags=bicubic,format=nv12,hwupload')
+  })
+
   test('falls back to constant QP where the driver has no ICQ', ({ assert }) => {
     const args = buildVersionEncodeArgs(input({ vaapiRateControl: 'CQP' }))
     assert.equal(after(args, '-rc_mode'), 'CQP')
@@ -277,5 +288,14 @@ test.group('movie_version_service | versionRelativePath', () => {
       versionRelativePath('Movie (2020)/Movie (2020).mp4', 'Mobile'),
       'Movie (2020)/Movie (2020) - Mobile.mkv'
     )
+  })
+})
+
+test.group('version_encoding | encodeStoppedAtFlush', () => {
+  test('accepts the scaler flush failure in either wording, at the very end only', ({ assert }) => {
+    assert.isTrue(encodeStoppedAtFlush('Error while filtering: Out of memory', 99.5))
+    assert.isTrue(encodeStoppedAtFlush('Error while filtering: Cannot allocate memory', 98.3))
+    assert.isFalse(encodeStoppedAtFlush('Error while filtering: Cannot allocate memory', 60))
+    assert.isFalse(encodeStoppedAtFlush('Invalid argument', 99.9))
   })
 })

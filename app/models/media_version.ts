@@ -1,23 +1,32 @@
 import { DateTime } from 'luxon'
 import { BaseModel, belongsTo, column } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import Episode from './episode.js'
 import type { VideoMediaInfo } from '#models/movie_file'
 import Movie from './movie.js'
 import VersionProfile from './version_profile.js'
 
-export type MovieVersionStatus = 'queued' | 'encoding' | 'ready' | 'failed'
+export type MediaVersionStatus = 'queued' | 'encoding' | 'ready' | 'failed'
 
 /**
- * A smaller copy of a movie beside its main file, made from a version profile.
+ * A smaller copy of a movie or an episode beside its main file, made from a
+ * version profile. Exactly one of `movieId` and `episodeId` is set.
  * The row exists from the moment the copy is queued; `relativePath` is only
  * set once the finished file is in the library.
  */
-export default class MovieVersion extends BaseModel {
+export default class MediaVersion extends BaseModel {
   @column({ isPrimary: true })
   declare id: string
 
   @column()
-  declare movieId: string
+  declare movieId: string | null
+
+  @column()
+  declare episodeId: string | null
+
+  /** Set for episodes, so a show page can find its versions in one query. */
+  @column()
+  declare tvShowId: string | null
 
   @column()
   declare profileId: string | null
@@ -27,9 +36,9 @@ export default class MovieVersion extends BaseModel {
   declare label: string
 
   @column()
-  declare status: MovieVersionStatus
+  declare status: MediaVersionStatus
 
-  /** Relative to the movie's root folder, like MovieFile.relativePath. */
+  /** Relative to the root folder, like the main file's relativePath. */
   @column()
   declare relativePath: string | null
 
@@ -77,6 +86,9 @@ export default class MovieVersion extends BaseModel {
 
   @belongsTo(() => Movie)
   declare movie: BelongsTo<typeof Movie>
+
+  @belongsTo(() => Episode)
+  declare episode: BelongsTo<typeof Episode>
 
   @belongsTo(() => VersionProfile, { foreignKey: 'profileId' })
   declare profile: BelongsTo<typeof VersionProfile>

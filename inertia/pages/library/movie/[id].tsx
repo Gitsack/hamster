@@ -52,7 +52,7 @@ import { VideoPlayer } from '@/components/player/video_player'
 import { ReleaseList, type AnnotatedRelease } from '@/components/release-list'
 import { ReplaceFileDialog } from '@/components/library/replace-file-dialog'
 import { MediaFileCard } from '@/components/library/media-file-card'
-import { MovieVersionsCard } from '@/components/library/movie-versions-card'
+import { MovieVersionsCard } from '@/components/library/media-versions'
 import { AudioTrackList, type AudioTrack } from '@/components/library/audio-track-list'
 
 interface QualityProfile {

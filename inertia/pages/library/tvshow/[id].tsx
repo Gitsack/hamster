@@ -56,6 +56,7 @@ import { CastLane, type CastMember } from '@/components/library/cast-lane'
 import { StreamingOffers, type StreamingOffer } from '@/components/library/streaming-offers'
 import { StreamingBadges } from '@/components/library/streaming-badges'
 import { DownloadProgressCard } from '@/components/library/download-progress-card'
+import { ShowVersionsCard } from '@/components/library/media-versions'
 import { useActiveDownloads, type ActiveDownloadInfo } from '@/hooks/use_active_downloads'
 import { useAudioPlayer } from '@/contexts/audio_player_context'
 import { VideoPlayer } from '@/components/player/video_player'
@@ -1450,6 +1451,12 @@ export default function TvShowDetail() {
             )}
           </CardContent>
         </Card>
+
+        <ShowVersionsCard
+          showId={String(show.id)}
+          seasons={show.seasons.filter((s) => s.downloadedCount > 0).map((s) => s.seasonNumber)}
+          onPromoted={() => void fetchShow()}
+        />
 
         {/* Browsing content: it belongs where browsing is the mode, not in the add-or-not sheet. */}
         <StreamingOffers offers={show.streamingOffers} />

@@ -4,7 +4,7 @@ import type { BelongsTo, HasMany, HasOne } from '@adonisjs/lucid/types/relations
 import QualityProfile from './quality_profile.js'
 import RootFolder from './root_folder.js'
 import MovieFile from './movie_file.js'
-import MovieVersion from './movie_version.js'
+import MediaVersion from './media_version.js'
 
 export default class Movie extends BaseModel {
   @column({ isPrimary: true })
@@ -115,6 +115,6 @@ export default class Movie extends BaseModel {
   @hasOne(() => MovieFile)
   declare movieFile: HasOne<typeof MovieFile>
 
-  @hasMany(() => MovieVersion)
-  declare versions: HasMany<typeof MovieVersion>
+  @hasMany(() => MediaVersion)
+  declare versions: HasMany<typeof MediaVersion>
 }

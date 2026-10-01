@@ -18,6 +18,7 @@ import { justwatchService } from '#services/metadata/justwatch_service'
 import AppSetting from '#models/app_setting'
 import { downloadManager } from '#services/download_clients/download_manager'
 import { libraryCleanupService } from '#services/library/library_cleanup_service'
+import { mediaVersionService } from '#services/media/media_version_service'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 
@@ -1548,6 +1549,9 @@ export default class TvShowsController {
     }
 
     const absolutePath = path.join(episode.tvShow.rootFolder.path, episode.episodeFile.relativePath)
+
+    // Versions are copies of this file and go with it
+    await mediaVersionService.removeAllFor({ episodeId: episode.id })
     const folderPath = path.dirname(absolutePath)
 
     try {
@@ -1618,6 +1622,7 @@ export default class TvShowsController {
         episode.tvShow.rootFolder.path,
         episode.episodeFile.relativePath
       )
+      await mediaVersionService.removeAllFor({ episodeId: episode.id })
       const folderPath = path.dirname(absolutePath)
 
       try {
