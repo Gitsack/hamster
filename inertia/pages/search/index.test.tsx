@@ -36,6 +36,7 @@ vi.mock('@hugeicons/core-free-icons', () => {
     MusicNoteSquare01Icon: m('MusicNoteSquare01Icon'),
     CheckmarkCircle01Icon: m('CheckmarkCircle01Icon'),
     Globe02Icon: m('Globe02Icon'),
+    SoftwareIcon: m('SoftwareIcon'),
     Add01Icon: m('Add01Icon'),
     MoreVerticalIcon: m('MoreVerticalIcon'),
     Film01Icon: m('Film01Icon'),
