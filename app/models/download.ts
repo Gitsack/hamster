@@ -50,7 +50,9 @@ export default class Download extends BaseModel {
   @column()
   declare status: DownloadStatus
 
-  @column()
+  // decimal(5,2): pg hands it back as a string ("61.00"), which progress bars
+  // treat as no value and draw full
+  @column({ consume: (value: string | number | null) => (value === null ? 0 : Number(value)) })
   declare progress: number
 
   @column()
