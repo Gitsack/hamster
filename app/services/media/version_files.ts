@@ -17,7 +17,7 @@ export interface LibraryFileFilter {
   isNotMainFile(relativePath: string): boolean
 }
 
-/** `Movie.mkv.hamster-prune.mkv` from subtitle pruning; `.partial` from copies. */
+/** `Movie.mkv.<id>.hamster-prune.mkv` from subtitle pruning; `.partial` from copies. */
 const WORK_FILE = /\.hamster-[a-z]+\.[^.]+$|\.partial$/i
 
 /**

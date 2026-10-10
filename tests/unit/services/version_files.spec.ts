@@ -20,6 +20,7 @@ test.group('version files | library scan filter', () => {
     assert.isTrue(
       filter.isNotMainFile('Show/Season 01/Show - S01E06 - Rocked.mkv.hamster-prune.mkv')
     )
+    assert.isTrue(filter.isNotMainFile('Movie (1999)/Movie (1999).mkv.3f9a0c1e.hamster-prune.mkv'))
   })
 
   test('main files pass, including titles that merely contain a label', ({ assert }) => {

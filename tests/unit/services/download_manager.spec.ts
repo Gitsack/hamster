@@ -1,5 +1,6 @@
 import { test } from '@japa/runner'
 import {
+  DownloadManager,
   IMPORT_HUNG_MS,
   isImportHung,
   missingPathVerdict,
@@ -164,5 +165,24 @@ test.group('DownloadManager | isImportHung', () => {
 
   test('nothing in flight is never hung', ({ assert }) => {
     assert.isFalse(isImportHung(undefined, IMPORT_HUNG_MS * 2))
+  })
+})
+
+test.group('DownloadManager | claimImport', () => {
+  test('a second claim on a download fails until the first is released', ({ assert }) => {
+    const manager = new DownloadManager()
+    assert.isTrue(manager.claimImport('dl-1'))
+    assert.isFalse(manager.claimImport('dl-1'))
+    assert.isTrue(manager.claimImport('dl-2'))
+    manager.releaseImport('dl-1')
+    assert.isTrue(manager.claimImport('dl-1'))
+  })
+
+  test('retryImport leaves a claimed download alone', async ({ assert }) => {
+    const manager = new DownloadManager()
+    assert.isTrue(manager.claimImport('dl-1'))
+    // In flight: returns before touching the download, so a bare stub is enough.
+    await manager.retryImport({ id: 'dl-1', title: 'x' } as any)
+    assert.isFalse(manager.claimImport('dl-1'))
   })
 })

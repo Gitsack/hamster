@@ -2069,6 +2069,23 @@ export class DownloadManager {
     }
   }
 
+  /**
+   * Take the import slot for a download on behalf of another importer (the
+   * completed-downloads scanner). False when an import of it is already
+   * running here: starting a second one would remux into the same output file.
+   * A true result must be paired with releaseImport().
+   */
+  claimImport(downloadId: string): boolean {
+    if (this.importsInFlight.has(downloadId)) return false
+    this.importsInFlight.set(downloadId, Date.now())
+    return true
+  }
+
+  /** Give back a slot taken with claimImport(). */
+  releaseImport(downloadId: string): void {
+    this.importsInFlight.delete(downloadId)
+  }
+
   /** Test/maintenance hook: reset retry bookkeeping for a download */
   resetImportAttempts(downloadId: string): void {
     this.importAttempts.delete(downloadId)

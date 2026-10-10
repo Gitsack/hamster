@@ -362,9 +362,28 @@ class CompletedDownloadsScanner {
   }
 
   /**
-   * Import a download using the appropriate service
+   * Import a download using the appropriate service, unless DownloadManager is
+   * already importing it. A large movie takes longer than the five minutes after
+   * which an `importing` row looks stuck, and a second import would remux into
+   * the same output file, then fail and mark the download failed once the first
+   * had deleted its source.
    */
   private async importDownload(
+    download: Download,
+    client: DownloadClient
+  ): Promise<{ imported: boolean; error?: string }> {
+    if (!downloadManager.claimImport(download.id)) {
+      console.log(`[CompletedScanner] Skipping ${download.title} - import already in progress`)
+      return { imported: false }
+    }
+    try {
+      return await this.runImport(download, client)
+    } finally {
+      downloadManager.releaseImport(download.id)
+    }
+  }
+
+  private async runImport(
     download: Download,
     client: DownloadClient
   ): Promise<{ imported: boolean; error?: string }> {

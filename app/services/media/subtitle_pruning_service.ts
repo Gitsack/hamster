@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import AppSetting from '#models/app_setting'
 import {
@@ -144,7 +145,9 @@ export class SubtitlePruningService {
     }
 
     const extension = path.extname(destinationPath)
-    const tempPath = `${destinationPath}.hamster-prune${extension || '.mkv'}`
+    // Unique per run, so two imports of one download never write the same file.
+    // It still ends in `.hamster-prune.<ext>`, which version_files skips as a work file.
+    const tempPath = `${destinationPath}.${randomBytes(4).toString('hex')}.hamster-prune${extension || '.mkv'}`
 
     try {
       await runFfmpeg(getSubtitlePruneArgs(sourcePath, tempPath, keep))
