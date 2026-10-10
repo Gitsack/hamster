@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.43.0](https://github.com/Gitsack/hamster/compare/hamster-v1.42.1...hamster-v1.43.0) (2026-10-10)
+
+
+### Features
+
+* **search:** label PC/app releases as Apps ([4c38efb](https://github.com/Gitsack/hamster/commit/4c38efbff0b5ea4080e2ab2f10b625b4e658190d))
+
+
+### Bug Fixes
+
+* **import:** stop the completed scanner starting a second import ([3388d00](https://github.com/Gitsack/hamster/commit/3388d0042f8a8bae2c2372f9f35010c378464b0c))
+* **search:** general search via Prowlarr skips the music filters ([3fb6704](https://github.com/Gitsack/hamster/commit/3fb6704204815b26bfa4ff47e43a6d0b482daaef))
+
 ## [1.42.1](https://github.com/Gitsack/hamster/compare/hamster-v1.42.0...hamster-v1.42.1) (2026-10-10)
 
 
