@@ -19,7 +19,7 @@ function sanitizeSearchQuery(title: string): string {
     .trim()
 }
 
-export type MediaType = 'movie' | 'tv' | 'music' | 'book' | 'other'
+export type MediaType = 'movie' | 'tv' | 'music' | 'book' | 'app' | 'other'
 
 export interface UnifiedSearchResult {
   id: string
@@ -47,10 +47,10 @@ export interface UnifiedSearchResult {
 
 /**
  * Derive a broad media type from a Newznab category ID.
- * Newznab category ranges: 2000s=Movies, 3000s=Audio/Music,
+ * Newznab category ranges: 2000s=Movies, 3000s=Audio/Music, 4000s=PC/Apps,
  * 5000s=TV, 7000s=Books, 8000s=Other (8010=Audiobook)
  */
-function classifyMediaType(categoryId: number | undefined): MediaType | undefined {
+export function classifyMediaType(categoryId: number | undefined): MediaType | undefined {
   if (categoryId === undefined) return undefined
   const major = Math.floor(categoryId / 1000)
   switch (major) {
@@ -58,6 +58,8 @@ function classifyMediaType(categoryId: number | undefined): MediaType | undefine
       return 'movie'
     case 3:
       return 'music'
+    case 4:
+      return 'app'
     case 5:
       return 'tv'
     case 7:
@@ -181,18 +183,19 @@ export class IndexerManager {
     // Search via Prowlarr if configured and not filtered to specific indexers
     if (prowlarrConfig && options.useProwlarr !== false) {
       try {
-        const prowlarrResults = await prowlarrService.searchMusic(
-          {
-            url: prowlarrConfig.baseUrl,
-            apiKey: prowlarrConfig.apiKey,
-          },
-          {
-            query: options.query,
-            artist: options.artist,
-            album: options.album,
-            limit: options.limit,
-          }
-        )
+        const config = { url: prowlarrConfig.baseUrl, apiKey: prowlarrConfig.apiKey }
+        const prowlarrResults = options.generalSearch
+          ? // General search without music-specific filters, same as direct indexers
+            await prowlarrService.search(config, {
+              query: [options.artist, options.album, options.query].filter(Boolean).join(' '),
+              limit: options.limit,
+            })
+          : await prowlarrService.searchMusic(config, {
+              query: options.query,
+              artist: options.artist,
+              album: options.album,
+              limit: options.limit,
+            })
 
         results.push(...this.mapProwlarrResults(prowlarrResults))
       } catch (error) {
