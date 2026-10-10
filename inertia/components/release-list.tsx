@@ -249,7 +249,9 @@ export function ReleaseList({
     for (const release of releases) {
       if (release.quality?.resolution) found.add(release.quality.resolution)
     }
-    return [...found].sort().reverse()
+    // By pixel height, lowest first. A plain string sort put 2160p between 720p and 1080p.
+    const height = (r: string) => parseInt(r, 10) || Number.MAX_SAFE_INTEGER
+    return [...found].sort((a, b) => height(a) - height(b) || a.localeCompare(b))
   }, [releases])
 
   const rejectedCount = useMemo(

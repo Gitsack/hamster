@@ -71,6 +71,24 @@ describe('ReleaseList', () => {
     expect(screen.getByText('B.2024.2160p.HDTS-GRP')).toBeTruthy()
   })
 
+  it('orders resolution chips by height, lowest first', () => {
+    const at = (id: string, resolution: string): AnnotatedRelease => ({
+      ...releases[0],
+      id,
+      title: `${id}.${resolution}`,
+      quality: { ...base, resolution },
+    })
+    render(
+      <ReleaseList
+        releases={[at('a', '2160p'), at('b', '720p'), at('c', '1080p')]}
+        onGrab={() => {}}
+      />
+    )
+    const chips = screen.getByRole('group', { name: 'Filter by resolution' })
+    const labels = Array.from(chips.querySelectorAll('button')).map((b) => b.textContent)
+    expect(labels).toEqual(['Any', '720p', '1080p', '2160p'])
+  })
+
   // The movie page mounts the list twice — once inline under the page, once in
   // the picker dialog — and both are live at the same time.
   it('renders two instances at once, like the movie page does', () => {
