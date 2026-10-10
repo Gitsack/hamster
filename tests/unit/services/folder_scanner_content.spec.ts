@@ -64,3 +64,27 @@ test.group('FolderScanner.holdsMediaFor', (group) => {
     assert.isFalse(await holdsMediaFor(dir, 'book'))
   })
 })
+
+/**
+ * With the client path pointed at the download root, "incomplete" looked like
+ * a category folder and jobs still downloading — or aborted with zero-filled
+ * articles — were imported from it.
+ */
+test.group('FolderScanner excluded folders', () => {
+  const isExcludedFolder = (name: string) =>
+    (
+      folderScanner.constructor as unknown as { isExcludedFolder: (n: string) => boolean }
+    ).isExcludedFolder(name)
+
+  test('skips download clients’ in-progress folders', ({ assert }) => {
+    assert.isTrue(isExcludedFolder('incomplete'))
+    assert.isTrue(isExcludedFolder('Incomplete'))
+    assert.isTrue(isExcludedFolder('intermediate'))
+    assert.isTrue(isExcludedFolder('_UNPACK_Some.Movie.2020'))
+  })
+
+  test('still scans the completed folder and release folders', ({ assert }) => {
+    assert.isFalse(isExcludedFolder('complete'))
+    assert.isFalse(isExcludedFolder('The.Matrix.1999.2160p.UHD.BDRip-MUSHR00M'))
+  })
+})

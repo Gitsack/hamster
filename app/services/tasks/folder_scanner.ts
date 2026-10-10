@@ -133,6 +133,12 @@ class FolderScanner {
     '_unpack',
     '_failed',
     'unmatched',
+    // In-progress folders (SABnzbd/qBittorrent "incomplete", NZBGet
+    // "intermediate"). With the client path pointed at the download root these
+    // looked like category folders, so jobs still downloading — or aborted
+    // with zero-filled missing articles — were imported or cleaned up.
+    'incomplete',
+    'intermediate',
   ])
 
   /**

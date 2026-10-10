@@ -9,6 +9,7 @@ import { subtitleSidecarService } from './subtitle_sidecar_service.js'
 import { mediaVersionService } from './media_version_service.js'
 import { eventEmitter } from '#services/events/event_emitter'
 import { probeFile, checkFfmpegAvailable, type MediaAnalysis } from '#utils/ffmpeg_utils'
+import { findZeroFilledRegion, describeZeroFill } from '#utils/zero_fill'
 import { analysisToMediaInfo } from '#services/quality/file_quality_service'
 import type { VideoMediaInfo } from '#models/movie_file'
 import Download from '#models/download'
@@ -291,6 +292,18 @@ export class MovieImportService {
           error: `Source file could not be read by ffprobe — likely corrupt`,
         }
       }
+    }
+
+    // --- Integrity check 2b: zero-filled holes ---
+    // Missing Usenet articles come out as runs of zeros that ffprobe never
+    // reads, so a file can pass every check above and still stop playing.
+    try {
+      const hole = await findZeroFilledRegion(sourcePath)
+      if (hole !== null) {
+        return { success: false, error: `Source file ${describeZeroFill(hole)}` }
+      }
+    } catch {
+      // Unreadable here means unreadable to the import below, which reports it
     }
 
     // --- Integrity check 3: don't overwrite a larger existing file ---
