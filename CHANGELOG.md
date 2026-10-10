@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.42.1](https://github.com/Gitsack/hamster/compare/hamster-v1.42.0...hamster-v1.42.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **downloads:** progress bar drawn full for partial downloads ([6bd33d8](https://github.com/Gitsack/hamster/commit/6bd33d8271e2b5ebe9c018225a1e48def08fa125))
+* **import:** never adopt incomplete downloads; reject zero-filled files ([e17d68a](https://github.com/Gitsack/hamster/commit/e17d68a2aa071be162a57989d7346df084c74a4d))
+
 ## [1.42.0](https://github.com/Gitsack/hamster/compare/hamster-v1.41.0...hamster-v1.42.0) (2026-10-01)
 
 
