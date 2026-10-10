@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.44.0](https://github.com/Gitsack/hamster/compare/hamster-v1.43.0...hamster-v1.44.0) (2026-10-10)
+
+
+### Features
+
+* **search:** size range slider in Manual Search ([119c905](https://github.com/Gitsack/hamster/commit/119c905189db88e03c43ba24be6b523b081dfd85))
+
+
+### Bug Fixes
+
+* **search:** order resolution chips by height in Manual Search ([66de704](https://github.com/Gitsack/hamster/commit/66de704ce4f388f75bebb819f7faaa9d6b691675))
+
 ## [1.43.0](https://github.com/Gitsack/hamster/compare/hamster-v1.42.1...hamster-v1.43.0) (2026-10-10)
 
 
