@@ -48,6 +48,7 @@ import {
   MusicNoteSquare01Icon,
   CheckmarkCircle01Icon,
   Globe02Icon,
+  SoftwareIcon,
   Add01Icon,
   MoreVerticalIcon,
   Film01Icon,
@@ -131,7 +132,7 @@ class ErrorBoundary extends Component<
 type MediaType = 'music' | 'movies' | 'tv' | 'books'
 type MusicSearchType = 'artist' | 'album' | 'track'
 
-type ResultMediaType = 'movie' | 'tv' | 'music' | 'book' | 'other'
+type ResultMediaType = 'movie' | 'tv' | 'music' | 'book' | 'app' | 'other'
 
 interface IndexerSearchResult {
   id: string
@@ -157,6 +158,7 @@ const MEDIA_TYPE_LABELS: Record<ResultMediaType, string> = {
   tv: 'TV',
   music: 'Music',
   book: 'Books',
+  app: 'Apps',
   other: 'Other',
 }
 
@@ -165,6 +167,7 @@ const MEDIA_TYPE_ICONS: Record<ResultMediaType, typeof Film01Icon> = {
   tv: Tv01Icon,
   music: MusicNote01Icon,
   book: Book01Icon,
+  app: SoftwareIcon,
   other: Globe02Icon,
 }
 
@@ -3165,7 +3168,7 @@ export default function SearchPage({
                       {availableMediaTypes.size > 1 && (
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm text-muted-foreground">Type:</span>
-                          {(['movie', 'tv', 'music', 'book', 'other'] as ResultMediaType[])
+                          {(['movie', 'tv', 'music', 'book', 'app', 'other'] as ResultMediaType[])
                             .filter((mt) => availableMediaTypes.has(mt))
                             .map((mt) => {
                               const active = selectedMediaTypes.has(mt)
