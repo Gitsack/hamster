@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ReleaseList, releaseBadges, type AnnotatedRelease } from '@/components/release-list'
 import { ReplaceFileDialog } from '@/components/library/replace-file-dialog'
@@ -69,6 +69,28 @@ describe('ReleaseList', () => {
       </Dialog>
     )
     expect(screen.getByText('B.2024.2160p.HDTS-GRP')).toBeTruthy()
+  })
+
+  it('filters by size with the range slider', () => {
+    const sized = (id: string, size: number): AnnotatedRelease => ({
+      ...releases[0],
+      id,
+      title: `${id}.release`,
+      size,
+    })
+    render(
+      <ReleaseList
+        releases={[sized('small', 1e9), sized('mid', 8e9), sized('big', 60e9)]}
+        onGrab={() => {}}
+      />
+    )
+    expect(screen.getByText('3 of 3')).toBeTruthy()
+
+    // Pull the upper thumb all the way down: only the smallest release fits.
+    fireEvent.keyDown(screen.getByLabelText('Maximum size'), { key: 'Home' })
+    expect(screen.getByText('1 of 3')).toBeTruthy()
+    expect(screen.getByText('small.release')).toBeTruthy()
+    expect(screen.queryByText('big.release')).toBeNull()
   })
 
   it('orders resolution chips by height, lowest first', () => {

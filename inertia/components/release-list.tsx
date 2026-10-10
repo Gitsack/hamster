@@ -5,6 +5,7 @@ import { Alert01Icon, FileDownloadIcon, Search01Icon } from '@hugeicons/core-fre
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Slider } from '@/components/ui/slider'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn } from '@/lib/utils'
@@ -208,6 +209,18 @@ function formatSize(bytes: number) {
   return `${(bytes / 1024).toFixed(0)} KB`
 }
 
+/** Slider positions for the size filter. The scale is logarithmic: sizes run
+ * from a few hundred MB to tens of GB, and a linear track would crowd every
+ * small release into its first few percent. */
+const SIZE_STEPS = 100
+
+function sizeAt(step: number, min: number, max: number) {
+  // Exact at the ends: exp(log(x)) can land a byte short and drop the release that set the bound.
+  if (step <= 0) return min
+  if (step >= SIZE_STEPS) return max
+  return Math.exp(Math.log(min) + ((Math.log(max) - Math.log(min)) * step) / SIZE_STEPS)
+}
+
 type SortKey = 'best' | 'size' | 'peers'
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -243,6 +256,26 @@ export function ReleaseList({
   const [hideRejected, setHideRejected] = useState(false)
   const [resolution, setResolution] = useState('all')
   const [sort, setSort] = useState<SortKey>('best')
+  const [sizeSteps, setSizeSteps] = useState<[number, number]>([0, SIZE_STEPS])
+
+  const sizeBounds = useMemo(() => {
+    const sizes = releases.map((r) => r.size).filter((size) => size > 0)
+    if (sizes.length === 0) return null
+    const min = Math.min(...sizes)
+    const max = Math.max(...sizes)
+    return min < max ? { min, max } : null
+  }, [releases])
+
+  // The ends of the track mean "no limit", so a release just outside the
+  // rounded bounds, or one with an unknown size, is never hidden by default.
+  const sizeLimit = useMemo(() => {
+    if (!sizeBounds) return null
+    const [lo, hi] = sizeSteps
+    return {
+      from: lo > 0 ? sizeAt(lo, sizeBounds.min, sizeBounds.max) : null,
+      to: hi < SIZE_STEPS ? sizeAt(hi, sizeBounds.min, sizeBounds.max) : null,
+    }
+  }, [sizeBounds, sizeSteps])
 
   const resolutions = useMemo(() => {
     const found = new Set<string>()
@@ -265,6 +298,14 @@ export function ReleaseList({
       if (needle && !release.title.toLowerCase().includes(needle)) return false
       if (hideRejected && release.accepted === false) return false
       if (resolution !== 'all' && release.quality?.resolution !== resolution) return false
+      if (
+        sizeLimit?.from !== null &&
+        sizeLimit?.from !== undefined &&
+        release.size < sizeLimit.from
+      )
+        return false
+      if (sizeLimit?.to !== null && sizeLimit?.to !== undefined && release.size > sizeLimit.to)
+        return false
       return true
     })
 
@@ -277,7 +318,7 @@ export function ReleaseList({
     })
 
     return list
-  }, [releases, query, hideRejected, resolution, sort])
+  }, [releases, query, hideRejected, resolution, sizeLimit, sort])
 
   if (loading) {
     return (
@@ -320,6 +361,27 @@ export function ReleaseList({
                 {value === 'all' ? 'Any' : value}
               </FilterChip>
             ))}
+          </div>
+        )}
+
+        {sizeBounds && (
+          <div className="flex items-center gap-2" role="group" aria-label="Filter by size">
+            <span className="text-sm text-muted-foreground">Size</span>
+            <Slider
+              className="w-40"
+              min={0}
+              max={SIZE_STEPS}
+              value={sizeSteps}
+              onValueChange={(value) => {
+                if (Array.isArray(value)) setSizeSteps([value[0], value[1]])
+              }}
+              thumbAlignment="edge"
+              getThumbAriaLabel={(index) => (index === 0 ? 'Minimum size' : 'Maximum size')}
+            />
+            <span className="readout whitespace-nowrap text-xs text-muted-foreground">
+              {formatSize(sizeLimit?.from ?? sizeBounds.min)} –{' '}
+              {formatSize(sizeLimit?.to ?? sizeBounds.max)}
+            </span>
           </div>
         )}
 

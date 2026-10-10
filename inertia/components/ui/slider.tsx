@@ -10,8 +10,12 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  getThumbAriaLabel,
   ...props
-}: React.ComponentProps<typeof BaseSlider.Root>) {
+}: React.ComponentProps<typeof BaseSlider.Root> & {
+  /** Accessible name for each thumb, e.g. "Minimum" / "Maximum" on a range. */
+  getThumbAriaLabel?: (index: number) => string
+}) {
   const _values = React.useMemo(
     () => (Array.isArray(value) ? value : Array.isArray(defaultValue) ? defaultValue : [min, max]),
     [value, defaultValue, min, max]
@@ -47,6 +51,8 @@ function Slider({
         <BaseSlider.Thumb
           data-slot="slider-thumb"
           key={index}
+          index={index}
+          getAriaLabel={getThumbAriaLabel}
           className="border-primary ring-ring/50 bg-background block size-4 shrink-0 rounded-full border-2 transition-[color,box-shadow] outline-none hover:ring-[3px] focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50"
         />
       ))}
